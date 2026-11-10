@@ -123,7 +123,23 @@ def deploy(uuid: str) -> None:
         f.write(f"DEPLOY_UUID={dep}\n")
 
 
+def detalhe(uuid: str) -> None:
+    st, a = api("GET", f"/applications/{uuid}")
+    if not isinstance(a, dict):
+        print("APP", st, a); return
+    print("APP", st, so(a, ("uuid", "name", "private_key_id", "repository_project_id", "source_type", "source_id",
+                         "destination_type", "destination_id", "environment_id", "git_full_url")))
+    dest = a.get("destination") or {}
+    print("DEST", so(dest, ("uuid", "name", "network", "server_id")), so(dest.get("server") or {}, ("uuid", "name", "ip")))
+    st, envs = api("GET", f"/projects")
+    for p in envs if isinstance(envs, list) else []:
+        st2, pd = api("GET", f"/projects/{p['uuid']}")
+        print("PROJ", p["name"], [so(e, ("id", "name", "uuid")) for e in (pd or {}).get("environments", [])] if isinstance(pd, dict) else pd)
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "detalhe":
+        detalhe(sys.argv[2]); sys.exit(0)
     acao = sys.argv[1]
     {"diagnostico": diagnostico, "criar": criar}.get(acao, lambda: deploy(sys.argv[2]))()
     time.sleep(0)
