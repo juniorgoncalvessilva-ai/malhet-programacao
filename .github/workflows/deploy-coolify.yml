@@ -31,7 +31,7 @@ jobs:
         env:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          status=$(curl -sS -m 60 -o resposta.json -w '%{http_code}' \
+          status=$(curl -sS -m 60 -X POST -o resposta.json -w '%{http_code}' \
             -H "Authorization: Bearer $COOLIFY_TOKEN" \
             "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_UUID&force=false")
           echo "HTTP $status"; cat resposta.json; echo
