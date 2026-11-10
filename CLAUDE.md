@@ -22,6 +22,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   de novo e registre o commit em `vendor/auth_kit/ORIGEM`). Ponte em `app/core/authkit.py` (sys.path + .env) e
   `app/core/auth.py`: rotas usam `Depends(usuario_atual)` (obra.usar) ou `Depends(usuario_admin)` (obra.administrar).
   Casos de uso recebem só `usuario.id`.
+- **Tudo é por obra**: toda tabela de dados tem `obra_id`; rotas recebem `ContextoObra` via `Depends(ler|programar|
+  planejar|administrar)` (`app/core/auth.py`, cabeçalho `X-Obra-Id`) e repositórios/gateways recebem `obra_id` no
+  construtor. Nova tabela de dados sem `obra_id` = bug. Teste de isolamento em `tests/test_auth.py`.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 
@@ -30,6 +33,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Tailwind `m-*`, componentes em `src/components/Obra/ui.tsx`, shell em `src/components/Malhet/`. Não use as cores
   do kit (`primary`, `dark-*`, `gray-*`) em telas novas.
 - Páginas da obra em `src/app/[locale]/app/(obra)/`; menu em `src/components/Malhet/menu.ts`.
+- Obra corrente: `useObra()` (`src/lib/obra/ObraProvider.tsx`): obras, papel, `pode('planejador')`, superadmin.
+  `useApi()` já manda o `X-Obra-Id`; trocar de obra remonta as telas. Esconda ações que o papel não permite.
 - Sessão: `useSessao()` (`src/lib/auth/AuthProvider.tsx`). Código antigo do kit usa o shim `src/lib/auth/compat.ts`.
 - API só via `useApi()` + TanStack Query (`queries.ts`), sempre por `/backend/api` (rewrite do Next). Tipos em
   `src/lib/api/types.ts`.
@@ -37,6 +42,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 ## Comandos
 - API: `cd apps/api && .venv/bin/pytest -q` · `.venv/bin/alembic revision --autogenerate -m "..."` · `.venv/bin/alembic upgrade head`
 - Web: `cd apps/web && npx tsc --noEmit && npm run build`
+- Deploy: `docker-compose.coolify.yml` + `docs/deploy-coolify.md`
 
 ## Regras
 - Nunca remova testes para "fazer passar". Rode pytest + tsc antes de concluir.

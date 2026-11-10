@@ -65,25 +65,26 @@ def _num(v) -> float | None:
         return None
 
 
-def nova_versao(session: Session, tipo: str, rotulo: str, usuario: str, data_base: date | None,
+def nova_versao(session: Session, obra_id: int, tipo: str, rotulo: str, usuario: str, data_base: date | None,
                 arquivo: str | None, observacao: str | None) -> VersaoReferenciaModel:
     if tipo not in TIPOS_REFERENCIA:
         raise DomainError(f"tipo inválido: {tipo}", "tipo")
     if not rotulo.strip():
         raise DomainError("informe o rótulo da versão (ex.: 'P6 rev 12 - 02/11/2026')", "rotulo")
-    v = VersaoReferenciaModel(tipo=tipo, rotulo=rotulo.strip(), data_base=data_base, arquivo_origem=arquivo,
+    v = VersaoReferenciaModel(obra_id=obra_id, tipo=tipo, rotulo=rotulo.strip(), data_base=data_base, arquivo_origem=arquivo,
                               observacao=observacao, carregado_por=usuario, vigente=False)
     session.add(v)
     session.flush()
     return v
 
 
-def ativar_versao(session: Session, versao_id: int) -> VersaoReferenciaModel:
+def ativar_versao(session: Session, versao_id: int, obra_id: int) -> VersaoReferenciaModel:
     v = session.get(VersaoReferenciaModel, versao_id)
-    if v is None:
+    if v is None or v.obra_id != obra_id:
         raise NotFoundError("Versão", versao_id)
     session.execute(update(VersaoReferenciaModel).where(
-        VersaoReferenciaModel.tipo == v.tipo, VersaoReferenciaModel.id != v.id).values(vigente=False))
+        VersaoReferenciaModel.obra_id == obra_id, VersaoReferenciaModel.tipo == v.tipo,
+        VersaoReferenciaModel.id != v.id).values(vigente=False))
     session.flush()
     v.vigente = True
     session.flush()
@@ -91,7 +92,7 @@ def ativar_versao(session: Session, versao_id: int) -> VersaoReferenciaModel:
 
 
 def carregar_planilha_auxiliar(
-    session: Session, arquivo: BinaryIO, *, nome_arquivo: str, rotulo: str, usuario: str,
+    session: Session, obra_id: int, arquivo: BinaryIO, *, nome_arquivo: str, rotulo: str, usuario: str,
     tipos: list[str] | None = None, data_base: date | None = None, ativar: bool = True,
 ) -> ResultadoCarga:
     wb = load_workbook(arquivo, read_only=True, data_only=True)
@@ -101,13 +102,13 @@ def carregar_planilha_auxiliar(
         if aba not in wb.sheetnames:
             res.avisos.append(f"aba {aba} não encontrada — {tipo} não carregado")
             continue
-        v = nova_versao(session, tipo, rotulo, usuario, data_base, nome_arquivo, None)
+        v = nova_versao(session, obra_id, tipo, rotulo, usuario, data_base, nome_arquivo, None)
         n = _CARGAS[tipo](session, wb[aba], v.id, res)
         v.qtd_itens = n
         res.versoes[tipo] = v.id
         res.contagem[tipo] = n
         if ativar:
-            ativar_versao(session, v.id)
+            ativar_versao(session, v.id, obra_id)
     return res
 
 

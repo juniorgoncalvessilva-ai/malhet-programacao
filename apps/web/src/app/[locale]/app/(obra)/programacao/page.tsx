@@ -9,7 +9,7 @@ import {
 import { useApi } from '@/hooks/programacao/useApi';
 import { useAcaoItem, useCriarItem, useEquipes, useFrentes, useGrupos, useItens, useOpers } from '@/hooks/programacao/queries';
 import { qs } from '@/lib/api/client';
-import { useSessao } from '@/lib/auth/AuthProvider';
+import { useObra } from '@/lib/obra/ObraProvider';
 import type { CriarItemOut, DiaPlano, ItemProgramacao } from '@/lib/api/types';
 
 const DIAS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
@@ -27,7 +27,7 @@ const STATUS: Record<ItemProgramacao['status'], { rotulo: string; tom: 'neutro' 
 const ORIGEM: Record<ItemProgramacao['origem'], string> = { cronograma: 'Cronograma', pq: 'Só PQ', padrao: 'OPER padrão' };
 
 export default function ProgramacaoPage() {
-  const { usuario } = useSessao();
+  const { pode } = useObra();
   const [inicio, setInicio] = useState(proximaSegunda());
   const fim = somar(inicio, 6);
   const dias = useMemo(() => intervalo(inicio, fim), [inicio, fim]);
@@ -122,7 +122,7 @@ export default function ProgramacaoPage() {
           <Botao variante="secundario" aria-label="Semana anterior" onClick={() => setInicio(somar(inicio, -7))}>‹</Botao>
           <Campo type="date" aria-label="Início da semana" value={inicio} onChange={(e) => setInicio(e.target.value)} className="w-[160px]" />
           <Botao variante="secundario" aria-label="Próxima semana" onClick={() => setInicio(somar(inicio, 7))}>›</Botao>
-          {usuario?.admin && <Botao onClick={exportar}><Download size={16} /> Enviar FT ao Simova</Botao>}
+          {pode('admin') && <Botao onClick={exportar}><Download size={16} /> Enviar FT ao Simova</Botao>}
         </>}
       >
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
@@ -172,8 +172,8 @@ export default function ProgramacaoPage() {
                 })}
                 <td className={td}><Pilula tom={STATUS[i.status].tom}>{STATUS[i.status].rotulo}</Pilula></td>
                 <td className={`${td} whitespace-nowrap text-right`}>
-                  {i.status === 'rascunho' && <Botao variante="fantasma" className="h-8 px-3" onClick={() => acao.mutate({ id: i.id, acao: 'aprovar' })}>Aprovar</Botao>}
-                  {i.status !== 'exportado' && <Botao variante="fantasma" className="h-8 px-3 text-m-danger hover:bg-m-danger-subtle" onClick={() => acao.mutate({ id: i.id, acao: 'excluir' })}>Excluir</Botao>}
+                  {i.status === 'rascunho' && pode('planejador') && <Botao variante="fantasma" className="h-8 px-3" onClick={() => acao.mutate({ id: i.id, acao: 'aprovar' })}>Aprovar</Botao>}
+                  {i.status !== 'exportado' && pode('encarregado') && <Botao variante="fantasma" className="h-8 px-3 text-m-danger hover:bg-m-danger-subtle" onClick={() => acao.mutate({ id: i.id, acao: 'excluir' })}>Excluir</Botao>}
                 </td>
               </tr>
             ))}
@@ -204,7 +204,7 @@ export default function ProgramacaoPage() {
         </Painel>
       </div>
 
-      <Painel titulo="Programar atividade" subtitulo="Escolha a equipe, a OPER e a frente. Deixe o HH vazio para calcular pelo índice da CPU vigente.">
+      {pode('encarregado') && <Painel titulo="Programar atividade" subtitulo="Escolha a equipe, a OPER e a frente. Deixe o HH vazio para calcular pelo índice da CPU vigente.">
         <form onSubmit={enviar} className="flex flex-col gap-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Selecao rotulo="Equipe / encarregado" value={equipeId} onChange={(e) => setEquipeId(e.target.value)} required>
@@ -258,7 +258,7 @@ export default function ProgramacaoPage() {
             </div>
           </div>
         )}
-      </Painel>
+      </Painel>}
     </>
   );
 }

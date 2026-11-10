@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import UsuarioAtual, usuario_admin, usuario_atual
+from app.core.auth import ContextoObra, administrar, ler, planejar
 from app.core.db import get_session
 from app.modules.equipes.application.importar_equipes import importar_equipes
 from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeModel
@@ -43,13 +43,13 @@ def _out(e: EquipeModel) -> EquipeOut:
 
 
 @router.get("", response_model=list[EquipeOut])
-def listar(s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_atual)):
-    return [_out(e) for e in s.scalars(select(EquipeModel).order_by(EquipeModel.nome))]
+def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    return [_out(e) for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id).order_by(EquipeModel.nome))]
 
 
 @router.post("", response_model=EquipeOut, status_code=201)
-def criar(d: EquipeIn, s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_atual)):
-    e = EquipeModel(**d.model_dump(exclude={"composicao"}),
+def criar(d: EquipeIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    e = EquipeModel(**d.model_dump(exclude={"composicao"}), obra_id=c.obra_id,
                     composicao=[EquipeComposicaoModel(**c.model_dump()) for c in d.composicao])
     s.add(e)
     s.flush()
@@ -58,9 +58,9 @@ def criar(d: EquipeIn, s: Session = Depends(get_session), _: UsuarioAtual = Depe
 
 @router.put("/{equipe_id}", response_model=EquipeOut)
 def atualizar(equipe_id: int, d: EquipeIn, s: Session = Depends(get_session),
-              _: UsuarioAtual = Depends(usuario_atual)):
+              c: ContextoObra = Depends(planejar)):
     e = s.get(EquipeModel, equipe_id)
-    if e is None:
+    if e is None or e.obra_id != c.obra_id:
         raise NotFoundError("Equipe", equipe_id)
     for k, v in d.model_dump(exclude={"composicao"}).items():
         setattr(e, k, v)
@@ -70,15 +70,15 @@ def atualizar(equipe_id: int, d: EquipeIn, s: Session = Depends(get_session),
 
 
 @router.delete("/{equipe_id}", status_code=204)
-def excluir(equipe_id: int, s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_atual)):
+def excluir(equipe_id: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     e = s.get(EquipeModel, equipe_id)
-    if e is None:
+    if e is None or e.obra_id != c.obra_id:
         raise NotFoundError("Equipe", equipe_id)
     s.delete(e)
 
 
 @router.post("/importar")
 def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session),
-             _: UsuarioAtual = Depends(usuario_admin)):
+             c: ContextoObra = Depends(administrar)):
     """Importa a aba EQUIPES da planilha auxiliar."""
-    return {"equipes": importar_equipes(s, arquivo.file)}
+    return {"equipes": importar_equipes(s, c.obra_id, arquivo.file)}

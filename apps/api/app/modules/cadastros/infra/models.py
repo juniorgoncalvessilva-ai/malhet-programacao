@@ -3,7 +3,7 @@
 Hierarquia: FRENTE (local) → OPER_GRUPO → OPER (atividade padrão) → FT (programação).
 TAREFA = itens do cronograma/AWP (IWP) e CPUs.
 """
-from sqlalchemy import ARRAY, Boolean, Float, Integer, String, UniqueConstraint
+from sqlalchemy import ARRAY, Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -11,6 +11,7 @@ from app.core.db import Base
 
 class FrenteModel(Base):
     __tablename__ = "frente"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
     codigo: Mapped[str] = mapped_column(String(30), primary_key=True)
     descricao: Mapped[str] = mapped_column(String(200))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -18,6 +19,7 @@ class FrenteModel(Base):
 
 class UnidadeMedidaModel(Base):
     __tablename__ = "unidade_medida"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
     codigo: Mapped[str] = mapped_column(String(10), primary_key=True)
     descricao: Mapped[str | None] = mapped_column(String(60))
     sigla: Mapped[str | None] = mapped_column(String(10))
@@ -28,6 +30,7 @@ class OperGrupoModel(Base):
 
     __tablename__ = "oper_grupo"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     codigo: Mapped[str] = mapped_column(String(30), index=True)
     descricao: Mapped[str] = mapped_column(String(200))
     unidade_medida: Mapped[str | None] = mapped_column(String(10))
@@ -40,8 +43,9 @@ class OperModel(Base):
     """Atividade padrão. Chave natural no Simova = (grupo, código) — '9.1' existe em 2 grupos."""
 
     __tablename__ = "oper"
-    __table_args__ = (UniqueConstraint("grupo_codigo", "codigo", name="uq_oper_grupo_codigo"),)
+    __table_args__ = (UniqueConstraint("obra_id", "grupo_codigo", "codigo", name="uq_oper_obra_grupo_codigo"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     codigo: Mapped[str] = mapped_column(String(30), index=True)
     descricao: Mapped[str] = mapped_column(String(300))
     grupo_codigo: Mapped[str] = mapped_column(String(30))
@@ -58,6 +62,7 @@ class OperModel(Base):
 
 class TarefaModel(Base):
     __tablename__ = "tarefa"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
     codigo: Mapped[str] = mapped_column(String(120), primary_key=True)
     descricao: Mapped[str] = mapped_column(String(400))
     unidade_medida: Mapped[str | None] = mapped_column(String(10))
@@ -68,6 +73,7 @@ class TarefaModel(Base):
 
 class MaterialModel(Base):
     __tablename__ = "material"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
     codigo: Mapped[str] = mapped_column(String(30), primary_key=True)
     descricao: Mapped[str] = mapped_column(String(300))
     unidade_medida: Mapped[str | None] = mapped_column(String(10))
@@ -76,6 +82,7 @@ class MaterialModel(Base):
 
 class FuncaoModel(Base):
     __tablename__ = "funcao"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
     codigo: Mapped[str] = mapped_column(String(10), primary_key=True)
     descricao: Mapped[str] = mapped_column(String(120))
     tipo_funcao: Mapped[str | None] = mapped_column(String(5))

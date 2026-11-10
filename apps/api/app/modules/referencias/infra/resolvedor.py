@@ -35,20 +35,24 @@ class VinculoResolvido:
 
 
 class ResolvedorReferencias:
-    def __init__(self, session: Session, jornada: float = JORNADA_REFERENCIA):
+    def __init__(self, session: Session, obra_id: int, jornada: float = JORNADA_REFERENCIA):
         self.s = session
+        self.obra_id = obra_id
         self.jornada = jornada
 
     def versoes_vigentes(self) -> dict[str, int]:
-        q = select(VersaoReferenciaModel.tipo, VersaoReferenciaModel.id).where(VersaoReferenciaModel.vigente.is_(True))
+        q = select(VersaoReferenciaModel.tipo, VersaoReferenciaModel.id).where(
+            VersaoReferenciaModel.obra_id == self.obra_id, VersaoReferenciaModel.vigente.is_(True))
         return {t: i for t, i in self.s.execute(q)}
 
     def vinculo_da_oper(self, grupo: str, oper: str, vinculo_id: int | None = None) -> VinculoReferenciaModel | None:
         if vinculo_id:
-            return self.s.get(VinculoReferenciaModel, vinculo_id)
+            v = self.s.get(VinculoReferenciaModel, vinculo_id)
+            return v if v is not None and v.obra_id == self.obra_id else None
         return self.s.scalar(
             select(VinculoReferenciaModel)
             .where(
+                VinculoReferenciaModel.obra_id == self.obra_id,
                 VinculoReferenciaModel.simova_grupo_codigo == grupo,
                 VinculoReferenciaModel.simova_oper_codigo == oper,
                 VinculoReferenciaModel.ativo.is_(True),

@@ -29,9 +29,10 @@ TIPOS_REFERENCIA = ("CRONOGRAMA", "PQ", "CPU", "INDICES", "SIMOVA")
 class VersaoReferenciaModel(Base):
     __tablename__ = "versao_referencia"
     __table_args__ = (
-        Index("uq_versao_vigente_por_tipo", "tipo", unique=True, postgresql_where=text("vigente")),
+        Index("uq_versao_vigente_por_obra_tipo", "obra_id", "tipo", unique=True, postgresql_where=text("vigente")),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     tipo: Mapped[str] = mapped_column(String(15), index=True)
     rotulo: Mapped[str] = mapped_column(String(120))  # ex.: "Rev. 12 - P6 02/11/2026"
     data_base: Mapped[date | None] = mapped_column(Date)
@@ -120,9 +121,10 @@ class VinculoReferenciaModel(Base):
     """
 
     __tablename__ = "vinculo_referencia"
-    __table_args__ = (UniqueConstraint("simova_grupo_codigo", "simova_oper_codigo", "id_crono", "item_pq",
+    __table_args__ = (UniqueConstraint("obra_id", "simova_grupo_codigo", "simova_oper_codigo", "id_crono", "item_pq",
                                        name="uq_vinculo"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     id_crono: Mapped[str | None] = mapped_column(String(40), index=True)
     item_pq: Mapped[str | None] = mapped_column(String(40), index=True)
     composicao: Mapped[str | None] = mapped_column(String(40))

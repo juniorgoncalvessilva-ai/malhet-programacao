@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.auth import UsuarioAtual, usuario_atual
+from fastapi import HTTPException
+
+from app.core.auth import ContextoObra, UsuarioAtual, ler, planejar, programar, usuario_atual
+from app.modules.obras.domain.obra import PapelObra
 from app.core.db import get_session
 from app.modules.programacao.application.use_cases import (
     AprovarItem,
@@ -95,33 +98,47 @@ def _ocup(o: capacidade.OcupacaoDia) -> OcupacaoOut:
 
 @router.get("/itens", response_model=list[ItemOut])
 def listar(inicio: date, fim: date, status: str | None = None, s: Session = Depends(get_session),
-           _: UsuarioAtual = Depends(usuario_atual)):
-    return [ItemOut.de(i) for i in SqlProgramacaoRepository(s).do_periodo(inicio, fim, status)]
+           c: ContextoObra = Depends(ler)):
+    return [ItemOut.de(i) for i in SqlProgramacaoRepository(s, c.obra_id).do_periodo(inicio, fim, status)]
+
+
+def _so_a_propria_equipe(c: ContextoObra, cracha: str) -> None:
+    """Encarregado programa só a própria equipe (crachá do acesso)."""
+    if c.papel == PapelObra.ENCARREGADO and cracha != (c.cracha or ""):
+        raise HTTPException(403, detail={"ok": False, "message": "Encarregado só programa a própria equipe",
+                                         "detail": "Encarregado só programa a própria equipe"})
 
 
 @router.post("/itens", response_model=CriarOut, status_code=201)
-def criar(d: ItemIn, s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_atual)):
+def criar(d: ItemIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    _so_a_propria_equipe(c, d.encarregado_cracha)
     dados = CriarItemIn(**d.model_dump(exclude={"dias"}), dias=[DiaIn(x.data, x.pe, x.hh) for x in d.dias])
-    out = CriarItemProgramacao(SqlProgramacaoRepository(s), SqlCatalogoGateway(s)).executar(dados, u.id)
+    out = CriarItemProgramacao(SqlProgramacaoRepository(s, c.obra_id), SqlCatalogoGateway(s, c.obra_id)).executar(
+        dados, c.usuario.id)
     return CriarOut(item=ItemOut.de(out.item), hh_disponivel_dia=out.hh_disponivel_dia,
                     ocupacao=[_ocup(o) for o in out.ocupacao], avisos=out.avisos)
 
 
 @router.post("/itens/{item_id}/aprovar", response_model=ItemOut)
-def aprovar(item_id: int, s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_atual)):
-    return ItemOut.de(AprovarItem(SqlProgramacaoRepository(s)).executar(item_id))
+def aprovar(item_id: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    return ItemOut.de(AprovarItem(SqlProgramacaoRepository(s, c.obra_id)).executar(item_id))
 
 
 @router.delete("/itens/{item_id}", status_code=204)
-def excluir(item_id: int, s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_atual)):
-    ExcluirItem(SqlProgramacaoRepository(s)).executar(item_id)
+def excluir(item_id: int, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    repo = SqlProgramacaoRepository(s, c.obra_id)
+    if c.papel == PapelObra.ENCARREGADO:
+        item = repo.obter(item_id)
+        if item is not None:
+            _so_a_propria_equipe(c, item.encarregado_cracha)
+    ExcluirItem(repo).executar(item_id)
 
 
 @router.get("/capacidade", response_model=list[OcupacaoOut])
 def ocupacao_encarregado(encarregado: str, inicio: date, fim: date, s: Session = Depends(get_session),
-                         _: UsuarioAtual = Depends(usuario_atual)):
-    hh = capacidade.hh_disponivel(SqlCatalogoGateway(s).equipe(encarregado))
-    itens = SqlProgramacaoRepository(s).do_encarregado(encarregado, inicio, fim)
+                         c: ContextoObra = Depends(ler)):
+    hh = capacidade.hh_disponivel(SqlCatalogoGateway(s, c.obra_id).equipe(encarregado))
+    itens = SqlProgramacaoRepository(s, c.obra_id).do_encarregado(encarregado, inicio, fim)
     return [_ocup(o) for o in capacidade.ocupacao(itens, hh)]
 
 

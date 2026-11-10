@@ -13,7 +13,7 @@ N_FUNCOES = 40  # NF do gerador programacao_v5.py
 N_EQUIPES = 40  # NE
 
 
-def importar_equipes(session: Session, arquivo: BinaryIO, jornada: float = 9.0) -> int:
+def importar_equipes(session: Session, obra_id: int, arquivo: BinaryIO, jornada: float = 9.0) -> int:
     wb = load_workbook(arquivo, read_only=True, data_only=True)
     if "EQUIPES" not in wb.sheetnames:
         return 0
@@ -24,7 +24,8 @@ def importar_equipes(session: Session, arquivo: BinaryIO, jornada: float = 9.0) 
         nome = simova.codigo(r[0]) if r else None
         if not nome:
             continue
-        eq = session.scalar(select(EquipeModel).where(EquipeModel.nome == nome)) or EquipeModel(nome=nome)
+        eq = session.scalar(select(EquipeModel).where(EquipeModel.obra_id == obra_id, EquipeModel.nome == nome)) \
+            or EquipeModel(obra_id=obra_id, nome=nome)
         eq.frente_codigo = None
         eq.encarregado_nome = simova.codigo(r[2])
         eq.observacao = simova.codigo(r[3])

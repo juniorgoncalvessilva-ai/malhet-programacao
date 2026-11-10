@@ -1,14 +1,14 @@
 """tabelas auth_* do auth-kit (vendor/auth_kit). O desenho mora em modules.auth.infra.models.Base.
 
 Revision ID: 0002_auth_kit
-Revises: b43332948ee5
+Revises: 0001_inicial
 """
 import app.core.authkit  # noqa: F401
 from alembic import op
 from modules.auth.infra.models import Base
 
 revision = "0002_auth_kit"
-down_revision = "b43332948ee5"
+down_revision = "0001_inicial"
 branch_labels = None
 depends_on = None
 

@@ -22,4 +22,7 @@ def client():
         md.drop_all(engine)
         md.create_all(engine)
     with TestClient(app) as c:
+        r = c.post("/api/admin/obras", json={"codigo": "310", "nome": "Obra 310 · teste"})
+        assert r.status_code == 201, r.text
+        c.headers["X-Obra-Id"] = str(r.json()["id"])
         yield c

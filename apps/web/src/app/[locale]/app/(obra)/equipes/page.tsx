@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Pilula, Painel, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
+import { useObra } from '@/lib/obra/ObraProvider';
 import { useApi } from '@/hooks/programacao/useApi';
 import { chaves, useEquipes, useUpload } from '@/hooks/programacao/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Equipe } from '@/lib/api/types';
 
 export default function EquipesPage() {
+  const { pode } = useObra();
   const equipes = useEquipes();
   const importar = useUpload('/equipes/importar', [[...chaves.equipes]]);
   const api = useApi();
@@ -28,10 +30,10 @@ export default function EquipesPage() {
     <>
       <Cabecalho eyebrow="Equipes · frentes de trabalho" titulo="Quem trabalha em cada frente e quanto HH a equipe tem por dia" descricao="Cada equipe tem um encarregado (crachá do Simova) e a composição por função. O HH disponível é a soma da mão de obra direta × jornada." />
       <div className="flex flex-col gap-4">
-        <Painel titulo="Importar aba EQUIPES da planilha auxiliar">
+        {pode('admin') && <Painel titulo="Importar aba EQUIPES da planilha auxiliar">
           <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Planilha auxiliar' }]} rotulo="Importar" pendente={importar.isPending}
             onEnviar={(fd) => importar.mutate(fd, { onSuccess: (r) => toast.success(`${r.equipes} equipe(s)`), onError: (er) => toast.error(er.message) })} />
-        </Painel>
+        </Painel>}
         {editando && (
           <Painel titulo={`Editar ${editando.nome}`}>
             <form onSubmit={salvar} className="grid gap-3 md:grid-cols-4">
@@ -56,7 +58,7 @@ export default function EquipesPage() {
                 <td className={td}>{e.encarregado_cracha ?? <Pilula tom="atencao">informe</Pilula>}</td>
                 <td className={td}><div className="flex flex-wrap gap-1">{e.composicao.map((c) => <Pilula key={c.recurso} ponto={false} tom={c.tipo === 'MOD' ? 'acento' : 'neutro'}>{fmt(c.quantidade, 0)} {c.recurso}</Pilula>)}</div></td>
                 <td className={td}>{fmt(e.hh_disponivel_dia)}</td>
-                <td className={td}><button className="text-m-accent" onClick={() => setEditando(e)}>Editar</button></td>
+                <td className={td}>{pode('planejador') && <button className="text-m-accent" onClick={() => setEditando(e)}>Editar</button>}</td>
               </tr>
             ))}
           </Tabela>

@@ -61,3 +61,19 @@ export interface ItemIn {
 }
 export interface Ocupacao { data: string; hh_disponivel: number; hh_programado: number; saldo: number; excedido: boolean }
 export interface CriarItemOut { item: ItemProgramacao; hh_disponivel_dia: number; ocupacao: Ocupacao[]; avisos: string[] }
+
+// ---- obras e acessos
+export type PapelObra = 'admin' | 'planejador' | 'encarregado' | 'leitor';
+export interface Obra {
+  id: number; codigo: string; nome: string; contrato: string | null; cliente: string | null; ativa: boolean; criado_em: string;
+}
+export interface MinhaObra extends Obra { papel: PapelObra }
+export interface ObraAdmin extends Obra { usuarios: number }
+export interface Acesso {
+  id: number; obra_id: number; usuario_id: string; email: string; papel: PapelObra; cracha: string | null;
+  concedido_por: string; concedido_em: string;
+}
+export interface ContaAdmin {
+  id: string; email: string; roles: string[]; status: string; verificado: boolean; mfa_enabled: boolean;
+  created_at: string; obras: { obra: string; papel: PapelObra }[];
+}

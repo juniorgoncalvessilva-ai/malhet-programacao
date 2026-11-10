@@ -39,11 +39,17 @@ def _to_domain(m: ProgramacaoItemModel) -> ItemProgramacao:
 
 
 class SqlProgramacaoRepository:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, obra_id: int):
         self.s = session
+        self.obra_id = obra_id
+
+    def _get(self, item_id: int) -> ProgramacaoItemModel | None:
+        m = self.s.get(ProgramacaoItemModel, item_id)
+        return m if m is not None and m.obra_id == self.obra_id else None
 
     def salvar(self, item: ItemProgramacao, criado_por: str) -> ItemProgramacao:
         m = ProgramacaoItemModel(
+            obra_id=self.obra_id,
             encarregado_cracha=item.encarregado_cracha,
             encarregado_nome=item.encarregado_nome,
             grupo_codigo=item.grupo_codigo,
@@ -71,7 +77,7 @@ class SqlProgramacaoRepository:
         return _to_domain(m)
 
     def atualizar_status(self, item: ItemProgramacao) -> None:
-        m = self.s.get(ProgramacaoItemModel, item.id)
+        m = self._get(item.id)
         if m is None:
             return
         m.status = item.status.value
@@ -80,11 +86,12 @@ class SqlProgramacaoRepository:
         self.s.flush()
 
     def obter(self, item_id: int) -> ItemProgramacao | None:
-        m = self.s.get(ProgramacaoItemModel, item_id)
+        m = self._get(item_id)
         return _to_domain(m) if m else None
 
     def do_encarregado(self, cracha: str, inicio: date, fim: date) -> list[ItemProgramacao]:
         q = select(ProgramacaoItemModel).where(
+            ProgramacaoItemModel.obra_id == self.obra_id,
             ProgramacaoItemModel.encarregado_cracha == cracha,
             ProgramacaoItemModel.data_inicio <= fim,
             ProgramacaoItemModel.data_fim >= inicio,
@@ -93,7 +100,8 @@ class SqlProgramacaoRepository:
 
     def do_periodo(self, inicio: date, fim: date, status: str | None = None) -> list[ItemProgramacao]:
         q = select(ProgramacaoItemModel).where(
-            ProgramacaoItemModel.data_inicio <= fim, ProgramacaoItemModel.data_fim >= inicio
+            ProgramacaoItemModel.obra_id == self.obra_id,
+            ProgramacaoItemModel.data_inicio <= fim, ProgramacaoItemModel.data_fim >= inicio,
         )
         if status:
             q = q.where(ProgramacaoItemModel.status == status)
@@ -101,7 +109,7 @@ class SqlProgramacaoRepository:
         return [_to_domain(m) for m in self.s.scalars(q)]
 
     def excluir(self, item_id: int) -> None:
-        m = self.s.get(ProgramacaoItemModel, item_id)
+        m = self._get(item_id)
         if m:
             self.s.delete(m)
             self.s.flush()

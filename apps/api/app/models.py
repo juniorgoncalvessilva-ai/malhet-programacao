@@ -4,3 +4,4 @@ from app.modules.cadastros.infra import models as _cadastros  # noqa: F401
 from app.modules.referencias.infra import models as _referencias  # noqa: F401
 from app.modules.equipes.infra import models as _equipes  # noqa: F401
 from app.modules.programacao.infra import models as _programacao  # noqa: F401
+from app.modules.obras.infra import models as _obras  # noqa: F401

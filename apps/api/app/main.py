@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 import app.core.authkit  # noqa: F401  (antes de qualquer import do kit)
@@ -13,6 +14,9 @@ from app.core.config import get_settings
 from app.modules.cadastros.api.router import router as cadastros
 from app.modules.equipes.api.router import router as equipes
 from app.modules.integracao_simova.api.router import router as simova
+from app.modules.obras.api.router import router as obras
+from app.modules.obras.application.acessos import garantir_superadmin
+from app.modules.obras.infra.contas_authkit import ContasAuthKit
 from app.modules.programacao.api.router import router as programacao
 from app.modules.referencias.api.router import router as referencias
 from app.shared.errors import DomainError, NotFoundError
@@ -21,10 +25,12 @@ from app.shared.errors import DomainError, NotFoundError
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await seed_admin(app.state.auth)
+    await garantir_superadmin(ContasAuthKit(app.state.auth), os.getenv("SUPERADMIN_EMAIL", "").strip(),
+                              os.getenv("SUPERADMIN_PASSWORD", ""))
     yield
 
 
-app = FastAPI(title="Malhet · Programação × Simova", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Malhet · Programação × Simova", version="0.3.0", lifespan=lifespan)
 app.state.auth = build_auth()
 app.add_middleware(
     CORSMiddleware, allow_origins=get_settings().cors_list, allow_credentials=True,
@@ -58,5 +64,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (cadastros, referencias, equipes, programacao, simova):
+for r in (obras, cadastros, referencias, equipes, programacao, simova):
     app.include_router(r, prefix="/api")

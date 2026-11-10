@@ -27,6 +27,12 @@ from modules.auth.infra.models import Base as AuthBase
 config.set_main_option('sqlalchemy.url', get_settings().database_url)
 target_metadata = [Base.metadata, AuthBase.metadata]
 
+
+def include_object(obj, name, type_, reflected, compare_to):
+    # tabelas auth_* são do auth-kit (migração 0002_auth_kit)
+    return not (type_ == "table" and name.startswith("auth_"))
+
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
@@ -48,7 +54,7 @@ def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
-        target_metadata=target_metadata,
+        target_metadata=target_metadata, include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )

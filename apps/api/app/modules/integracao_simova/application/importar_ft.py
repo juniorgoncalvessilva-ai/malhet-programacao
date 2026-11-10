@@ -27,12 +27,12 @@ class RelatorioFT:
     erros: list[str] = field(default_factory=list)
 
 
-def importar_ft(session: Session, arquivo: BinaryIO, usuario: str) -> RelatorioFT:
+def importar_ft(session: Session, obra_id: int, arquivo: BinaryIO, usuario: str) -> RelatorioFT:
     wb = load_workbook(arquivo, read_only=True, data_only=True)
     ws = wb["FT_IMPORT_INTERMEDIARIA"] if "FT_IMPORT_INTERMEDIARIA" in wb.sheetnames else wb.worksheets[0]
     rows = ws.iter_rows(values_only=True)
     header = [str(h).strip() if h else "" for h in next(rows)]
-    repo = SqlProgramacaoRepository(session)
+    repo = SqlProgramacaoRepository(session, obra_id)
     rel = RelatorioFT()
     for n, raw in enumerate(rows, start=2):
         if raw is None or all(v is None for v in raw):

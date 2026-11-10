@@ -1,0 +1,65 @@
+# Malhet · Programação × Simova — deploy no Coolify (Docker Compose).
+# Coolify: New Resource › Docker Compose › este arquivo. Só o serviço "web" é publicado (porta 3000).
+# Variáveis marcadas com :? são obrigatórias (defina em Environment Variables no Coolify).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: malhet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      POSTGRES_DB: malhet
+    volumes:
+      - malhet-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U malhet -d malhet"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://malhet:${POSTGRES_PASSWORD}@db:5432/malhet
+      CORS_ORIGINS: ${APP_URL:-http://localhost:3000}
+      AUTH_DISABLED: "false"
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (64+ caracteres aleatórios)}
+      MFA_CIPHER_KEY: ${MFA_CIPHER_KEY:-}
+      MFA_BACKUP_PEPPER: ${MFA_BACKUP_PEPPER:-}
+      AUTH_ISSUER: Malhet
+      DEFAULT_LOCALE: pt-BR
+      HIBP: ${HIBP:-0}
+      # http puro (IP:porta) exige 0; com domínio https use 1
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      COOKIE_SAMESITE: lax
+      HSTS: ${HSTS:-0}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:?defina SUPERADMIN_EMAIL}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?defina SUPERADMIN_PASSWORD (10+ caracteres, letra e número)}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-console}
+      MAIL_FROM: ${MAIL_FROM:-nao-responder@malhet.app}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+    expose:
+      - "8000"
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        API_INTERNAL_URL: http://api:8000
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+volumes:
+  malhet-pg:

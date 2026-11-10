@@ -29,13 +29,18 @@ cd apps/api && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app 
 cd apps/web && npm install && cp .env.local.example .env.local && npm run dev
 ```
 
-Acesse <http://localhost:3000> e entre com o admin semente do `.env` da API (`SEED_ADMIN_EMAIL` /
-`SEED_ADMIN_PASSWORD`; troque a senha e esvazie as variáveis depois do primeiro boot). O navegador chama a API pelo
+Acesse <http://localhost:3000> e entre com o **Super Admin** do `.env` da API (`SUPERADMIN_EMAIL` /
+`SUPERADMIN_PASSWORD`, criado ou garantido a cada boot). Em **Administrar › Obras e usuários** ele cria a obra e
+libera os usuários. O navegador chama a API pelo
 próprio Next em `/backend/api/*` (mesma origem: o cookie de refresh e o CSRF do auth-kit funcionam sem CORS).
 Para desenvolver sem login: `AUTH_DISABLED=true` na API e `NEXT_PUBLIC_AUTH_DISABLED=true` no web.
 
-Papéis: `user` programa e aprova; `admin` também carrega versões de referência, importa cadastros e envia a FT
-ao Simova. Promova um usuário com `UPDATE auth_users SET roles = 'admin' …` (ou pelo seed).
+Acesso por obra: todos os dados são separados por obra (cabeçalho `X-Obra-Id`). Papéis na obra:
+`admin` (carrega versões, importa do Simova, envia a FT, dá acesso) · `planejador` (programa, aprova, vínculos,
+equipes) · `encarregado` (programa só a própria equipe, pelo crachá) · `leitor`. O `superadmin` (papel da conta
+no auth-kit) entra em todas as obras como admin.
+
+Deploy: [docs/deploy-coolify.md](docs/deploy-coolify.md) (`docker-compose.coolify.yml`).
 Documentação interativa da API: <http://localhost:8000/docs>.
 
 Testes da API (precisa do banco `programacao_test`):
@@ -46,6 +51,7 @@ cd apps/api && .venv/bin/pytest -q
 
 ## Primeira carga (ordem)
 
+0. **Obra e usuários** (Super Admin): crie a obra e libere os e-mails com o papel de cada um.
 1. **Cadastros Simova** → `OPER.xlsx` + `FRENTE.xlsx` (tela *Cadastros Simova*). Gera a versão `SIMOVA` vigente.
 2. **Referências** → `Programacao_auxiliar_vN.xlsx` (tela *Referências*). Abas ATIVIDADES, PQ, RECURSOS e ÍNDICES
    viram versões `CRONOGRAMA`, `PQ`, `CPU` e `INDICES` (vigentes).
@@ -57,6 +63,7 @@ cd apps/api && .venv/bin/pytest -q
 
 ```
 apps/api/app/modules/
+  obras/              obra, acesso por obra (papel), Super Admin
   cadastros/          espelho Simova: FRENTE, OPER_GRUPO, OPER, TAREFA, MATERIAL, FUNÇÃO
   referencias/        versões (CRONOGRAMA, PQ, CPU, ÍNDICES, SIMOVA) + vínculo + motor de índices
   equipes/            equipe = frente de trabalho com composição por função

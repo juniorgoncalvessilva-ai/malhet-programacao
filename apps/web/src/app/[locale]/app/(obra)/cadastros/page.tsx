@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Tabela, UploadForm, td } from '@/components/Obra/ui';
+import { useObra } from '@/lib/obra/ObraProvider';
 import { useApi } from '@/hooks/programacao/useApi';
 import { chaves, useFrentes, useGrupos, useOpers, useUpload } from '@/hooks/programacao/queries';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function CadastrosPage() {
+  const { pode } = useObra();
   const frentes = useFrentes();
   const grupos = useGrupos();
   const [grupo, setGrupo] = useState('');
@@ -33,7 +35,7 @@ export default function CadastrosPage() {
     <>
       <Cabecalho eyebrow="Cadastros Simova" cor="var(--m-proc-medir)" titulo="Frentes, grupos e OPERs que o Simova reconhece" descricao="Importe OPER.xlsx e FRENTE.xlsx do Simova. OPERs criadas aqui ficam marcadas para retroalimentar o Simova." />
       <div className="flex flex-col gap-4">
-        <Painel
+        {pode('admin') && <Painel
           titulo="Importar do Simova"
           acoes={<Botao variante="secundario" onClick={async () => {
             const n = await api.download('/simova/exportar/opers-pendentes', 'OPER_pendentes.xlsx');
@@ -49,7 +51,7 @@ export default function CadastrosPage() {
               onError: (e) => toast.error(e.message),
             })}
           />
-        </Painel>
+        </Painel>}
 
         <div className="grid gap-6 xl:grid-cols-3">
           <Painel titulo={`Grupos (${grupos.data?.length ?? 0})`}>
@@ -74,7 +76,7 @@ export default function CadastrosPage() {
                 </tr>
               ))}
             </Tabela>
-            {grupo && (
+            {grupo && pode('planejador') && (
               <form onSubmit={criarOper} className="mt-4 grid gap-3 border-t border-m-stroke-subtle pt-4 md:grid-cols-4 ">
                 <Campo rotulo="Código" required value={nova.codigo} onChange={(e) => setNova({ ...nova, codigo: e.target.value })} />
                 <Campo rotulo="Descrição" required className="md:col-span-2" value={nova.descricao} onChange={(e) => setNova({ ...nova, descricao: e.target.value })} />

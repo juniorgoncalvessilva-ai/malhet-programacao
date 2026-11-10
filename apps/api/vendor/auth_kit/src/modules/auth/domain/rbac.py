@@ -13,7 +13,8 @@ class Permission(str, Enum):
     USERS_ADMIN = "admin.users"
     # Programação de Obra (Malhet) — adicionado ao copiar o kit
     OBRA_USAR = "obra.usar"  # consultar, programar, aprovar
-    OBRA_ADMINISTRAR = "obra.administrar"  # carregar versões, importar cadastros, exportar ao Simova
+    OBRA_ADMINISTRAR = "obra.administrar"  # (legado) — o papel na obra decide; ver app/core/auth.py
+    OBRAS_GERIR = "obras.gerir"  # super admin: criar obras e dar acesso a usuários
 
 
 _USER = frozenset({
@@ -22,7 +23,9 @@ _USER = frozenset({
 })
 _ADMIN = _USER | frozenset({Permission.USERS_ADMIN, Permission.OBRA_ADMINISTRAR})
 
-GRANTS: dict[str, frozenset[Permission]] = {"user": _USER, "admin": _ADMIN}
+_SUPERADMIN = _ADMIN | frozenset({Permission.OBRAS_GERIR})
+
+GRANTS: dict[str, frozenset[Permission]] = {"user": _USER, "admin": _ADMIN, "superadmin": _SUPERADMIN}
 
 
 def granted(roles: tuple[str, ...] | list[str]) -> frozenset[Permission]:

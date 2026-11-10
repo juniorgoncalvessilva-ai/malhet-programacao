@@ -12,6 +12,7 @@ class ProgramacaoItemModel(Base):
 
     __tablename__ = "programacao_item"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     encarregado_cracha: Mapped[str] = mapped_column(String(20), index=True)
     encarregado_nome: Mapped[str] = mapped_column(String(150))
     grupo_codigo: Mapped[str] = mapped_column(String(30))

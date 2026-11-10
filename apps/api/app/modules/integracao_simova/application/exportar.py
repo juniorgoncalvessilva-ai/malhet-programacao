@@ -51,9 +51,9 @@ def gerar_ft_xlsx(itens: list[ItemProgramacao]) -> bytes:
     return buf.getvalue()
 
 
-def gerar_oper_pendentes_xlsx(session: Session) -> tuple[bytes, int]:
+def gerar_oper_pendentes_xlsx(session: Session, obra_id: int) -> tuple[bytes, int]:
     """OPERs criadas/alteradas na aplicação e ainda não enviadas ao Simova (aba OPER)."""
-    opers = list(session.scalars(select(OperModel).where(OperModel.pendente_envio_simova.is_(True))))
+    opers = list(session.scalars(select(OperModel).where(OperModel.obra_id == obra_id, OperModel.pendente_envio_simova.is_(True))))
     wb = Workbook()
     ws = wb.active
     ws.title = "OPER"

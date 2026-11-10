@@ -1,6 +1,6 @@
 """Equipes (como na aba EQUIPES da planilha auxiliar): cada equipe é uma frente de trabalho com um
 encarregado e uma composição por função/equipamento."""
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -8,8 +8,10 @@ from app.core.db import Base
 
 class EquipeModel(Base):
     __tablename__ = "equipe"
+    __table_args__ = (UniqueConstraint("obra_id", "nome", name="uq_equipe_obra_nome"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    nome: Mapped[str] = mapped_column(String(120), unique=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    nome: Mapped[str] = mapped_column(String(120))
     frente_codigo: Mapped[str | None] = mapped_column(String(30))
     encarregado_cracha: Mapped[str | None] = mapped_column(String(20), index=True)
     encarregado_nome: Mapped[str | None] = mapped_column(String(150))

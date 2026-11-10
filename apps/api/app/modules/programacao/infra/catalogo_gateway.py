@@ -10,17 +10,20 @@ from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
 
 
 class SqlCatalogoGateway:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, obra_id: int):
         self.s = session
-        self.ref = ResolvedorReferencias(session)
+        self.obra_id = obra_id
+        self.ref = ResolvedorReferencias(session, obra_id)
 
     def oper(self, grupo_codigo: str, oper_codigo: str, vinculo_id: int | None = None) -> OperInfo | None:
         o = self.s.scalar(
-            select(OperModel).where(OperModel.grupo_codigo == grupo_codigo, OperModel.codigo == oper_codigo)
+            select(OperModel).where(OperModel.obra_id == self.obra_id, OperModel.grupo_codigo == grupo_codigo,
+                                    OperModel.codigo == oper_codigo)
         )
         if o is None:
             return None
-        grupo = self.s.scalar(select(OperGrupoModel).where(OperGrupoModel.codigo == grupo_codigo).limit(1))
+        grupo = self.s.scalar(select(OperGrupoModel).where(OperGrupoModel.obra_id == self.obra_id,
+                                                OperGrupoModel.codigo == grupo_codigo).limit(1))
         vinc = self.ref.vinculo_da_oper(grupo_codigo, oper_codigo, vinculo_id)
         resolvido = self.ref.resolver(vinc) if vinc else None
         return OperInfo(
@@ -38,11 +41,12 @@ class SqlCatalogoGateway:
         )
 
     def frente_existe(self, codigo: str) -> bool:
-        return self.s.get(FrenteModel, codigo) is not None
+        return self.s.get(FrenteModel, (self.obra_id, codigo)) is not None
 
     def equipe(self, encarregado_cracha: str) -> list[MembroEquipe]:
         equipes = self.s.scalars(
             select(EquipeModel).where(
+                EquipeModel.obra_id == self.obra_id,
                 EquipeModel.encarregado_cracha == encarregado_cracha, EquipeModel.ativo.is_(True)
             )
         )

@@ -1,12 +1,13 @@
 'use client';
 
-import { LayoutGrid, LogOut, Menu as MenuIcon, Moon, Sun, X } from 'lucide-react';
+import { Check, ChevronsUpDown, LayoutGrid, LogOut, Menu as MenuIcon, Moon, Sun, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { cn } from '@/lib/utils';
-import { APP_NOME, MENU, OBRA } from './menu';
+import { useObra } from '@/lib/obra/ObraProvider';
+import { APP_NOME, MENU, type GrupoMenu } from './menu';
 
 function Logo() {
   return (
@@ -17,8 +18,71 @@ function Logo() {
   );
 }
 
+const PAPEL: Record<string, string> = { admin: 'Admin da obra', planejador: 'Planejador', encarregado: 'Encarregado', leitor: 'Leitor' };
+
+function SeletorObra() {
+  const { obras, obra, escolher, superadmin } = useObra();
+  const [aberto, setAberto] = useState(false);
+  if (!obra) {
+    return (
+      <div className="rounded-m-md border border-dashed border-m-stroke px-3 py-2.5 text-xs text-m-text-muted">
+        {superadmin ? 'Nenhuma obra ainda. Crie em Obras e usuários.' : 'Sem obra liberada para você.'}
+      </div>
+    );
+  }
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={aberto}
+        onClick={() => setAberto(!aberto)}
+        className="flex w-full items-center gap-2.5 rounded-m-md border border-m-stroke-subtle px-3 py-2.5 text-left hover:bg-m-surface-hover"
+      >
+        <div className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-m-sm bg-m-accent-strong text-[10px] font-bold text-m-on-accent">
+          {obra.codigo.slice(0, 4)}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[13px] font-semibold leading-[18px]">{obra.nome}</span>
+          <span className="truncate text-[11px] leading-4 text-m-text-muted">{obra.contrato || PAPEL[obra.papel]}</span>
+        </div>
+        {obras.length > 1 && <ChevronsUpDown size={15} className="shrink-0 text-m-text-muted" aria-hidden="true" />}
+      </button>
+      {aberto && obras.length > 1 && (
+        <ul role="listbox" aria-label="Obras" className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-80 overflow-auto rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised p-1.5 shadow-m-md">
+          {obras.map((o) => (
+            <li key={o.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={o.id === obra.id}
+                onClick={() => { escolher(o.id); setAberto(false); }}
+                className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left hover:bg-m-surface-hover"
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-m-sm bg-m-accent-subtle text-[10px] font-bold text-m-accent">{o.codigo.slice(0, 4)}</span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[13px] font-semibold">{o.nome}</span>
+                  <span className="text-[11px] text-m-text-muted">{PAPEL[o.papel]}</span>
+                </span>
+                {o.id === obra.id && <Check size={15} className="text-m-accent" aria-hidden="true" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function useMenuVisivel(): GrupoMenu[] {
+  const { pode, superadmin } = useObra();
+  return MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => (i.superadmin ? superadmin : !i.minimo || pode(i.minimo))) }))
+    .filter((g) => g.itens.length);
+}
+
 function Lateral({ onNavegar }: { onNavegar?: () => void }) {
   const pathname = usePathname();
+  const menu = useMenuVisivel();
   return (
     <div className="flex h-full flex-col gap-[22px] py-5 pl-6 pr-3">
       <div className="flex h-8 items-center gap-2.5 px-2.5">
@@ -26,17 +90,9 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
         <span className="h-[18px] w-px bg-m-stroke" />
         <span className="text-sm font-medium text-m-text-secondary">{APP_NOME}</span>
       </div>
-      <div className="flex items-center gap-2.5 rounded-m-md border border-m-stroke-subtle px-3 py-2.5">
-        <div className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-m-sm bg-m-accent-strong text-[10px] font-bold text-m-on-accent">
-          {OBRA.sigla}
-        </div>
-        <div className="flex min-w-0 flex-col">
-          <span className="truncate text-[13px] font-semibold leading-[18px]">{OBRA.nome}</span>
-          <span className="truncate text-[11px] leading-4 text-m-text-muted">{OBRA.contrato}</span>
-        </div>
-      </div>
+      <SeletorObra />
       <nav className="flex flex-col gap-[22px]" aria-label="Menu do app">
-        {MENU.map((g) => (
+        {menu.map((g) => (
           <div key={g.etapa} className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 px-2.5 pb-1.5 text-[11px] font-semibold uppercase leading-4 tracking-[0.48px] text-m-text-muted">
               <span className="h-1.5 w-1.5 rounded-[2px]" style={{ background: g.cor }} />
@@ -92,6 +148,7 @@ function Tema() {
 
 function Usuario() {
   const { usuario, sair, desabilitado } = useSessao();
+  const { superadmin, papel } = useObra();
   const [aberto, setAberto] = useState(false);
   const iniciais = (usuario?.email ?? '?').slice(0, 2).toUpperCase();
   return (
@@ -110,7 +167,7 @@ function Usuario() {
           <div className="px-3 py-2">
             <div className="truncate text-sm font-semibold">{usuario?.email}</div>
             <div className="text-xs text-m-text-muted">
-              {usuario?.admin ? 'Administrador' : 'Usuário'}{desabilitado ? ' · modo dev' : ''}
+              {superadmin ? 'Super Admin' : papel ? PAPEL[papel] : 'Sem obra'}{desabilitado ? ' · modo dev' : ''}
             </div>
           </div>
           <button
@@ -130,6 +187,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [gaveta, setGaveta] = useState(false);
   const atual = MENU.flatMap((g) => g.itens).find((i) => pathname?.startsWith(i.url));
+  const { obra, carregando, superadmin } = useObra();
+  const telaAdmin = pathname?.startsWith('/app/admin');
   return (
     <div className="min-h-screen bg-m-surface-base text-m-text-primary">
       <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r border-m-stroke-subtle bg-m-surface-raised lg:block">
@@ -158,8 +217,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Usuario />
           </div>
         </header>
-        <main className="flex flex-col gap-5 px-4 pb-10 pt-7 sm:px-8">{children}</main>
+        <main className="flex flex-col gap-5 px-4 pb-10 pt-7 sm:px-8">
+          {obra || telaAdmin || carregando ? children : <SemObra superadmin={superadmin} />}
+        </main>
       </div>
+    </div>
+  );
+}
+
+function SemObra({ superadmin }: { superadmin: boolean }) {
+  return (
+    <div className="mx-auto mt-16 flex max-w-md flex-col items-center gap-3 rounded-m-xl border border-m-stroke-subtle bg-m-surface-raised p-10 text-center">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.48px] text-m-text-muted">Sem obra</span>
+      <h1 className="text-[22px] font-semibold leading-7">
+        {superadmin ? 'Crie a primeira obra para começar' : 'Você ainda não tem acesso a nenhuma obra'}
+      </h1>
+      <p className="text-sm text-m-text-tertiary">
+        {superadmin
+          ? 'Em Obras e usuários você cadastra a obra e libera quem vai programar.'
+          : 'Peça ao administrador da obra para liberar o seu e-mail.'}
+      </p>
+      {superadmin && (
+        <Link href="/app/admin/obras" className="mt-2 inline-flex h-10 items-center rounded-full bg-m-accent-strong px-4 text-sm font-semibold text-m-on-accent">
+          Ir para Obras e usuários
+        </Link>
+      )}
     </div>
   );
 }

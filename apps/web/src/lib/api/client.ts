@@ -37,9 +37,12 @@ export async function apiFetch<T>(path: string, getToken: TokenGetter, init: Req
   return res.json() as Promise<T>;
 }
 
-export async function apiDownload(path: string, getToken: TokenGetter, nomePadrao: string): Promise<number> {
+export async function apiDownload(path: string, getToken: TokenGetter, nomePadrao: string, obraId?: number): Promise<number> {
   const token = await getToken();
-  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' });
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (obraId) headers['X-Obra-Id'] = String(obraId);
+  const res = await fetch(`${API_URL}${path}`, { headers, credentials: 'include' });
   if (!res.ok) return erro(res);
   const blob = await res.blob();
   const cd = res.headers.get('Content-Disposition') ?? '';

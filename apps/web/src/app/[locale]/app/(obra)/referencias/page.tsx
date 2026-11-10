@@ -7,12 +7,14 @@ import {
   chaves, useAtivarVersao, useBuscaAtividades, useBuscaPq, useExcluirVinculo, useIndices, useResolverVinculo,
   useSalvarVinculo, useUpload, useVersoes, useVinculos,
 } from '@/hooks/programacao/queries';
+import { useObra } from '@/lib/obra/ObraProvider';
 import type { TipoReferencia, VinculoIn } from '@/lib/api/types';
 
 const TIPOS: TipoReferencia[] = ['CRONOGRAMA', 'PQ', 'CPU', 'INDICES', 'SIMOVA'];
 const vazio: VinculoIn = { simova_grupo_codigo: '', simova_oper_codigo: '', id_crono: '', item_pq: '', indice_codigo: '', frente_codigo: '' };
 
 export default function ReferenciasPage() {
+  const { pode } = useObra();
   const versoes = useVersoes();
   const ativar = useAtivarVersao();
   const carregar = useUpload('/referencias/versoes/carregar', [[...chaves.versoes]]);
@@ -55,7 +57,7 @@ export default function ReferenciasPage() {
                   ) : (
                     <Pilula tom="atencao">sem versão vigente</Pilula>
                   )}
-                  {(porTipo[t]?.length ?? 0) > 1 && (
+                  {pode('admin') && (porTipo[t]?.length ?? 0) > 1 && (
                     <select
                       className="mt-2 w-full rounded-m-md border border-m-stroke-subtle bg-m-surface-field px-2 py-1 text-xs "
                       value={vig?.id ?? ''}
@@ -70,7 +72,7 @@ export default function ReferenciasPage() {
               );
             })}
           </div>
-          <div className="mt-6 border-t border-m-stroke-subtle pt-4 ">
+          {pode('admin') && <div className="mt-6 border-t border-m-stroke-subtle pt-4 ">
             <p className="mb-3 text-sm text-m-text-muted">
               Carregue a <strong>planilha auxiliar</strong> (Programacao_auxiliar_vN.xlsx). As abas ATIVIDADES, PQ, RECURSOS e ÍNDICES
               viram novas versões e passam a ser as vigentes. As anteriores continuam guardadas para consulta.
@@ -89,10 +91,10 @@ export default function ReferenciasPage() {
               <Campo rotulo="Rótulo da versão" name="rotulo" required placeholder="P6 rev 12 — 02/11/2026" />
               <Campo rotulo="Data-base" name="data_base" type="date" />
             </UploadForm>
-          </div>
+          </div>}
         </Painel>
 
-        <Painel titulo={editando ? `Editar vínculo #${editando}` : 'Novo vínculo'}>
+        {pode('planejador') && <Painel titulo={editando ? `Editar vínculo #${editando}` : 'Novo vínculo'}>
           <p className="mb-4 text-sm text-m-text-muted">
             Liga a atividade do cronograma (ou o item da PQ, para atividades fora do cronograma) à OPER do Simova. A CPU e o índice
             vêm da PQ/cronograma vigentes. Preencha a composição ou o índice específico só para trocar o que veio da referência.
@@ -155,7 +157,7 @@ export default function ReferenciasPage() {
             </div>
             <div className="md:col-span-4"><Erro erro={salvar.error} /></div>
           </form>
-        </Painel>
+        </Painel>}
 
         <Painel titulo={`Vínculos (${vinculos.data?.length ?? 0})`}>
           {resolver.data && (

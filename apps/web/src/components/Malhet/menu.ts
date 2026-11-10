@@ -1,6 +1,7 @@
-import { CalendarRange, Database, GitMerge, Users, type LucideIcon } from 'lucide-react';
+import { Building2, CalendarRange, Database, GitMerge, KeyRound, Users, type LucideIcon } from 'lucide-react';
+import type { PapelObra } from '@/lib/api/types';
 
-export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; admin?: boolean }
+export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean }
 export interface GrupoMenu { etapa: string; cor: string; itens: ItemMenu[] }
 
 /** Menu do app "Programação" dentro do Malhet, por etapa (cores proc-* do CorpMind). */
@@ -21,11 +22,14 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Cadastros Simova', url: '/app/cadastros', icone: Database },
     ],
   },
+  {
+    etapa: 'Administrar',
+    cor: 'var(--m-proc-administrar)',
+    itens: [
+      { titulo: 'Acessos da obra', url: '/app/acessos', icone: KeyRound, minimo: 'admin' },
+      { titulo: 'Obras e usuários', url: '/app/admin/obras', icone: Building2, superadmin: true },
+    ],
+  },
 ];
 
 export const APP_NOME = 'Programação';
-export const OBRA = {
-  sigla: process.env.NEXT_PUBLIC_OBRA_SIGLA ?? '310',
-  nome: process.env.NEXT_PUBLIC_OBRA_NOME ?? 'Obra 310 · Obras civis',
-  contrato: process.env.NEXT_PUBLIC_OBRA_CONTRATO ?? 'Programa Tamanduá · Fase 2',
-};
