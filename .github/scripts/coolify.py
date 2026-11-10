@@ -141,6 +141,30 @@ def deploy(uuid: str) -> None:
         f.write(f"DEPLOY_UUID={dep}\n")
 
 
+def reaproveitar(uuid: str) -> None:
+    """Aponta um app existente para este repositório e completa só as variáveis que faltam."""
+    st, a = api("GET", f"/applications/{uuid}")
+    if st >= 300:
+        print("APP", st, a); sys.exit(1)
+    print("ANTES", so(a, ("name", "git_repository", "git_branch", "build_pack", "docker_compose_location")))
+    corpo = {"git_repository": _url_git(), "git_branch": "main", "build_pack": "dockercompose",
+             "docker_compose_location": "/docker-compose.coolify.yml"}
+    st, r = api("PATCH", f"/applications/{uuid}", corpo)
+    print("PATCH", st, "ok" if st < 300 else r)
+    if st >= 300:
+        sys.exit(1)
+    st, envs = api("GET", f"/applications/{uuid}/envs")
+    existentes = {e.get("key") for e in envs} if isinstance(envs, list) else set()
+    novos = [{"key": k, "value": v, "is_preview": False} for k, v in _gerar_env().items() if k not in existentes]
+    print("ENVS existentes:", sorted(existentes), "| adicionando:", [e["key"] for e in novos])
+    if novos:
+        st, r = api("PATCH", f"/applications/{uuid}/envs/bulk", {"data": novos})
+        print("ENVS", st, "ok (valores só no Coolify)" if st < 300 else r)
+        if st >= 300:
+            sys.exit(1)
+    deploy(uuid)
+
+
 def detalhe(uuid: str) -> None:
     st, a = api("GET", f"/applications/{uuid}")
     if not isinstance(a, dict):
@@ -158,6 +182,8 @@ def detalhe(uuid: str) -> None:
 if __name__ == "__main__":
     if sys.argv[1] == "detalhe":
         detalhe(sys.argv[2]); sys.exit(0)
+    if sys.argv[1] == "reaproveitar":
+        reaproveitar(sys.argv[2]); sys.exit(0)
     acao = sys.argv[1]
     {"diagnostico": diagnostico, "criar": criar}.get(acao, lambda: deploy(sys.argv[2]))()
     time.sleep(0)

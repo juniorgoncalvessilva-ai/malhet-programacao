@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       acao:
-        description: diagnostico | criar | deploy
+        description: diagnostico | criar | reaproveitar | deploy | detalhe
         required: true
         default: diagnostico
       app_uuid:
@@ -28,5 +28,5 @@ jobs:
       - name: ${{ inputs.acao }}
         run: python3 .github/scripts/coolify.py "${{ inputs.acao }}" "${{ inputs.app_uuid }}"
       - name: Acompanhar o deploy e testar a aplicação
-        if: inputs.acao == 'criar' || inputs.acao == 'deploy'
+        if: inputs.acao == 'criar' || inputs.acao == 'deploy' || inputs.acao == 'reaproveitar'
         run: bash .github/scripts/acompanhar-deploy.sh "$DEPLOY_UUID"
