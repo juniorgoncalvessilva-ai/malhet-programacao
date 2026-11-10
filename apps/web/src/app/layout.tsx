@@ -1,5 +1,6 @@
-import "@/css/satoshi.css";
+import "@fontsource-variable/figtree";
 import "@/css/style.css";
+import "@/css/malhet.css";
 
 import "flatpickr/dist/flatpickr.min.css";
 import "jsvectormap/dist/jsvectormap.css";
@@ -8,11 +9,10 @@ import type { Metadata } from "next";
 import NextTopLoader from "nextjs-toploader";
 import type { PropsWithChildren } from "react";
 import { Providers } from "./providers";
-import { getSEOConfig, getAppName, getThemeConfig } from "@/config";
+import { getSEOConfig, getAppName } from "@/config";
 
 const seoConfig = getSEOConfig();
 const appName = getAppName();
-const themeConfig = getThemeConfig();
 
 export const metadata: Metadata = {
   title: {
@@ -37,9 +37,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: PropsWithChildren) {
   return (
     <html suppressHydrationWarning>
-      <body>
+      <body className="malhet">
         <Providers>
-          <NextTopLoader color={themeConfig.primaryColor} showSpinner={false} />
+          <NextTopLoader color="#284E4F" showSpinner={false} />
           {children}
         </Providers>
       </body>

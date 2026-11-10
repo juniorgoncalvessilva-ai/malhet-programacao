@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.core.auth import UsuarioAtual, usuario_atual
+from app.core.auth import UsuarioAtual, usuario_admin, usuario_atual
 from app.core.db import get_session
 from app.modules.integracao_simova.application.exportar import gerar_ft_xlsx, gerar_oper_pendentes_xlsx
 from app.modules.integracao_simova.application.importar_cadastros import (
@@ -24,7 +24,7 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 @router.post("/importar/cadastros")
 def importar_cadastros(oper: UploadFile | None = File(None), frente: UploadFile | None = File(None),
                        rotulo: str = "Cadastros Simova", s: Session = Depends(get_session),
-                       u: UsuarioAtual = Depends(usuario_atual)):
+                       u: UsuarioAtual = Depends(usuario_admin)):
     """OPER.xlsx (OPER_GRUPO, OPER, TAREFA, MATERIAL, EFETIVO_FUNCAO) e/ou FRENTE.xlsx. Gera versão SIMOVA vigente."""
     rel = RelatorioImportacao()
     if oper:
@@ -40,14 +40,14 @@ def importar_cadastros(oper: UploadFile | None = File(None), frente: UploadFile 
 
 @router.post("/importar/ft")
 def importar_programacao(arquivo: UploadFile = File(...), s: Session = Depends(get_session),
-                         u: UsuarioAtual = Depends(usuario_atual)):
+                         u: UsuarioAtual = Depends(usuario_admin)):
     r = importar_ft(s, arquivo.file, u.id)
     return {"importados": r.importados, "erros": r.erros}
 
 
 @router.get("/exportar/ft")
 def exportar_ft(inicio: date, fim: date, marcar_exportado: bool = True, s: Session = Depends(get_session),
-                _: UsuarioAtual = Depends(usuario_atual)):
+                _: UsuarioAtual = Depends(usuario_admin)):
     """FT_IMPORT_INTERMEDIARIA com os itens APROVADOS do período (layout exato do Simova)."""
     repo = SqlProgramacaoRepository(s)
     itens = repo.do_periodo(inicio, fim, Status.APROVADO.value)
@@ -61,7 +61,7 @@ def exportar_ft(inicio: date, fim: date, marcar_exportado: bool = True, s: Sessi
 
 
 @router.get("/exportar/opers-pendentes")
-def exportar_opers(s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_atual)):
+def exportar_opers(s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_admin)):
     """OPERs criadas/alteradas na aplicação para retroalimentar o Simova (aba OPER)."""
     conteudo, n = gerar_oper_pendentes_xlsx(s)
     return Response(conteudo, media_type=XLSX, headers={"Content-Disposition": 'attachment; filename="OPER_pendentes.xlsx"',

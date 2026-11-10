@@ -7,7 +7,7 @@ import {
   DropdownTrigger,
 } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useUser, useClerk } from '@/lib/auth/compat';
 import { useTranslations, useLocale } from 'next-intl';
 import Image from "next/image";
 import {Link} from "@/i18n/navigation";

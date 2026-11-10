@@ -17,13 +17,8 @@ export function ConditionalLayout({ children }: PropsWithChildren) {
 
   if (isAuthPage) {
     // Simple layout for authentication pages
-    return (
-      <div className="min-h-screen bg-gray-2 dark:bg-[#020d1a]">
-        <main className="isolate mx-auto w-full max-w-screen-2xl overflow-hidden p-4 md:p-6 2xl:p-10">
-          {children}
-        </main>
-      </div>
-    );
+    // Telas de acesso do Malhet (TelaAuth) cuidam do próprio layout
+    return <>{children}</>;
   }
 
   // Landing page (root) gets no wrapper - it handles its own layout

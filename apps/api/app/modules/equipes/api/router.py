@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import UsuarioAtual, usuario_atual
+from app.core.auth import UsuarioAtual, usuario_admin, usuario_atual
 from app.core.db import get_session
 from app.modules.equipes.application.importar_equipes import importar_equipes
 from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeModel
@@ -79,6 +79,6 @@ def excluir(equipe_id: int, s: Session = Depends(get_session), _: UsuarioAtual =
 
 @router.post("/importar")
 def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session),
-             _: UsuarioAtual = Depends(usuario_atual)):
+             _: UsuarioAtual = Depends(usuario_admin)):
     """Importa a aba EQUIPES da planilha auxiliar."""
     return {"equipes": importar_equipes(s, arquivo.file)}

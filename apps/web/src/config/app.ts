@@ -175,9 +175,9 @@ export interface AppConfig {
 // Configuração principal da aplicação
 export const appConfig: AppConfig = {
   app: {
-    name: "Programação de Obra",
+    name: "Malhet",
     version: "1.2.1",
-    description: "Programação diária integrada ao Simova — cronograma, PQ, CPU e equipes",
+    description: "Malhet · Programação diária por capacidade, integrada ao Simova",
     tagline: "Dashboard Admin Moderno com Next.js",
     url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     locale: "pt-BR",

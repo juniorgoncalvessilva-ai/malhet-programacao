@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from 'react';
-import { useUser, useAuth } from '@clerk/nextjs';
+import { useUser, useAuth } from '@/lib/auth/compat';
 import { useAuthStore } from '@/store/auth-store';
 import { useStoreInitialization } from '@/store';
 

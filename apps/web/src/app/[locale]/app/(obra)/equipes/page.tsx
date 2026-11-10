@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import Breadcrumb from '@/components/Breadcrumbs/Breadcrumb';
-import { Botao, Campo, Etiqueta, Painel, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
+import { Botao, Cabecalho, Campo, Pilula, Painel, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { chaves, useEquipes, useUpload } from '@/hooks/programacao/queries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,8 +26,8 @@ export default function EquipesPage() {
 
   return (
     <>
-      <Breadcrumb pageName="Equipes (frentes de trabalho)" />
-      <div className="space-y-6">
+      <Cabecalho eyebrow="Equipes · frentes de trabalho" titulo="Quem trabalha em cada frente e quanto HH a equipe tem por dia" descricao="Cada equipe tem um encarregado (crachá do Simova) e a composição por função. O HH disponível é a soma da mão de obra direta × jornada." />
+      <div className="flex flex-col gap-4">
         <Painel titulo="Importar aba EQUIPES da planilha auxiliar">
           <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Planilha auxiliar' }]} rotulo="Importar" pendente={importar.isPending}
             onEnviar={(fd) => importar.mutate(fd, { onSuccess: (r) => toast.success(`${r.equipes} equipe(s)`), onError: (er) => toast.error(er.message) })} />
@@ -52,12 +51,12 @@ export default function EquipesPage() {
           <Tabela cabecalho={['Equipe', 'Encarregado', 'Crachá', 'Composição', 'HH/dia (MOD)', '']} vazio={!equipes.data?.length}>
             {equipes.data?.map((e) => (
               <tr key={e.id}>
-                <td className={td}>{e.nome}<div className="text-xs text-dark-5">{e.observacao}</div></td>
+                <td className={td}>{e.nome}<div className="text-xs text-m-text-muted">{e.observacao}</div></td>
                 <td className={td}>{e.encarregado_nome ?? '—'}</td>
-                <td className={td}>{e.encarregado_cracha ?? <Etiqueta cor="amarelo">informe</Etiqueta>}</td>
-                <td className={td}><div className="flex flex-wrap gap-1">{e.composicao.map((c) => <Etiqueta key={c.recurso} cor={c.tipo === 'MOD' ? 'azul' : 'cinza'}>{fmt(c.quantidade, 0)} {c.recurso}</Etiqueta>)}</div></td>
+                <td className={td}>{e.encarregado_cracha ?? <Pilula tom="atencao">informe</Pilula>}</td>
+                <td className={td}><div className="flex flex-wrap gap-1">{e.composicao.map((c) => <Pilula key={c.recurso} ponto={false} tom={c.tipo === 'MOD' ? 'acento' : 'neutro'}>{fmt(c.quantidade, 0)} {c.recurso}</Pilula>)}</div></td>
                 <td className={td}>{fmt(e.hh_disponivel_dia)}</td>
-                <td className={td}><button className="text-primary" onClick={() => setEditando(e)}>Editar</button></td>
+                <td className={td}><button className="text-m-accent" onClick={() => setEditando(e)}>Editar</button></td>
               </tr>
             ))}
           </Tabela>

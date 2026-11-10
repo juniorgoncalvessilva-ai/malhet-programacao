@@ -8,9 +8,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://app:app@localhost:5432/programacao"
     cors_origins: str = "http://localhost:3000"
-    auth_disabled: bool = True
-    clerk_jwks_url: str = ""
-    clerk_issuer: str = ""
+    # Dev/testes: pula a autenticação do auth-kit. Nunca em produção.
+    auth_disabled: bool = False
 
     @property
     def cors_list(self) -> list[str]:

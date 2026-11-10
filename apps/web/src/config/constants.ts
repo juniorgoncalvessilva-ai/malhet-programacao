@@ -10,7 +10,7 @@ export const ROUTES = {
   HOME: '/',
   DASHBOARD: '/',
   AUTH: {
-    SIGN_IN: '/auth/sign-in',
+    SIGN_IN: '/auth/entrar',
     SIGN_UP: '/auth/sign-up',
     SSO_CALLBACK: '/auth/sso-callback'
   },

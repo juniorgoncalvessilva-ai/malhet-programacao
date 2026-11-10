@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.auth import UsuarioAtual, usuario_atual
+from app.core.auth import UsuarioAtual, usuario_admin, usuario_atual
 from app.core.db import get_session
 from app.modules.referencias.application import versoes as uc
 from app.modules.referencias.infra.models import (
@@ -142,7 +142,7 @@ def listar_versoes(tipo: str | None = None, s: Session = Depends(get_session),
 @router.post("/versoes/carregar")
 def carregar(arquivo: UploadFile = File(...), rotulo: str = Form(...), tipos: str = Form("CRONOGRAMA,PQ,CPU,INDICES"),
              data_base: date | None = Form(None), ativar: bool = Form(True), s: Session = Depends(get_session),
-             u: UsuarioAtual = Depends(usuario_atual)):
+             u: UsuarioAtual = Depends(usuario_admin)):
     """Carrega a planilha auxiliar (abas ATIVIDADES, PQ, RECURSOS, ÍNDICES) como novas versões."""
     res = uc.carregar_planilha_auxiliar(
         s, arquivo.file, nome_arquivo=arquivo.filename or "", rotulo=rotulo, usuario=u.id,
@@ -151,7 +151,7 @@ def carregar(arquivo: UploadFile = File(...), rotulo: str = Form(...), tipos: st
 
 
 @router.post("/versoes/{versao_id}/ativar", response_model=VersaoOut)
-def ativar(versao_id: int, s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_atual)):
+def ativar(versao_id: int, s: Session = Depends(get_session), _: UsuarioAtual = Depends(usuario_admin)):
     return uc.ativar_versao(s, versao_id)
 
 

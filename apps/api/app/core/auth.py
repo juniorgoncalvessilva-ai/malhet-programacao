@@ -1,47 +1,39 @@
-"""Autenticação: valida o JWT emitido pelo Clerk (o front continua usando o Clerk do starter kit).
+"""Autenticação pelo auth-kit (JWT HS256 + refresh em cookie com CSRF, 2FA, RBAC).
 
 A infra de auth fica aqui, na borda; casos de uso recebem apenas `UsuarioAtual`.
 """
 from dataclasses import dataclass
-from functools import lru_cache
 
-import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Request
 
-from app.core.config import Settings, get_settings
-
-_bearer = HTTPBearer(auto_error=False)
+import app.core.authkit  # noqa: F401  (sys.path + .env do kit)
+from app.core.config import get_settings
+from modules.auth.domain.rbac import Permission
+from modules.auth.presentation.http import require_user
 
 
 @dataclass(frozen=True)
 class UsuarioAtual:
     id: str
     email: str | None = None
+    admin: bool = False
 
 
-@lru_cache
-def _jwks_client(url: str) -> jwt.PyJWKClient:
-    return jwt.PyJWKClient(url)
+_DEV = UsuarioAtual(id="dev", email="dev@local", admin=True)
 
 
-def usuario_atual(
-    cred: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    settings: Settings = Depends(get_settings),
-) -> UsuarioAtual:
-    if settings.auth_disabled:
-        return UsuarioAtual(id="dev", email="dev@local")
-    if cred is None or not settings.clerk_jwks_url:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Não autenticado")
-    try:
-        key = _jwks_client(settings.clerk_jwks_url).get_signing_key_from_jwt(cred.credentials)
-        claims = jwt.decode(
-            cred.credentials,
-            key.key,
-            algorithms=["RS256"],
-            issuer=settings.clerk_issuer or None,
-            options={"verify_aud": False},
-        )
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido") from exc
-    return UsuarioAtual(id=claims["sub"], email=claims.get("email"))
+async def _exigir(request: Request, permissao: Permission) -> UsuarioAtual:
+    if get_settings().auth_disabled:
+        return _DEV
+    user = await require_user(request, permissao)  # 401/403 no formato do kit
+    return UsuarioAtual(id=str(user.id), email=str(user.email), admin="admin" in user.roles)
+
+
+async def usuario_atual(request: Request) -> UsuarioAtual:
+    """Qualquer usuário verificado com permissão obra.usar (papéis user e admin)."""
+    return await _exigir(request, Permission.OBRA_USAR)
+
+
+async def usuario_admin(request: Request) -> UsuarioAtual:
+    """Cargas de referência, importações e exportação ao Simova (papel admin)."""
+    return await _exigir(request, Permission.OBRA_ADMINISTRAR)

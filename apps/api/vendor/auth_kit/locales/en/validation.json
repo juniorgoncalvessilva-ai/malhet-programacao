@@ -1,0 +1,1 @@
+{ "email.invalid": "Invalid e-mail.", "password.tooWeak": "Password must be at least 10 characters, with letters and numbers.", "validation.password.breached": "This password appeared in a breach. Choose another.", "required": "Required field." }

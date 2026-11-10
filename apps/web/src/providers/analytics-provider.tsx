@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Script from 'next/script';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@/lib/auth/compat';
 import { 
   isGoogleAnalyticsEnabled,
   isGoogleTagManagerEnabled,

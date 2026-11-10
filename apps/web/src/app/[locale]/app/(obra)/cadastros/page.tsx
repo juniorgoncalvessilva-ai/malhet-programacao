@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import Breadcrumb from '@/components/Breadcrumbs/Breadcrumb';
-import { Botao, Campo, Erro, Etiqueta, Painel, Tabela, UploadForm, td } from '@/components/Obra/ui';
+import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Tabela, UploadForm, td } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { chaves, useFrentes, useGrupos, useOpers, useUpload } from '@/hooks/programacao/queries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,8 +31,8 @@ export default function CadastrosPage() {
 
   return (
     <>
-      <Breadcrumb pageName="Cadastros Simova" />
-      <div className="space-y-6">
+      <Cabecalho eyebrow="Cadastros Simova" cor="var(--m-proc-medir)" titulo="Frentes, grupos e OPERs que o Simova reconhece" descricao="Importe OPER.xlsx e FRENTE.xlsx do Simova. OPERs criadas aqui ficam marcadas para retroalimentar o Simova." />
+      <div className="flex flex-col gap-4">
         <Painel
           titulo="Importar do Simova"
           acoes={<Botao variante="secundario" onClick={async () => {
@@ -56,8 +55,8 @@ export default function CadastrosPage() {
           <Painel titulo={`Grupos (${grupos.data?.length ?? 0})`}>
             <Tabela cabecalho={['Código', 'Descrição', 'UM']}>
               {grupos.data?.map((g) => (
-                <tr key={g.id} className={grupo === g.codigo ? 'bg-primary/5' : ''} onClick={() => setGrupo(g.codigo)} style={{ cursor: 'pointer' }}>
-                  <td className={td}>{g.codigo} {g.codigo_duplicado && <Etiqueta cor="vermelho">duplicado</Etiqueta>}</td>
+                <tr key={g.id} className={grupo === g.codigo ? 'bg-m-accent-subtle' : ''} onClick={() => setGrupo(g.codigo)} style={{ cursor: 'pointer' }}>
+                  <td className={td}>{g.codigo} {g.codigo_duplicado && <Pilula tom="perigo">duplicado</Pilula>}</td>
                   <td className={td}>{g.descricao}</td>
                   <td className={td}>{g.unidade_medida}</td>
                 </tr>
@@ -71,12 +70,12 @@ export default function CadastrosPage() {
                   <td className={td}>{o.grupo_codigo}/{o.codigo}</td>
                   <td className={td}>{o.descricao}</td>
                   <td className={td}>{o.unidade_medida}</td>
-                  <td className={td}><Etiqueta cor={o.origem === 'app' ? 'azul' : 'cinza'}>{o.origem}</Etiqueta>{o.pendente_envio_simova && <Etiqueta cor="amarelo">enviar</Etiqueta>}</td>
+                  <td className={td}><Pilula tom={o.origem === 'app' ? 'info' : 'neutro'}>{o.origem}</Pilula>{o.pendente_envio_simova && <Pilula tom="atencao">enviar</Pilula>}</td>
                 </tr>
               ))}
             </Tabela>
             {grupo && (
-              <form onSubmit={criarOper} className="mt-4 grid gap-3 border-t border-stroke pt-4 md:grid-cols-4 dark:border-dark-3">
+              <form onSubmit={criarOper} className="mt-4 grid gap-3 border-t border-m-stroke-subtle pt-4 md:grid-cols-4 ">
                 <Campo rotulo="Código" required value={nova.codigo} onChange={(e) => setNova({ ...nova, codigo: e.target.value })} />
                 <Campo rotulo="Descrição" required className="md:col-span-2" value={nova.descricao} onChange={(e) => setNova({ ...nova, descricao: e.target.value })} />
                 <Campo rotulo="Unidade (cód.)" value={nova.unidade_medida} onChange={(e) => setNova({ ...nova, unidade_medida: e.target.value })} />
@@ -89,7 +88,7 @@ export default function CadastrosPage() {
 
         <Painel titulo={`Frentes (${frentes.data?.length ?? 0})`}>
           <div className="flex flex-wrap gap-2">
-            {frentes.data?.map((f) => <Etiqueta key={f.codigo}>{f.codigo} · {f.descricao}</Etiqueta>)}
+            {frentes.data?.map((f) => <Pilula key={f.codigo}>{f.codigo} · {f.descricao}</Pilula>)}
           </div>
         </Painel>
       </div>

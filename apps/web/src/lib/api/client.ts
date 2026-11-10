@@ -1,8 +1,9 @@
 /**
  * Cliente da API Python (FastAPI). O token do Clerk vai no Authorization; a API valida via JWKS.
- * Base: NEXT_PUBLIC_API_URL (ex.: http://localhost:8000/api).
+ * Base: NEXT_PUBLIC_API_URL (padrão /backend/api, reescrito pelo Next para API_INTERNAL_URL — mesma origem,
+ * então o cookie de refresh e o CSRF do auth-kit funcionam sem CORS).
  */
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/backend/api';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public campo?: string | null) {
@@ -17,7 +18,7 @@ async function erro(res: Response): Promise<never> {
   let campo: string | null = null;
   try {
     const body = await res.json();
-    msg = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+    msg = body.message ?? (typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail));
     campo = body.campo ?? null;
   } catch {
     /* sem corpo */
@@ -30,7 +31,7 @@ export async function apiFetch<T>(path: string, getToken: TokenGetter, init: Req
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: 'include' });
   if (!res.ok) return erro(res);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -38,7 +39,7 @@ export async function apiFetch<T>(path: string, getToken: TokenGetter, init: Req
 
 export async function apiDownload(path: string, getToken: TokenGetter, nomePadrao: string): Promise<number> {
   const token = await getToken();
-  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' });
   if (!res.ok) return erro(res);
   const blob = await res.blob();
   const cd = res.headers.get('Content-Disposition') ?? '';

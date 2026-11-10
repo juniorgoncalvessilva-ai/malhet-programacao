@@ -1,4 +1,4 @@
-# Programação de Obra × Simova
+# Malhet · Programação de Obra × Simova
 
 Aplicação web para montar a **programação diária/semanal da obra** de acordo com a **capacidade produtiva das
 equipes**, usando a **versão vigente** do cronograma (P6), da PQ, da CPU e dos índices, e **retroalimentar o Simova**
@@ -6,7 +6,8 @@ equipes**, usando a **versão vigente** do cronograma (P6), da PQ, da CPU e dos 
 
 | Camada | Stack |
 | --- | --- |
-| Front | Next.js 15 (base: **AI Coders Starter Kit** — layout, sidebar, i18n, Clerk, TanStack Query, Zustand) em `apps/web` |
+| Front | Next.js 15 (base: **AI Coders Starter Kit** — i18n, TanStack Query, Zustand, toasts, tema) com a identidade **Malhet** (design system CorpMind: Figtree, teal/carvão) em `apps/web` |
+| Auth | **auth-kit** (`apps/api/vendor/auth_kit`): cadastro + verificação de e-mail, login, refresh em cookie com CSRF, 2FA TOTP, RBAC `user`/`admin` |
 | API | Python 3.12+ · FastAPI · SQLAlchemy 2 · Alembic · Pydantic em `apps/api` |
 | Banco | PostgreSQL 16 (substitui o Supabase do kit) |
 
@@ -28,8 +29,14 @@ cd apps/api && .venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app 
 cd apps/web && npm install && cp .env.local.example .env.local && npm run dev
 ```
 
-Sem chaves do Clerk, use `AUTH_DISABLED=true` e `NEXT_PUBLIC_AUTH_DISABLED=true` no `.env.local` do web (e
-`AUTH_DISABLED=true` no `.env` da API). Documentação interativa da API: <http://localhost:8000/docs>.
+Acesse <http://localhost:3000> e entre com o admin semente do `.env` da API (`SEED_ADMIN_EMAIL` /
+`SEED_ADMIN_PASSWORD`; troque a senha e esvazie as variáveis depois do primeiro boot). O navegador chama a API pelo
+próprio Next em `/backend/api/*` (mesma origem: o cookie de refresh e o CSRF do auth-kit funcionam sem CORS).
+Para desenvolver sem login: `AUTH_DISABLED=true` na API e `NEXT_PUBLIC_AUTH_DISABLED=true` no web.
+
+Papéis: `user` programa e aprova; `admin` também carrega versões de referência, importa cadastros e envia a FT
+ao Simova. Promova um usuário com `UPDATE auth_users SET roles = 'admin' …` (ou pelo seed).
+Documentação interativa da API: <http://localhost:8000/docs>.
 
 Testes da API (precisa do banco `programacao_test`):
 
@@ -55,7 +62,11 @@ apps/api/app/modules/
   equipes/            equipe = frente de trabalho com composição por função
   programacao/        agregado ItemProgramacao, capacidade, calendário, gargalo, sequenciador
   integracao_simova/  importar OPER/FRENTE/FT · exportar FT_IMPORT_INTERMEDIARIA e OPERs novas
+apps/api/vendor/auth_kit/  cópia do auth-kit (ORIGEM = repo@commit) + permissões obra.usar / obra.administrar
 apps/web/src/app/[locale]/app/(obra)/   programacao · referencias · equipes · cadastros
+apps/web/src/app/[locale]/auth/         entrar · cadastro · verificar (telas Malhet)
+apps/web/src/components/Malhet/         shell (lateral, topo, trilha), menu, TelaAuth
+apps/web/src/css/malhet.css             tokens CorpMind (claro/escuro)
 docs/       PRD, domínio e regras de cálculo, legado (macros VBA da planilha v5)
 specs/      Spec-Driven Development (changes/ → archive/)
 .claude/skills/  skills do projeto (extraídas do código)

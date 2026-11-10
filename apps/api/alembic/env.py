@@ -18,12 +18,14 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
+import app.core.authkit  # noqa: F401
 import app.models  # noqa: F401
 from app.core.config import get_settings
 from app.core.db import Base
+from modules.auth.infra.models import Base as AuthBase
 
 config.set_main_option('sqlalchemy.url', get_settings().database_url)
-target_metadata = Base.metadata
+target_metadata = [Base.metadata, AuthBase.metadata]
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

@@ -1,0 +1,49 @@
+"""Interfaces de repositório (persistência atrás de contrato)."""
+from __future__ import annotations
+from abc import ABC, abstractmethod
+from ..domain.entities import User, Credential, Session, OneTimeToken, MfaSecret
+
+
+class UserRepository(ABC):
+    @abstractmethod
+    async def by_email(self, email: str) -> User | None: ...
+    @abstractmethod
+    async def by_id(self, user_id: str) -> User | None: ...
+    @abstractmethod
+    async def save(self, user: User) -> None: ...
+
+
+class CredentialRepository(ABC):
+    @abstractmethod
+    async def by_user(self, user_id: str) -> Credential | None: ...
+    @abstractmethod
+    async def save(self, cred: Credential) -> None: ...
+
+
+class SessionRepository(ABC):
+    @abstractmethod
+    async def by_id(self, session_id: str) -> Session | None: ...
+    @abstractmethod
+    async def save(self, session: Session) -> None: ...
+    @abstractmethod
+    async def by_refresh_hash(self, refresh_hash: str) -> Session | None: ...
+    @abstractmethod
+    async def revoke_all_for_user(self, user_id: str) -> None: ...
+    @abstractmethod
+    async def revoke_family(self, family_id: str) -> None: ...
+    @abstractmethod
+    async def list_for_user(self, user_id: str) -> list[Session]: ...
+
+
+class TokenRepository(ABC):
+    @abstractmethod
+    async def save(self, token: OneTimeToken) -> None: ...
+    @abstractmethod
+    async def find_valid(self, token_hash: str, purpose: str) -> OneTimeToken | None: ...
+
+
+class MfaRepository(ABC):
+    @abstractmethod
+    async def by_user(self, user_id: str) -> MfaSecret | None: ...
+    @abstractmethod
+    async def save(self, mfa: MfaSecret) -> None: ...

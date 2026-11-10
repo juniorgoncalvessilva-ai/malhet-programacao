@@ -1,0 +1,78 @@
+/* Malhet · design system CorpMind (tokens de project/ds/corpmind/tokens.json do canvas Malhet).
+   Claro = "Teal", escuro = "Carvão". next-themes alterna a classe .dark no <html>. */
+:root {
+  --m-surface-base: #F6F8F8;
+  --m-surface-raised: #FFFFFF;
+  --m-surface-field: #FFFFFF;
+  --m-surface-hover: #F4F4F5;
+  --m-surface-active: #E6EFEF;
+  --m-stroke-subtle: #ECEEEF;
+  --m-stroke: #E2E5E7;
+  --m-stroke-strong: #A1A8B0;
+  --m-row: #F1F3F4;
+  --m-text-primary: #070911;
+  --m-text-secondary: #3F3F46;
+  --m-text-tertiary: #52525B;
+  --m-text-muted: #5F6368;
+  --m-accent: #284E4F;
+  --m-accent-strong: #284E4F;
+  --m-accent-hover: #1F3D3E;
+  --m-accent-subtle: #E6EFEF;
+  --m-on-accent: #FFFFFF;
+  --m-terracota: #B36449;
+  --m-success: #15803D;
+  --m-success-subtle: #F0FDF4;
+  --m-warning: #854D0E;
+  --m-warning-subtle: #FEFCE8;
+  --m-danger: #B91C1C;
+  --m-danger-subtle: #FEF2F2;
+  --m-info: #1D4ED8;
+  --m-info-subtle: #EFF6FF;
+  --m-proc-planejar: #1D4ED8;
+  --m-proc-executar: #15803D;
+  --m-proc-medir: #854D0E;
+  --m-proc-administrar: #BE185D;
+  --m-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.dark {
+  --m-surface-base: #141517;
+  --m-surface-raised: #1B1D20;
+  --m-surface-field: #232529;
+  --m-surface-hover: #2A2D31;
+  --m-surface-active: #33373C;
+  --m-stroke-subtle: #26282C;
+  --m-stroke: #34373C;
+  --m-stroke-strong: #474B51;
+  --m-row: #26282C;
+  --m-text-primary: #ECECEA;
+  --m-text-secondary: #C8C9C6;
+  --m-text-tertiary: #A9ABA8;
+  --m-text-muted: #909290;
+  --m-accent: #6FB3B1;
+  --m-accent-strong: #2F7372;
+  --m-accent-hover: #9FD0CE;
+  --m-accent-subtle: #1F3F40;
+  --m-success: #32AD52;
+  --m-success-subtle: #1B2E22;
+  --m-warning: #F3C357;
+  --m-warning-subtle: #33301F;
+  --m-danger: #E7615B;
+  --m-danger-subtle: #3A2426;
+  --m-info: #78B0FF;
+  --m-info-subtle: #1B2A3F;
+  --m-proc-planejar: #78B0FF;
+  --m-proc-executar: #32AD52;
+  --m-proc-medir: #F3C357;
+  --m-proc-administrar: #E15E8C;
+  --m-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+body.malhet {
+  font-family: 'Figtree Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.malhet :focus-visible {
+  outline: 2px solid var(--m-accent);
+  outline-offset: 2px;
+}
