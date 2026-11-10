@@ -12,7 +12,7 @@ export function useNavigation(): NavigationData {
     {
       label: t('obra'),
       items: [
-        { title: t('programacao'), url: '/app/programacao', icon: Icons.Calendar, items: [] },
+        { title: t('programacao'), url: '/app/programacoes', icon: Icons.Calendar, items: [] },
         { title: t('referencias'), url: '/app/referencias', icon: Icons.Table, items: [] },
         { title: t('equipes'), url: '/app/equipes', icon: Icons.User, items: [] },
         { title: t('cadastrosSimova'), url: '/app/cadastros', icon: Icons.FourCircle, items: [] },

@@ -16,7 +16,7 @@ export default function EntrarPage() {
   const [erro, setErro] = useState<unknown>(null);
   const [enviando, setEnviando] = useState(false);
 
-  useEffect(() => { if (carregado && usuario) router.replace('/app/programacao'); }, [carregado, usuario, router]);
+  useEffect(() => { if (carregado && usuario) router.replace('/app/programacoes'); }, [carregado, usuario, router]);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +25,7 @@ export default function EntrarPage() {
     try {
       const r = await entrar(email, senha, pedeMfa ? codigo : undefined);
       if (r.mfa) setPedeMfa(true);
-      else router.replace('/app/programacao');
+      else router.replace('/app/programacoes');
     } catch (er) { setErro(er); } finally { setEnviando(false); }
   };
 

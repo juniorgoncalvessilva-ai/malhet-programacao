@@ -32,7 +32,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Visual = design system CorpMind do canvas Malhet (skill `ui-malhet`): tokens em `src/css/malhet.css`, classes
   Tailwind `m-*`, componentes em `src/components/Obra/ui.tsx`, shell em `src/components/Malhet/`. Não use as cores
   do kit (`primary`, `dark-*`, `gray-*`) em telas novas.
-- Páginas da obra em `src/app/[locale]/app/(obra)/`; menu em `src/components/Malhet/menu.ts`.
+- Páginas da obra em `src/app/[locale]/app/(obra)/` (o `layout.tsx` só monta com obra escolhida); menu em
+  `src/components/Malhet/menu.ts`. Fluxo principal (spec 008): Importações → Frentes → Catálogo → Programações
+  (montar → emitir → imprimir → FT). Hooks em `src/hooks/programacao/planejamento.ts`.
 - Obra corrente: `useObra()` (`src/lib/obra/ObraProvider.tsx`): obras, papel, `pode('planejador')`, superadmin.
   `useApi()` já manda o `X-Obra-Id`; trocar de obra remonta as telas. Esconda ações que o papel não permite.
 - Sessão: `useSessao()` (`src/lib/auth/AuthProvider.tsx`). Código antigo do kit usa o shim `src/lib/auth/compat.ts`.

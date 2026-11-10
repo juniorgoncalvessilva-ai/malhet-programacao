@@ -41,7 +41,7 @@ export function Cabecalho({ eyebrow, cor = 'var(--m-proc-planejar)', titulo, des
 }
 
 export function Painel({ titulo, subtitulo, acoes, children, className }: {
-  titulo: string; subtitulo?: ReactNode; acoes?: ReactNode; children: ReactNode; className?: string;
+  titulo: ReactNode; subtitulo?: ReactNode; acoes?: ReactNode; children: ReactNode; className?: string;
 }) {
   return (
     <section className={cn('flex min-w-0 flex-col gap-4 rounded-m-xl border border-m-stroke-subtle bg-m-surface-raised p-5 sm:p-6', className)}>
@@ -162,8 +162,8 @@ export function Indicador({ rotulo, valor, detalhe, tom }: { rotulo: string; val
   );
 }
 
-export function UploadForm({ campos, onEnviar, rotulo, pendente, children }: {
-  campos: { nome: string; rotulo: string }[];
+export function UploadForm({ campos, onEnviar, rotulo, pendente, children, accept = '.xlsx,.xlsm' }: {
+  campos: { nome: string; rotulo: string }[]; accept?: string;
   onEnviar: (fd: FormData) => void; rotulo: string; pendente?: boolean; children?: ReactNode;
 }) {
   return (
@@ -175,7 +175,7 @@ export function UploadForm({ campos, onEnviar, rotulo, pendente, children }: {
         <label key={c.nome} className={rotuloCls}>
           {c.rotulo}
           <input
-            type="file" name={c.nome} accept=".xlsx,.xlsm"
+            type="file" name={c.nome} accept={accept}
             className="h-10 rounded-m-md border border-dashed border-m-stroke-strong bg-m-surface-field px-2 py-2 text-[13px] font-normal normal-case tracking-normal text-m-text-secondary file:mr-3 file:rounded-full file:border-0 file:bg-m-accent-subtle file:px-3 file:py-1 file:text-xs file:font-semibold file:text-m-accent"
           />
         </label>

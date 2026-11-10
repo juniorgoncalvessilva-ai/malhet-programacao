@@ -77,3 +77,27 @@ export interface ContaAdmin {
   id: string; email: string; roles: string[]; status: string; verificado: boolean; mfa_enabled: boolean;
   created_at: string; obras: { obra: string; papel: PapelObra }[];
 }
+
+// ---- programação simplificada (spec 008)
+export interface Area { id: number; local_id: number; cwa: string; codigo: string; descricao: string; tag: string | null; ordem: number; ativo: boolean }
+export interface Local { id: number; codigo: string; descricao: string; ordem: number; ativo: boolean; areas: Area[] }
+export interface ItemCatalogo { id: number; tipo_id: number; numero: number; codigo: string; complemento: string; descricao: string; item_pq: string | null; ativo: boolean }
+export interface TipoCatalogo { id: number; grupo_id: number; numero: number; codigo: string; descricao: string; unidade: string | null; ativo: boolean; itens_pq: string[]; itens: ItemCatalogo[] }
+export interface GrupoCatalogo { id: number; numero: number; codigo: string; descricao: string; ativo: boolean; tipos: TipoCatalogo[] }
+export interface ProgramacaoResumo { id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: 'rascunho' | 'emitida'; revisao: number; linhas: number }
+export interface LinhaVisao {
+  id: number; n: number; area_id: number; tipo_id: number; item_simova_id: number | null;
+  grupo: { codigo: string; descricao: string }; codigo_simova: string; descricao: string; complemento: string | null;
+  unidade: string | null; item_pq: string | null; descricao_pq: string | null; pu: number | null;
+  qtd_takeoff: number | null; qtd_projeto: number | null; id_crono: string | null; atividade_crono: string | null;
+  equipe_id: number | null; equipe: string | null; encarregado: string | null; cracha: string | null; observacao: string | null;
+  previsto: (number | null)[]; realizado: (number | null)[]; total_previsto: number; total_realizado: number;
+}
+export interface ProgramacaoVisao {
+  id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: 'rascunho' | 'emitida'; revisao: number;
+  dias: { data: string; dia: string }[]; linhas: number;
+  locais: { id: number; codigo: string; descricao: string; areas: { id: number; codigo: string; cwa: string; descricao: string; tag: string | null; linhas: LinhaVisao[] }[] }[];
+  emitida_em?: string; emitida_por?: string;
+}
+export interface ItemPqBusca { item: string; descricao: string; unid: string | null; quantidade: number | null; cpu: string | null; qtd_tag: number | null }
+export interface AtividadeBusca { id_crono: string; atividade: string; inicio: string | null; fim: string | null; status: string | null; wbs: string | null }

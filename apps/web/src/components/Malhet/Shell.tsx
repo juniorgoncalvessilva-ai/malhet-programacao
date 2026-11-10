@@ -191,7 +191,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const telaAdmin = pathname?.startsWith('/app/admin');
   return (
     <div className="min-h-screen bg-m-surface-base text-m-text-primary">
-      <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r border-m-stroke-subtle bg-m-surface-raised lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r border-m-stroke-subtle bg-m-surface-raised lg:block print:hidden">
         <Lateral />
       </aside>
       {gaveta && (
@@ -203,8 +203,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </aside>
         </div>
       )}
-      <div className="flex min-h-screen flex-col lg:ml-[248px]">
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b border-m-stroke-subtle bg-m-surface-raised px-4 sm:px-8">
+      <div className="flex min-h-screen flex-col lg:ml-[248px] print:ml-0">
+        <header className="sticky top-0 z-40 flex h-16 print:hidden items-center justify-between gap-3 border-b border-m-stroke-subtle bg-m-surface-raised px-4 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" aria-label="Abrir menu" onClick={() => setGaveta(true)} className="-ml-1 p-1 text-m-text-secondary lg:hidden"><MenuIcon size={20} /></button>
             <nav aria-label="Trilha" className="truncate text-[13px] text-m-text-muted">
@@ -217,7 +217,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Usuario />
           </div>
         </header>
-        <main className="flex flex-col gap-5 px-4 pb-10 pt-7 sm:px-8">
+        <main className="flex flex-col gap-5 px-4 pb-10 pt-7 sm:px-8 print:p-0">
           {obra || telaAdmin || carregando ? children : <SemObra superadmin={superadmin} />}
         </main>
       </div>

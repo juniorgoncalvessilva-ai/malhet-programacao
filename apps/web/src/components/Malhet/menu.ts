@@ -1,4 +1,4 @@
-import { Building2, CalendarRange, Database, GitMerge, KeyRound, Users, type LucideIcon } from 'lucide-react';
+import { BookOpen, Building2, CalendarRange, FileUp, KeyRound, MapPin, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean }
@@ -7,19 +7,20 @@ export interface GrupoMenu { etapa: string; cor: string; itens: ItemMenu[] }
 /** Menu do app "Programação" dentro do Malhet, por etapa (cores proc-* do CorpMind). */
 export const MENU: GrupoMenu[] = [
   {
-    etapa: 'Planejar',
+    etapa: 'Programar',
     cor: 'var(--m-proc-planejar)',
     itens: [
-      { titulo: 'Programação semanal', url: '/app/programacao', icone: CalendarRange },
+      { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
     ],
   },
   {
-    etapa: 'Referências',
+    etapa: 'Cadastros',
     cor: 'var(--m-proc-medir)',
     itens: [
-      { titulo: 'Versões e vínculos', url: '/app/referencias', icone: GitMerge },
-      { titulo: 'Cadastros Simova', url: '/app/cadastros', icone: Database },
+      { titulo: 'Frentes', url: '/app/frentes', icone: MapPin },
+      { titulo: 'Catálogo de atividades', url: '/app/catalogo', icone: BookOpen },
+      { titulo: 'Importações', url: '/app/importacoes', icone: FileUp },
     ],
   },
   {
