@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -5,7 +6,6 @@ import app.core.authkit  # noqa: F401  (antes de qualquer import do kit)
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from modules.auth.infra.seed import seed_admin
 from modules.auth.presentation.container import build_auth
 from modules.auth.presentation.router import router as auth_router
 
@@ -22,11 +22,23 @@ from app.modules.referencias.api.router import router as referencias
 from app.shared.errors import DomainError, NotFoundError
 
 
+log = logging.getLogger("malhet")
+
+# Contas promovidas a Super Admin no boot: SUPERADMIN_* e o admin semente SEED_ADMIN_* (mesmo e-mail/senha do Coolify)
+_SUPERADMINS = (("SUPERADMIN_EMAIL", "SUPERADMIN_PASSWORD"), ("SEED_ADMIN_EMAIL", "SEED_ADMIN_PASSWORD"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await seed_admin(app.state.auth)
-    await garantir_superadmin(ContasAuthKit(app.state.auth), os.getenv("SUPERADMIN_EMAIL", "").strip(),
-                              os.getenv("SUPERADMIN_PASSWORD", ""))
+    contas = ContasAuthKit(app.state.auth)
+    for var_email, var_senha in _SUPERADMINS:
+        email = os.getenv(var_email, "").strip()
+        try:
+            await garantir_superadmin(contas, email, os.getenv(var_senha, ""))
+            if email:
+                log.warning("Super Admin garantido: %s (%s)", email, var_email)
+        except Exception as exc:  # senha fora da regra etc.: não derruba a API
+            log.error("Não foi possível garantir o Super Admin %s (%s): %s", email, var_email, exc)
     yield
 
 

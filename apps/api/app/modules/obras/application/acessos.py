@@ -59,10 +59,16 @@ async def conceder_acesso(s: Session, contas: ContasGateway, obra_id: int, d: Co
 
 
 async def garantir_superadmin(contas: ContasGateway, email: str, senha: str) -> None:
-    """Seed do Super Admin (SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD). Idempotente."""
-    if not email or not senha:
+    """Seed do Super Admin. Idempotente: cria a conta (confirmada) ou só promove a superadmin.
+
+    Não troca a senha de conta que já existe.
+    """
+    email = (email or "").strip().lower()
+    if not email:
         return
     conta = await contas.por_email(email)
+    if conta is None and not senha:
+        return
     if conta is None:
         await contas.criar_verificada(email, senha, roles=("superadmin",))
     elif "superadmin" not in conta.roles:

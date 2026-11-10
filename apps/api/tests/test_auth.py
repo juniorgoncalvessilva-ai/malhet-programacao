@@ -77,3 +77,17 @@ def test_superadmin_obras_acessos_e_isolamento(client, monkeypatch):
     client.put(f"/api/admin/obras/{obra_b}", headers=sa, json={"codigo": "M450", "nome": "Usina 1 · Montagem", "ativa": False})
     assert client.get("/api/obras/minhas", headers=plan).json() == []
     assert client.get("/api/cadastros/frentes", headers=hb).status_code == 404
+
+
+def test_seed_promove_conta_existente_e_tolera_senha_fraca(client):
+    contas = ContasAuthKit(app.state.auth)
+    asyncio.run(contas.criar_verificada("admin@construtora-demo.test", "SenhaForte123"))
+    asyncio.run(garantir_superadmin(contas, "Admin@Construtora-Demo.test", ""))  # conta existe: só promove
+    conta = asyncio.run(contas.por_email("admin@construtora-demo.test"))
+    assert "superadmin" in conta.roles
+    r = client.post("/api/auth/login", json={"email": "admin@construtora-demo.test", "password": "SenhaForte123"})
+    assert r.status_code == 200  # senha não foi trocada
+    import pytest
+    from app.shared.errors import DomainError
+    with pytest.raises(DomainError):  # senha fora da regra: o boot registra e segue (main.lifespan)
+        asyncio.run(garantir_superadmin(contas, "novo@obra.com", "fraca"))

@@ -42,8 +42,11 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
       COOKIE_SAMESITE: lax
       HSTS: ${HSTS:-0}
-      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:?defina SUPERADMIN_EMAIL}
-      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?defina SUPERADMIN_PASSWORD (10+ caracteres, letra e número)}
+      # Super Admin(s) criados/promovidos no boot. Basta um dos pares.
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       MAIL_PROVIDER: ${MAIL_PROVIDER:-console}
       MAIL_FROM: ${MAIL_FROM:-nao-responder@malhet.app}
       SMTP_HOST: ${SMTP_HOST:-}
