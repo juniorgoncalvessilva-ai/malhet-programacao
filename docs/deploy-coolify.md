@@ -53,3 +53,11 @@ bash infra/limpar-vps.sh --apagar
 (e pelo botão *Run workflow* na aba Actions). Cadastre uma vez o secret **`COOLIFY_TOKEN`**
 (Coolify › Keys & Tokens › API tokens, com permissão de deploy) em Settings › Secrets and variables › Actions.
 Opcional: variáveis `COOLIFY_URL` e `COOLIFY_UUID` (padrão: `http://179.199.156.129:8000` e `zhailxjohc52ohmgm36jzdpp`).
+
+## Memória da VPS
+O `next build` usa ~1,5 GB (limitado por `NODE_OPTIONS` no `apps/web/Dockerfile`). Com 2 GB de RAM ou menos, crie
+swap antes do primeiro deploy, senão o build morre com `signal SIGKILL`:
+
+```bash
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
