@@ -81,32 +81,47 @@ def _gerar_env() -> dict[str, str]:
     }
 
 
+# Projeto Malhet (o token do Coolify só enxerga este projeto)
+PROJETO_UUID = os.environ.get("COOLIFY_PROJECT_UUID", "tddoz2comhgtshnoyh5hjizy")
+SERVIDOR_UUID = os.environ.get("COOLIFY_SERVER_UUID", "u6vdxlcsllwwtf8q4l3casmr")
+DESTINO_UUID = os.environ.get("COOLIFY_DESTINATION_UUID", "k4r7xfge6dfrlxpzlkrfezre")
+NOME_APP = "malhet-programacao"
+
+
+def _url_git() -> str:
+    """HTTPS com o token temporário da execução (só leitura deste repo; expira ao fim do job)."""
+    tok = os.environ.get("GH_CLONE_TOKEN", "")
+    return f"https://x-access-token:{tok}@github.com/{REPO}.git" if tok else f"https://github.com/{REPO}.git"
+
+
+def _app_existente() -> str | None:
+    st, apps = api("GET", "/applications")
+    for a in apps if isinstance(apps, list) else []:
+        if a.get("name") == NOME_APP:
+            return a["uuid"]
+    return None
+
+
 def criar() -> None:
-    st, servers = api("GET", "/servers")
-    server = next((s for s in servers if s.get("is_usable", True)), servers[0])
-    st, gh = api("GET", "/github-apps")
-    gh = gh if isinstance(gh, list) else []
-    gh_app = next((g for g in gh if not g.get("is_public")), None)
-    st, proj = api("POST", "/projects", {"name": "Malhet Programação", "description": "Programação de obra × Simova"})
-    print("PROJETO", st, so(proj, ("uuid",)) if isinstance(proj, dict) else proj)
-    if st >= 300:
-        sys.exit(1)
-    base = {"project_uuid": proj["uuid"], "server_uuid": server["uuid"], "environment_name": "production",
-            "git_repository": REPO, "git_branch": "main", "build_pack": "dockercompose",
-            "docker_compose_location": "/docker-compose.coolify.yml", "ports_exposes": "3000",
-            "name": "malhet", "description": "Malhet · Programação × Simova", "instant_deploy": False}
-    if gh_app:
-        st, app = api("POST", "/applications/private-github-app", {**base, "github_app_uuid": gh_app["uuid"]})
-        print("APP (github app)", st, app if st >= 300 else so(app, ("uuid", "domains")))
+    uuid = _app_existente()
+    if uuid:
+        print(f"App {NOME_APP} já existe ({uuid}); só faço o deploy.")
     else:
-        print("::error::Nenhum GitHub App privado no Coolify; não há como ler o repositório privado.")
-        sys.exit(1)
-    if st >= 300:
-        sys.exit(1)
-    uuid = app["uuid"]
-    envs = [{"key": k, "value": v, "is_preview": False} for k, v in _gerar_env().items()]
-    st, r = api("PATCH", f"/applications/{uuid}/envs/bulk", {"data": envs})
-    print("ENVS", st, "ok" if st < 300 else r)
+        corpo = {"project_uuid": PROJETO_UUID, "server_uuid": SERVIDOR_UUID, "destination_uuid": DESTINO_UUID,
+                 "environment_name": "production", "git_repository": _url_git(), "git_branch": "main",
+                 "build_pack": "dockercompose", "docker_compose_location": "/docker-compose.coolify.yml",
+                 "ports_exposes": "3000", "name": NOME_APP, "description": "Malhet · Programação × Simova",
+                 "instant_deploy": False}
+        st, app = api("POST", "/applications/public", corpo)
+        print("APP", st, so(app, ("uuid",)) if st < 300 else app)
+        if st >= 300:
+            sys.exit(1)
+        uuid = app["uuid"]
+        envs = [{"key": k, "value": v, "is_preview": False} for k, v in _gerar_env().items()]
+        st, r = api("PATCH", f"/applications/{uuid}/envs/bulk", {"data": envs})
+        print("ENVS", st, "ok (valores só no Coolify)" if st < 300 else r)
+        if st >= 300:
+            sys.exit(1)
     with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
         f.write(f"app_uuid={uuid}\n")
     print(f"APP_UUID={uuid}")
@@ -114,6 +129,9 @@ def criar() -> None:
 
 
 def deploy(uuid: str) -> None:
+    if os.environ.get("GH_CLONE_TOKEN"):
+        st, r = api("PATCH", f"/applications/{uuid}", {"git_repository": _url_git()})
+        print("URL do git renovada", st, "" if st < 300 else r)
     st, r = api("POST", f"/deploy?uuid={uuid}&force=true")
     print("DEPLOY", st, r)
     if st >= 300:

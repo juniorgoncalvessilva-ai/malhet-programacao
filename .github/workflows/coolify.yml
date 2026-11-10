@@ -18,6 +18,9 @@ jobs:
       COOLIFY_URL: ${{ vars.COOLIFY_URL || 'http://179.199.156.129:8000' }}
       APP_URL: ${{ vars.APP_URL || 'http://179.199.156.129:3000' }}
       COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      GH_CLONE_TOKEN: ${{ github.token }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,5 +28,5 @@ jobs:
       - name: ${{ inputs.acao }}
         run: python3 .github/scripts/coolify.py "${{ inputs.acao }}" "${{ inputs.app_uuid }}"
       - name: Acompanhar o deploy e testar a aplicação
-        if: inputs.acao != 'diagnostico'
+        if: inputs.acao == 'criar' || inputs.acao == 'deploy'
         run: bash .github/scripts/acompanhar-deploy.sh "$DEPLOY_UUID"
