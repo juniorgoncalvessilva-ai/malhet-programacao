@@ -47,3 +47,9 @@ bash infra/limpar-vps.sh --apagar
   `HSTS=1`, `APP_URL` e faça redeploy. Aí a porta 3000 pode ser fechada no firewall.
 - Backup: Coolify › recurso › *Backups* do serviço `db` (ou `pg_dump` agendado).
 - E-mail: `MAIL_PROVIDER=smtp` + `SMTP_*`. Sem isso os e-mails do auth-kit saem só no log da API.
+
+## 4. Deploy automático pelo GitHub Actions
+`.github/workflows/deploy-coolify.yml` chama `GET /api/v1/deploy?uuid=…` do Coolify a cada push em `main`
+(e pelo botão *Run workflow* na aba Actions). Cadastre uma vez o secret **`COOLIFY_TOKEN`**
+(Coolify › Keys & Tokens › API tokens, com permissão de deploy) em Settings › Secrets and variables › Actions.
+Opcional: variáveis `COOLIFY_URL` e `COOLIFY_UUID` (padrão: `http://179.199.156.129:8000` e `zhailxjohc52ohmgm36jzdpp`).

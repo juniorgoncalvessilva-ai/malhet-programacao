@@ -1,0 +1,42 @@
+# Dispara o deploy no Coolify a cada push em main (ou manualmente na aba Actions).
+# Requer o secret do repositório COOLIFY_TOKEN (Settings › Secrets and variables › Actions).
+name: Deploy no Coolify
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-coolify
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      COOLIFY_URL: ${{ vars.COOLIFY_URL || 'http://179.199.156.129:8000' }}
+      COOLIFY_UUID: ${{ vars.COOLIFY_UUID || 'zhailxjohc52ohmgm36jzdpp' }}
+    steps:
+      - name: Conferir o token
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_TOKEN" ]; then
+            echo "::error::Cadastre o secret COOLIFY_TOKEN em Settings › Secrets and variables › Actions."
+            exit 1
+          fi
+      - name: Disparar o deploy
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          status=$(curl -sS -m 60 -o resposta.json -w '%{http_code}' \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_UUID&force=false")
+          echo "HTTP $status"; cat resposta.json; echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::O Coolify respondeu HTTP $status. Confira o token, o uuid do recurso e se a porta 8000 está aberta."
+            exit 1
+          fi
+          echo "Deploy enfileirado. Acompanhe em $COOLIFY_URL (recurso $COOLIFY_UUID › Deployments)."
