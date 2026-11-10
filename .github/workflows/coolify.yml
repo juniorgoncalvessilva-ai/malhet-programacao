@@ -1,0 +1,29 @@
+# Operações no Coolify pela API: diagnóstico, criar o projeto do zero (e fazer o deploy), ou deploy de um app.
+name: Coolify
+on:
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: diagnostico | criar | deploy
+        required: true
+        default: diagnostico
+      app_uuid:
+        description: uuid do app (só para deploy)
+        required: false
+jobs:
+  coolify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COOLIFY_URL: ${{ vars.COOLIFY_URL || 'http://179.199.156.129:8000' }}
+      APP_URL: ${{ vars.APP_URL || 'http://179.199.156.129:3000' }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: ${{ inputs.acao }}
+        run: python3 .github/scripts/coolify.py "${{ inputs.acao }}" "${{ inputs.app_uuid }}"
+      - name: Acompanhar o deploy e testar a aplicação
+        if: inputs.acao != 'diagnostico'
+        run: bash .github/scripts/acompanhar-deploy.sh "$DEPLOY_UUID"
