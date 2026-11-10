@@ -5,3 +5,6 @@ from app.modules.referencias.infra import models as _referencias  # noqa: F401
 from app.modules.equipes.infra import models as _equipes  # noqa: F401
 from app.modules.programacao.infra import models as _programacao  # noqa: F401
 from app.modules.obras.infra import models as _obras  # noqa: F401
+from app.modules.frentes.infra import models as _frentes  # noqa: F401
+from app.modules.catalogo.infra import models as _catalogo  # noqa: F401
+from app.modules.planejamento.infra import models as _planejamento  # noqa: F401

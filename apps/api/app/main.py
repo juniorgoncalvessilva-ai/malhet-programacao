@@ -12,6 +12,9 @@ from modules.auth.presentation.router import router as auth_router
 import app.models  # noqa: F401  (registra os modelos)
 from app.core.config import get_settings
 from app.modules.cadastros.api.router import router as cadastros
+from app.modules.catalogo.api.router import router as catalogo
+from app.modules.frentes.api.router import router as frentes
+from app.modules.planejamento.api.router import router as planejamento
 from app.modules.equipes.api.router import router as equipes
 from app.modules.integracao_simova.api.router import router as simova
 from app.modules.obras.api.router import router as obras
@@ -42,7 +45,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Malhet · Programação × Simova", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="Malhet · Programação × Simova", version="0.4.0", lifespan=lifespan)
 app.state.auth = build_auth()
 app.add_middleware(
     CORSMiddleware, allow_origins=get_settings().cors_list, allow_credentials=True,
@@ -76,5 +79,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, cadastros, referencias, equipes, programacao, simova):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova):
     app.include_router(r, prefix="/api")

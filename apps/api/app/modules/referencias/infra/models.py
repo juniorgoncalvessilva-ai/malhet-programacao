@@ -138,3 +138,16 @@ class VinculoReferenciaModel(Base):
     atualizado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class PqQuantidadeTagModel(Base):
+    """Take-off (aba MC FRENTES): quantidade de cada item de PQ por TAG (1800AA-ED-01)."""
+
+    __tablename__ = "pq_quantidade_tag"
+    __table_args__ = (UniqueConstraint("versao_id", "item", "tag", name="uq_pq_qtd_tag"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    versao_id: Mapped[int] = mapped_column(ForeignKey("versao_referencia.id", ondelete="CASCADE"), index=True)
+    item: Mapped[str] = mapped_column(String(40), index=True)
+    tag: Mapped[str] = mapped_column(String(40), index=True)
+    quantidade: Mapped[float] = mapped_column(Float)
+    unid: Mapped[str | None] = mapped_column(String(20))
