@@ -14,10 +14,11 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 35
     env:
       COOLIFY_URL: ${{ vars.COOLIFY_URL || 'http://179.199.156.129:8000' }}
       COOLIFY_UUID: ${{ vars.COOLIFY_UUID || 'zhailxjohc52ohmgm36jzdpp' }}
+      APP_URL: ${{ vars.APP_URL || 'http://179.199.156.129:3000' }}
     steps:
       - name: Conferir o token
         env:
@@ -39,4 +40,13 @@ jobs:
             echo "::error::O Coolify respondeu HTTP $status. Confira o token, o uuid do recurso e se a porta 8000 está aberta."
             exit 1
           fi
-          echo "Deploy enfileirado. Acompanhe em $COOLIFY_URL (recurso $COOLIFY_UUID › Deployments)."
+          dep=$(python3 -c 'import json;print(json.load(open("resposta.json"))["deployments"][0]["deployment_uuid"])')
+          echo "DEPLOY_UUID=$dep" >> "$GITHUB_ENV"
+          echo "Deploy $dep enfileirado."
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Acompanhar até o fim e testar a aplicação
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: bash .github/scripts/acompanhar-deploy.sh "$DEPLOY_UUID"

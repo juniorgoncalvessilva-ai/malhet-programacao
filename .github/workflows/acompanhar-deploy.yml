@@ -1,0 +1,21 @@
+# Acompanha um deploy já disparado (sem disparar outro): Actions › Acompanhar deploy › Run workflow.
+name: Acompanhar deploy
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_uuid:
+        description: uuid do deploy no Coolify
+        required: true
+jobs:
+  acompanhar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COOLIFY_URL: ${{ vars.COOLIFY_URL || 'http://179.199.156.129:8000' }}
+      APP_URL: ${{ vars.APP_URL || 'http://179.199.156.129:3000' }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - run: bash .github/scripts/acompanhar-deploy.sh "${{ inputs.deployment_uuid }}"
