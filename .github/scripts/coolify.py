@@ -129,7 +129,7 @@ def criar() -> None:
 
 
 def deploy(uuid: str) -> None:
-    if os.environ.get("GH_CLONE_TOKEN"):
+    if os.environ.get("GH_CLONE_TOKEN") and os.environ.get("RENOVAR_URL") == "1":
         st, r = api("PATCH", f"/applications/{uuid}", {"git_repository": _url_git()})
         print("URL do git renovada", st, "" if st < 300 else r)
     st, r = api("POST", f"/deploy?uuid={uuid}&force=true")
@@ -147,10 +147,10 @@ def reaproveitar(uuid: str) -> None:
     if st >= 300:
         print("APP", st, a); sys.exit(1)
     print("ANTES", so(a, ("name", "git_repository", "git_branch", "build_pack", "docker_compose_location")))
-    corpo = {"git_repository": _url_git(), "git_branch": "main", "build_pack": "dockercompose",
-             "docker_compose_location": "/docker-compose.coolify.yml"}
-    st, r = api("PATCH", f"/applications/{uuid}", corpo)
-    print("PATCH", st, "ok" if st < 300 else r)
+    # app com chave SSH: o Coolify clona por SSH; tenta a URL SSH deste repositório (funciona se a chave for de conta)
+    alvo = os.environ.get("GIT_URL_ALVO") or f"git@github.com:{REPO}.git"
+    st, r = api("PATCH", f"/applications/{uuid}", {"git_repository": alvo})
+    print("PATCH git_repository ->", alvo.split("@")[-1], st, "ok" if st < 300 else r)
     if st >= 300:
         sys.exit(1)
     st, envs = api("GET", f"/applications/{uuid}/envs")
