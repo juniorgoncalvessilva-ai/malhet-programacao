@@ -25,6 +25,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - **Tudo é por obra**: toda tabela de dados tem `obra_id`; rotas recebem `ContextoObra` via `Depends(ler|programar|
   planejar|administrar)` (`app/core/auth.py`, cabeçalho `X-Obra-Id`) e repositórios/gateways recebem `obra_id` no
   construtor. Nova tabela de dados sem `obra_id` = bug. Teste de isolamento em `tests/test_auth.py`.
+- CPU da obra = relatório "Composição de Preços Unitários" (.xls) → `referencias/domain/cpu_obra.py` (leitura +
+  achatamento das auxiliares) e `referencias/infra/cpu_gateway.py` (item PQ → HH/un, governa, índice). Spec 009.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

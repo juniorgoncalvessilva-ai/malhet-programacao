@@ -94,3 +94,15 @@ def test_sequenciador_detecta_ciclo():
 def test_producao_com_sequencia_respeita_janela():
     # capacidade 10/dia de ref.; atividade ocupa [1.5, 3.0] em dias de referência
     assert producao_com_sequencia(10, 1.5, 3.0, [1, 2, 3, 4]) == [0, 5, 10, 0]
+
+
+def test_recurso_que_governa_ignora_apoio():
+    """CPU da obra: no lançamento de concreto o servente tem mais h/un, mas quem dita o ritmo é o pedreiro."""
+    rec = [ind.RecursoCpu("Servente", "MOD", 2.8), ind.RecursoCpu("Pedreiro", "MOD", 1.3),
+           ind.RecursoCpu("Encarregado de pedreiro", "MOD", 0.3583), ind.RecursoCpu("Vibrador", "EQU", 3.0)]
+    assert ind.recurso_que_governa(rec).recurso == "Pedreiro"
+    assert ind.indice_orcado(9, 1.3) == pytest.approx(6.923, rel=1e-3)
+    so_apoio = [ind.RecursoCpu("Servente", "MOD", 2.0)]
+    assert ind.recurso_que_governa(so_apoio).recurso == "Servente"
+    so_equip = [ind.RecursoCpu("Escavadeira Hidráulica CAT 320", "EQU", 0.0222)]
+    assert ind.recurso_que_governa(so_equip).recurso == "Escavadeira Hidráulica CAT 320"

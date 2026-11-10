@@ -15,10 +15,12 @@ from app.modules.frentes.infra.models import AreaFrenteModel
 from app.modules.planejamento.application import servico as sv
 from app.modules.planejamento.domain.periodo import TipoProgramacao, periodo, titulo
 from app.modules.planejamento.infra.models import EmissaoModel, LinhaProgramacaoModel, ProgramacaoModel
+from app.modules.referencias.application.importar_cpu import carregar_cpu_obra
 from app.modules.referencias.application.importar_takeoff import carregar_takeoff
 from app.modules.referencias.application.importar_xer import carregar_xer
 from app.modules.referencias.infra.models import AtividadeCronogramaModel, ItemPqModel, PqQuantidadeTagModel
-from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
+from app.modules.referencias.infra.cpu_gateway import CpuGateway
+from app.modules.referencias.infra.resolvedor import JORNADA_REFERENCIA, ResolvedorReferencias
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(tags=["programação semanal/mensal"])
@@ -271,3 +273,49 @@ def importar_xer(arquivo: UploadFile = File(...), rotulo: str = Form(...), s: Se
     r = carregar_xer(s, c.obra_id, arquivo.file, nome_arquivo=arquivo.filename or "", rotulo=rotulo,
                      usuario=c.usuario.id)
     return {"versoes": r.versoes, "contagem": r.contagem, "avisos": r.avisos}
+
+
+@router.post("/importar/cpu")
+def importar_cpu(arquivo: UploadFile = File(...), rotulo: str = Form(...), s: Session = Depends(get_session),
+                 c: ContextoObra = Depends(administrar)):
+    """Composição de Custo Unitário da obra (.xls do orçamento) → versão CPU vigente."""
+    r = carregar_cpu_obra(s, c.obra_id, arquivo.file, nome_arquivo=arquivo.filename or "", rotulo=rotulo,
+                          usuario=c.usuario.id)
+    return {"versoes": r.versoes, "contagem": r.contagem, "avisos": r.avisos[:50]}
+
+
+@router.get("/cpu/item")
+def cpu_do_item(item: str, jornada: float = JORNADA_REFERENCIA, s: Session = Depends(get_session),
+                c: ContextoObra = Depends(ler)):
+    """Rastreio: item da PQ → composição → funções/equipamentos (h/un), recurso que governa, índice e HH/un."""
+    vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes()
+    par = CpuGateway(s, c.obra_id, vig).por_itens({item.strip()}).get(item.strip())
+    pq = s.scalar(select(ItemPqModel).where(ItemPqModel.versao_id == vig["PQ"], ItemPqModel.item == item.strip())) \
+        if "PQ" in vig else None
+    if par is None or (not par.composicao and pq is None):
+        raise NotFoundError("Item de PQ", item)
+    return {
+        "item": item, "descricao": pq.descricao if pq else None, "unid": pq.unid if pq else None,
+        "pu": pq.pu if pq else None, "composicao": par.composicao, "descricao_composicao": par.descricao_composicao,
+        "custo_unitario": par.custo_unitario, "hh_un": par.hh_por_unidade, "recurso_governa": par.recurso_governa,
+        "coef_governa": par.coef_governa, "jornada": jornada, "indice_un_dia": par.indice_un_dia(jornada),
+        "recursos": [{"recurso": r.recurso, "tipo": r.tipo, "coef": r.coef_por_unidade,
+                      "un_dia_por_pessoa": round(jornada / r.coef_por_unidade, 4) if r.coef_por_unidade else None}
+                     for r in sorted(par.recursos, key=lambda r: (r.tipo != "MOD", -r.coef_por_unidade))],
+    }
+
+
+@router.get("/cpu/recursos")
+def recursos_da_cpu(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Funções e equipamentos da CPU vigente (para montar a composição das equipes com os mesmos nomes)."""
+    from sqlalchemy import func
+
+    from app.modules.referencias.infra.models import CpuRecursoModel
+
+    vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes()
+    if "CPU" not in vig:
+        return []
+    q = (select(CpuRecursoModel.recurso, CpuRecursoModel.tipo, func.count().label("n"))
+         .where(CpuRecursoModel.versao_id == vig["CPU"])
+         .group_by(CpuRecursoModel.recurso, CpuRecursoModel.tipo).order_by(func.count().desc()))
+    return [{"recurso": r, "tipo": t, "composicoes": n} for r, t, n in s.execute(q)]

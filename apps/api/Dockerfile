@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --upgrade pip && pip install "fastapi>=0.115" "uvicorn[standard]>=0.30" "sqlalchemy>=2.0" \
-    "psycopg[binary]>=3.2" "alembic>=1.13" "pydantic-settings>=2.4" "openpyxl>=3.1" "python-multipart>=0.0.9" \
+    "psycopg[binary]>=3.2" "alembic>=1.13" "pydantic-settings>=2.4" "openpyxl>=3.1" "xlrd>=2.0.1" "python-multipart>=0.0.9" \
     "pyjwt[crypto]>=2.9" "httpx>=0.27" "cryptography>=43" "argon2-cffi>=23.1"
 COPY alembic.ini ./
 COPY alembic ./alembic

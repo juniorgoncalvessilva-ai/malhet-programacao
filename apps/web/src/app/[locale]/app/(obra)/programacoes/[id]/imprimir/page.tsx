@@ -49,7 +49,7 @@ export default function ImprimirPage() {
         <table className="w-full border-collapse text-[11px] leading-tight [print-color-adjust:exact] [-webkit-print-color-adjust:exact]">
           <thead>
             <tr>
-              <td colSpan={8 + v.dias.length + 2} className="pb-2">
+              <td colSpan={11 + v.dias.length} className="pb-2">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-[13px] font-bold uppercase">{obra?.nome}{obra?.contrato ? ` · ${obra.contrato}` : ''}</div>
@@ -64,16 +64,17 @@ export default function ImprimirPage() {
               {['Item', 'ID Simova', 'Atividade', 'Item PQ', 'Unid.', 'Qtd projeto', 'Encarregado', 'P/R'].map((h) => <th key={h} className={`${cel} text-left font-semibold`}>{h}</th>)}
               {v.dias.map((d) => <th key={d.data} className={`${cel} min-w-[38px] text-center font-semibold ${['SÁB', 'DOM'].includes(d.dia) ? 'bg-[#1F3D3E]' : ''}`}>{d.dia}<br />{d.data.slice(8)}/{d.data.slice(5, 7)}</th>)}
               <th className={`${cel} text-right font-semibold`}>Total</th>
+              <th className={`${cel} text-right font-semibold`}>HH prev.</th>
               <th className={`${cel} text-right font-semibold`}>R$ previsto</th>
             </tr>
           </thead>
           <tbody>
             {v.locais.map((l, li) => (
               <Fragment key={`l${l.id}`}>
-                <tr className="break-inside-avoid"><td colSpan={10 + v.dias.length} className={`${cel} bg-[#FF0000] font-bold text-white`}>{l.codigo} · {l.descricao}</td></tr>
+                <tr className="break-inside-avoid"><td colSpan={11 + v.dias.length} className={`${cel} bg-[#FF0000] font-bold text-white`}>{l.codigo} · {l.descricao}</td></tr>
                 {l.areas.map((a, ai) => (
                   <Fragment key={`a${a.id}`}>
-                    <tr className="break-inside-avoid"><td colSpan={10 + v.dias.length} className={`${cel} bg-[#173761] font-semibold text-white`}>{a.codigo} · {a.descricao}</td></tr>
+                    <tr className="break-inside-avoid"><td colSpan={11 + v.dias.length} className={`${cel} bg-[#173761] font-semibold text-white`}>{a.codigo} · {a.descricao}</td></tr>
                     {a.linhas.map((ln, i) => (
                       <Fragment key={ln.id}>
                         <tr className="break-inside-avoid">
@@ -87,6 +88,7 @@ export default function ImprimirPage() {
                           <td className={`${cel} bg-[#FFFF00] text-center font-bold`}>P</td>
                           {ln.previsto.map((q, di) => <td key={di} className={`${cel} bg-[#FFFF00] text-right`}>{q ? fmt(q) : ''}</td>)}
                           <td className={`${cel} bg-[#FFFF00] text-right font-semibold`}>{ln.total_previsto ? fmt(ln.total_previsto) : ''}</td>
+                          <td rowSpan={2} className={`${cel} text-right align-middle`}>{ln.calc?.total_hh_previsto ? fmt(ln.calc.total_hh_previsto, 1) : ''}</td>
                           <td rowSpan={2} className={`${cel} text-right align-middle`}>{ln.pu ? fmt(ln.pu * ln.total_previsto) : ''}</td>
                         </tr>
                         <tr className="break-inside-avoid">
@@ -103,10 +105,11 @@ export default function ImprimirPage() {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={8 + v.dias.length + 1} className={`${cel} text-right font-bold`}>Faturamento previsto no período</td>
+              <td colSpan={9 + v.dias.length} className={`${cel} text-right font-bold`}>HH previsto (CPU da obra) · Faturamento previsto no período</td>
+              <td className={`${cel} text-right font-bold`}>{v.total_hh_previsto ? fmt(v.total_hh_previsto, 1) : ''}</td>
               <td className={`${cel} text-right font-bold`}>{fmt(totalValor)}</td>
             </tr>
-            <tr><td colSpan={10 + v.dias.length} className="pt-6">
+            <tr><td colSpan={11 + v.dias.length} className="pt-6">
               <div className="grid grid-cols-3 gap-8 text-center text-[10px]">
                 {['Planejamento', 'Produção', 'Cliente / fiscalização'].map((x) => <div key={x} className="border-t border-black pt-1">{x}</div>)}
               </div>

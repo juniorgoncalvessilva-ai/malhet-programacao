@@ -22,7 +22,10 @@ from app.modules.referencias.infra.models import (
     ItemPqModel,
     PqQuantidadeTagModel,
 )
-from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
+from app.modules.programacao.domain.gargalo import capacidade_da_equipe
+from app.modules.referencias.domain.cpu_obra import nome_recurso
+from app.modules.referencias.infra.cpu_gateway import CpuGateway, ParametrosCpu
+from app.modules.referencias.infra.resolvedor import JORNADA_REFERENCIA, ResolvedorReferencias
 from app.shared import simova
 from app.shared.errors import DomainError, NotFoundError
 
@@ -38,6 +41,57 @@ def obter(s: Session, obra_id: int, pid: int) -> ProgramacaoModel:
 
 def _num(v: float | None) -> float:
     return float(v or 0)
+
+
+def _chave(nome: str) -> str:
+    return nome_recurso(nome).casefold()
+
+
+def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previsto: list, realizado: list) -> dict:
+    """Produção da linha a partir da CPU da obra: HH/un, recurso que governa, índice e capacidade da equipe.
+
+    HH do dia            = quantidade × HH/un (soma da mão de obra da composição, auxiliares incluídas)
+    índice (un/dia)      = jornada ÷ h/un do recurso que governa  → por oficial
+    oficiais do dia      = quantidade ÷ índice
+    capacidade da equipe = jornada ÷ max(h/un da função ÷ quantas a equipe tem)   (gargalo)
+    """
+    jornada = float(equipe.jornada_horas) if equipe and equipe.jornada_horas else JORNADA_REFERENCIA
+    alertas: list[str] = []
+    if par is None:
+        return {"composicao": None, "hh_un": None, "recurso_governa": None, "indice_un_dia": None,
+                "jornada": jornada, "capacidade_un_dia": None, "gargalo": None, "apoio_externo": [],
+                "custo_unitario": None, "hh_previsto": [None] * len(previsto), "oficiais": [None] * len(previsto),
+                "acima_capacidade": [False] * len(previsto), "total_hh_previsto": 0.0, "total_hh_realizado": 0.0,
+                "alertas": ["sem item de PQ: sem HH nem índice"]}
+    if not par.composicao:
+        alertas.append(f"item {par.item_pq} sem composição na CPU vigente")
+    elif not par.recursos:
+        alertas.append(f"composição {par.composicao} sem mão de obra nem equipamento (subempreitado?)")
+    hh_un = par.hh_por_unidade
+    indice = par.indice_un_dia(jornada)
+    cap = gargalo = None
+    apoio: list[str] = []
+    if equipe is not None and equipe.composicao and par.recursos:
+        tem = {_chave(c.recurso): float(c.quantidade or 0) for c in equipe.composicao}
+        comp = {r.recurso: tem.get(_chave(r.recurso), 0.0) for r in par.recursos}
+        ce = capacidade_da_equipe(par.coefs, comp, jornada, par.recurso_governa)
+        cap, gargalo, apoio = round(ce.capacidade_un_dia, 4), ce.gargalo, list(ce.apoio_externo)
+        if ce.falta_governante:
+            alertas.append(f"a equipe não tem {par.recurso_governa}: capacidade zero")
+    hh_prev = [round(q * hh_un, 2) if q and hh_un else None for q in previsto]
+    oficiais = [round(q / indice, 1) if q and indice else None for q in previsto]
+    acima = [bool(q and cap is not None and q > cap + 1e-9) for q in previsto]
+    if any(acima):
+        alertas.append(f"previsto acima da capacidade da equipe ({cap:.2f}/dia) em {sum(acima)} dia(s)".replace(".", ","))
+    return {"composicao": par.composicao, "descricao_composicao": par.descricao_composicao,
+            "hh_un": hh_un, "recurso_governa": par.recurso_governa, "coef_governa": par.coef_governa,
+            "indice_un_dia": round(indice, 4) if indice else None, "jornada": jornada,
+            "capacidade_un_dia": cap, "gargalo": gargalo, "apoio_externo": apoio,
+            "custo_unitario": par.custo_unitario, "hh_previsto": hh_prev, "oficiais": oficiais,
+            "acima_capacidade": acima,
+            "total_hh_previsto": round(sum(x or 0 for x in hh_prev), 2),
+            "total_hh_realizado": round(sum(_num(q) for q in realizado) * (hh_un or 0), 2),
+            "alertas": alertas}
 
 
 def visao(s: Session, p: ProgramacaoModel) -> dict:
@@ -59,6 +113,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
         qtd_tag = {(x.item, x.tag): x.quantidade for x in s.scalars(
             select(PqQuantidadeTagModel).where(PqQuantidadeTagModel.versao_id == vig["PQ"],
                                                PqQuantidadeTagModel.item.in_(cods_pq)))}
+    cpu = CpuGateway(s, p.obra_id, vig).por_itens(cods_pq)
     cron = {}
     ids_crono = {ln.id_crono for ln in p.linhas if ln.id_crono}
     if "CRONOGRAMA" in vig and ids_crono:
@@ -92,6 +147,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "encarregado": (eq.encarregado_nome if eq else None), "cracha": (eq.encarregado_cracha if eq else None),
             "observacao": ln.observacao, "previsto": prev, "realizado": real,
             "total_previsto": round(sum(_num(x) for x in prev), 4), "total_realizado": round(sum(_num(x) for x in real), 4),
+            "calc": calculo_linha(cpu.get(ln.item_pq) if ln.item_pq else None, eq, prev, real),
         })
     saida_locais = []
     for loc in sorted(locais.values(), key=lambda x: (x.ordem, x.id)):
@@ -102,8 +158,12 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
         saida_locais.append({"id": loc.id, "codigo": loc.codigo, "descricao": loc.descricao,
                              "areas": [{"id": a.id, "codigo": a.codigo, "cwa": a.cwa, "descricao": a.descricao,
                                         "tag": a.tag, "linhas": por_area[a.id]} for a in areas_loc]})
+    todas = [ln for loc in saida_locais for a in loc["areas"] for ln in a["linhas"]]
+    hh_dia = [round(sum(ln["calc"]["hh_previsto"][i] or 0 for ln in todas), 2) for i in range(len(datas))]
     return {"id": p.id, "tipo": p.tipo, "titulo": p.titulo, "inicio": p.inicio.isoformat(), "fim": p.fim.isoformat(),
-            "status": p.status, "revisao": p.revisao,
+            "status": p.status, "revisao": p.revisao, "hh_previsto_dia": hh_dia,
+            "total_hh_previsto": round(sum(hh_dia), 2),
+            "total_hh_realizado": round(sum(ln["calc"]["total_hh_realizado"] for ln in todas), 2),
             "dias": [{"data": d.isoformat(), "dia": DIAS[d.weekday()]} for d in datas],
             "locais": saida_locais, "linhas": sum(len(v) for v in por_area.values())}
 
@@ -158,6 +218,10 @@ def reabrir(p: ProgramacaoModel) -> None:
     p.status = "rascunho"
 
 
+def _fmt_ft(q: float) -> str:
+    return str(int(q)) if float(q).is_integer() else str(q)
+
+
 # ---- Simova ---------------------------------------------------------------------------------------------
 def ft_xlsx(s: Session, p: ProgramacaoModel) -> tuple[bytes, int, list[str]]:
     """FT_IMPORT_INTERMEDIARIA: cada linha vira 1+ linhas (janelas de até 7 dias sem repetir o dia da semana)."""
@@ -177,6 +241,7 @@ def ft_xlsx(s: Session, p: ProgramacaoModel) -> tuple[bytes, int, list[str]]:
                     pend.append(f"linha {ln['n']} ({a['codigo']} · {ln['codigo_simova']}): equipe sem crachá do encarregado")
                     continue
                 prev = dict(zip(datas, ln["previsto"]))
+                hh_un = ln["calc"]["hh_un"]
                 for jan in janelas_ft(datas):  # janela cobre o período; só os dias com quantidade vão preenchidos
                     if not any(prev.get(d) for d in jan):
                         continue
@@ -195,7 +260,10 @@ def ft_xlsx(s: Session, p: ProgramacaoModel) -> tuple[bytes, int, list[str]]:
                         q = prev[d]
                         if not q:
                             continue
-                        linha[f"PE_{DIAS_FT[d.weekday()]}"] = str(int(q)) if float(q).is_integer() else str(q)
+                        linha[f"PE_{DIAS_FT[d.weekday()]}"] = _fmt_ft(q)
+                        hh = hh_un * q if hh_un else None
+                        if hh:
+                            linha[f"HH_{DIAS_FT[d.weekday()]}"] = _fmt_ft(round(hh, 2))
                     ws.append([linha[c] for c in layout.FT_IMPORT_INTERMEDIARIA])
                     n += 1
     buf = BytesIO()

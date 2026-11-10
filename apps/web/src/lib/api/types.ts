@@ -92,10 +92,26 @@ export interface LinhaVisao {
   qtd_takeoff: number | null; qtd_projeto: number | null; id_crono: string | null; atividade_crono: string | null;
   equipe_id: number | null; equipe: string | null; encarregado: string | null; cracha: string | null; observacao: string | null;
   previsto: (number | null)[]; realizado: (number | null)[]; total_previsto: number; total_realizado: number;
+  calc: CalculoLinha;
+}
+/** Produção da linha a partir da CPU da obra (HH/un, recurso que governa, índice, capacidade da equipe). */
+export interface CalculoLinha {
+  composicao: string | null; descricao_composicao?: string | null; hh_un: number | null; recurso_governa: string | null;
+  coef_governa?: number | null; indice_un_dia: number | null; jornada: number; capacidade_un_dia: number | null;
+  gargalo: string | null; apoio_externo: string[]; custo_unitario: number | null;
+  hh_previsto: (number | null)[]; oficiais: (number | null)[]; acima_capacidade: boolean[];
+  total_hh_previsto: number; total_hh_realizado: number; alertas: string[];
+}
+export interface RecursoCpuItem { recurso: string; tipo: 'MOD' | 'EQU'; coef: number; un_dia_por_pessoa: number | null }
+export interface CpuDoItem {
+  item: string; descricao: string | null; unid: string | null; pu: number | null; composicao: string | null;
+  descricao_composicao: string | null; custo_unitario: number | null; hh_un: number | null; recurso_governa: string | null;
+  coef_governa: number | null; jornada: number; indice_un_dia: number | null; recursos: RecursoCpuItem[];
 }
 export interface ProgramacaoVisao {
   id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: 'rascunho' | 'emitida'; revisao: number;
   dias: { data: string; dia: string }[]; linhas: number;
+  hh_previsto_dia?: number[]; total_hh_previsto?: number; total_hh_realizado?: number;
   locais: { id: number; codigo: string; descricao: string; areas: { id: number; codigo: string; cwa: string; descricao: string; tag: string | null; linhas: LinhaVisao[] }[] }[];
   emitida_em?: string; emitida_por?: string;
 }

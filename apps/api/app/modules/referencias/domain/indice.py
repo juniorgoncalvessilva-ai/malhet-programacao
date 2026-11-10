@@ -16,6 +16,7 @@ Fórmulas:
 from dataclasses import dataclass
 from enum import StrEnum
 
+from app.modules.referencias.domain.cpu_obra import eh_apoio
 from app.shared.errors import DomainError
 
 
@@ -96,9 +97,11 @@ def hh_por_unidade_mod(recursos: list[RecursoCpu], coefs: dict[str, float]) -> f
 
 
 def recurso_que_governa(recursos: list[RecursoCpu]) -> RecursoCpu | None:
-    """Maior coeficiente entre os recursos (MOD primeiro) — a função que dita o ritmo."""
+    """A função que dita o ritmo: o oficial de maior coeficiente (servente, ajudante e encarregado são apoio);
+    sem oficial, o maior MOD; sem MOD, o maior equipamento."""
     mod = [r for r in recursos if r.tipo == "MOD" and r.coef_por_unidade > 0]
-    pool = mod or [r for r in recursos if r.coef_por_unidade > 0]
+    oficiais = [r for r in mod if not eh_apoio(r.recurso)]
+    pool = oficiais or mod or [r for r in recursos if r.coef_por_unidade > 0]
     return max(pool, key=lambda r: r.coef_por_unidade) if pool else None
 
 

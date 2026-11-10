@@ -216,6 +216,7 @@ export default function MontarPage() {
                           <td className="min-w-[240px] px-2 py-2">
                             <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{ln.descricao}</span>
                             <div className="text-xs text-m-text-muted">{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
+                            <Calculo ln={ln} />
                           </td>
                           <td className="px-2 py-2">{ln.item_pq ? <span title={ln.descricao_pq ?? ''}>{ln.item_pq}</span> : <span className="text-m-warning">sem PQ</span>}</td>
                           <td className="px-2 py-2">{ln.equipe ?? <span className="text-m-warning">sem equipe</span>}{ln.equipe && !ln.cracha && <div className="text-xs text-m-warning">sem crachá</div>}</td>
@@ -232,11 +233,16 @@ export default function MontarPage() {
                                   if (novo === String(ln[modo][di] ?? '')) return;
                                   valor.mutate({ lid: ln.id, data: d.data, valor: novo }, { onError: (er) => toast.error(er.message) });
                                 }}
-                                className={`h-8 w-[58px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${modo === 'realizado' ? 'border-m-info/40' : 'border-m-stroke'}`}
+                                title={dicaDia(ln, di)}
+                                className={`h-8 w-[58px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${modo === 'previsto' && ln.calc?.acima_capacidade[di] ? 'border-m-danger text-m-danger' : modo === 'realizado' ? 'border-m-info/40' : 'border-m-stroke'}`}
                               />
+                              {modo === 'previsto' && ln.calc?.hh_previsto[di] ? <div className="mt-0.5 text-center text-[10px] text-m-text-muted">{fmt(ln.calc.hh_previsto[di], 1)} HH</div> : null}
                             </td>
                           ))}
-                          <td className="whitespace-nowrap px-2 py-2 text-right font-semibold text-m-text-primary">{fmt(modo === 'previsto' ? ln.total_previsto : ln.total_realizado)}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right font-semibold text-m-text-primary">
+                            {fmt(modo === 'previsto' ? ln.total_previsto : ln.total_realizado)}
+                            {ln.calc?.hh_un ? <div className="text-[11px] font-normal text-m-text-muted">{fmt(modo === 'previsto' ? ln.calc.total_hh_previsto : ln.calc.total_hh_realizado, 1)} HH</div> : null}
+                          </td>
                           <td className="whitespace-nowrap px-1 py-1.5">
                             {rascunho && pode('encarregado') && <>
                               <button type="button" aria-label="Editar linha" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirEdicao(ln)}><Pencil size={15} /></button>
@@ -257,6 +263,14 @@ export default function MontarPage() {
                   {totalDia.map((t, i) => <td key={i} className="px-1 pt-2 text-right">{t ? fmt(t) : ''}</td>)}
                   <td colSpan={2} />
                 </tr>
+                {modo === 'previsto' && !!v.total_hh_previsto && (
+                  <tr className="text-xs font-semibold text-m-text-muted">
+                    <td colSpan={5} className="px-2 pt-1 text-right uppercase">HH previsto do dia (CPU)</td>
+                    {(v.hh_previsto_dia ?? []).map((t, i) => <td key={i} className="px-1 pt-1 text-right">{t ? fmt(t, 1) : ''}</td>)}
+                    <td className="px-2 pt-1 text-right text-m-text-primary">{fmt(v.total_hh_previsto, 1)}</td>
+                    <td />
+                  </tr>
+                )}
               </tfoot>
             )}
           </table>
@@ -264,5 +278,31 @@ export default function MontarPage() {
         <Erro erro={valor.error ?? emitir.error ?? excluir.error} />
       </Painel>
     </>
+  );
+}
+
+function dicaDia(ln: LinhaVisao, di: number): string | undefined {
+  const c = ln.calc;
+  if (!c || !ln.previsto[di]) return undefined;
+  const partes = [c.hh_previsto[di] ? `${fmt(c.hh_previsto[di], 1)} HH` : null,
+    c.oficiais[di] ? `${fmt(c.oficiais[di], 1)} ${c.recurso_governa ?? 'oficial'}(s)` : null,
+    c.acima_capacidade[di] && c.capacidade_un_dia != null ? `acima da capacidade da equipe (${fmt(c.capacidade_un_dia)}/dia)` : null];
+  return partes.filter(Boolean).join(' · ') || undefined;
+}
+
+/** Produção da linha pela CPU da obra: HH/un, quem governa, índice e capacidade da equipe. */
+function Calculo({ ln }: { ln: LinhaVisao }) {
+  const c = ln.calc;
+  if (!c) return null;
+  const un = ln.unidade ?? 'un';
+  return (
+    <div className="mt-1 text-[11px] leading-snug text-m-text-secondary">
+      {c.hh_un ? <>
+        <span title={c.descricao_composicao ?? ''}>{c.composicao}</span> · {fmt(c.hh_un, 3)} HH/{un}
+        {c.recurso_governa && c.indice_un_dia ? <> · governa <b>{c.recurso_governa}</b> ({fmt(c.indice_un_dia)} {un}/dia por pessoa)</> : null}
+        {c.capacidade_un_dia != null && <> · equipe <b>{fmt(c.capacidade_un_dia)} {un}/dia</b>{c.gargalo ? ` (gargalo ${c.gargalo})` : ''}</>}
+      </> : c.composicao ? <>{c.composicao} · sem mão de obra na CPU</> : null}
+      {c.alertas.map((a) => <div key={a} className="text-m-warning">{a}</div>)}
+    </div>
   );
 }

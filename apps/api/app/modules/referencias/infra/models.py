@@ -151,3 +151,34 @@ class PqQuantidadeTagModel(Base):
     tag: Mapped[str] = mapped_column(String(40), index=True)
     quantidade: Mapped[float] = mapped_column(Float)
     unid: Mapped[str | None] = mapped_column(String(20))
+
+
+class CpuServicoModel(Base):
+    """CPU da obra: item da PQ → composição principal e custo unitário (relatório de composições)."""
+
+    __tablename__ = "cpu_servico"
+    __table_args__ = (UniqueConstraint("versao_id", "item", name="uq_cpu_servico"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    versao_id: Mapped[int] = mapped_column(ForeignKey("versao_referencia.id", ondelete="CASCADE"), index=True)
+    item: Mapped[str] = mapped_column(String(40), index=True)  # normalizado (1.8.3.1.2)
+    item_original: Mapped[str] = mapped_column(String(40))  # como no relatório (1.08.03.01.02)
+    descricao: Mapped[str] = mapped_column(String(500))
+    unid: Mapped[str | None] = mapped_column(String(20))
+    quantidade: Mapped[float | None] = mapped_column(Float)
+    composicao: Mapped[str] = mapped_column(String(40), index=True)
+    custo_unitario: Mapped[float | None] = mapped_column(Float)
+
+
+class CpuComposicaoModel(Base):
+    """Cabeçalho de cada composição (principal ou auxiliar) da CPU da obra."""
+
+    __tablename__ = "cpu_composicao"
+    __table_args__ = (UniqueConstraint("versao_id", "codigo", name="uq_cpu_composicao"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    versao_id: Mapped[int] = mapped_column(ForeignKey("versao_referencia.id", ondelete="CASCADE"), index=True)
+    codigo: Mapped[str] = mapped_column(String(40), index=True)
+    descricao: Mapped[str] = mapped_column(String(500))
+    custo: Mapped[float | None] = mapped_column(Float)
+    recurso_governa: Mapped[str | None] = mapped_column(String(120))
+    coef_governa: Mapped[float | None] = mapped_column(Float)
+    hh_por_unidade: Mapped[float | None] = mapped_column(Float)
