@@ -25,7 +25,10 @@ def api(metodo: str, caminho: str, corpo: dict | None = None):
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             txt = r.read().decode()
-            return r.status, (json.loads(txt) if txt else None)
+            try:
+                return r.status, (json.loads(txt) if txt else None)
+            except ValueError:
+                return r.status, txt[:200]
     except urllib.error.HTTPError as e:
         txt = e.read().decode()
         try:
