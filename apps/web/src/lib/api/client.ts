@@ -1,0 +1,60 @@
+/**
+ * Cliente da API Python (FastAPI). O token do Clerk vai no Authorization; a API valida via JWKS.
+ * Base: NEXT_PUBLIC_API_URL (ex.: http://localhost:8000/api).
+ */
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string, public campo?: string | null) {
+    super(message);
+  }
+}
+
+export type TokenGetter = () => Promise<string | null>;
+
+async function erro(res: Response): Promise<never> {
+  let msg = res.statusText;
+  let campo: string | null = null;
+  try {
+    const body = await res.json();
+    msg = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+    campo = body.campo ?? null;
+  } catch {
+    /* sem corpo */
+  }
+  throw new ApiError(res.status, msg, campo);
+}
+
+export async function apiFetch<T>(path: string, getToken: TokenGetter, init: RequestInit = {}): Promise<T> {
+  const token = await getToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  if (!res.ok) return erro(res);
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+export async function apiDownload(path: string, getToken: TokenGetter, nomePadrao: string): Promise<number> {
+  const token = await getToken();
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) return erro(res);
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') ?? '';
+  const nome = /filename="([^"]+)"/.exec(cd)?.[1] ?? nomePadrao;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome;
+  a.click();
+  URL.revokeObjectURL(url);
+  return Number(res.headers.get('X-Itens') ?? 0);
+}
+
+export const qs = (p: Record<string, string | number | boolean | undefined | null>) =>
+  '?' +
+  Object.entries(p)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+    .join('&');

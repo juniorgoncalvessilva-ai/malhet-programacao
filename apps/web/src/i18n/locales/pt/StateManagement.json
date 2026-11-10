@@ -1,0 +1,8 @@
+{
+  "meta": {
+    "title": "Gerenciamento de Estado",
+    "description": "Demonstração do gerenciamento de estado global com Zustand"
+  },
+  "title": "Gerenciamento de Estado",
+  "description": "Explore como funciona o gerenciamento de estado global usando Zustand. Teste as funcionalidades interativas e observe como o estado é compartilhado entre componentes."
+}

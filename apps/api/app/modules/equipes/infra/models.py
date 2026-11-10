@@ -1,0 +1,30 @@
+"""Equipes (como na aba EQUIPES da planilha auxiliar): cada equipe é uma frente de trabalho com um
+encarregado e uma composição por função/equipamento."""
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.db import Base
+
+
+class EquipeModel(Base):
+    __tablename__ = "equipe"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nome: Mapped[str] = mapped_column(String(120), unique=True)
+    frente_codigo: Mapped[str | None] = mapped_column(String(30))
+    encarregado_cracha: Mapped[str | None] = mapped_column(String(20), index=True)
+    encarregado_nome: Mapped[str | None] = mapped_column(String(150))
+    jornada_horas: Mapped[float] = mapped_column(Float, default=9.0)
+    observacao: Mapped[str | None] = mapped_column(String(300))
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    composicao: Mapped[list["EquipeComposicaoModel"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class EquipeComposicaoModel(Base):
+    __tablename__ = "equipe_composicao"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    equipe_id: Mapped[int] = mapped_column(ForeignKey("equipe.id", ondelete="CASCADE"))
+    recurso: Mapped[str] = mapped_column(String(120))  # mesmo nome do recurso na CPU (Pedreiro, Trator D6…)
+    tipo: Mapped[str] = mapped_column(String(5), default="MOD")  # MOD | EQU
+    quantidade: Mapped[float] = mapped_column(Float)

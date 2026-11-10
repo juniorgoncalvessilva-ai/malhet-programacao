@@ -1,0 +1,8 @@
+{
+  "meta": {
+    "title": "State Management",
+    "description": "Global state management demonstration with Zustand"
+  },
+  "title": "State Management",
+  "description": "Explore how global state management works using Zustand. Test the interactive features and observe how state is shared between components."
+}

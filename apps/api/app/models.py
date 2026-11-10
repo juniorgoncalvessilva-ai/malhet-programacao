@@ -1,0 +1,6 @@
+"""Importa todos os modelos para o metadata (Alembic e testes)."""
+from app.core.db import Base  # noqa: F401
+from app.modules.cadastros.infra import models as _cadastros  # noqa: F401
+from app.modules.referencias.infra import models as _referencias  # noqa: F401
+from app.modules.equipes.infra import models as _equipes  # noqa: F401
+from app.modules.programacao.infra import models as _programacao  # noqa: F401

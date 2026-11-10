@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+apps/api/.env
+# Node / Next
+node_modules/
+.next/
+out/
+apps/web/.env.local
+apps/web/next-env.d.ts
+# Dados sensíveis da obra (planilhas com nomes/crachás) — use data/local/
+data/local/
+*.log
+.DS_Store

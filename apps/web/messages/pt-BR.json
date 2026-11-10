@@ -1,0 +1,1183 @@
+{
+  "Navigation": {
+    "dashboard": "Painel",
+    "ecommerce": "E-commerce",
+    "calendar": "Calendário",
+    "profile": "Perfil",
+    "forms": "Formulários",
+    "formElements": "Elementos de Formulário",
+    "formLayout": "Layout de Formulário",
+    "validatedForms": "Formulários Validados",
+    "tables": "Tabelas",
+    "pages": "Páginas",
+    "settings": "Configurações",
+    "charts": "Gráficos",
+    "basicChart": "Gráfico Básico",
+    "uiElements": "Elementos de UI",
+    "alerts": "Alertas",
+    "buttons": "Botões",
+    "badges": "Badges",
+    "spinners": "Spinners",
+    "toasts": "Toasts",
+    "dialogs": "Dialogs",
+    "drawers": "Drawers",
+    "carousels": "Carousels",
+    "authentication": "Autenticação",
+    "signIn": "Entrar",
+    "signUp": "Cadastrar",
+    "apiDemo": "Demonstração de API",
+    "protectedApi": "API Protegida",
+    "stateManagement": "Gerenciamento de Estado",
+    "tanStackQuery": "TanStack Query",
+    "analyticsDemo": "Demo Analytics",
+    "mainMenu": "EXEMPLOS DO KIT",
+    "others": "OUTROS",
+    "backend": "BACKEND",
+    "obra": "OBRA",
+    "programacao": "Programação diária",
+    "referencias": "Referências (versão vigente)",
+    "equipes": "Equipes",
+    "cadastrosSimova": "Cadastros Simova"
+  },
+  "Header": {
+    "notifications": "Notificações",
+    "messages": "Mensagens",
+    "viewProfile": "Ver Perfil",
+    "accountSettings": "Configurações da Conta",
+    "logout": "Sair",
+    "myAccount": "Minha Conta"
+  },
+  "Auth": {
+    "signInTitle": "Entrar",
+    "signUpTitle": "Cadastrar",
+    "signInToAccount": "Entre na sua conta",
+    "welcomeBack": "Bem-vindo de volta!",
+    "signInDescription": "Por favor, entre na sua conta preenchendo os campos necessários abaixo",
+    "createAccount": "Crie sua conta",
+    "getStarted": "Vamos começar!",
+    "signUpDescription": "Por favor, crie sua conta preenchendo os campos necessários abaixo",
+    "email": "E-mail",
+    "password": "Senha",
+    "enterEmail": "Digite seu e-mail",
+    "enterPassword": "Digite sua senha",
+    "rememberMe": "Lembrar de mim",
+    "forgotPassword": "Esqueceu a senha?",
+    "signInButton": "Entrar",
+    "signUpButton": "Cadastrar",
+    "orSignInWithEmail": "Ou entre com e-mail",
+    "orSignUpWithEmail": "Ou cadastre-se com e-mail",
+    "signInWithGoogle": "Entrar com Google",
+    "signUpWithGoogle": "Cadastrar com Google",
+    "dontHaveAccount": "Não tem uma conta?",
+    "alreadyHaveAccount": "Já tem uma conta?"
+  },
+  "Profile": {
+    "title": "Perfil",
+    "posts": "Posts",
+    "followers": "Seguidores",
+    "following": "Seguindo",
+    "aboutMe": "Sobre Mim",
+    "memberSince": "Membro desde",
+    "lastActive": "Última atividade",
+    "edit": "Editar",
+    "viewFullImage": "Ver imagem completa",
+    "profileCover": "capa do perfil",
+    "user": "Usuário",
+    "noEmail": "Sem e-mail",
+    "unknown": "Desconhecido",
+    "defaultBio": "Bem-vindo ao meu perfil! Estou usando este painel administrativo para gerenciar minha conta e configurações."
+  },
+  "Settings": {
+    "title": "Configurações",
+    "personalInformation": "Informações Pessoais",
+    "fullName": "Nome Completo",
+    "phoneNumber": "Número de Telefone",
+    "emailAddress": "Endereço de E-mail",
+    "username": "Nome de Usuário",
+    "bio": "Bio",
+    "writeBioHere": "Escreva sua bio aqui",
+    "yourPhoto": "Sua Foto",
+    "editPhoto": "Editar sua foto",
+    "delete": "Excluir",
+    "update": "Atualizar",
+    "clickToUpload": "Clique para enviar",
+    "dragAndDrop": "ou arraste e solte",
+    "fileFormat": "SVG, PNG, JPG ou GIF (máx. 800 X 800px)",
+    "cancel": "Cancelar",
+    "save": "Salvar"
+  },
+  "Dashboard": {
+    "title": "Painel",
+    "ecommerce": "E-commerce",
+    "overview": "Visão Geral",
+    "totalRevenue": "Receita Total",
+    "totalSales": "Vendas Totais",
+    "totalCustomers": "Clientes Totais",
+    "totalOrders": "Pedidos Totais",
+    "paymentsOverview": "Visão Geral de Pagamentos",
+    "weeksProfit": "Lucro da Semana",
+    "usedDevices": "Dispositivos Utilizados",
+    "topChannels": "Principais Canais",
+    "topProducts": "Principais Produtos",
+    "recentMessages": "Mensagens Recentes"
+  },
+  "Notifications": {
+    "title": "Notificações",
+    "newNotifications": "nova(s)",
+    "seeAll": "Ver todas as notificações",
+    "noNotifications": "Nenhuma notificação",
+    "markAllRead": "Marcar todas como lidas",
+    "teamJoined": "entrou no time!",
+    "congratulate": "Parabenize-o",
+    "newMessage": "Nova mensagem",
+    "messageSent": "enviou uma nova mensagem",
+    "paymentReceived": "Novo pagamento recebido",
+    "checkEarnings": "Verifique seus ganhos",
+    "tasksCompleted": "concluiu as tarefas",
+    "assignNewTask": "Atribuir nova tarefa"
+  },
+  "Forms": {
+    "title": "Formulários",
+    "elements": "Elementos",
+    "layout": "Layout",
+    "contactForm": "Formulário de Contato",
+    "inputFields": "Campos de Entrada",
+    "defaultInput": "Entrada padrão",
+    "activeInput": "Entrada ativa",
+    "disabledInput": "Entrada desabilitada",
+    "toggleSwitchInput": "Entrada de alternância",
+    "timeAndDate": "Data e hora",
+    "fileUpload": "Upload de arquivo",
+    "attachFile": "Anexar arquivo",
+    "textareaFields": "Campos de Texto",
+    "selectInput": "Entrada de seleção",
+    "selectCountry": "Selecionar País",
+    "checkboxAndRadio": "Checkbox e radio",
+    "checkboxText": "Texto do Checkbox",
+    "enterFirstName": "Digite seu primeiro nome",
+    "enterLastName": "Digite seu sobrenome",
+    "enterEmailAddress": "Digite seu endereço de e-mail",
+    "enterSubject": "Digite seu assunto",
+    "selectSubject": "Selecione seu assunto",
+    "typeMessage": "Digite sua mensagem",
+    "sendMessage": "Enviar Mensagem",
+    "multiselectDropdown": "Dropdown de Múltipla Seleção",
+    "design": "Design",
+    "development": "Desenvolvimento",
+    "option4": "Opção 4",
+    "option5": "Opção 5",
+    "datePicker": "Seletor de data",
+    "dateFormat": "dd/mm/aaaa",
+    "defaultTextarea": "Textarea padrão",
+    "activeTextarea": "Textarea ativa",
+    "disabledTextarea": "Textarea desabilitada",
+    "labels": {
+      "name": "Nome",
+      "email": "E-mail",
+      "password": "Senha",
+      "confirmPassword": "Confirmar Senha",
+      "firstName": "Primeiro Nome",
+      "lastName": "Sobrenome",
+      "phoneNumber": "Número de Telefone",
+      "company": "Empresa",
+      "website": "Website",
+      "message": "Mensagem",
+      "subject": "Assunto",
+      "selectOption": "Selecione uma opção",
+      "chooseFile": "Escolher arquivo",
+      "upload": "Enviar",
+      "submit": "Enviar",
+      "cancel": "Cancelar",
+      "save": "Salvar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "search": "Pesquisar"
+    },
+    "placeholders": {
+      "enterName": "Digite seu nome",
+      "enterEmail": "Digite seu e-mail",
+      "enterPassword": "Digite sua senha",
+      "enterMessage": "Digite sua mensagem",
+      "searchHere": "Pesquisar aqui...",
+      "defaultInputText": "Texto de entrada padrão",
+      "activeInputText": "Texto de entrada ativa",
+      "disabledInputText": "Texto de entrada desabilitada",
+      "defaultTextarea": "Textarea padrão",
+      "activeTextarea": "Textarea ativa",
+      "disabledTextarea": "Textarea desabilitada"
+    },
+    "validation": {
+      "required": "Este campo é obrigatório",
+      "invalidEmail": "E-mail inválido",
+      "passwordMismatch": "As senhas não coincidem",
+      "minLength": "Mínimo de {count} caracteres",
+      "maxLength": "Máximo de {count} caracteres"
+    }
+  },
+  "Tables": {
+    "headers": {
+      "name": "Nome",
+      "email": "E-mail",
+      "status": "Status",
+      "date": "Data",
+      "amount": "Valor",
+      "actions": "Ações",
+      "product": "Produto",
+      "category": "Categoria",
+      "price": "Preço",
+      "quantity": "Quantidade",
+      "total": "Total",
+      "topChannels": "Principais Canais",
+      "source": "Origem",
+      "visitors": "Visitantes",
+      "revenues": "Receitas",
+      "sales": "Vendas",
+      "conversion": "Conversão",
+      "topProducts": "Principais Produtos",
+      "package": "Pacote",
+      "invoiceDate": "Data da Fatura"
+    },
+    "status": {
+      "active": "Ativo",
+      "inactive": "Inativo",
+      "pending": "Pendente",
+      "completed": "Concluído",
+      "cancelled": "Cancelado",
+      "paid": "Pago",
+      "unpaid": "Não pago"
+    },
+    "actions": {
+      "view": "Visualizar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "export": "Exportar",
+      "viewInvoice": "Ver Fatura",
+      "deleteInvoice": "Excluir Fatura",
+      "downloadInvoice": "Baixar Fatura"
+    },
+    "pagination": {
+      "previous": "Anterior",
+      "next": "Próximo",
+      "showing": "Mostrando",
+      "of": "de",
+      "results": "resultados"
+    },
+    "title": "Tabelas",
+    "role": "Função"
+  },
+  "Charts": {
+    "paymentsOverview": "Visão Geral de Pagamentos",
+    "weeksProfit": "Lucro da Semana",
+    "usedDevices": "Dispositivos Utilizados",
+    "campaignVisitors": "Visitantes da Campanha",
+    "totalVisitors": "Total de Visitantes",
+    "revenue": "Receita",
+    "sales": "Vendas",
+    "customers": "Clientes",
+    "orders": "Pedidos",
+    "thisWeek": "Esta Semana",
+    "lastWeek": "Semana Passada",
+    "thisMonth": "Este Mês",
+    "lastMonth": "Mês Passado",
+    "profit": "Lucro",
+    "receivedAmount": "Valor Recebido",
+    "dueAmount": "Valor Devido",
+    "profitThisWeek": "Lucro desta semana",
+    "profitLastWeek": "Lucro da semana passada"
+  },
+  "Common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "warning": "Aviso",
+    "info": "Informação",
+    "close": "Fechar",
+    "open": "Abrir",
+    "search": "Pesquisar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "previous": "Anterior",
+    "next": "Próximo",
+    "page": "Página",
+    "of": "de",
+    "showing": "Mostrando",
+    "results": "resultados",
+    "noData": "Nenhum dado disponível",
+    "language": "Idioma",
+    "theme": "Tema",
+    "lightMode": "Modo Claro",
+    "darkMode": "Modo Escuro",
+    "timePeriod": "Período",
+    "monthly": "mensal",
+    "yearly": "anual",
+    "weekly": "semanal",
+    "daily": "diário",
+    "thisWeek": "esta semana",
+    "lastWeek": "semana passada",
+    "thisMonth": "este mês",
+    "lastMonth": "mês passado"
+  },
+  "Components": {
+    "chats": "Conversas",
+    "decreased": "Diminuiu",
+    "increased": "Aumentou"
+  },
+  "UIElements": {
+    "normalButton": "Botão Normal",
+    "button": "Botão",
+    "buttonWithIcon": "Botão com Ícone",
+    "alerts": "Alertas",
+    "buttons": "Botões",
+    "badges": "Badges",
+    "spinners": "Spinners",
+    "toasts": "Toasts",
+    "dialogs": "Dialogs",
+    "drawers": "Drawers",
+    "carousels": "Carousels",
+    "basicCarousel": "Carousel Básico",
+    "withAutoplay": "Carousel com Autoplay",
+    "multipleSlides": "Múltiplos Slides (Produtos)",
+    "testimonials": "Carousel de Depoimentos",
+    "withThumbs": "Carousel com Thumbnails",
+    "controlled": "Carousel Controlado",
+    "responsive": "Carousel Responsivo",
+    "directions": "Direções",
+    "navigationDrawer": "Drawer de Navegação",
+    "controlledDrawer": "Drawer Controlado",
+    "formDrawer": "Drawer com Formulário",
+    "differentSizes": "Diferentes Tamanhos",
+    "confirmationModal": "Modal de Confirmação",
+    "controlledModal": "Modal Controlado",
+    "formModal": "Modal com Formulário",
+    "positioning": "Posicionamento",
+    "variants": "Variantes de Cor",
+    "sizes": "Tamanhos",
+    "withIcons": "Com Ícones",
+    "removable": "Removíveis",
+    "notificationBadges": "Badges de Notificação",
+    "useCases": "Casos de Uso",
+    "codeExample": "Código de Exemplo",
+    "basicTypes": "Tipos de Toast",
+    "withTitleDescription": "Toast com Título e Descrição",
+    "withActions": "Toast com Ações",
+    "withPromise": "Toast com Promise",
+    "controls": "Controles",
+    "differentPositions": "Diferentes Posições"
+  },
+  "Badge": {
+    "new": "Novo",
+    "default": "Padrão",
+    "primary": "Primário",
+    "success": "Sucesso",
+    "warning": "Aviso",
+    "error": "Erro",
+    "info": "Informação",
+    "approved": "Aprovado",
+    "small": "Pequeno",
+    "medium": "Médio",
+    "large": "Grande",
+    "verified": "Verificado",
+    "attention": "Atenção",
+    "complete": "Completo",
+    "removableTag": "Tag removível",
+    "removeAriaLabel": "Remover badge",
+    "allRemoved": "Todos os badges foram removidos!",
+    "status": "Status",
+    "categories": "Categorias",
+    "notifications": "Notificações",
+    "messages": "Mensagens",
+    "active": "Ativo",
+    "pending": "Pendente",
+    "inactive": "Inativo",
+    "frontend": "Frontend",
+    "backend": "Backend",
+    "devops": "DevOps",
+    "mobile": "Mobile"
+  },
+  "Spinner": {
+    "loading": "Carregando...",
+    "processing": "Processando dados...",
+    "sending": "Enviando arquivo...",
+    "saving": "Salvando...",
+    "testOverlay": "Testar Loading Overlay",
+    "pageContent": "Conteúdo da Página",
+    "overlayDescription": "Este conteúdo será coberto pelo overlay quando estiver carregando. Clique no botão acima para testar o comportamento.",
+    "send": "Enviar",
+    "save": "Salvar",
+    "variant": {
+      "ring": "Ring",
+      "dots": "Dots",
+      "pulse": "Pulse",
+      "bars": "Bars",
+      "bounce": "Bounce"
+    },
+    "color": {
+      "primary": "Primary",
+      "success": "Success",
+      "warning": "Warning",
+      "error": "Error",
+      "gray": "Gray"
+    }
+  },
+  "Toast": {
+    "promiseSuccess": "Operação concluída com sucesso",
+    "promiseError": "Erro ao executar operação",
+    "dismiss": "Fechar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "successOperation": "Operação realizada com sucesso!",
+    "errorProcessing": "Erro ao processar solicitação",
+    "warningNotSaved": "Atenção: dados não salvos",
+    "updateAvailable": "Nova atualização disponível",
+    "emailSent": "Email enviado",
+    "emailSentDescription": "Seu email foi enviado com sucesso para joão@exemplo.com",
+    "connectionFailed": "Falha na conexão",
+    "connectionFailedDescription": "Não foi possível conectar ao servidor. Tente novamente.",
+    "fileSent": "Arquivo enviado",
+    "fileSentDescription": "Documento.pdf foi enviado com sucesso",
+    "viewFile": "Ver arquivo",
+    "confirmDeletion": "Confirmar exclusão",
+    "confirmDeletionDescription": "Esta ação não pode ser desfeita",
+    "itemDeleted": "Item excluído",
+    "actionCancelled": "Ação cancelada",
+    "openingFile": "Abrindo arquivo...",
+    "promiseDescription": "O toast com promise mostra um loading e automaticamente atualiza para sucesso ou erro.",
+    "testPromiseToast": "Testar Promise Toast",
+    "processing": "Processando...",
+    "closeAll": "Fechar Todos",
+    "multipleToasts": "Múltiplos Toasts",
+    "topRight": "Top Right",
+    "otherPositions": "Outras Posições",
+    "positionNote": "* A posição é configurada globalmente no ToastProvider",
+    "defaultPosition": "Toast no canto superior direito (padrão)",
+    "changePosition": "Para alterar posição, configure no ToastProvider",
+    "successToast": "Success Toast",
+    "errorToast": "Error Toast",
+    "warningToast": "Warning Toast",
+    "infoToast": "Info Toast",
+    "completeToast": "Toast Completo",
+    "customDuration": "Toast com Duração Customizada",
+    "withAction": "Toast com Ação",
+    "withConfirmation": "Toast com Confirmação"
+  },
+  "Alerts": {
+    "attentionNeeded": "Atenção Necessária",
+    "messageSentSuccessfully": "Mensagem Enviada com Sucesso",
+    "errorsWithSubmission": "Houve 1 erro no seu envio",
+    "alertDescription": "Lorem Ipsum é simplesmente um texto fictício da indústria de impressão e composição tipográfica."
+  },
+  "Countries": {
+    "unitedStates": "Estados Unidos",
+    "unitedKingdom": "Reino Unido",
+    "canada": "Canadá"
+  },
+  "Accessibility": {
+    "closeSidebar": "Fechar barra lateral",
+    "closeMenu": "Fechar Menu",
+    "collapseSidebar": "Recolher barra lateral",
+    "expandSidebar": "Expandir barra lateral"
+  },
+  "Pages": {
+    "basicChart": "Gráfico Básico",
+    "calendarPage": "Calendário"
+  },
+  "Calendar": {
+    "title": "Calendário",
+    "today": "Hoje",
+    "month": "Mês",
+    "week": "Semana",
+    "day": "Dia",
+    "event": "Evento",
+    "events": "Eventos",
+    "addEvent": "Adicionar Evento",
+    "editEvent": "Editar Evento",
+    "deleteEvent": "Excluir Evento"
+  },
+  "Dialog": {
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Salvar",
+    "delete": "Excluir",
+    "openModal": "Abrir Modal",
+    "closeModal": "Fechar Modal",
+    "confirmDeletion": "Confirmar Exclusão",
+    "confirmDeletionDescription": "Esta ação não pode ser desfeita. Tem certeza que deseja excluir este item?",
+    "deleteItem": "Excluir Item",
+    "itemDeleted": "Item excluído com sucesso!",
+    "controlledDescription": "Modal controlado externamente via estado React.",
+    "controlledModalTitle": "Modal Controlado",
+    "controlledContent": "Você pode controlar este modal programaticamente através do estado React.",
+    "open": "Aberto",
+    "closed": "Fechado",
+    "addUser": "Adicionar Usuário",
+    "newUser": "Novo Usuário",
+    "newUserDescription": "Preencha os dados do novo usuário abaixo.",
+    "name": "Nome",
+    "email": "Email",
+    "namePlaceholder": "Digite o nome",
+    "emailPlaceholder": "Digite o email",
+    "saveUser": "Salvar Usuário",
+    "userCreated": "Usuário criado com sucesso!",
+    "fillAllFields": "Preencha todos os campos",
+    "center": "Centro",
+    "top": "Topo",
+    "bottom": "Inferior",
+    "ok": "OK"
+  },
+  "Drawer": {
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "left": "Esquerda",
+    "right": "Direita",
+    "top": "Topo",
+    "bottom": "Inferior",
+    "openDrawer": "Abrir Drawer",
+    "closeDrawer": "Fechar Drawer",
+    "navigation": "Navegação",
+    "navigationDescription": "Menu de navegação de acesso rápido.",
+    "openNavigation": "Abrir Navegação",
+    "controlledDescription": "Drawer controlado externamente via estado React.",
+    "controlledDrawerTitle": "Drawer Controlado",
+    "controlledContent": "Você pode controlar este drawer programaticamente através do estado React.",
+    "direction": "Direção",
+    "open": "Aberto",
+    "closed": "Fechado",
+    "sendMessage": "Enviar Mensagem",
+    "contactForm": "Formulário de Contato",
+    "contactFormDescription": "Envie uma mensagem usando o formulário abaixo.",
+    "name": "Nome",
+    "email": "Email",
+    "message": "Mensagem",
+    "namePlaceholder": "Digite seu nome",
+    "emailPlaceholder": "Digite seu email",
+    "messagePlaceholder": "Digite sua mensagem",
+    "messageSent": "Mensagem enviada com sucesso!",
+    "fillAllFields": "Preencha todos os campos"
+  },
+  "Carousel": {
+    "previous": "Anterior",
+    "next": "Próximo",
+    "first": "Primeiro",
+    "goToSlide": "Ir para slide {slide}",
+    "slide": "Slide {current} de {total}",
+    "previousSlide": "Slide anterior",
+    "nextSlide": "Próximo slide",
+    "slideNumber": "Slide {number}",
+    "product": "Produto {number}",
+    "productDescription": "Descrição do produto",
+    "price": "R$ {price},00",
+    "imageDescription": "Descrição da imagem {number}",
+    "testimonialText1": "Este produto mudou completamente nossa forma de trabalhar.",
+    "testimonialText2": "Interface intuitiva e funcionalidades incríveis.",
+    "testimonialText3": "Suporte excepcional e produto de alta qualidade.",
+    "author1": "João Silva",
+    "author2": "Maria Santos",
+    "author3": "Pedro Costa",
+    "role1": "CEO, TechCorp",
+    "role2": "Designer, Creative Studio",
+    "role3": "Developer, StartupXYZ",
+    "responsiveDescription": "Este carousel mostra diferentes quantidades de slides baseado no tamanho da tela:",
+    "responsiveMobile": "• Mobile: 1 slide",
+    "responsiveTablet": "• Tablet: 2 slides",
+    "responsiveDesktop": "• Desktop: 3 slides"
+  },
+  "Landing": {
+    "badge": "Versão Mais Recente {version}",
+    "hero": {
+      "title": "Construa Dashboards Modernos com",
+      "subtitle": "Um starter kit abrangente para construir dashboards admin profissionais com Next.js, TypeScript e ferramentas modernas. Comece em minutos, não horas.",
+      "features": {
+        "auth": "🔐 Autenticação Completa",
+        "i18n": "🌍 Internacionalização",
+        "validation": "📝 Validação Avançada de Formulários",
+        "responsive": "📱 Design Mobile-First"
+      },
+      "cta": {
+        "primary": "Começar Gratuitamente",
+        "secondary": "Entrar"
+      },
+      "trust": "Confiado por desenvolvedores no mundo todo. Construído com tecnologias modernas."
+    },
+    "navbar": {
+      "features": "Funcionalidades",
+      "about": "Sobre",
+      "docs": "Documentação",
+      "contact": "Contato",
+      "signIn": "Entrar",
+      "signUp": "Começar",
+      "dashboard": "Acessar Dashboard"
+    },
+    "features": {
+      "title": "Tudo que você precisa para construir dashboards incríveis",
+      "subtitle": "Ferramentas e componentes abrangentes para acelerar seu processo de desenvolvimento.",
+      "cta": "Explorar todas as funcionalidades",
+      "items": {
+        "auth": {
+          "title": "Autenticação e Segurança",
+          "description": "Sistema completo de autenticação com integração Clerk, suporte OAuth e controle de acesso baseado em funções."
+        },
+        "i18n": {
+          "title": "Internacionalização",
+          "description": "Suporte nativo para múltiplos idiomas com next-intl. Fácil de adicionar novos idiomas e gerenciar traduções."
+        },
+        "validation": {
+          "title": "Validação de Formulários",
+          "description": "Validação avançada de formulários com schemas Zod, integração React Hook Form e validações específicas brasileiras."
+        },
+        "responsive": {
+          "title": "Design Responsivo",
+          "description": "Design mobile-first que fica ótimo em todos os dispositivos. Componentes e layouts totalmente responsivos."
+        },
+        "typescript": {
+          "title": "TypeScript First",
+          "description": "Construído com TypeScript para melhor experiência de desenvolvimento, segurança de tipos e menos erros em tempo de execução."
+        },
+        "config": {
+          "title": "Configuração Centralizada",
+          "description": "Sistema unificado de configuração para fácil manutenção, personalização e deployment em diferentes ambientes."
+        }
+      }
+    },
+    "stats": {
+      "title": "Construído para Escalar",
+      "subtitle": "Starter kit abrangente com tudo que você precisa para desenvolvimento profissional.",
+      "description": "Junte-se a milhares de desenvolvedores que confiam no nosso starter kit para seus projetos.",
+      "items": {
+        "components": "Componentes de UI",
+        "pages": "Páginas Prontas",
+        "frameworks": "Integrações",
+        "languages": "Idiomas"
+      }
+    },
+    "cta": {
+      "title": "Pronto para construir algo incrível?",
+      "subtitle": "Junte-se a milhares de desenvolvedores que já estão construindo com nosso starter kit.",
+      "primary": "Começar a Construir Agora",
+      "secondary": "Ver Demo",
+      "notice": "Grátis para começar • Não requer cartão de crédito"
+    },
+    "footer": {
+      "copyright": "Todos os direitos reservados.",
+      "madeWith": "Feito com",
+      "by": "por",
+      "sections": {
+        "product": "Produto",
+        "company": "Empresa",
+        "support": "Suporte",
+        "legal": "Legal"
+      },
+      "product": {
+        "features": "Funcionalidades",
+        "pricing": "Preços",
+        "demo": "Demo Ao Vivo",
+        "docs": "Documentação"
+      },
+      "company": {
+        "about": "Sobre Nós",
+        "blog": "Blog",
+        "careers": "Carreiras",
+        "contact": "Contato"
+      },
+      "support": {
+        "help": "Central de Ajuda",
+        "status": "Status",
+        "community": "Comunidade",
+        "changelog": "Changelog"
+      },
+      "legal": {
+        "privacy": "Política de Privacidade",
+        "terms": "Termos de Serviço",
+        "cookies": "Política de Cookies",
+        "license": "Licença"
+      }
+    },
+    "components": {
+      "title": "Componentes e Funcionalidades Incluídas",
+      "subtitle": "Um kit completo com mais de 50 componentes prontos, páginas de exemplo e funcionalidades avançadas para acelerar seu desenvolvimento.",
+      "categoriesTitle": "Categorias de Componentes",
+      "categoriesSubtitle": "Explore nossa biblioteca abrangente de componentes organizados por categoria",
+      "moreItems": "mais itens",
+      "features": {
+        "auth": {
+          "title": "Autenticação Completa",
+          "description": "Sistema de autenticação pronto com Clerk, incluindo OAuth, SSO e gestão de usuários"
+        },
+        "i18n": {
+          "title": "Internacionalização",
+          "description": "Suporte multi-idiomas com next-intl, inclui português e inglês"
+        },
+        "theme": {
+          "title": "Tema Claro/Escuro",
+          "description": "Alternância de tema integrada com detecção de preferência do sistema"
+        },
+        "responsive": {
+          "title": "Totalmente Responsivo",
+          "description": "Design mobile-first que funciona perfeitamente em todos os tamanhos de tela"
+        },
+        "performance": {
+          "title": "Otimizado para Performance",
+          "description": "Construído com Next.js 15, React 19 e melhores práticas modernas de performance"
+        },
+        "dx": {
+          "title": "Experiência do Desenvolvedor",
+          "description": "TypeScript, ESLint, Prettier e documentação abrangente incluídos"
+        }
+      },
+      "categories": {
+        "dashboard": {
+          "name": "Componentes de Dashboard",
+          "items": [
+            "Cards de Receita",
+            "Analytics de Usuário",
+            "Fontes de Tráfego",
+            "Visão de Vendas",
+            "Atividade Recente",
+            "Métricas de Performance",
+            "Gráficos de Crescimento",
+            "Indicadores KPI"
+          ]
+        },
+        "charts": {
+          "name": "Gráficos e Visualização de Dados",
+          "items": [
+            "Gráficos de Linha",
+            "Gráficos de Barra",
+            "Gráficos de Área",
+            "Gráficos de Pizza",
+            "Gráficos Donut",
+            "Gráficos Radar",
+            "Mapas de Calor",
+            "Gráficos em Tempo Real",
+            "Legendas Interativas",
+            "Zoom e Pan",
+            "Tooltips Customizados",
+            "Opções de Export"
+          ]
+        },
+        "ui": {
+          "name": "Componentes de UI",
+          "items": [
+            "Botões e Variantes",
+            "Elementos de Formulário",
+            "Tabelas e Grids de Dados",
+            "Modais e Diálogos",
+            "Menus Dropdown",
+            "Abas e Navegação",
+            "Cards e Layouts",
+            "Badges e Labels",
+            "Spinners de Loading",
+            "Notificações Toast",
+            "Barras de Progresso",
+            "Alertas e Mensagens"
+          ]
+        },
+        "forms": {
+          "name": "Componentes de Formulário",
+          "items": [
+            "Inputs de Texto",
+            "Dropdowns Select",
+            "Multi-select",
+            "Seletores de Data",
+            "Upload de Arquivos",
+            "Editor de Texto Rico",
+            "Validação de Formulários",
+            "Arrays de Campos",
+            "Campos Condicionais",
+            "Assistentes de Formulário",
+            "Auto-save",
+            "Reset e Limpar"
+          ]
+        },
+        "layout": {
+          "name": "Layout e Navegação",
+          "items": [
+            "Sidebar Responsivo",
+            "Navegação Superior",
+            "Breadcrumbs",
+            "Cabeçalhos de Página",
+            "Componentes de Rodapé",
+            "Menu Mobile",
+            "Interface de Busca",
+            "Menu de Perfil",
+            "Painel de Configurações",
+            "Grid do Dashboard"
+          ]
+        },
+        "examples": {
+          "name": "Páginas de Exemplo",
+          "items": [
+            "Homepage do Dashboard",
+            "Perfil de Usuário",
+            "Páginas de Configurações",
+            "Visualização de Calendário",
+            "Interface de Email",
+            "Aplicação de Chat",
+            "Gerenciador de Arquivos",
+            "Sistema de Faturas",
+            "Board Kanban",
+            "Visualização Timeline",
+            "Páginas de Erro",
+            "Em Breve"
+          ]
+        }
+      },
+      "cta": {
+        "title": "Explore Todos os Componentes",
+        "description": "Veja todos os componentes em ação e aprenda como personalizá-los para suas necessidades.",
+        "viewComponents": "Ver Componentes",
+        "documentation": "Documentação"
+      }
+    },
+    "techStack": {
+      "title": "Construído com Tecnologias Modernas",
+      "subtitle": "Usamos as ferramentas mais recentes e confiáveis para garantir a melhor experiência de desenvolvimento e performance em produção.",
+      "learnMore": "Saiba mais",
+      "cta": "Todas as tecnologias são prontas para produção e bem documentadas",
+      "stats": {
+        "technologies": "Tecnologias",
+        "components": "Componentes",
+        "typescript": "TypeScript",
+        "languages": "Idiomas"
+      },
+      "technologies": {
+        "nextjs": {
+          "name": "Next.js 15",
+          "description": "Framework React mais recente com App Router, SSR e SSG"
+        },
+        "react": {
+          "name": "React 19",
+          "description": "React mais recente com recursos concorrentes e hooks"
+        },
+        "typescript": {
+          "name": "TypeScript",
+          "description": "JavaScript type-safe para melhor experiência de desenvolvimento"
+        },
+        "tailwindcss": {
+          "name": "Tailwind CSS",
+          "description": "Framework CSS utility-first para desenvolvimento rápido de UI"
+        },
+        "clerk": {
+          "name": "Clerk",
+          "description": "Autenticação completa com OAuth, SSO e gestão de usuários"
+        },
+        "supabase": {
+          "name": "Supabase",
+          "description": "Alternativa open source ao Firebase com PostgreSQL"
+        },
+        "tanstack": {
+          "name": "TanStack Query",
+          "description": "Sincronização de dados poderosa para aplicações React"
+        },
+        "zustand": {
+          "name": "Zustand",
+          "description": "Solução de gerenciamento de estado pequena, rápida e escalável"
+        },
+        "hookform": {
+          "name": "React Hook Form",
+          "description": "Formulários performáticos e flexíveis com validação fácil"
+        },
+        "zod": {
+          "name": "Zod",
+          "description": "Biblioteca de validação de schema TypeScript-first"
+        },
+        "nextintl": {
+          "name": "next-intl",
+          "description": "Internacionalização para aplicações Next.js"
+        },
+        "apexcharts": {
+          "name": "ApexCharts",
+          "description": "Biblioteca de gráficos moderna para visualização interativa de dados"
+        },
+        "radixui": {
+          "name": "Radix UI",
+          "description": "Primitivos de UI de baixo nível com acessibilidade integrada"
+        },
+        "lucide": {
+          "name": "Lucide React",
+          "description": "Kit de ícones bonitos e consistentes com mais de 1000 ícones"
+        },
+        "sonner": {
+          "name": "Sonner",
+          "description": "Componente de toast opinativo para React"
+        },
+        "embla": {
+          "name": "Embla Carousel",
+          "description": "Biblioteca de carrossel leve com movimento fluido"
+        }
+      }
+    },
+    "documentation": {
+      "title": "Documentação Abrangente",
+      "subtitle": "Tudo que você precisa para começar, personalizar e fazer deploy da sua aplicação está completamente documentado.",
+      "highlights": {
+        "comprehensive": "Guias",
+        "examples": "Exemplos",
+        "diagrams": "Diagramas",
+        "updated": ""
+      },
+      "sections": {
+        "structure": {
+          "title": "Estrutura do Projeto",
+          "description": "Aprenda como a aplicação está organizada e como as diferentes partes funcionam juntas."
+        },
+        "features": {
+          "title": "Funcionalidades Principais",
+          "description": "Mergulhe fundo em autenticação, internacionalização, formulários e configuração."
+        },
+        "styling": {
+          "title": "Sistema de Design",
+          "description": "Entenda o sistema de temas, componentes e arquitetura visual."
+        },
+        "deployment": {
+          "title": "Desenvolvimento e Deploy",
+          "description": "Melhores práticas para fluxo de desenvolvimento e deploy em produção."
+        }
+      },
+      "moreGuides": "mais guias",
+      "cta": {
+        "title": "Pronto para mergulhar mais fundo?",
+        "description": "Explore nossa documentação abrangente com guias passo a passo, exemplos e melhores práticas.",
+        "browse": "Navegar Documentação",
+        "github": "Ver no GitHub"
+      },
+      "quickLinks": {
+        "structure": "Estrutura",
+        "development": "Desenvolvimento",
+        "components": "Componentes",
+        "deploy": "Deploy"
+      }
+    },
+    "brazilian": {
+      "title": "Feito para Projetos Brasileiros",
+      "subtitle": "Kit completo com validações específicas do Brasil, integrações de pagamento e APIs nacionais. Pronto para lançar no Brasil e expandir globalmente.",
+      "cta": "Perfeito para startups e empresas brasileiras",
+      "features": {
+        "validation": {
+          "title": "Validação de Documentos Brasileiros",
+          "description": "Validação completa para CPF, CNPJ, CEP com algoritmos de verificação de dígitos. Validação em tempo real com mensagens de erro em português."
+        },
+        "payments": {
+          "title": "Integração com Gateways de Pagamento",
+          "description": "Integrações prontas com Mercado Pago, Hotmart para o mercado brasileiro e Stripe, PayPal para expansão internacional."
+        },
+        "apis": {
+          "title": "Integrações com APIs Brasileiras",
+          "description": "Conexões pré-construídas com APIs do ViaCEP, Correios, IBGE e Banco Central para consulta de endereços, frete e dados financeiros."
+        },
+        "localization": {
+          "title": "Localização Completa",
+          "description": "Português brasileiro, formatação de moeda (R$), formatos de data, fusos horários e adaptações culturais já incluídas."
+        }
+      }
+    },
+    "pricing": {
+      "title": "Planos e Preços",
+      "subtitle": "Escolha o plano perfeito para seu projeto. Comece gratuitamente e faça upgrade conforme sua necessidade.",
+      "popular": "Mais Popular",
+      "free": "Grátis",
+      "customPricing": "Preços personalizados disponíveis",
+      "notice": "Todos os planos incluem atualizações gratuitas e suporte da comunidade.",
+      "periods": {
+        "month": "mês",
+        "forever": "para sempre"
+      },
+      "plans": {
+        "starter": {
+          "name": "Starter",
+          "description": "Perfeito para projetos pessoais e MVPs.",
+          "cta": "Começar Agora",
+          "features": [
+            "📦 Código fonte completo",
+            "⚛️ 50+ componentes React",
+            "🔐 Setup de autenticação Clerk",
+            "📚 Documentação completa",
+            "🌍 Suporte multi-idiomas",
+            "🎨 Temas claro/escuro",
+            "📱 Design totalmente responsivo",
+            "💾 6 meses de atualizações"
+          ]
+        },
+        "pro": {
+          "name": "Pro",
+          "description": "Ideal para empresas e projetos comerciais.",
+          "cta": "Escolher Pro",
+          "features": [
+            "✅ Tudo do Starter",
+            "🚀 Layouts avançados de dashboard",
+            "📊 Componentes de gráficos premium",
+            "📝 Validação avançada de formulários",
+            "🗄️ Integração Supabase",
+            "🔄 Setup TanStack Query",
+            "🐻 Gerenciamento de estado Zustand",
+            "⚡ Otimizações de performance",
+            "📈 Integração de analytics",
+            "💳 Exemplos de integração de pagamento",
+            "🛠️ 12 meses de atualizações",
+            "💬 Suporte prioritário"
+          ]
+        },
+        "enterprise": {
+          "name": "Enterprise",
+          "description": "Para grandes organizações com necessidades específicas.",
+          "cta": "Fale Conosco",
+          "features": [
+            "✅ Tudo do Pro",
+            "🏢 Licença para equipe (até 10 devs)",
+            "🎯 Opções de branding customizado",
+            "🤝 Chamada de onboarding 1-on-1",
+            "🔧 Integrações customizadas",
+            "📞 Suporte telefônico direto",
+            "🏃‍♂️ Correções de bugs fast-track",
+            "🎓 Sessão de treinamento da equipe",
+            "♾️ Atualizações vitalícias",
+            "📄 Direitos de licença estendidos",
+            "🚀 Solicitações de features prioritárias",
+            "🛡️ Garantia SLA"
+          ]
+        }
+      }
+    },
+    "testimonials": {
+      "title": "O que nossos usuários dizem",
+      "subtitle": "Junte-se a milhares de desenvolvedores e empresas que confiam em nosso starter kit.",
+      "stats": {
+        "developers": "Desenvolvedores",
+        "projects": "Projetos",
+        "countries": "Países",
+        "satisfaction": "Satisfação"
+      },
+      "quotes": {
+        "carlos": {
+          "text": "Este starter kit economizou semanas de desenvolvimento. A integração com APIs brasileiras é perfeita!",
+          "author": "Carlos Mendes",
+          "role": "CTO"
+        },
+        "ana": {
+          "text": "A validação de CPF e CNPJ funcionou perfeitamente desde o primeiro dia. Recomendo para qualquer projeto brasileiro.",
+          "author": "Ana Silva",
+          "role": "Tech Lead"
+        },
+        "rafael": {
+          "text": "Documentação excelente e suporte excepcional. Conseguimos lançar em produção muito mais rápido.",
+          "author": "Rafael Costa",
+          "role": "Founder"
+        },
+        "maria": {
+          "text": "O sistema de internacionalização facilitou muito nossa expansão internacional. Muito bem pensado!",
+          "author": "Maria Santos",
+          "role": "Product Manager"
+        },
+        "pedro": {
+          "text": "Componentes de UI modernos e responsivos. Nossos clientes adoraram o novo design.",
+          "author": "Pedro Oliveira",
+          "role": "Full Stack Developer"
+        },
+        "julia": {
+          "text": "A integração com Clerk para autenticação funcionou perfeitamente. Segurança de primeira linha.",
+          "author": "Julia Ferreira",
+          "role": "Security Engineer"
+        }
+      },
+      "highlights": {
+        "title": "Por que escolher nosso starter kit?",
+        "description": "Desenvolvido por especialistas, testado em produção, e usado por milhares de projetos ao redor do mundo.",
+        "speed": {
+          "title": "Desenvolvimento Rápido",
+          "description": "Economize semanas de desenvolvimento com componentes prontos"
+        },
+        "reliability": {
+          "title": "Confiabilidade",
+          "description": "Código testado e validado em projetos reais"
+        },
+        "growth": {
+          "title": "Escalabilidade",
+          "description": "Arquitetura preparada para crescer com seu negócio"
+        }
+      }
+    }
+  },
+  "StateManagement": {
+    "meta": {
+      "title": "Gerenciamento de Estado",
+      "description": "Demonstração do gerenciamento de estado global com Zustand"
+    },
+    "title": "Gerenciamento de Estado",
+    "description": "Explore como funciona o gerenciamento de estado global usando Zustand. Teste as funcionalidades interativas e observe como o estado é compartilhado entre componentes."
+  },
+  "TanStackQuery": {
+    "meta": {
+      "title": "TanStack Query Demo",
+      "description": "Demonstração da integração do TanStack Query com Supabase e Clerk"
+    },
+    "title": "TanStack Query Demo",
+    "description": "Esta página demonstra a integração do TanStack Query com Supabase e Clerk para gerenciamento de estado do servidor",
+    "loginRequired": "Faça login para testar o TanStack Query",
+    "profile": {
+      "title": "Perfil do Usuário",
+      "loading": "Carregando perfil...",
+      "nameNotDefined": "Nome não definido",
+      "newNamePlaceholder": "Novo nome",
+      "updateButton": "Atualizar Nome",
+      "updating": "Atualizando..."
+    },
+    "posts": {
+      "create": {
+        "title": "Criar Post",
+        "titlePlaceholder": "Título do post",
+        "contentPlaceholder": "Conteúdo do post",
+        "button": "Criar Post",
+        "creating": "Criando..."
+      },
+      "myPosts": {
+        "title": "Meus Posts",
+        "loading": "Carregando posts...",
+        "published": "Publicado",
+        "draft": "Rascunho",
+        "publishButton": "Publicar",
+        "unpublishButton": "Despublicar",
+        "deleteButton": "Deletar",
+        "empty": "Nenhum post encontrado. Crie seu primeiro post!",
+        "deleteConfirm": "Tem certeza que deseja deletar este post?"
+      },
+      "public": {
+        "title": "Posts Públicos",
+        "loading": "Carregando posts públicos...",
+        "empty": "Nenhum post público encontrado."
+      }
+    },
+    "status": {
+      "title": "Status das Queries",
+      "profile": "Perfil:",
+      "myPosts": "Meus Posts:",
+      "publicPosts": "Posts Públicos:",
+      "mutations": "Mutations:",
+      "loading": "Carregando",
+      "loaded": "Carregado",
+      "executing": "Executando",
+      "idle": "Inativo"
+    },
+    "features": {
+      "title": "Funcionalidades Demonstradas",
+      "realTime": "Atualizações em tempo real",
+      "optimistic": "Atualizações otimistas",
+      "caching": "Cache inteligente",
+      "error": "Tratamento de erros",
+      "loading": "Estados de carregamento",
+      "mutations": "Mutations com feedback"
+    }
+  },
+  "metadata": {
+    "analytics-demo": {
+      "title": "Demo de Analytics",
+      "description": "Demonstração do sistema de analytics integrado com Google Analytics, Meta Pixel, GTM e LogRocket"
+    }
+  },
+  "pages": {
+    "analytics-demo": {
+      "title": "Demonstração de Analytics",
+      "subtitle": "Teste as funcionalidades de tracking e analytics"
+    }
+  }
+}
