@@ -100,10 +100,35 @@ def test_equipes_programacao_ssma_e_excel(client, monkeypatch):
     assert r.status_code == 201, r.text
     seg = {**_login(client, "tst@obra.com", "SenhaForte789"), "X-Obra-Id": obra}
     assert client.post(f"/api/programacoes/{p['id']}/emitir", headers={**sa, "X-Obra-Id": obra}).status_code == 200
+    # cadastros das listas suspensas: segurança cadastra técnico/RAC/PTS/ART/ATA; PTO é do Planejamento
+    cad = lambda h, tipo, cod, **kw: client.post("/api/ssma/cadastros", headers=h, json={"tipo": tipo, "codigo": cod, **kw})  # noqa: E731
+    assert cad(seg, "TECNICO", "Técnica Beltrana").status_code == 201
+    assert cad(seg, "ART", "ART/11/53", descricao="Concreto CMD", validade="2026-12-31").status_code == 201
+    assert cad(seg, "ART", " art/11/53 ").status_code == 422  # já cadastrado
+    assert cad(seg, "RAC", "N/A").status_code == 422  # N/A já existe em toda lista
+    assert cad(seg, "PTO", "PTO-001").status_code == 403  # PTO é do Planejamento
+    hsa = {**sa, "X-Obra-Id": obra}
+    assert cad(hsa, "PTO", "PTO-001", descricao="Galpão de resíduos").status_code == 201
     r = client.put(f"/api/programacoes/{p['id']}/ssma", headers=seg, json={"linhas": [
-        {"id": lid, "tecnico": "Técnica Beltrana", "rac": "N/A", "pts": "N/A", "art": "ART/11/53", "pto": "N/A",
+        {"id": lid, "tecnico": "Técnico Inventado", "rac": "N/A"}]})
+    assert r.status_code == 422 and "não está no cadastro" in r.text
+    r = client.put(f"/api/programacoes/{p['id']}/ssma", headers=seg, json={"linhas": [
+        {"id": lid, "tecnico": "Técnica Beltrana", "rac": "N/A", "pts": "na", "art": "ART/11/53", "pto": "PTO-001",
          "ata": "N/A"}]})
     assert r.status_code == 200, r.text
+    ln = client.get(f"/api/programacoes/{p['id']}", headers=seg).json()["locais"][0]["areas"][0]["linhas"][0]
+    assert ln["ssma"] == {"tecnico": "Técnica Beltrana", "rac": "N/A", "pts": "N/A", "art": "ART/11/53", "pto": None,
+                          "ata": "N/A"}  # PTO não vem pela tela de SSMA
+    # PTO na linha (planejamento) e renomear no cadastro propaga para o rascunho
+    lid2 = client.get(f"/api/programacoes/{p2['id']}", headers=hsa).json()["locais"][0]["areas"][0]["linhas"][0]["id"]
+    linha2 = {"area_id": area["id"], "tipo_id": t["id"], "equipe_id": eq2["id"], "pto": "PTO-001"}
+    assert client.put(f"/api/programacoes/{p2['id']}/linhas/{lid2}", headers=hsa, json=linha2).status_code == 200
+    assert client.put(f"/api/programacoes/{p2['id']}/linhas/{lid2}", headers=hsa, json={**linha2, "pto": "PTO-999"}).status_code == 422
+    pto = next(x for x in client.get("/api/ssma/cadastros", headers=hsa, params={"tipo": "PTO"}).json())
+    assert pto["em_uso"] == 1 and client.delete(f"/api/ssma/cadastros/{pto['id']}", headers=hsa).status_code == 422
+    client.put(f"/api/ssma/cadastros/{pto['id']}", headers=hsa, json={"tipo": "PTO", "codigo": "PTO-001/R1"})
+    ln2 = client.get(f"/api/programacoes/{p2['id']}", headers=hsa).json()["locais"][0]["areas"][0]["linhas"][0]
+    assert ln2["ssma"]["pto"] == "PTO-001/R1"
     assert client.post(f"/api/programacoes/{p2['id']}/linhas", headers=seg, json={
         "area_id": area["id"], "tipo_id": t["id"]}).status_code == 403
     assert client.put(f"/api/programacoes/{p['id']}/salvar", headers=seg, json={"linhas": []}).status_code == 403
@@ -136,3 +161,17 @@ def test_excel_mensal_desloca_colunas(client, tipo, colunas_dia):
     from openpyxl.utils import get_column_letter as L
     assert ws[f"{L(38 + colunas_dia)}11"].value == "Total Mês"
     assert ws.title.startswith("Programação Mensal")
+
+
+def test_dominio_do_cadastro_ssma():
+    from app.modules.ssma.domain.cadastro import ItemCadastro, TipoCadastro, valor_da_linha
+    from app.shared.errors import DomainError
+
+    assert ItemCadastro(TipoCadastro.TECNICO, "  Ana   Lima ").codigo == "Ana Lima"
+    with pytest.raises(DomainError):
+        ItemCadastro(TipoCadastro.ART, "")
+    assert valor_da_linha("na", set(), TipoCadastro.RAC) == "N/A" and valor_da_linha("", set(), TipoCadastro.RAC) is None
+    assert valor_da_linha("RAC 10", {"RAC 10"}, TipoCadastro.RAC) == "RAC 10"
+    with pytest.raises(DomainError):
+        valor_da_linha("RAC 11", {"RAC 10"}, TipoCadastro.RAC)
+    assert TipoCadastro.PTO.do_planejamento and not TipoCadastro.ATA.do_planejamento

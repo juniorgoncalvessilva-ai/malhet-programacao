@@ -99,7 +99,7 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
               {g.etapa}
             </div>
             {g.itens.map((i) => {
-              const ativo = pathname?.startsWith(i.url);
+              const ativo = itemAtivo(pathname) === i.url;
               const Icone = i.icone;
               return (
                 <Link
@@ -186,7 +186,7 @@ function Usuario() {
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [gaveta, setGaveta] = useState(false);
-  const atual = MENU.flatMap((g) => g.itens).find((i) => pathname?.startsWith(i.url));
+  const atual = MENU.flatMap((g) => g.itens).find((i) => i.url === itemAtivo(pathname));
   const { obra, carregando, superadmin } = useObra();
   const telaAdmin = pathname?.startsWith('/app/admin');
   return (
@@ -244,4 +244,12 @@ function SemObra({ superadmin }: { superadmin: boolean }) {
       )}
     </div>
   );
+}
+
+/** Item do menu da rota atual: o de caminho mais específico (/app/ssma/cadastros não acende /app/ssma). */
+function itemAtivo(pathname: string | null): string | undefined {
+  if (!pathname) return undefined;
+  return MENU.flatMap((g) => g.itens).map((i) => i.url)
+    .filter((u) => pathname === u || pathname.startsWith(`${u}/`) || pathname.endsWith(u) || pathname.includes(`${u}/`))
+    .sort((a, b) => b.length - a.length)[0];
 }

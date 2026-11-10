@@ -99,3 +99,8 @@ async def ssma(ctx: ContextoObra = Depends(ler)) -> ContextoObra:
     if not ctx.papel.edita_ssma:
         raise _erro(403, "Só a segurança (ou o planejamento) preenche o SSMA")
     return ctx
+
+
+def negar(msg: str) -> HTTPException:
+    """403 com a mensagem no formato do restante da API (para regras de papel decididas dentro da rota)."""
+    return _erro(403, msg)

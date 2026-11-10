@@ -7,7 +7,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
 import { useEquipes } from '@/hooks/programacao/queries';
-import { buscaAtividades, buscaPq, k, useAcao, useCatalogo, useFrentes2, useProgramacao } from '@/hooks/programacao/planejamento';
+import { buscaAtividades, buscaPq, k, useAcao, useCadastrosSsma, useCatalogo, useFrentes2, useProgramacao } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { AtividadeBusca, ItemPqBusca, LinhaVisao } from '@/lib/api/types';
@@ -16,9 +16,9 @@ import { useObra } from '@/lib/obra/ObraProvider';
 interface FormLinha {
   area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
   equipe_id: string; id_crono: string; qtd_projeto: string; observacao: string;
-  natureza: 'P' | 'O' | 'E'; responsavel: string; qtd_periodo: string;
+  natureza: 'P' | 'O' | 'E'; responsavel: string; qtd_periodo: string; pto: string;
 }
-const VAZIO: FormLinha = { area_id: '', grupo_id: '', tipo_id: '', complemento: '', item_pq: '', equipe_id: '', id_crono: '', qtd_projeto: '', observacao: '', natureza: 'P', responsavel: '', qtd_periodo: '' };
+const VAZIO: FormLinha = { area_id: '', grupo_id: '', tipo_id: '', complemento: '', item_pq: '', equipe_id: '', id_crono: '', qtd_projeto: '', observacao: '', natureza: 'P', responsavel: '', qtd_periodo: '', pto: '' };
 const NATUREZA = { P: 'Programada', O: 'Oportunidade', E: 'Emergencial' } as const;
 type Pendentes = Record<string, string>; // `${linha}|${campo}|${data}` → valor ; `${linha}|periodo` → qtd
 
@@ -30,6 +30,8 @@ export default function MontarPage() {
   const frentes = useFrentes2();
   const catalogo = useCatalogo();
   const equipes = useEquipes();
+  const cadastros = useCadastrosSsma();
+  const ptos = (cadastros.data ?? []).filter((c) => c.tipo === 'PTO' && (c.ativo || c.codigo === form.pto));
   const [modo, setModo] = useState<'previsto' | 'realizado'>('previsto');
   const [form, setForm] = useState<FormLinha>(VAZIO);
   const [editando, setEditando] = useState<number | null>(null);
@@ -56,6 +58,7 @@ export default function MontarPage() {
       equipe_id: d.equipe_id ? Number(d.equipe_id) : null, id_crono: d.id_crono || null,
       qtd_projeto: d.qtd_projeto ? Number(d.qtd_projeto) : null, observacao: d.observacao || null,
       natureza: d.natureza, responsavel: d.responsavel || null, qtd_periodo: d.qtd_periodo ? Number(d.qtd_periodo) : null,
+      pto: d.pto || null,
     };
     return editando
       ? a.put<{ aviso: string | null }>(`/programacoes/${id}/linhas/${editando}`, corpo)
@@ -125,7 +128,7 @@ export default function MontarPage() {
     setForm({ area_id: String(ln.area_id), grupo_id: g ? String(g.id) : '', tipo_id: String(ln.tipo_id), complemento: ln.complemento ?? '',
       item_pq: ln.item_pq ?? '', equipe_id: ln.equipe_id ? String(ln.equipe_id) : '', id_crono: ln.id_crono ?? '',
       qtd_projeto: ln.qtd_projeto != null && ln.qtd_projeto !== ln.qtd_takeoff ? String(ln.qtd_projeto) : '', observacao: ln.observacao ?? '',
-      natureza: (ln.natureza ?? 'P') as FormLinha['natureza'], responsavel: ln.responsavel ?? '', qtd_periodo: ln.qtd_periodo != null ? String(ln.qtd_periodo) : '' });
+      natureza: (ln.natureza ?? 'P') as FormLinha['natureza'], responsavel: ln.responsavel ?? '', qtd_periodo: ln.qtd_periodo != null ? String(ln.qtd_periodo) : '', pto: ln.ssma?.pto ?? '' });
     setAberto(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -216,6 +219,11 @@ export default function MontarPage() {
               {Object.entries(NATUREZA).map(([k2, r]) => <option key={k2} value={k2}>{k2} · {r}</option>)}
             </Selecao>
             <Campo rotulo="Responsável" placeholder="vem da equipe" value={form.responsavel} onChange={(e) => setForm({ ...form, responsavel: e.target.value })} />
+            <Selecao rotulo="PTO (Plano de Trabalho de Obra)" value={form.pto} disabled={!pode('planejador')} title={pode('planejador') ? undefined : 'O PTO é escolhido pelo Planejamento'} onChange={(e) => setForm({ ...form, pto: e.target.value })}>
+              <option value="">—</option>
+              <option value="N/A">N/A</option>
+              {ptos.map((c) => <option key={c.id} value={c.codigo}>{c.codigo}{c.descricao ? ` · ${c.descricao.slice(0, 50)}` : ''}{c.ativo ? '' : ' (inativo)'}</option>)}
+            </Selecao>
             <Campo rotulo={`Previsto no período (${v.tipo === 'SEMANAL' ? 'semana' : 'mês'})`} type="number" step="any" min="0" value={form.qtd_periodo} onChange={(e) => setForm({ ...form, qtd_periodo: e.target.value })} />
             <Selecao rotulo="Atividade do cronograma (opcional)" value={form.id_crono} onChange={(e) => setForm({ ...form, id_crono: e.target.value })}>
               <option value="">{form.area_id ? '—' : 'escolha a área antes'}</option>
@@ -276,7 +284,7 @@ export default function MontarPage() {
                           <td className="min-w-[240px] px-2 py-2">
                             <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{ln.descricao}</span>
                             <div className="text-xs text-m-text-muted">{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
-                            <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}</div>
+                            <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}{ln.ssma?.pto ? ` · PTO ${ln.ssma.pto}` : ''}</div>
                             <Calculo ln={ln} />
                           </td>
                           <td className="px-2 py-2">{ln.item_pq ? <span title={ln.descricao_pq ?? ''}>{ln.item_pq}</span> : <span className="text-m-warning">sem PQ</span>}</td>

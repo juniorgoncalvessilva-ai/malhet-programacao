@@ -1,4 +1,4 @@
-import { BookOpen, Building2, CalendarRange, FileUp, GanttChart, HardHat, KeyRound, MapPin, Users, type LucideIcon } from 'lucide-react';
+import { BookOpen, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, HardHat, KeyRound, MapPin, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -12,6 +12,7 @@ export const MENU: GrupoMenu[] = [
     itens: [
       { titulo: 'Cronograma', url: '/app/cronograma', icone: GanttChart },
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
+      { titulo: 'PTO (planejamento)', url: '/app/pto', icone: ClipboardList, minimo: 'planejador' },
       { titulo: 'SSMA da programação', url: '/app/ssma', icone: HardHat, ssma: true },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
     ],
@@ -23,6 +24,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Frentes', url: '/app/frentes', icone: MapPin },
       { titulo: 'Catálogo de atividades', url: '/app/catalogo', icone: BookOpen },
       { titulo: 'Importações', url: '/app/importacoes', icone: FileUp },
+      { titulo: 'Cadastros de SSMA', url: '/app/ssma/cadastros', icone: ShieldCheck, ssma: true },
     ],
   },
   {

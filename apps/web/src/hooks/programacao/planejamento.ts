@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qs } from '@/lib/api/client';
-import type { GrupoCatalogo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
+import type { CadastroSsma, GrupoCatalogo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
 import { useApi } from './useApi';
 
 export const k = {
@@ -10,7 +10,14 @@ export const k = {
   catalogo: ['catalogo'] as const,
   programacoes: ['programacoes'] as const,
   programacao: (id: number) => ['programacao', id] as const,
+  cadastrosSsma: ['cadastros-ssma'] as const,
 };
+
+/** Todos os cadastros de SSMA/PTO da obra (as telas filtram por tipo). */
+export function useCadastrosSsma() {
+  const api = useApi();
+  return useQuery({ queryKey: k.cadastrosSsma, queryFn: () => api.get<CadastroSsma[]>('/ssma/cadastros') });
+}
 
 export function useFrentes2() {
   const api = useApi();

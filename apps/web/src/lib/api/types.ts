@@ -136,3 +136,7 @@ export interface ProgramacaoVisao {
 }
 export interface ItemPqBusca { item: string; descricao: string; unid: string | null; quantidade: number | null; cpu: string | null; qtd_tag: number | null }
 export interface AtividadeBusca { id_crono: string; atividade: string; inicio: string | null; fim: string | null; status: string | null; wbs: string | null }
+
+/** Cadastros que alimentam as listas suspensas de SSMA (segurança) e o PTO (planejamento). */
+export type TipoCadastroSsma = 'TECNICO' | 'RAC' | 'PTS' | 'ART' | 'ATA' | 'PTO';
+export interface CadastroSsma { id: number; tipo: TipoCadastroSsma; codigo: string; descricao: string | null; validade: string | null; ativo: boolean; em_uso: number }

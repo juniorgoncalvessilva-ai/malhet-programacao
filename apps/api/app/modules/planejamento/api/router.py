@@ -6,7 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.auth import ContextoObra, administrar, ler, planejar, programar, ssma
+from app.core.auth import ContextoObra, administrar, ler, negar, planejar, programar, ssma
+from app.modules.obras.domain.obra import PapelObra
 from app.core.db import get_session
 from app.modules.catalogo.api.router import obter_ou_criar_item
 from app.modules.catalogo.infra.models import TipoAtividadeModel
@@ -21,6 +22,8 @@ from app.modules.referencias.application.importar_xer import carregar_xer, statu
 from app.modules.referencias.infra.models import AtividadeCronogramaModel, ItemPqModel, PqQuantidadeTagModel
 from app.modules.referencias.infra.cpu_gateway import CpuGateway
 from app.modules.referencias.infra.resolvedor import JORNADA_REFERENCIA, ResolvedorReferencias
+from app.modules.ssma.domain.cadastro import CAMPOS_PLANEJAMENTO, CAMPOS_SEGURANCA
+from app.modules.ssma.infra.gateway import CadastroSsmaGateway
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(tags=["programação semanal/mensal"])
@@ -55,6 +58,7 @@ class LinhaIn(BaseModel):
     qtd_periodo: float | None = None
     natureza: str = "P"  # P programada | O oportunidade | E emergencial
     responsavel: str | None = None
+    pto: str | None = None  # Plano de Trabalho de Obra (cadastro do Planejamento)
     observacao: str | None = None
 
 
@@ -86,15 +90,14 @@ class SsmaLinhaIn(BaseModel):
     rac: str | None = None
     pts: str | None = None
     art: str | None = None
-    pto: str | None = None
-    ata: str | None = None
+    ata: str | None = None  # PTO é do Planejamento: vai na linha (montar), não aqui
 
 
 class SsmaIn(BaseModel):
     linhas: list[SsmaLinhaIn]
 
 
-SSMA_CAMPOS = ("tecnico", "rac", "pts", "art", "pto", "ata")
+SSMA_CAMPOS = (*CAMPOS_SEGURANCA, *CAMPOS_PLANEJAMENTO)  # copiados ao copiar a programação
 
 
 def _resumo(p: ProgramacaoModel) -> ResumoOut:
@@ -168,6 +171,14 @@ def _validar_linha(s: Session, c: ContextoObra, d: LinhaIn) -> tuple[TipoAtivida
     return t, item_id, aviso
 
 
+def _pto(s: Session, c: ContextoObra, valor: str | None, atual: str | None) -> str | None:
+    """PTO da linha: do cadastro do Planejamento; só o planejador muda."""
+    novo = CadastroSsmaGateway(s, c.obra_id).conferir("pto", valor, atual)
+    if novo != atual and not c.papel.pode(PapelObra.PLANEJADOR):
+        raise negar("o PTO é escolhido pelo Planejamento")
+    return novo
+
+
 @router.post("/programacoes/{pid}/linhas", status_code=201)
 def nova_linha(pid: int, d: LinhaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
     p = sv.obter(s, c.obra_id, pid)
@@ -176,6 +187,7 @@ def nova_linha(pid: int, d: LinhaIn, s: Session = Depends(get_session), c: Conte
     ln = LinhaProgramacaoModel(area_id=d.area_id, tipo_id=d.tipo_id, item_simova_id=item_id, item_pq=d.item_pq or None,
                                id_crono=d.id_crono or None, equipe_id=d.equipe_id, qtd_projeto=d.qtd_projeto,
                                qtd_periodo=d.qtd_periodo, natureza=d.natureza, responsavel=(d.responsavel or None),
+                               ssma_pto=_pto(s, c, d.pto, None),
                                observacao=d.observacao, ordem=(max([x.ordem for x in p.linhas], default=0) + 1))
     p.linhas.append(ln)
     s.flush()
@@ -194,6 +206,7 @@ def editar_linha(pid: int, lid: int, d: LinhaIn, s: Session = Depends(get_sessio
     ln.item_pq, ln.id_crono, ln.equipe_id = d.item_pq or None, d.id_crono or None, d.equipe_id
     ln.qtd_projeto, ln.observacao = d.qtd_projeto, d.observacao
     ln.qtd_periodo, ln.natureza, ln.responsavel = d.qtd_periodo, d.natureza, (d.responsavel or None)
+    ln.ssma_pto = _pto(s, c, d.pto, ln.ssma_pto)
     s.flush()
     return {"id": ln.id, "aviso": aviso}
 
@@ -392,15 +405,15 @@ def salvar(pid: int, d: SalvarIn, s: Session = Depends(get_session), c: Contexto
 
 @router.put("/programacoes/{pid}/ssma")
 def salvar_ssma(pid: int, d: SsmaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(ssma)):
-    """Itens de SSMA por linha (técnico, RAC, PTS, ART, PTO, ATA). Vale também com a programação emitida."""
+    """Itens de SSMA por linha (técnico, RAC, PTS, ART, ATA), escolhidos nos cadastros. Vale com a programação emitida."""
     p = sv.obter(s, c.obra_id, pid)
+    gw = CadastroSsmaGateway(s, c.obra_id)
     for x in d.linhas:
         ln = next((y for y in p.linhas if y.id == x.id), None)
         if ln is None:
             raise NotFoundError("Linha", x.id)
-        for k in SSMA_CAMPOS:
-            v = (getattr(x, k) or "").strip() or None
-            setattr(ln, f"ssma_{k}", v[:150 if k == "tecnico" else 60] if v else None)
+        for k in CAMPOS_SEGURANCA:
+            setattr(ln, f"ssma_{k}", gw.conferir(k, getattr(x, k), getattr(ln, f"ssma_{k}")))
     s.flush()
     return {"linhas": len(d.linhas)}
 
