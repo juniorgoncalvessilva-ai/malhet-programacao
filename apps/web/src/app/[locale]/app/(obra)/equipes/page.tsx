@@ -28,6 +28,19 @@ export default function EquipesPage() {
   const [erro, setErro] = useState<unknown>(null);
   const [aberta, setAberta] = useState<number | null>(null);
   const [importando, setImportando] = useState(false);
+  const [marcadas, setMarcadas] = useState<Set<number>>(new Set());
+  const excluir = async (ids: number[]) => {
+    const nomes = equipes.data?.filter((e) => ids.includes(e.id)).map((e) => e.nome) ?? [];
+    if (!ids.length || !window.confirm(`Excluir ${ids.length === 1 ? `a equipe ${nomes[0]}` : `${ids.length} equipes`}? As linhas de programação que usam a equipe ficam sem equipe (as emissões não mudam).`)) return;
+    let ok = 0;
+    for (const id of ids) {
+      try { await api.del(`/equipes/${id}`); ok++; } catch (er) { toast.error((er as Error).message); }
+    }
+    if (ok) toast.success(`${ok} equipe(s) excluída(s)`);
+    setMarcadas(new Set());
+    if (form?.id && ids.includes(form.id)) setForm(null);
+    atualizar();
+  };
   const atualizar = () => { qc.invalidateQueries({ queryKey: chaves.equipes }); qc.invalidateQueries({ queryKey: ['programacao'] }); };
 
   const salvar = async (e: React.FormEvent) => {
@@ -137,12 +150,18 @@ export default function EquipesPage() {
             </form>
           </Painel>
         )}
-        <Painel titulo={`Equipes (${equipes.data?.length ?? 0})`}>
+        <Painel titulo={`Equipes (${equipes.data?.length ?? 0})`}
+          acoes={pode('planejador') && <div className="flex items-center gap-2">
+            {!!equipes.data?.length && <label className="flex items-center gap-2 text-[13px] text-m-text-secondary"><input type="checkbox" aria-label="Selecionar todas"
+              checked={!!equipes.data?.length && marcadas.size === equipes.data.length}
+              onChange={(e) => setMarcadas(e.target.checked ? new Set(equipes.data?.map((x) => x.id)) : new Set())} /> Todas</label>}
+            <Botao variante="secundario" disabled={!marcadas.size} onClick={() => excluir([...marcadas])}><Trash2 size={16} /> Excluir selecionadas{marcadas.size ? ` (${marcadas.size})` : ''}</Botao>
+          </div>}>
           <Tabela cabecalho={['', 'Cód.', 'Equipe', 'Encarregado', 'Turno · jornada', 'Composição', 'HH/dia', '']} vazio={!equipes.data?.length && 'Importe o cadastro do Simova ou crie a primeira equipe.'}>
             {equipes.data?.map((e) => (
               <Fragment key={e.id}>
                 <tr className={e.ativo ? '' : 'opacity-50'}>
-                  <td className={td}><button type="button" aria-label={`Ver funcionários de ${e.nome}`} className="text-m-text-muted" onClick={() => setAberta(aberta === e.id ? null : e.id)}>{aberta === e.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
+                  <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <input type="checkbox" className="mr-2 align-middle" aria-label={`Selecionar ${e.nome}`} checked={marcadas.has(e.id)} onChange={() => setMarcadas((m) => { const n = new Set(m); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })} />}<button type="button" aria-label={`Ver funcionários de ${e.nome}`} className="text-m-text-muted" onClick={() => setAberta(aberta === e.id ? null : e.id)}>{aberta === e.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
                   <td className={td}>{e.codigo_simova ?? '—'}</td>
                   <td className={td}><b className="text-m-text-primary">{e.nome}</b>{e.responsavel && <div className="text-xs text-m-text-muted">resp. {e.responsavel}</div>}</td>
                   <td className={td}>{e.encarregado_nome ?? '—'}<div className="text-xs text-m-text-muted">{e.encarregado_cracha ?? <Pilula tom="atencao">sem crachá</Pilula>}</div></td>
@@ -152,7 +171,10 @@ export default function EquipesPage() {
                     {!e.composicao_efetiva.length && <span className="text-xs text-m-text-muted">{e.membros.length} funcionário(s), funções não informadas</span>}
                   </div></td>
                   <td className={td}>{fmt(e.hh_disponivel_dia)}</td>
-                  <td className={td}>{pode('planejador') && <button type="button" className="font-semibold text-m-accent" onClick={() => { setErro(null); setForm({ ...e }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar</button>}</td>
+                  <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <>
+                    <button type="button" className="font-semibold text-m-accent" onClick={() => { setErro(null); setForm({ ...e }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar</button>
+                    <button type="button" aria-label={`Excluir ${e.nome}`} className="ml-3 p-1 align-middle text-m-text-muted hover:text-m-danger" onClick={() => excluir([e.id])}><Trash2 size={15} /></button>
+                  </>}</td>
                 </tr>
                 {aberta === e.id && (
                   <tr><td colSpan={8} className="bg-m-surface-active px-4 py-3">

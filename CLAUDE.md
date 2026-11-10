@@ -30,6 +30,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Equipes: cadastro do Simova (`equipes/domain/simova_equipe.py`), composição efetiva pelos membros
   (`equipes/infra/composicao.py`). Papel `seguranca` só edita SSMA (`Depends(ssma)`). Excel do cliente (layout S32)
   em `planejamento/application/exportar_cliente.py`. Spec 010.
+- Catálogo: tipo = item da PQ (`tipo_atividade.item_pq`, um por obra); PQ com estrutura (títulos/folhas) em
+  `item_pq` (`folha`, `nivel`, `ordem`), lida por `referencias/infra/pq_gateway.py`. Spec 011.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

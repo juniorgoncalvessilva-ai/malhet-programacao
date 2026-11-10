@@ -103,7 +103,7 @@ export default function MontarPage() {
   const pqBusca = useQuery({
     queryKey: ['pq-busca', qPq, area?.tag],
     queryFn: () => api.get<ItemPqBusca[]>(buscaPq(qPq, area?.tag)),
-    enabled: aberto && (qPq.length >= 2 || !!tipo?.itens_pq.length),
+    enabled: aberto && !tipo?.item_pq && qPq.length >= 2,
   });
   const atBusca = useQuery({
     queryKey: ['at-busca', qAt, form.area_id],
@@ -111,12 +111,12 @@ export default function MontarPage() {
     enabled: aberto && !!form.area_id,
   });
   const opcoesPq = useMemo(() => {
-    const permitidos = tipo?.itens_pq ?? [];
+    const permitidos = tipo?.item_pq ? [tipo.item_pq] : [];
     const achados = pqBusca.data ?? [];
     return { permitidos, outros: achados.filter((x) => !permitidos.includes(x.item)) };
   }, [tipo, pqBusca.data]);
 
-  useEffect(() => { if (tipo && tipo.itens_pq.length === 1 && !form.item_pq) setForm((f) => ({ ...f, item_pq: tipo.itens_pq[0] })); }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tipo?.item_pq && form.item_pq !== tipo.item_pq) setForm((f) => ({ ...f, item_pq: tipo.item_pq ?? '' })); }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const abrirNova = (areaId?: number) => { setEditando(null); setForm({ ...VAZIO, area_id: areaId ? String(areaId) : '' }); setAberto(true); };
   const abrirEdicao = (ln: LinhaVisao) => {
@@ -179,25 +179,32 @@ export default function MontarPage() {
               <option value="">Escolha…</option>
               {catalogo.data?.filter((g) => g.ativo).map((g) => <option key={g.id} value={g.id}>{g.codigo} · {g.descricao}</option>)}
             </Selecao>
-            <Selecao rotulo="Atividade (tipo)" required value={form.tipo_id} onChange={(e) => setForm({ ...form, tipo_id: e.target.value, item_pq: '' })}>
+            <Selecao rotulo="Atividade (item da PQ)" required value={form.tipo_id} onChange={(e) => setForm({ ...form, tipo_id: e.target.value, item_pq: '' })}>
               <option value="">{grupo ? 'Escolha…' : 'Escolha o grupo antes'}</option>
-              {grupo?.tipos.filter((t) => t.ativo).map((t) => <option key={t.id} value={t.id}>{t.codigo} · {t.descricao}</option>)}
+              {grupo?.tipos.filter((t) => t.ativo).map((t) => <option key={t.id} value={t.id}>{t.codigo} · {t.item_pq ? `${t.item_pq} · ` : ''}{t.descricao.slice(0, 90)}</option>)}
             </Selecao>
             <div>
               <Campo rotulo="Texto complementar (opcional)" list="complementos" placeholder="ex.: Fundo canaleta 2A" value={form.complemento} onChange={(e) => setForm({ ...form, complemento: e.target.value })} />
               <datalist id="complementos">{tipo?.itens.map((i) => <option key={i.id} value={i.complemento}>{i.codigo}</option>)}</datalist>
               {tipo && <p className="mt-1 text-xs text-m-text-muted">ID Simova: <b>{form.complemento.trim() ? (tipo.itens.find((i) => i.complemento.toLowerCase() === form.complemento.trim().replace(/^\(|\)$/g, '').toLowerCase())?.codigo ?? `${tipo.codigo}.novo`) : tipo.codigo}</b></p>}
             </div>
+            {tipo?.item_pq ? (
+              <div className="flex flex-col gap-1 rounded-m-md border border-m-stroke-subtle bg-m-surface-active px-3 py-2 text-[13px] md:col-span-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Item da PQ (mede nele)</span>
+                <span><b className="text-m-text-primary">{tipo.item_pq}</b> · {tipo.descricao} · {tipo.unidade ?? ''}{tipo.quantidade_pq != null ? ` · contrato ${fmt(tipo.quantidade_pq)}` : ''}</span>
+              </div>
+            ) : (<>
             <Selecao rotulo="Item da PQ" value={form.item_pq} onChange={(e) => setForm({ ...form, item_pq: e.target.value })}>
-              <option value="">— sem item —</option>
-              {opcoesPq.permitidos.length > 0 && <optgroup label="Itens do tipo">{opcoesPq.permitidos.map((x) => {
-                const b = pqBusca.data?.find((p) => p.item === x);
-                return <option key={x} value={x}>{x}{b ? ` · ${b.descricao.slice(0, 60)}${b.qtd_tag != null ? ` · TAG ${fmt(b.qtd_tag)}` : ''}` : ''}</option>;
-              })}</optgroup>}
-              {opcoesPq.outros.length > 0 && <optgroup label="Busca">{opcoesPq.outros.map((x) => <option key={x.item} value={x.item}>{x.item} · {x.descricao.slice(0, 60)}{x.qtd_tag != null ? ` · TAG ${fmt(x.qtd_tag)}` : ''}</option>)}</optgroup>}
-              {form.item_pq && !opcoesPq.permitidos.includes(form.item_pq) && !opcoesPq.outros.some((o) => o.item === form.item_pq) && <option value={form.item_pq}>{form.item_pq}</option>}
-            </Selecao>
-            <Campo rotulo="Buscar outro item da PQ" placeholder="nº ou descrição" value={qPq} onChange={(e) => setQPq(e.target.value)} />
+                <option value="">— sem item —</option>
+                {opcoesPq.permitidos.length > 0 && <optgroup label="Itens do tipo">{opcoesPq.permitidos.map((x) => {
+                  const b = pqBusca.data?.find((p) => p.item === x);
+                  return <option key={x} value={x}>{x}{b ? ` · ${b.descricao.slice(0, 60)}${b.qtd_tag != null ? ` · TAG ${fmt(b.qtd_tag)}` : ''}` : ''}</option>;
+                })}</optgroup>}
+                {opcoesPq.outros.length > 0 && <optgroup label="Busca">{opcoesPq.outros.map((x) => <option key={x.item} value={x.item}>{x.item} · {x.descricao.slice(0, 60)}{x.qtd_tag != null ? ` · TAG ${fmt(x.qtd_tag)}` : ''}</option>)}</optgroup>}
+                {form.item_pq && !opcoesPq.permitidos.includes(form.item_pq) && !opcoesPq.outros.some((o) => o.item === form.item_pq) && <option value={form.item_pq}>{form.item_pq}</option>}
+              </Selecao>
+              <Campo rotulo="Buscar outro item da PQ" placeholder="nº ou descrição" value={qPq} onChange={(e) => setQPq(e.target.value)} />
+            </>)}
             <Selecao rotulo="Equipe / encarregado" value={form.equipe_id} onChange={(e) => {
               const eq = equipes.data?.find((x) => String(x.id) === e.target.value);
               setForm({ ...form, equipe_id: e.target.value, responsavel: form.responsavel || eq?.responsavel || '' });

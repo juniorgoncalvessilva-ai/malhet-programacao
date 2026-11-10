@@ -185,7 +185,7 @@ def areas(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 @router.get("/pq", response_model=list[PqOut])
 def pq(q: str | None = None, limite: int = Query(100, le=1000), s: Session = Depends(get_session),
        c: ContextoObra = Depends(ler)):
-    stmt = select(ItemPqModel).where(ItemPqModel.versao_id == _vigente(s, c.obra_id, "PQ"))
+    stmt = select(ItemPqModel).where(ItemPqModel.versao_id == _vigente(s, c.obra_id, "PQ"), ItemPqModel.folha.is_(True))
     if q:
         stmt = stmt.where(or_(ItemPqModel.item.ilike(f"{q}%"), ItemPqModel.descricao.ilike(f"%{q}%")))
     return s.scalars(stmt.order_by(ItemPqModel.id).limit(limite)).all()

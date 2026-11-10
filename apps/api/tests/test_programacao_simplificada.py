@@ -97,19 +97,21 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     # take-off: PQ + quantidade por TAG
     r = client.post("/api/importar/takeoff", data={"rotulo": "5º take-off"}, files={"arquivo": ("t.xlsx", takeoff())})
     assert r.status_code == 200, r.text
-    assert r.json()["contagem"] == {"PQ": 2, "QTD_TAG": 1}
+    assert r.json()["contagem"] == {"PQ": 2, "ESTRUTURA": 0, "QTD_TAG": 1}
     busca = client.get("/api/pq/itens", params={"q": "1.5.3", "tag": "1800AA-ED-01"}).json()
     assert busca[0]["qtd_tag"] == 50.0
 
-    # catálogo: 2 Concreto → 2.3 Concreto 20 MPa (com item de PQ permitido)
+    # catálogo: o tipo é o item da PQ vinculado ao grupo (2 Concreto → 2.1 = 1.5.3.1.3, 2.2 = 1.5.3.1.2)
     g1 = client.post("/api/catalogo/grupos", json={"descricao": "Escavação"}).json()
     g = client.post("/api/catalogo/grupos", json={"descricao": "Concreto"}).json()
     assert (g1["numero"], g["numero"]) == (1, 2)
-    for desc in ("Concreto magro", "Concreto 10 MPa"):
-        client.post("/api/catalogo/tipos", json={"grupo_id": g["id"], "descricao": desc, "unidade": "m³"})
-    t = client.post("/api/catalogo/tipos", json={"grupo_id": g["id"], "descricao": "Concreto 20 MPa", "unidade": "m³",
-                                                  "itens_pq": ["1.5.3.1.2"]}).json()
-    assert t["codigo"] == "2.3"
+    r = client.post(f"/api/catalogo/grupos/{g['id']}/itens-pq", json={"itens": ["1.5.3.1.3", "1.5.3.1.2", "9.9.9"]}).json()
+    assert r["criados"] == ["2.1", "2.2"] and "9.9.9" in r["avisos"][0]
+    r = client.post(f"/api/catalogo/grupos/{g1['id']}/itens-pq", json={"itens": ["1.5.3.1.2"]}).json()
+    assert r["criados"] == [] and "já é o tipo 2.2" in r["avisos"][0]  # um item da PQ, um tipo
+    t = next(x for x in client.get("/api/catalogo").json()[1]["tipos"] if x["item_pq"] == "1.5.3.1.2")
+    assert (t["codigo"], t["descricao"], t["unidade"], t["quantidade_pq"]) == ("2.2", "Concreto estrutural 20 MPa", "m³", 300)
+    assert client.delete("/api/catalogo/grupos/" + str(g["id"])).status_code == 422  # grupo com itens
 
     # programação semanal (sex 06/11 → sáb 14/11) com linha "Concreto 20 MPa - (Fundo canaleta 2A)"
     p = client.post("/api/programacoes", json={"tipo": "SEMANAL", "referencia": "2026-11-10"}).json()
@@ -123,7 +125,10 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     lid = r.json()["id"]
     r2 = client.post(f"/api/programacoes/{p['id']}/linhas", json={**linha, "complemento": "(fundo  canaleta 2a)",
                                                                    "item_pq": "1.5.3.1.3"})
-    assert "1.5.3.1.2" in r2.json()["aviso"]  # mesmo complemento reaproveita 2.3.1, mas avisa do item de PQ
+    assert r2.json()["aviso"] is None  # mesmo complemento reaproveita 2.2.1; a linha mede no item do tipo
+    ln2 = client.get(f"/api/programacoes/{p['id']}").json()["locais"][0]["areas"][0]["linhas"][1]
+    assert (ln2["codigo_simova"], ln2["item_pq"]) == ("2.2.1", "1.5.3.1.2")
+    assert client.delete(f"/api/catalogo/tipos/{t['id']}").status_code == 422  # tipo em uso
     client.delete(f"/api/programacoes/{p['id']}/linhas/{r2.json()['id']}")
     vals = [{"data": f"2026-11-{d:02d}", "valor": v} for d, v in ((6, 5), (9, 10), (10, 10), (13, 8), (14, 4))]
     assert client.put(f"/api/programacoes/{p['id']}/linhas/{lid}/valores",
@@ -134,7 +139,7 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     loc = v["locais"][0]
     ln = loc["areas"][0]["linhas"][0]
     assert (loc["codigo"], loc["areas"][0]["codigo"]) == ("2", "004.05")
-    assert ln["codigo_simova"] == "2.3.1" and ln["descricao"] == "Concreto 20 MPa - (Fundo canaleta 2A)"
+    assert ln["codigo_simova"] == "2.2.1" and ln["descricao"] == "Concreto estrutural 20 MPa - (Fundo canaleta 2A)"
     assert ln["qtd_takeoff"] == 50.0 and ln["total_previsto"] == 37 and ln["unidade"] == "m³"
 
     # editar frente e catálogo propaga para a programação
@@ -143,7 +148,7 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     client.put(f"/api/catalogo/grupos/{g['id']}", json={"descricao": "Concretagem", "numero": 7})
     v = client.get(f"/api/programacoes/{p['id']}").json()
     ln = v["locais"][0]["areas"][0]["linhas"][0]
-    assert v["locais"][0]["areas"][0]["codigo"] == "004.05.9" and ln["codigo_simova"] == "7.3.1"
+    assert v["locais"][0]["areas"][0]["codigo"] == "004.05.9" and ln["codigo_simova"] == "7.2.1"
     assert ln["grupo"]["descricao"] == "Concretagem"
 
     # emitir congela; previsto travado, realizado liberado; reabrir gera nova revisão
@@ -159,20 +164,20 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     assert client.post(f"/api/programacoes/{p['id']}/reabrir").status_code == 204
     assert client.post(f"/api/programacoes/{p['id']}/emitir").json() == {"revisao": 1}
 
-    # FT: 9 dias → 2 linhas (sex…qui + sex, sáb), ID 7.3.1 e frente 004.05
+    # FT: 9 dias → 2 linhas (sex…qui + sex, sáb), ID 7.2.1 e frente 004.05
     r = client.get(f"/api/programacoes/{p['id']}/ft")
     assert r.status_code == 200 and r.headers["x-itens"] == "2"
     ws = load_workbook(BytesIO(r.content)).active
     rows = [dict(zip(layout.FT_IMPORT_INTERMEDIARIA, x)) for x in list(ws.iter_rows(values_only=True))[1:]]
-    assert {x["CODIGO_OPER"] for x in rows} == {"7.3.1"} and {x["CODIGO_FRENTE"] for x in rows} == {"004.05"}
+    assert {x["CODIGO_OPER"] for x in rows} == {"7.2.1"} and {x["CODIGO_FRENTE"] for x in rows} == {"004.05"}
     assert (rows[0]["DATA_INICIO"], rows[0]["DATA_FIM"], rows[0]["PE_SEXTA"]) == ("06/11/2026", "12/11/2026", "5")
     assert (rows[1]["DATA_INICIO"], rows[1]["PE_SEXTA"], rows[1]["PE_SABADO"]) == ("13/11/2026", "8", "4")
     assert rows[0]["CRACHA_ENCARREGADO"] == "115095" and "PQ 1.5.3.1.2" in rows[0]["OBSERVACAO"]
 
-    # cadastros para o Simova: FRENTE (locais+áreas), OPER_GRUPO, OPER com 7.3 e 7.3.1
+    # cadastros para o Simova: FRENTE (locais+áreas), OPER_GRUPO, OPER com 7.2 e 7.2.1
     wb = load_workbook(BytesIO(client.get("/api/simova/cadastros.xlsx").content))
     opers = {r[0]: r[1] for r in list(wb["OPER"].iter_rows(values_only=True))[1:]}
-    assert opers["7.3"] == "Concreto 20 MPa" and opers["7.3.1"] == "Concreto 20 MPa - (Fundo canaleta 2A)"
+    assert opers["7.2"] == "Concreto estrutural 20 MPa" and opers["7.2.1"] == "Concreto estrutural 20 MPa - (Fundo canaleta 2A)"
     frentes = [r[0] for r in list(wb["FRENTE"].iter_rows(values_only=True))[1:]]
     assert frentes[:3] == ["1", "004.00.1", "2"] and "S2" in frentes
 

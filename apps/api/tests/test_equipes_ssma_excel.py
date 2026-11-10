@@ -63,6 +63,9 @@ def test_equipes_programacao_ssma_e_excel(client, monkeypatch):
     eq2 = next(e for e in client.get("/api/equipes").json() if e["codigo_simova"] == "2")
     assert eq2["turno"] == "Noturno" and eq2["jornada_horas"] == 8 and eq2["membros"][0]["funcao"]
     assert len(client.get("/api/equipes").json()) == 3
+    desm = next(e for e in client.get("/api/equipes").json() if e["codigo_simova"] == "3")
+    assert client.delete(f"/api/equipes/{desm['id']}").status_code == 204  # excluir equipe (com membros)
+    assert len(client.get("/api/equipes").json()) == 2
 
     # programação: linha herda o responsável da equipe; salvar em lote (qtd do período + dias)
     area = client.post("/api/frentes/importar", json={"texto": LISTA}).json()[0]["areas"][0]

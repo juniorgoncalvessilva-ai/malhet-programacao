@@ -75,7 +75,7 @@ export default function ImportacoesPage() {
       {admin ? (
         <div className="grid gap-4 xl:grid-cols-3">
           <Bloco titulo="Cronograma (P6 .xer)" subtitulo="Atividades, datas e WBS (CWA). A tela de montar filtra as atividades pela área escolhida." icone={CalendarClock} caminho="/importar/xer" accept=".xer" />
-          <Bloco titulo="Take-off da obra" subtitulo="Itens da PQ do contrato e quantidade de cada item por TAG da frente." icone={Table2} caminho="/importar/takeoff" accept=".xlsx,.xlsm" />
+          <Bloco titulo="PQ do contrato (abas PQ e MC)" subtitulo="A aba PQ com toda a estrutura (títulos, itens, critério, quantidade e preço) e a MC com a quantidade de cada item por TAG. Também aceita o take-off (PQ CONTRATO + MC FRENTES)." icone={Table2} caminho="/importar/takeoff" accept=".xlsx,.xlsm" />
           <Bloco titulo="CPU da obra (Composição de Custo Unitário)" subtitulo="O relatório de composições do orçamento (.xls). Dele saem HH por unidade, o recurso que governa, o índice (un/dia por pessoa) e a capacidade das equipes." icone={FileSpreadsheet} caminho="/importar/cpu" accept=".xls,.xlsx" />
         </div>
       ) : (

@@ -86,6 +86,13 @@ class ItemPqModel(Base):
     composicao: Mapped[str | None] = mapped_column(String(40))
     recurso_governa: Mapped[str | None] = mapped_column(String(120))
     coef_governa: Mapped[float | None] = mapped_column(Float)
+    # estrutura da aba PQ: títulos (níveis 1–4) e itens medidos (folhas)
+    nivel: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
+    folha: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), index=True)
+    ordem: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    codigo_atividade: Mapped[str | None] = mapped_column(String(20))  # K.TT.UU.VVV.WWW
+    criterio: Mapped[str | None] = mapped_column(String(40))  # CMS C.05.05.001
+    total: Mapped[float | None] = mapped_column(Float)
 
 
 class CpuRecursoModel(Base):

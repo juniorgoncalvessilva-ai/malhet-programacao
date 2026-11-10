@@ -1,41 +1,57 @@
 'use client';
 
-import { Download, Pencil, Plus } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, ChevronRight, Download, Link2, Pencil, Plus, Trash2, Unlink } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Botao, Cabecalho, Campo, Erro, Painel, Pilula, Selecao, Tabela, td } from '@/components/Obra/ui';
-import { useApi } from '@/hooks/programacao/useApi';
+import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, fmt } from '@/components/Obra/ui';
 import { k, useAcao, useCatalogo } from '@/hooks/programacao/planejamento';
-import type { GrupoCatalogo, ItemCatalogo, TipoCatalogo } from '@/lib/api/types';
+import { useApi } from '@/hooks/programacao/useApi';
+import { Link } from '@/i18n/navigation';
+import type { GrupoCatalogo, ItemCatalogo, LinhaPq, TipoCatalogo } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 
 type GrupoForm = { id?: number; descricao: string; numero: string; ativo: boolean };
-type TipoForm = { id?: number; grupo_id: string; descricao: string; unidade: string; numero: string; itens_pq: string; ativo: boolean };
-type ItemForm = { id?: number; tipo_id: number; complemento: string; item_pq: string; ativo: boolean };
+type TipoForm = { id: number; grupo_id: string; numero: string; ativo: boolean; codigo: string };
+type ItemForm = { id?: number; tipo_id: number; complemento: string; ativo: boolean };
 
 const num = (v: string) => (v.trim() ? Number(v) : null);
-const listaPq = (v: string) => v.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+const th = 'px-2 py-2 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted whitespace-nowrap';
+const tdc = 'px-2 py-2 text-[12.5px] align-top tabular-nums border-b border-m-row';
+// níveis da aba PQ (como na planilha: 1 laranja, 2 amarelo… aqui nos tons do design)
+const NIVEL: Record<number, string> = {
+  1: 'bg-m-accent-strong text-m-on-accent font-bold uppercase',
+  2: 'bg-m-surface-active font-bold text-m-text-primary',
+  3: 'bg-m-surface-active/60 font-semibold text-m-text-primary',
+  4: 'font-semibold text-m-text-secondary',
+};
 
 export default function CatalogoPage() {
   const cat = useCatalogo();
   const api = useApi();
   const { pode } = useObra();
-  const inv = [[...k.catalogo], ['programacao']];
+  const editar = pode('planejador');
+  const inv = [[...k.catalogo], ['programacao'], ['pq-estrutura']];
+  const pq = useQuery({ queryKey: ['pq-estrutura'], queryFn: () => api.get<{ versao: { rotulo: string; arquivo: string | null } | null; linhas: LinhaPq[] }>('/pq/estrutura') });
   const [grupo, setGrupo] = useState<GrupoForm | null>(null);
   const [tipo, setTipo] = useState<TipoForm | null>(null);
   const [item, setItem] = useState<ItemForm | null>(null);
-  const editar = pode('planejador');
+  const [destino, setDestino] = useState('');
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [q, setQ] = useState('');
+  const [soLivres, setSoLivres] = useState(false);
+  const [fechados, setFechados] = useState<Set<string>>(new Set());
 
   const salvarGrupo = useAcao((a, d: GrupoForm) => {
     const corpo = { descricao: d.descricao, numero: num(d.numero), ativo: d.ativo };
     return d.id ? a.put(`/catalogo/grupos/${d.id}`, corpo) : a.post('/catalogo/grupos', corpo);
   }, inv);
-  const salvarTipo = useAcao((a, d: TipoForm) => {
-    const corpo = { grupo_id: Number(d.grupo_id), descricao: d.descricao, unidade: d.unidade || null, numero: num(d.numero), ativo: d.ativo, itens_pq: listaPq(d.itens_pq) };
-    return d.id ? a.put(`/catalogo/tipos/${d.id}`, corpo) : a.post('/catalogo/tipos', corpo);
-  }, inv);
+  const excluirGrupo = useAcao((a, id: number) => a.del(`/catalogo/grupos/${id}`), inv);
+  const salvarTipo = useAcao((a, d: TipoForm) => a.put(`/catalogo/tipos/${d.id}`, { grupo_id: Number(d.grupo_id), numero: num(d.numero), ativo: d.ativo }), inv);
+  const desvincular = useAcao((a, id: number) => a.del(`/catalogo/tipos/${id}`), inv);
+  const vincular = useAcao((a, d: { gid: number; itens: string[] }) => a.post<{ criados: string[]; avisos: string[] }>(`/catalogo/grupos/${d.gid}/itens-pq`, { itens: d.itens }), inv);
   const salvarItem = useAcao((a, d: ItemForm) => {
-    const corpo = { tipo_id: d.tipo_id, complemento: d.complemento, item_pq: d.item_pq || null, ativo: d.ativo };
+    const corpo = { tipo_id: d.tipo_id, complemento: d.complemento, ativo: d.ativo };
     return d.id ? a.put(`/catalogo/itens/${d.id}`, corpo) : a.post<{ criado: boolean; aviso: string | null }>('/catalogo/itens', corpo);
   }, inv);
 
@@ -43,27 +59,37 @@ export default function CatalogoPage() {
   const nTipos = grupos.reduce((s, g) => s + g.tipos.length, 0);
   const fechar = () => { setGrupo(null); setTipo(null); setItem(null); };
   const abrirGrupo = (g?: GrupoCatalogo) => { fechar(); setGrupo(g ? { id: g.id, descricao: g.descricao, numero: String(g.numero), ativo: g.ativo } : { descricao: '', numero: '', ativo: true }); };
-  const abrirTipo = (t?: TipoCatalogo, grupoId?: number) => {
-    fechar();
-    setTipo(t
-      ? { id: t.id, grupo_id: String(t.grupo_id), descricao: t.descricao, unidade: t.unidade ?? '', numero: String(t.numero), itens_pq: t.itens_pq.join(', '), ativo: t.ativo }
-      : { grupo_id: String(grupoId ?? grupos[0]?.id ?? ''), descricao: '', unidade: '', numero: '', itens_pq: '', ativo: true });
-  };
-  const abrirItem = (t: TipoCatalogo, i?: ItemCatalogo) => { fechar(); setItem(i ? { id: i.id, tipo_id: t.id, complemento: i.complemento, item_pq: i.item_pq ?? '', ativo: i.ativo } : { tipo_id: t.id, complemento: '', item_pq: t.itens_pq[0] ?? '', ativo: true }); };
+  const abrirTipo = (t: TipoCatalogo) => { fechar(); setTipo({ id: t.id, grupo_id: String(t.grupo_id), numero: String(t.numero), ativo: t.ativo, codigo: t.codigo }); };
+  const abrirItem = (t: TipoCatalogo, i?: ItemCatalogo) => { fechar(); setItem(i ? { id: i.id, tipo_id: t.id, complemento: i.complemento, ativo: i.ativo } : { tipo_id: t.id, complemento: '', ativo: true }); };
   const tipoDoItem = item && grupos.flatMap((g) => g.tipos).find((t) => t.id === item.tipo_id);
+  const grupoDestino = grupos.find((g) => String(g.id) === destino);
+
+  // aba PQ: filtro mantém os títulos acima dos itens que casam
+  const linhas = pq.data?.linhas ?? [];
+  const visiveis = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    const casa = (l: LinhaPq) => l.folha && (!soLivres || !l.tipo) && (!t || l.item.startsWith(t) || l.descricao.toLowerCase().includes(t) || (l.codigo_atividade ?? '').toLowerCase().includes(t));
+    if (!t && !soLivres) return linhas;
+    const manter = new Set<string>();
+    for (const l of linhas) if (casa(l)) { const p = l.item.split('.'); for (let i = 1; i <= p.length; i++) manter.add(p.slice(0, i).join('.')); }
+    return linhas.filter((l) => manter.has(l.item));
+  }, [linhas, q, soLivres]);
+  const escondido = (l: LinhaPq) => { const p = l.item.split('.'); for (let i = 1; i < p.length; i++) if (fechados.has(p.slice(0, i).join('.'))) return true; return false; };
+  const alternar = (it: string) => setFechados((s) => { const n = new Set(s); if (n.has(it)) n.delete(it); else n.add(it); return n; });
+  const marcar = (it: string) => setSel((s) => { const n = new Set(s); if (n.has(it)) n.delete(it); else n.add(it); return n; });
 
   return (
     <>
       <Cabecalho
         eyebrow="Cadastros · catálogo de atividades"
         cor="var(--m-proc-medir)"
-        titulo={grupos.length ? `${grupos.length} grupos e ${nTipos} tipos de atividade` : 'Catálogo vazio'}
-        descricao="O que o encarregado escolhe: Grupo (ex.: 2 Concreto) → Tipo (2.3 Concreto 20 MPa). O texto complementar cria um item com ID próprio no Simova (2.3.1 Concreto 20 MPa - (Fundo canaleta 2A)). Cada tipo aponta os itens de PQ que pode consumir, para rastrear a programação até o contrato."
+        titulo={grupos.length ? `${grupos.length} grupos e ${nTipos} itens da PQ no catálogo` : 'Catálogo vazio'}
+        descricao="O encarregado escolhe o Grupo (ex.: 2 Concreto) e o item da PQ, que é o tipo da atividade (2.3 = item 1.8.3.1.2). O texto complementar cria um item com ID próprio no Simova (2.3.1 … - (Fundo canaleta 2A)). A descrição vem da PQ do contrato; a coluna de texto simplificado para o Simova entra na próxima etapa."
         acoes={<Botao variante="secundario" onClick={() => api.download('/simova/cadastros.xlsx', 'cadastros-simova.xlsx').catch((e) => toast.error(e.message))}><Download size={16} /> Cadastros p/ Simova</Botao>}
       />
 
       {(grupo || tipo || item) && (
-        <Painel titulo={grupo ? (grupo.id ? 'Editar grupo' : 'Novo grupo') : tipo ? (tipo.id ? 'Editar tipo' : 'Novo tipo') : item?.id ? 'Editar item complementar' : 'Novo item complementar'}>
+        <Painel titulo={grupo ? (grupo.id ? 'Editar grupo' : 'Novo grupo') : tipo ? `Mover ou renumerar ${tipo.codigo}` : item?.id ? 'Editar item complementar' : 'Novo item complementar'}>
           {grupo && (
             <form className="grid gap-3 md:grid-cols-[110px_1fr_auto_auto]" onSubmit={(e) => { e.preventDefault(); salvarGrupo.mutate(grupo, { onSuccess: () => { toast.success('Grupo salvo'); fechar(); } }); }}>
               <Campo rotulo="Número" placeholder="auto" inputMode="numeric" value={grupo.numero} onChange={(e) => setGrupo({ ...grupo, numero: e.target.value })} />
@@ -74,22 +100,18 @@ export default function CatalogoPage() {
             </form>
           )}
           {tipo && (
-            <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_90px_2fr_100px]" onSubmit={(e) => { e.preventDefault(); salvarTipo.mutate(tipo, { onSuccess: () => { toast.success('Tipo salvo'); fechar(); } }); }}>
-              <Selecao rotulo="Grupo" required value={tipo.grupo_id} onChange={(e) => setTipo({ ...tipo, grupo_id: e.target.value })}>
+            <form className="grid gap-3 md:grid-cols-[1fr_110px_auto_auto]" onSubmit={(e) => { e.preventDefault(); salvarTipo.mutate(tipo, { onSuccess: () => { toast.success('Atualizado: o ID Simova segue o grupo e o número'); fechar(); } }); }}>
+              <Selecao rotulo="Grupo" value={tipo.grupo_id} onChange={(e) => setTipo({ ...tipo, grupo_id: e.target.value, numero: '' })}>
                 {grupos.map((g) => <option key={g.id} value={g.id}>{g.codigo} · {g.descricao}</option>)}
               </Selecao>
-              <Campo rotulo="Número" placeholder="auto" inputMode="numeric" value={tipo.numero} onChange={(e) => setTipo({ ...tipo, numero: e.target.value })} />
-              <Campo rotulo="Descrição" required placeholder="Concreto 20 MPa" value={tipo.descricao} onChange={(e) => setTipo({ ...tipo, descricao: e.target.value })} />
-              <Campo rotulo="Unidade" placeholder="m³" value={tipo.unidade} onChange={(e) => setTipo({ ...tipo, unidade: e.target.value })} />
-              <div className="md:col-span-2 xl:col-span-3">
-                <Campo rotulo="Itens de PQ permitidos (separe por vírgula)" placeholder="3.2.1, 3.2.4" value={tipo.itens_pq} onChange={(e) => setTipo({ ...tipo, itens_pq: e.target.value })} />
-              </div>
+              <Campo rotulo="Número" placeholder="mantém" inputMode="numeric" value={tipo.numero} onChange={(e) => setTipo({ ...tipo, numero: e.target.value })} />
               <label className="flex items-end gap-2 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={tipo.ativo} onChange={(e) => setTipo({ ...tipo, ativo: e.target.checked })} /> Ativo</label>
-              <div className="flex items-center gap-2 md:col-span-2 xl:col-span-4"><Botao type="submit">Salvar</Botao><Botao type="button" variante="secundario" onClick={fechar}>Cancelar</Botao><Erro erro={salvarTipo.error} /></div>
+              <div className="flex items-end gap-2"><Botao type="submit">Salvar</Botao><Botao type="button" variante="secundario" onClick={fechar}>Cancelar</Botao></div>
+              <div className="md:col-span-4"><Erro erro={salvarTipo.error} /></div>
             </form>
           )}
           {item && (
-            <form className="grid gap-3 md:grid-cols-[2fr_1fr_auto]" onSubmit={(e) => {
+            <form className="grid gap-3 md:grid-cols-[2fr_auto]" onSubmit={(e) => {
               e.preventDefault();
               salvarItem.mutate(item, { onSuccess: (r) => {
                 const resp = r as { criado?: boolean; aviso?: string | null } | undefined;
@@ -97,12 +119,10 @@ export default function CatalogoPage() {
                 fechar();
               } });
             }}>
-              <Campo rotulo={`Texto complementar de ${tipoDoItem?.codigo} ${tipoDoItem?.descricao}`} required placeholder="Fundo canaleta 2A" value={item.complemento} onChange={(e) => setItem({ ...item, complemento: e.target.value })} />
-              <Campo rotulo="Item de PQ" list="pq-tipo" placeholder="3.2.1" value={item.item_pq} onChange={(e) => setItem({ ...item, item_pq: e.target.value })} />
-              <datalist id="pq-tipo">{tipoDoItem?.itens_pq.map((p) => <option key={p} value={p} />)}</datalist>
+              <Campo rotulo={`Texto complementar de ${tipoDoItem?.codigo} (${tipoDoItem?.item_pq ?? ''})`} required placeholder="Fundo canaleta 2A" value={item.complemento} onChange={(e) => setItem({ ...item, complemento: e.target.value })} />
               <div className="flex items-end gap-2"><Botao type="submit">Salvar</Botao><Botao type="button" variante="secundario" onClick={fechar}>Cancelar</Botao></div>
-              {item.complemento && <p className="text-[13px] text-m-text-secondary md:col-span-3">No Simova: <b className="text-m-text-primary">{tipoDoItem?.descricao} - ({item.complemento.trim()})</b></p>}
-              <div className="md:col-span-3"><Erro erro={salvarItem.error} /></div>
+              {item.complemento && <p className="text-[13px] text-m-text-secondary md:col-span-2">No Simova: <b className="text-m-text-primary">{tipoDoItem?.descricao} - ({item.complemento.trim()})</b></p>}
+              <div className="md:col-span-2"><Erro erro={salvarItem.error} /></div>
             </form>
           )}
         </Painel>
@@ -110,56 +130,132 @@ export default function CatalogoPage() {
 
       <Painel
         titulo="Quais atividades o encarregado pode escolher?"
-        subtitulo="Renomear um tipo muda a descrição em todas as programações e na próxima exportação para o Simova; o ID (g.t.n) não muda."
-        acoes={editar && <>
-          <Botao variante="secundario" onClick={() => abrirGrupo()}><Plus size={16} /> Grupo</Botao>
-          <Botao disabled={!grupos.length} onClick={() => abrirTipo()}><Plus size={16} /> Tipo</Botao>
-        </>}
+        subtitulo="Cada grupo reúne itens da PQ. Mover de grupo ou renumerar muda o ID Simova em todas as programações abertas."
+        acoes={editar && <Botao variante="secundario" onClick={() => abrirGrupo()}><Plus size={16} /> Grupo</Botao>}
       >
-        <Tabela cabecalho={['ID Simova', 'Atividade', 'Unid.', 'Itens de PQ', 'Situação', '']} vazio={!grupos.length && (cat.isLoading ? 'Carregando…' : 'Crie o primeiro grupo (ex.: Escavação, Concreto, Forma).')}>
-          {grupos.map((g) => (
-            <Fragment key={`g${g.id}`}>
-              <tr>
-                <td colSpan={6} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-on-accent">
-                  {g.codigo} · {g.descricao}{!g.ativo && ' (inativo)'}
-                  {editar && <>
-                    <button type="button" aria-label={`Editar grupo ${g.codigo}`} className="ml-3 align-middle opacity-80 hover:opacity-100" onClick={() => abrirGrupo(g)}><Pencil size={13} /></button>
-                    <button type="button" aria-label={`Novo tipo em ${g.codigo}`} className="ml-2 align-middle opacity-80 hover:opacity-100" onClick={() => abrirTipo(undefined, g.id)}><Plus size={14} /></button>
-                  </>}
-                </td>
-              </tr>
-              {g.tipos.map((t) => (
-                <Fragment key={`t${t.id}`}>
-                  <tr className={t.ativo ? '' : 'opacity-50'}>
-                    <td className={td}><b className="text-m-text-primary">{t.codigo}</b></td>
-                    <td className={td}><span className="font-semibold text-m-text-primary">{t.descricao}</span></td>
-                    <td className={td}>{t.unidade ?? '—'}</td>
-                    <td className={td}>{t.itens_pq.length ? t.itens_pq.join(', ') : <span className="text-m-text-muted">nenhum</span>}</td>
-                    <td className={td}><Pilula tom={t.ativo ? 'sucesso' : 'neutro'}>{t.ativo ? 'Ativo' : 'Inativo'}</Pilula></td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
-                      {editar && <>
-                        <button type="button" aria-label={`Editar tipo ${t.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirTipo(t)}><Pencil size={15} /></button>
-                        <button type="button" aria-label={`Novo complemento em ${t.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t)}><Plus size={15} /></button>
-                      </>}
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full border-collapse">
+            <thead><tr className="text-left">
+              <th className={th}>ID Simova</th><th className={th}>Item PQ</th><th className={th}>Descrição (PQ)</th><th className={th}>Un.</th>
+              <th className={`${th} text-right`}>Qtd. contrato</th><th className={`${th} text-right`}>P. unit.</th><th className={th}>Situação</th><th className={th} />
+            </tr></thead>
+            <tbody>
+              {!grupos.length && <tr><td colSpan={8} className="py-8 text-center text-sm text-m-text-muted">{cat.isLoading ? 'Carregando…' : 'Crie o primeiro grupo (ex.: Escavação, Concreto, Forma) e vincule os itens da PQ.'}</td></tr>}
+              {grupos.map((g) => (
+                <Fragment key={`g${g.id}`}>
+                  <tr>
+                    <td colSpan={8} className="bg-m-surface-active px-3 py-2.5 text-xs font-bold uppercase tracking-[0.3px] text-m-text-primary">
+                      {g.codigo} · {g.descricao}{!g.ativo && ' (inativo)'} <span className="ml-1 font-medium normal-case text-m-text-muted">{g.tipos.length} item(ns)</span>
+                      {editar && <span className="ml-3 inline-flex items-center gap-1 align-middle">
+                        <button type="button" aria-label={`Editar grupo ${g.codigo}`} className="rounded p-1 text-m-text-muted hover:text-m-accent" onClick={() => abrirGrupo(g)}><Pencil size={13} /></button>
+                        <button type="button" className="rounded px-1.5 py-0.5 text-[11px] font-semibold normal-case text-m-accent hover:underline" onClick={() => { setDestino(String(g.id)); document.getElementById('aba-pq')?.scrollIntoView({ behavior: 'smooth' }); }}><Link2 size={12} className="mr-1 inline" />vincular itens da PQ</button>
+                        {!g.tipos.length && <button type="button" aria-label={`Excluir grupo ${g.codigo}`} className="rounded p-1 text-m-text-muted hover:text-m-danger" onClick={() => excluirGrupo.mutate(g.id, { onSuccess: () => toast.success('Grupo excluído'), onError: (e) => toast.error(e.message) })}><Trash2 size={13} /></button>}
+                      </span>}
                     </td>
                   </tr>
-                  {t.itens.map((i) => (
-                    <tr key={`i${i.id}`} className={i.ativo ? '' : 'opacity-50'}>
-                      <td className={`${td} pl-6`}>{i.codigo}</td>
-                      <td className={`${td} pl-6`}>{i.descricao}</td>
-                      <td className={td}>{t.unidade ?? '—'}</td>
-                      <td className={td}>{i.item_pq ?? '—'}</td>
-                      <td className={td}><Pilula tom={i.ativo ? 'sucesso' : 'neutro'}>{i.ativo ? 'Ativo' : 'Inativo'}</Pilula></td>
-                      <td className={`${td} text-right`}>
-                        {editar && <button type="button" aria-label={`Editar item ${i.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t, i)}><Pencil size={15} /></button>}
-                      </td>
-                    </tr>
+                  {g.tipos.map((t) => (
+                    <Fragment key={`t${t.id}`}>
+                      <tr className={t.ativo ? '' : 'opacity-50'}>
+                        <td className={`${tdc} font-semibold text-m-text-primary`}>{t.codigo}</td>
+                        <td className={tdc}>{t.item_pq ? <span className="rounded-[6px] bg-m-info-subtle px-2 py-0.5 text-[11px] font-semibold text-m-info">{t.item_pq}</span> : <Pilula tom="atencao">sem PQ</Pilula>}</td>
+                        <td className={`${tdc} min-w-[320px] whitespace-normal`}>{t.descricao}{!t.na_pq_vigente && <div className="text-[11px] text-m-warning">não está na PQ vigente</div>}</td>
+                        <td className={tdc}>{t.unidade ?? '—'}</td>
+                        <td className={`${tdc} text-right`}>{t.quantidade_pq != null ? fmt(t.quantidade_pq) : '—'}</td>
+                        <td className={`${tdc} text-right`}>{t.pu != null ? fmt(t.pu) : '—'}</td>
+                        <td className={tdc}><Pilula tom={t.ativo ? 'sucesso' : 'neutro'}>{t.ativo ? 'Ativo' : 'Inativo'}</Pilula></td>
+                        <td className={`${tdc} whitespace-nowrap text-right`}>
+                          {editar && <>
+                            <button type="button" aria-label={`Novo complemento em ${t.codigo}`} title="Texto complementar (novo ID)" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t)}><Plus size={15} /></button>
+                            <button type="button" aria-label={`Mover ${t.codigo}`} title="Mover de grupo / renumerar / inativar" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirTipo(t)}><Pencil size={15} /></button>
+                            <button type="button" aria-label={`Desvincular ${t.codigo}`} title="Desvincular do grupo" className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={() => desvincular.mutate(t.id, { onSuccess: () => toast.success(`${t.codigo} desvinculado`), onError: (e) => toast.error(e.message) })}><Unlink size={15} /></button>
+                          </>}
+                        </td>
+                      </tr>
+                      {t.itens.map((i) => (
+                        <tr key={`i${i.id}`} className={i.ativo ? '' : 'opacity-50'}>
+                          <td className={`${tdc} pl-6 text-m-text-secondary`}>{i.codigo}</td>
+                          <td className={tdc} />
+                          <td className={`${tdc} whitespace-normal pl-6 text-m-text-secondary`}>… - ({i.complemento})</td>
+                          <td className={tdc} colSpan={3} />
+                          <td className={tdc}><Pilula tom={i.ativo ? 'sucesso' : 'neutro'}>{i.ativo ? 'Ativo' : 'Inativo'}</Pilula></td>
+                          <td className={`${tdc} text-right`}>{editar && <button type="button" aria-label={`Editar item ${i.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t, i)}><Pencil size={15} /></button>}</td>
+                        </tr>
+                      ))}
+                    </Fragment>
                   ))}
                 </Fragment>
               ))}
-            </Fragment>
-          ))}
-        </Tabela>
+            </tbody>
+          </table>
+        </div>
+        <Erro erro={desvincular.error ?? excluirGrupo.error} />
+      </Painel>
+
+      <div id="aba-pq" />
+      <Painel
+        titulo="Aba PQ do contrato"
+        subtitulo={pq.data?.versao ? `${pq.data.versao.rotulo}${pq.data.versao.arquivo ? ` · ${pq.data.versao.arquivo}` : ''} · ${linhas.filter((l) => l.folha).length} itens em ${linhas.filter((l) => !l.folha).length} títulos` : 'Nenhuma PQ importada'}
+        acoes={editar && <div className="flex flex-wrap items-end gap-2">
+          <Selecao rotulo="Vincular ao grupo" value={destino} onChange={(e) => setDestino(e.target.value)} className="min-w-[220px]">
+            <option value="">Escolha o grupo…</option>
+            {grupos.map((g) => <option key={g.id} value={g.id}>{g.codigo} · {g.descricao}</option>)}
+          </Selecao>
+          <Botao disabled={!sel.size || !grupoDestino || vincular.isPending} onClick={() => grupoDestino && vincular.mutate({ gid: grupoDestino.id, itens: [...sel] }, {
+            onSuccess: (r) => { if (r.criados.length) toast.success(`${r.criados.length} item(ns) vinculado(s): ${r.criados.join(', ')}`); r.avisos.slice(0, 4).forEach((a) => toast.warning(a)); setSel(new Set()); },
+          })}><Link2 size={16} /> Vincular {sel.size || ''}</Botao>
+        </div>}
+      >
+        {!pq.data?.versao && !pq.isLoading && <p className="text-sm text-m-text-secondary">Importe a PQ do contrato (abas PQ e MC) em <Link href="/app/importacoes" className="font-semibold text-m-accent">Importações</Link>.</p>}
+        {!!linhas.length && <>
+          <div className="flex flex-wrap items-end gap-2">
+            <Campo rotulo="Buscar na PQ" placeholder="item, descrição ou código da atividade" value={q} onChange={(e) => setQ(e.target.value)} className="w-[320px]" />
+            <Chip ativo={soLivres} onClick={() => setSoLivres(!soLivres)}>Só itens sem grupo</Chip>
+            <Chip ativo={false} onClick={() => setFechados(fechados.size ? new Set() : new Set(linhas.filter((l) => l.nivel === 1).map((l) => l.item)))}>{fechados.size ? 'Abrir tudo' : 'Recolher no nível 1'}</Chip>
+            {sel.size > 0 && <Chip ativo={false} onClick={() => setSel(new Set())}>Limpar seleção ({sel.size})</Chip>}
+          </div>
+          <div className="-mx-1 max-h-[70vh] overflow-auto px-1">
+            <table className="w-full border-collapse">
+              <thead className="sticky top-0 z-10 bg-m-surface">
+                <tr>
+                  <th colSpan={3} />
+                  <th colSpan={2} className="rounded-t-[8px] bg-m-surface-active px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-secondary">Medição</th>
+                  <th colSpan={3} className="rounded-t-[8px] bg-m-accent-subtle px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.4px] text-m-accent">Contratado</th>
+                  <th />
+                </tr>
+                <tr className="text-left">
+                  <th className={th} /><th className={th}>Item</th><th className={th}>Descrição das atividades</th>
+                  <th className={th}>Un.</th><th className={th}>CMS · cód. atividade</th>
+                  <th className={`${th} text-right`}>Qtd.</th><th className={`${th} text-right`}>P. unit. (R$)</th><th className={`${th} text-right`}>Total (R$)</th>
+                  <th className={th}>Catálogo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiveis.filter((l) => !escondido(l)).map((l) => l.folha ? (
+                  <tr key={l.item} className={sel.has(l.item) ? 'bg-m-accent-subtle' : ''}>
+                    <td className={`${tdc} w-8`}>{editar && !l.tipo && <input type="checkbox" aria-label={`Selecionar ${l.item}`} checked={sel.has(l.item)} onChange={() => marcar(l.item)} />}</td>
+                    <td className={`${tdc} whitespace-nowrap font-semibold text-m-text-primary`}>{l.item}</td>
+                    <td className={`${tdc} min-w-[340px] whitespace-normal`}>{l.descricao}</td>
+                    <td className={tdc}>{l.unid}</td>
+                    <td className={`${tdc} whitespace-nowrap`}>{l.criterio && <span className="rounded-[6px] bg-m-info-subtle px-2 py-0.5 text-[11px] font-semibold text-m-info">{l.criterio}</span>}<div className="mt-0.5 text-[11px] text-m-text-muted">{l.codigo_atividade}</div></td>
+                    <td className={`${tdc} text-right`}>{fmt(l.quantidade)}</td>
+                    <td className={`${tdc} text-right`}>{fmt(l.pu)}</td>
+                    <td className={`${tdc} text-right font-semibold`}>{fmt(l.total)}</td>
+                    <td className={`${tdc} whitespace-nowrap`}>{l.tipo ? <span title={l.tipo.grupo} className="rounded-[6px] bg-m-accent-subtle px-2 py-0.5 text-[11px] font-semibold text-m-accent">{l.tipo.codigo}</span> : <span className="text-[11px] text-m-text-muted">—</span>}</td>
+                  </tr>
+                ) : (
+                  <tr key={l.item}>
+                    <td colSpan={9} className={`border-b border-m-row px-2 py-2 text-[12px] ${NIVEL[l.nivel] ?? ''}`} style={{ paddingLeft: 8 + (l.nivel - 1) * 14 }}>
+                      <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => alternar(l.item)} aria-label={`${fechados.has(l.item) ? 'Abrir' : 'Recolher'} ${l.item}`}>
+                        {fechados.has(l.item) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}{l.item} · {l.descricao}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>}
+        <Erro erro={vincular.error} />
       </Painel>
     </>
   );

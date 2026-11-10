@@ -155,6 +155,8 @@ def _validar_linha(s: Session, c: ContextoObra, d: LinhaIn) -> tuple[TipoAtivida
             raise NotFoundError("Equipe", d.equipe_id)
         if not (d.responsavel or "").strip() and e.responsavel:
             d.responsavel = e.responsavel
+    if t.item_pq:  # o tipo é um item da PQ: a linha mede nele
+        d.item_pq = t.item_pq
     if d.natureza not in ("P", "O", "E"):
         raise DomainError("natureza: P (programada), O (oportunidade) ou E (emergencial)", "natureza")
     if d.qtd_periodo is not None and d.qtd_periodo < 0:
@@ -265,10 +267,10 @@ def itens_pq(q: str | None = None, tag: str | None = None, limite: int = 40, s: 
     vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes().get("PQ")
     if not vig:
         return []
-    stmt = select(ItemPqModel).where(ItemPqModel.versao_id == vig)
+    stmt = select(ItemPqModel).where(ItemPqModel.versao_id == vig, ItemPqModel.folha.is_(True))
     if q:
         stmt = stmt.where(or_(ItemPqModel.item.ilike(f"{q}%"), ItemPqModel.descricao.ilike(f"%{q}%")))
-    itens = list(s.scalars(stmt.order_by(ItemPqModel.id).limit(min(limite, 200))))
+    itens = list(s.scalars(stmt.order_by(ItemPqModel.ordem, ItemPqModel.id).limit(min(limite, 200))))
     qtd = {}
     if tag and itens:
         qtd = {x.item: x.quantidade for x in s.scalars(select(PqQuantidadeTagModel).where(
@@ -456,3 +458,29 @@ def exportar_excel(pid: int, revisao: int | None = None, s: Session = Depends(ge
     base = unicodedata.normalize("NFKD", p.titulo.split(" · ")[0]).encode("ascii", "ignore").decode().replace(" ", "_")
     arq = f"{base}_{p.inicio:%Y%m%d}{'' if revisao is None else f'_rev{revisao}'}.xlsx"
     return Response(dados, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{arq}"'})
+
+
+@router.get("/pq/estrutura")
+def pq_estrutura(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Aba PQ da versão vigente com a estrutura (títulos e itens) e o tipo do catálogo de cada item."""
+    from app.modules.catalogo.domain.catalogo import codigo_tipo
+    from app.modules.catalogo.infra.models import GrupoAtividadeModel, TipoAtividadeModel
+    from app.modules.referencias.infra.models import VersaoReferenciaModel
+
+    vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes().get("PQ")
+    if not vig:
+        return {"versao": None, "linhas": []}
+    v = s.get(VersaoReferenciaModel, vig)
+    grupos = {g.id: g for g in s.scalars(select(GrupoAtividadeModel).where(GrupoAtividadeModel.obra_id == c.obra_id))}
+    tipo_de = {t.item_pq: {"id": t.id, "codigo": codigo_tipo(grupos[t.grupo_id].numero, t.numero),
+                           "grupo": grupos[t.grupo_id].descricao}
+               for t in s.scalars(select(TipoAtividadeModel).where(TipoAtividadeModel.obra_id == c.obra_id,
+                                                                   TipoAtividadeModel.item_pq.is_not(None)))}
+    linhas = [{"item": x.item, "nivel": x.nivel, "folha": x.folha, "descricao": x.descricao, "unid": x.unid,
+               "codigo_atividade": x.codigo_atividade, "criterio": x.criterio, "quantidade": x.quantidade,
+               "pu": x.pu, "total": x.total if x.total is not None else (
+                   round(x.quantidade * x.pu, 2) if x.quantidade is not None and x.pu is not None else None),
+               "tipo": tipo_de.get(x.item)}
+              for x in s.scalars(select(ItemPqModel).where(ItemPqModel.versao_id == vig)
+                                 .order_by(ItemPqModel.ordem, ItemPqModel.id))]
+    return {"versao": {"id": v.id, "rotulo": v.rotulo, "arquivo": v.arquivo_origem}, "linhas": linhas}
