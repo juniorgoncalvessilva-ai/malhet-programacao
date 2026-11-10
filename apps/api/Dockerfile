@@ -10,9 +10,11 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 COPY vendor ./vendor
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 RUN useradd -r -u 10001 api && chown -R api /app
 USER api
 EXPOSE 8000
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=8 \
   CMD python -c "import urllib.request as u,sys; o=u.build_opener(u.ProxyHandler({})); sys.exit(0 if o.open('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["/app/entrypoint.sh"]

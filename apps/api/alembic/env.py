@@ -24,7 +24,8 @@ from app.core.config import get_settings
 from app.core.db import Base
 from modules.auth.infra.models import Base as AuthBase
 
-config.set_main_option('sqlalchemy.url', get_settings().database_url)
+# % escapado: a senha vem codificada na URL e o ConfigParser do Alembic interpreta %
+config.set_main_option('sqlalchemy.url', get_settings().database_url.replace('%', '%%'))
 target_metadata = [Base.metadata, AuthBase.metadata]
 
 

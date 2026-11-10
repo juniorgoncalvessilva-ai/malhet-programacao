@@ -6,13 +6,14 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: malhet
+      # usuário/banco/volume exclusivos: não reaproveita banco de outro projeto no mesmo recurso do Coolify
+      POSTGRES_USER: malhet_prog
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
-      POSTGRES_DB: malhet
+      POSTGRES_DB: malhet_prog
     volumes:
-      - malhet-pg:/var/lib/postgresql/data
+      - malhet-prog-pg:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U malhet -d malhet"]
+      test: ["CMD-SHELL", "pg_isready -U malhet_prog -d malhet_prog && psql -U malhet_prog -d malhet_prog -c 'select 1' >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -25,7 +26,10 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://malhet:${POSTGRES_PASSWORD}@db:5432/malhet
+      DB_HOST: db
+      DB_USER: malhet_prog
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: malhet_prog
       CORS_ORIGINS: ${APP_URL:-http://localhost:3000}
       AUTH_DISABLED: "false"
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (64+ caracteres aleatórios)}
@@ -48,6 +52,12 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
     expose:
       - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u,sys; o=u.build_opener(u.ProxyHandler({})); sys.exit(0 if o.open('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 8
 
   web:
     build:
@@ -62,4 +72,4 @@ services:
       - "${WEB_PORT:-3000}:3000"
 
 volumes:
-  malhet-pg:
+  malhet-prog-pg:
