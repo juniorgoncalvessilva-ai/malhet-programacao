@@ -92,3 +92,10 @@ ler = contexto_obra(PapelObra.LEITOR)
 programar = contexto_obra(PapelObra.ENCARREGADO)
 planejar = contexto_obra(PapelObra.PLANEJADOR)
 administrar = contexto_obra(PapelObra.ADMIN)
+
+
+async def ssma(ctx: ContextoObra = Depends(ler)) -> ContextoObra:
+    """Itens de SSMA da programação: segurança, planejador e admin."""
+    if not ctx.papel.edita_ssma:
+        raise _erro(403, "Só a segurança (ou o planejamento) preenche o SSMA")
+    return ctx

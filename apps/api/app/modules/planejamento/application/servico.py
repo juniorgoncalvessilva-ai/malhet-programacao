@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.catalogo.domain import catalogo as cat
 from app.modules.catalogo.infra.models import GrupoAtividadeModel, ItemSimovaModel, TipoAtividadeModel
+from app.modules.equipes.infra.composicao import composicao_efetiva
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
 from app.modules.integracao_simova.domain import layout
@@ -25,6 +26,7 @@ from app.modules.referencias.infra.models import (
 from app.modules.programacao.domain.gargalo import capacidade_da_equipe
 from app.modules.referencias.domain.cpu_obra import nome_recurso
 from app.modules.referencias.infra.cpu_gateway import CpuGateway, ParametrosCpu
+from app.modules.referencias.application.importar_xer import status_pt
 from app.modules.referencias.infra.resolvedor import JORNADA_REFERENCIA, ResolvedorReferencias
 from app.shared import simova
 from app.shared.errors import DomainError, NotFoundError
@@ -71,8 +73,10 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
     indice = par.indice_un_dia(jornada)
     cap = gargalo = None
     apoio: list[str] = []
-    if equipe is not None and equipe.composicao and par.recursos:
-        tem = {_chave(c.recurso): float(c.quantidade or 0) for c in equipe.composicao}
+    if equipe is not None and (equipe.composicao or any(m.funcao for m in equipe.membros)) and par.recursos:
+        tem = {}
+        for rec, _t, q in composicao_efetiva(equipe):
+            tem[_chave(rec)] = tem.get(_chave(rec), 0.0) + q
         comp = {r.recurso: tem.get(_chave(r.recurso), 0.0) for r in par.recursos}
         ce = capacidade_da_equipe(par.coefs, comp, jornada, par.recurso_governa)
         cap, gargalo, apoio = round(ce.capacidade_un_dia, 4), ce.gargalo, list(ce.apoio_externo)
@@ -92,6 +96,31 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
             "total_hh_previsto": round(sum(x or 0 for x in hh_prev), 2),
             "total_hh_realizado": round(sum(_num(q) for q in realizado) * (hh_un or 0), 2),
             "alertas": alertas}
+
+
+def _chave_linha(ln: LinhaProgramacaoModel) -> tuple:
+    return (ln.area_id, ln.tipo_id, ln.item_simova_id, ln.item_pq)
+
+
+def realizado_anterior(s: Session, p: ProgramacaoModel) -> dict[tuple, float]:
+    """Realizado acumulado ANTES do início desta programação, pela mesma atividade (área, tipo, item, PQ).
+
+    Considera programações do mesmo tipo; semanas se sobrepõem (sexta/sábado), então cada dia conta uma vez,
+    valendo a programação mais recente.
+    """
+    q = (select(ProgramacaoModel).where(ProgramacaoModel.obra_id == p.obra_id, ProgramacaoModel.tipo == p.tipo,
+                                        ProgramacaoModel.id != p.id, ProgramacaoModel.inicio < p.inicio)
+         .order_by(ProgramacaoModel.inicio))
+    por_dia: dict[tuple, float] = {}
+    for outra in s.scalars(q):
+        for ln in outra.linhas:
+            for v in ln.valores:
+                if v.data < p.inicio and v.realizado is not None:
+                    por_dia[(_chave_linha(ln), v.data)] = float(v.realizado)
+    tot: dict[tuple, float] = {}
+    for (k, _d), q_ in por_dia.items():
+        tot[k] = round(tot.get(k, 0.0) + q_, 4)
+    return tot
 
 
 def visao(s: Session, p: ProgramacaoModel) -> dict:
@@ -120,6 +149,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
         cron = {x.id_crono: x for x in s.scalars(select(AtividadeCronogramaModel).where(
             AtividadeCronogramaModel.versao_id == vig["CRONOGRAMA"], AtividadeCronogramaModel.id_crono.in_(ids_crono)))}
 
+    anterior = realizado_anterior(s, p)
     por_area: dict[int, list[dict]] = {}
     for n, ln in enumerate(p.linhas, start=1):
         a, t = areas[ln.area_id], tipos[ln.tipo_id]
@@ -146,9 +176,19 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "equipe_id": ln.equipe_id, "equipe": eq.nome if eq else None,
             "encarregado": (eq.encarregado_nome if eq else None), "cracha": (eq.encarregado_cracha if eq else None),
             "observacao": ln.observacao, "previsto": prev, "realizado": real,
+            "qtd_periodo": ln.qtd_periodo, "natureza": ln.natureza or "P",
+            "responsavel": ln.responsavel or (eq.responsavel if eq else None),
+            "turno": eq.turno if eq else None, "jornada": eq.jornada_horas if eq else None,
+            "equipe_codigo": eq.codigo_simova if eq else None,
+            "status_crono": status_pt(at.status) if at else None,
+            "realizado_anterior": anterior.get(_chave_linha(ln)),
+            "ssma": {k: getattr(ln, f"ssma_{k}") for k in ("tecnico", "rac", "pts", "art", "pto", "ata")},
             "total_previsto": round(sum(_num(x) for x in prev), 4), "total_realizado": round(sum(_num(x) for x in real), 4),
             "calc": calculo_linha(cpu.get(ln.item_pq) if ln.item_pq else None, eq, prev, real),
         })
+        reg = por_area[a.id][-1]
+        feito = (reg["realizado_anterior"] or 0) + reg["total_realizado"]
+        reg["restante"] = round(reg["qtd_projeto"] - feito, 4) if reg["qtd_projeto"] is not None else None
     saida_locais = []
     for loc in sorted(locais.values(), key=lambda x: (x.ordem, x.id)):
         areas_loc = sorted([a for a in areas.values() if a.local_id == loc.id and a.id in por_area],

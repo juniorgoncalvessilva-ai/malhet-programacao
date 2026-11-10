@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, Printer } from 'lucide-react';
+import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { Fragment, useState } from 'react';
 import { Botao, Selecao, dataBR, fmt } from '@/components/Obra/ui';
@@ -40,6 +41,7 @@ export default function ImprimirPage() {
             {emissoes.data?.map((e) => <option key={e.revisao} value={e.revisao}>Rev. {e.revisao} · {new Date(e.emitida_em).toLocaleString('pt-BR')}</option>)}
             <option value="viva">Rascunho atual (não emitido)</option>
           </Selecao>
+          <Botao variante="secundario" onClick={() => api.download(`/programacoes/${id}/excel${rev != null ? `?revisao=${rev}` : ''}`, `${v.titulo.split(' · ')[0]}${rev != null ? ` rev${rev}` : ''}.xlsx`).catch((e) => toast.error(e.message))}><FileSpreadsheet size={16} /> Excel do cliente</Botao>
           <Botao onClick={() => window.print()}><Printer size={16} /> Imprimir / PDF</Botao>
         </div>
       </div>

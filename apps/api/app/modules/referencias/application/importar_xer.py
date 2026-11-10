@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 from app.modules.referencias.application.versoes import ResultadoCarga, ativar_versao, nova_versao
 from app.modules.referencias.infra.models import AtividadeCronogramaModel
 
-STATUS = {"TK_NotStart": "Not Started", "TK_Active": "In Progress", "TK_Complete": "Completed"}
+STATUS = {"TK_NotStart": "Não iniciada", "TK_Active": "Em andamento", "TK_Complete": "Concluída"}
+_EN = {"Not Started": "Não iniciada", "In Progress": "Em andamento", "Completed": "Concluída"}
+
+
+def status_pt(s: str | None) -> str | None:
+    """Status do P6 em português (versões importadas antes guardaram em inglês)."""
+    return _EN.get(s, s) if s else s
 
 
 def ler_xer(conteudo: bytes) -> dict[str, list[dict[str, str]]]:

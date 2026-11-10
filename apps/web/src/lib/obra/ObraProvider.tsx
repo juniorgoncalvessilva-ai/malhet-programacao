@@ -15,9 +15,11 @@ interface ObraCtx {
   carregando: boolean;
   escolher: (id: number) => void;
   pode: (minimo: PapelObra) => boolean;
+  /** Segurança, planejador e admin preenchem o SSMA. */
+  editaSsma: boolean;
 }
 
-const NIVEL: Record<PapelObra, number> = { leitor: 0, encarregado: 1, planejador: 2, admin: 3 };
+const NIVEL: Record<PapelObra, number> = { leitor: 0, seguranca: 0, encarregado: 1, planejador: 2, admin: 3 };
 const CHAVE = 'malhet.obra';
 const Ctx = createContext<ObraCtx | null>(null);
 
@@ -60,6 +62,7 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
     carregando: lista.isLoading || eu.isLoading,
     escolher,
     pode: (m) => !!obra && NIVEL[obra.papel] >= NIVEL[m],
+    editaSsma: !!obra && ['seguranca', 'planejador', 'admin'].includes(obra.papel),
   }), [lista.data, lista.isLoading, eu.data, eu.isLoading, obra, escolher]);
 
   // key: trocar de obra remonta as telas (nenhum estado/consulta da obra anterior sobrevive)

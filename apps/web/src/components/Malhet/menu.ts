@@ -1,7 +1,7 @@
-import { BookOpen, Building2, CalendarRange, FileUp, KeyRound, MapPin, Users, type LucideIcon } from 'lucide-react';
+import { BookOpen, Building2, CalendarRange, FileUp, GanttChart, HardHat, KeyRound, MapPin, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
-export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean }
+export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
 export interface GrupoMenu { etapa: string; cor: string; itens: ItemMenu[] }
 
 /** Menu do app "Programação" dentro do Malhet, por etapa (cores proc-* do CorpMind). */
@@ -10,7 +10,9 @@ export const MENU: GrupoMenu[] = [
     etapa: 'Programar',
     cor: 'var(--m-proc-planejar)',
     itens: [
+      { titulo: 'Cronograma', url: '/app/cronograma', icone: GanttChart },
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
+      { titulo: 'SSMA da programação', url: '/app/ssma', icone: HardHat, ssma: true },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
     ],
   },

@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileCheck2, Pencil, Plus, Printer, RotateCcw, Trash2, X } from 'lucide-react';
+import { Download, FileCheck2, FileSpreadsheet, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -16,8 +16,11 @@ import { useObra } from '@/lib/obra/ObraProvider';
 interface FormLinha {
   area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
   equipe_id: string; id_crono: string; qtd_projeto: string; observacao: string;
+  natureza: 'P' | 'O' | 'E'; responsavel: string; qtd_periodo: string;
 }
-const VAZIO: FormLinha = { area_id: '', grupo_id: '', tipo_id: '', complemento: '', item_pq: '', equipe_id: '', id_crono: '', qtd_projeto: '', observacao: '' };
+const VAZIO: FormLinha = { area_id: '', grupo_id: '', tipo_id: '', complemento: '', item_pq: '', equipe_id: '', id_crono: '', qtd_projeto: '', observacao: '', natureza: 'P', responsavel: '', qtd_periodo: '' };
+const NATUREZA = { P: 'Programada', O: 'Oportunidade', E: 'Emergencial' } as const;
+type Pendentes = Record<string, string>; // `${linha}|${campo}|${data}` → valor ; `${linha}|periodo` → qtd
 
 export default function MontarPage() {
   const id = Number(useParams<{ id: string }>().id);
@@ -33,6 +36,14 @@ export default function MontarPage() {
   const [aberto, setAberto] = useState(false);
   const [qPq, setQPq] = useState('');
   const [qAt, setQAt] = useState('');
+  const [pend, setPend] = useState<Pendentes>({});
+  const nPend = Object.keys(pend).length;
+  useEffect(() => {
+    if (!nPend) return;
+    const aviso = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', aviso);
+    return () => window.removeEventListener('beforeunload', aviso);
+  }, [nPend]);
 
   const v = prog.data;
   const rascunho = v?.status === 'rascunho';
@@ -44,6 +55,7 @@ export default function MontarPage() {
       area_id: Number(d.area_id), tipo_id: Number(d.tipo_id), complemento: d.complemento || null, item_pq: d.item_pq || null,
       equipe_id: d.equipe_id ? Number(d.equipe_id) : null, id_crono: d.id_crono || null,
       qtd_projeto: d.qtd_projeto ? Number(d.qtd_projeto) : null, observacao: d.observacao || null,
+      natureza: d.natureza, responsavel: d.responsavel || null, qtd_periodo: d.qtd_periodo ? Number(d.qtd_periodo) : null,
     };
     return editando
       ? a.put<{ aviso: string | null }>(`/programacoes/${id}/linhas/${editando}`, corpo)
@@ -52,9 +64,38 @@ export default function MontarPage() {
   const excluir = useAcao((a, lid: number) => a.del(`/programacoes/${id}/linhas/${lid}`), chave);
   const emitir = useAcao((a) => a.post<{ revisao: number }>(`/programacoes/${id}/emitir`), chave);
   const reabrir = useAcao((a) => a.post(`/programacoes/${id}/reabrir`), chave);
-  const valor = useAcao((a, d: { lid: number; data: string; valor: string }) =>
-    a.put(`/programacoes/${id}/linhas/${d.lid}/valores`, { campo: modo, valores: [{ data: d.data, valor: d.valor === '' ? null : Number(d.valor) }] }),
-  [[...k.programacao(id)]]);
+  const salvarTudo = useAcao((a, p: Pendentes) => {
+    const por: Record<number, { id: number; qtd_periodo?: number | null; mudar_qtd_periodo?: boolean; previsto: { data: string; valor: number | null }[]; realizado: { data: string; valor: number | null }[] }> = {};
+    for (const [chave, val] of Object.entries(p)) {
+      const [lid, campo, data] = chave.split('|');
+      const ln = (por[Number(lid)] ??= { id: Number(lid), previsto: [], realizado: [] });
+      const num = val.trim() === '' ? null : Number(val.replace(',', '.'));
+      if (campo === 'periodo') { ln.qtd_periodo = num; ln.mudar_qtd_periodo = true; } else ln[campo as 'previsto' | 'realizado'].push({ data, valor: num });
+    }
+    return a.put<{ alteracoes: number }>(`/programacoes/${id}/salvar`, { linhas: Object.values(por) });
+  }, [[...k.programacao(id)], [...k.programacoes]]);
+  const salvar = () => salvarTudo.mutate(pend, {
+    onSuccess: (r) => { setPend({}); toast.success(`Programação salva (${r.alteracoes} alteraç${r.alteracoes === 1 ? 'ão' : 'ões'})`); },
+    onError: (e) => toast.error(e.message),
+  });
+  const valorCel = (ln: LinhaVisao, campo: 'previsto' | 'realizado', di: number, data: string) =>
+    pend[`${ln.id}|${campo}|${data}`] ?? (ln[campo][di] != null ? String(ln[campo][di]) : '');
+  const distribuir = (ln: LinhaVisao) => {
+    if (!v) return;
+    const alvo = Number(pend[`${ln.id}|periodo`] ?? ln.qtd_periodo ?? 0);
+    const uteis = v.dias.filter((d) => d.dia !== 'DOM');
+    if (!alvo || !uteis.length) return;
+    const parte = Math.floor((alvo / uteis.length) * 100) / 100;
+    const novo = { ...pend };
+    v.dias.forEach((d) => { novo[`${ln.id}|previsto|${d.data}`] = d.dia === 'DOM' ? '' : String(parte); });
+    const resto = Math.round((alvo - parte * uteis.length) * 100) / 100;
+    if (resto) novo[`${ln.id}|previsto|${uteis[uteis.length - 1].data}`] = String(Math.round((parte + resto) * 100) / 100);
+    setPend(novo);
+  };
+  const baixarExcel = async (rev?: number) => {
+    try { await api.download(`/programacoes/${id}/excel${rev != null ? `?revisao=${rev}` : ''}`, `${v?.titulo.split(' · ')[0] ?? 'Programacao'}.xlsx`); }
+    catch (e) { toast.error((e as Error).message); }
+  };
 
   const grupo = catalogo.data?.find((g) => String(g.id) === form.grupo_id);
   const tipo = grupo?.tipos.find((t) => String(t.id) === form.tipo_id);
@@ -83,7 +124,8 @@ export default function MontarPage() {
     setEditando(ln.id);
     setForm({ area_id: String(ln.area_id), grupo_id: g ? String(g.id) : '', tipo_id: String(ln.tipo_id), complemento: ln.complemento ?? '',
       item_pq: ln.item_pq ?? '', equipe_id: ln.equipe_id ? String(ln.equipe_id) : '', id_crono: ln.id_crono ?? '',
-      qtd_projeto: ln.qtd_projeto != null && ln.qtd_projeto !== ln.qtd_takeoff ? String(ln.qtd_projeto) : '', observacao: ln.observacao ?? '' });
+      qtd_projeto: ln.qtd_projeto != null && ln.qtd_projeto !== ln.qtd_takeoff ? String(ln.qtd_projeto) : '', observacao: ln.observacao ?? '',
+      natureza: (ln.natureza ?? 'P') as FormLinha['natureza'], responsavel: ln.responsavel ?? '', qtd_periodo: ln.qtd_periodo != null ? String(ln.qtd_periodo) : '' });
     setAberto(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -95,7 +137,7 @@ export default function MontarPage() {
   };
 
   if (!v) return <p className="text-sm text-m-text-muted">{prog.isLoading ? 'Carregando…' : 'Programação não encontrada.'}</p>;
-  const totalDia = v.dias.map((_, i) => v.locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (Number(ln[modo][i]) || 0), 0));
+  const totalDia = v.dias.map((d, i) => v.locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (Number(valorCel(ln, modo, i, d.data)) || 0), 0));
 
   return (
     <>
@@ -105,10 +147,12 @@ export default function MontarPage() {
         descricao={<>Local → Área → atividade (grupo, tipo e texto complementar, que gera o ID do Simova) → item da PQ. {rascunho ? 'Previsto aberto para edição.' : 'Emitida: o previsto está travado; o realizado continua aberto.'}</>}
         acoes={<>
           <Pilula tom={rascunho ? 'neutro' : 'acento'}>{rascunho ? (v.revisao ? `Reaberta · rev. ${v.revisao}` : 'Rascunho') : `Emitida · rev. ${v.revisao - 1}`}</Pilula>
+          {nPend > 0 && <Botao onClick={salvar} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação ({nPend})</Botao>}
           <Link href={`/app/programacoes/${id}/imprimir`}><Botao variante="secundario"><Printer size={16} /> Imprimir</Botao></Link>
+          <Botao variante="secundario" onClick={() => baixarExcel()}><FileSpreadsheet size={16} /> Excel do cliente</Botao>
           {pode('admin') && <Botao variante="secundario" onClick={baixarFt}><Download size={16} /> FT Simova</Botao>}
           {pode('planejador') && (rascunho
-            ? <Botao onClick={() => emitir.mutate(undefined, { onSuccess: (r) => toast.success(`Emitida · revisão ${r.revisao}`), onError: (e) => toast.error(e.message) })}><FileCheck2 size={16} /> Emitir</Botao>
+            ? <Botao disabled={nPend > 0} title={nPend ? 'Salve as alterações antes de emitir' : undefined} onClick={() => emitir.mutate(undefined, { onSuccess: (r) => toast.success(`Emitida · revisão ${r.revisao}`), onError: (e) => toast.error(e.message) })}><FileCheck2 size={16} /> Emitir</Botao>
             : <Botao variante="secundario" onClick={() => reabrir.mutate(undefined)}><RotateCcw size={16} /> Reabrir</Botao>)}
         </>}
       />
@@ -154,10 +198,18 @@ export default function MontarPage() {
               {form.item_pq && !opcoesPq.permitidos.includes(form.item_pq) && !opcoesPq.outros.some((o) => o.item === form.item_pq) && <option value={form.item_pq}>{form.item_pq}</option>}
             </Selecao>
             <Campo rotulo="Buscar outro item da PQ" placeholder="nº ou descrição" value={qPq} onChange={(e) => setQPq(e.target.value)} />
-            <Selecao rotulo="Equipe / encarregado" value={form.equipe_id} onChange={(e) => setForm({ ...form, equipe_id: e.target.value })}>
+            <Selecao rotulo="Equipe / encarregado" value={form.equipe_id} onChange={(e) => {
+              const eq = equipes.data?.find((x) => String(x.id) === e.target.value);
+              setForm({ ...form, equipe_id: e.target.value, responsavel: form.responsavel || eq?.responsavel || '' });
+            }}>
               <option value="">—</option>
-              {equipes.data?.map((e) => <option key={e.id} value={e.id}>{e.nome} · {e.encarregado_nome ?? 'sem encarregado'}{e.encarregado_cracha ? '' : ' (sem crachá)'}</option>)}
+              {equipes.data?.filter((e) => e.ativo || String(e.id) === form.equipe_id).map((e) => <option key={e.id} value={e.id}>{e.codigo_simova ? `${e.codigo_simova} · ` : ''}{e.nome} · {e.encarregado_nome ?? 'sem encarregado'}{e.encarregado_cracha ? '' : ' (sem crachá)'} · {e.turno ?? 'Diurno'} {fmt(e.jornada_horas, 1)}h</option>)}
             </Selecao>
+            <Selecao rotulo="Programada / Oportunidade / Emergencial" value={form.natureza} onChange={(e) => setForm({ ...form, natureza: e.target.value as FormLinha['natureza'] })}>
+              {Object.entries(NATUREZA).map(([k2, r]) => <option key={k2} value={k2}>{k2} · {r}</option>)}
+            </Selecao>
+            <Campo rotulo="Responsável" placeholder="vem da equipe" value={form.responsavel} onChange={(e) => setForm({ ...form, responsavel: e.target.value })} />
+            <Campo rotulo={`Previsto no período (${v.tipo === 'SEMANAL' ? 'semana' : 'mês'})`} type="number" step="any" min="0" value={form.qtd_periodo} onChange={(e) => setForm({ ...form, qtd_periodo: e.target.value })} />
             <Selecao rotulo="Atividade do cronograma (opcional)" value={form.id_crono} onChange={(e) => setForm({ ...form, id_crono: e.target.value })}>
               <option value="">{form.area_id ? '—' : 'escolha a área antes'}</option>
               {atBusca.data?.map((a) => <option key={a.id_crono} value={a.id_crono}>{a.id_crono} · {a.atividade.slice(0, 70)}</option>)}
@@ -176,7 +228,7 @@ export default function MontarPage() {
 
       <Painel
         titulo="O que cada frente faz no período?"
-        subtitulo={`${dataBR(v.inicio)} a ${dataBR(v.fim)} · digite a quantidade de cada dia (sai do campo para salvar).`}
+        subtitulo={`${dataBR(v.inicio)} a ${dataBR(v.fim)} · digite a quantidade do período e de cada dia e clique em Salvar programação.`}
         acoes={<>
           <Chip ativo={modo === 'previsto'} onClick={() => setModo('previsto')}>P · Previsto</Chip>
           <Chip ativo={modo === 'realizado'} onClick={() => setModo('realizado')}>R · Realizado</Chip>
@@ -192,20 +244,21 @@ export default function MontarPage() {
                 <th className="px-2 pb-2 text-left">PQ</th>
                 <th className="px-2 pb-2 text-left">Equipe</th>
                 <th className="px-2 pb-2 text-right">Projeto</th>
+                <th className="px-2 pb-2 text-right">Prev. período</th>
                 {v.dias.map((d) => <th key={d.data} className={`px-1 pb-2 text-center ${['SÁB', 'DOM'].includes(d.dia) ? 'text-m-text-tertiary' : ''}`}>{d.dia}<div className="font-medium normal-case">{d.data.slice(8)}/{d.data.slice(5, 7)}</div></th>)}
                 <th className="px-2 pb-2 text-right">Total</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {!v.locais.length && <tr><td colSpan={v.dias.length + 7} className="py-10 text-center text-m-text-muted">Inclua a primeira linha: escolha a área, o grupo e o tipo.</td></tr>}
+              {!v.locais.length && <tr><td colSpan={v.dias.length + 8} className="py-10 text-center text-m-text-muted">Inclua a primeira linha: escolha a área, o grupo e o tipo.</td></tr>}
               {v.locais.map((l, li) => (
                 <Fragment key={`l${l.id}`}>
-                  <tr><td colSpan={v.dias.length + 7} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-on-accent">{l.codigo} · {l.descricao}</td></tr>
+                  <tr><td colSpan={v.dias.length + 8} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-on-accent">{l.codigo} · {l.descricao}</td></tr>
                   {l.areas.map((a, ai) => (
                     <Fragment key={`a${a.id}`}>
                       <tr>
-                        <td colSpan={v.dias.length + 7} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1.5 text-xs font-semibold text-m-accent">
+                        <td colSpan={v.dias.length + 8} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1.5 text-xs font-semibold text-m-accent">
                           {a.codigo} · {a.descricao}
                           {rascunho && pode('encarregado') && <button type="button" className="ml-3 font-semibold underline" onClick={() => abrirNova(a.id)}>+ linha</button>}
                         </td>
@@ -216,25 +269,42 @@ export default function MontarPage() {
                           <td className="min-w-[240px] px-2 py-2">
                             <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{ln.descricao}</span>
                             <div className="text-xs text-m-text-muted">{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
+                            <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}</div>
                             <Calculo ln={ln} />
                           </td>
                           <td className="px-2 py-2">{ln.item_pq ? <span title={ln.descricao_pq ?? ''}>{ln.item_pq}</span> : <span className="text-m-warning">sem PQ</span>}</td>
                           <td className="px-2 py-2">{ln.equipe ?? <span className="text-m-warning">sem equipe</span>}{ln.equipe && !ln.cracha && <div className="text-xs text-m-warning">sem crachá</div>}</td>
-                          <td className="whitespace-nowrap px-2 py-2 text-right">{ln.qtd_projeto != null ? `${fmt(ln.qtd_projeto)} ${ln.unidade ?? ''}` : '—'}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right">{ln.qtd_projeto != null ? `${fmt(ln.qtd_projeto)} ${ln.unidade ?? ''}` : '—'}
+                            {ln.realizado_anterior ? <div className="text-[11px] text-m-text-muted">feito {fmt(ln.realizado_anterior)}</div> : null}
+                            {ln.restante != null ? <div className="text-[11px] text-m-text-muted">resta {fmt(ln.restante)}</div> : null}</td>
+                          <td className="px-1 py-1.5 text-right">
+                            {(() => {
+                              const pv = pend[`${ln.id}|periodo`] ?? (ln.qtd_periodo != null ? String(ln.qtd_periodo) : '');
+                              const soma = v.dias.reduce((s2, d, di) => s2 + (Number(valorCel(ln, 'previsto', di, d.data)) || 0), 0);
+                              const difere = pv !== '' && Math.abs(Number(pv) - soma) > 0.005;
+                              return <>
+                                <input aria-label={`${ln.codigo_simova} previsto no período`} type="number" min="0" step="any" disabled={!(rascunho && pode('encarregado'))}
+                                  value={pv} onChange={(e) => setPend({ ...pend, [`${ln.id}|periodo`]: e.target.value })}
+                                  className={`h-8 w-[72px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] font-semibold outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${difere ? 'border-m-warning' : 'border-m-stroke'}`} />
+                                {difere && <div className="mt-0.5 text-[10px] text-m-warning">dias somam {fmt(soma)}{rascunho && pode('encarregado') && <> · <button type="button" className="font-semibold underline" onClick={() => distribuir(ln)}>distribuir</button></>}</div>}
+                              </>;
+                            })()}
+                          </td>
                           {v.dias.map((d, di) => (
                             <td key={d.data} className="px-0.5 py-1.5">
                               <input
-                                key={`${ln.id}-${d.data}-${modo}-${ln[modo][di] ?? ''}`}
                                 aria-label={`${ln.codigo_simova} ${d.dia} ${d.data}`}
                                 type="number" min="0" step="any" disabled={!podeEditarValor}
-                                defaultValue={ln[modo][di] ?? ''}
-                                onBlur={(e) => {
-                                  const novo = e.target.value;
-                                  if (novo === String(ln[modo][di] ?? '')) return;
-                                  valor.mutate({ lid: ln.id, data: d.data, valor: novo }, { onError: (er) => toast.error(er.message) });
+                                value={valorCel(ln, modo, di, d.data)}
+                                onChange={(e) => {
+                                  const k2 = `${ln.id}|${modo}|${d.data}`;
+                                  const original = ln[modo][di] != null ? String(ln[modo][di]) : '';
+                                  const novo = { ...pend };
+                                  if (e.target.value === original) delete novo[k2]; else novo[k2] = e.target.value;
+                                  setPend(novo);
                                 }}
                                 title={dicaDia(ln, di)}
-                                className={`h-8 w-[58px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${modo === 'previsto' && ln.calc?.acima_capacidade[di] ? 'border-m-danger text-m-danger' : modo === 'realizado' ? 'border-m-info/40' : 'border-m-stroke'}`}
+                                className={`h-8 w-[58px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${pend[`${ln.id}|${modo}|${d.data}`] !== undefined ? 'border-m-accent bg-m-accent-subtle' : modo === 'previsto' && ln.calc?.acima_capacidade[di] ? 'border-m-danger text-m-danger' : modo === 'realizado' ? 'border-m-info/40' : 'border-m-stroke'}`}
                               />
                               {modo === 'previsto' && ln.calc?.hh_previsto[di] ? <div className="mt-0.5 text-center text-[10px] text-m-text-muted">{fmt(ln.calc.hh_previsto[di], 1)} HH</div> : null}
                             </td>
@@ -259,13 +329,13 @@ export default function MontarPage() {
             {v.linhas > 0 && (
               <tfoot>
                 <tr className="text-xs font-semibold text-m-text-muted">
-                  <td colSpan={5} className="px-2 pt-2 text-right uppercase">Soma do dia ({modo})</td>
+                  <td colSpan={6} className="px-2 pt-2 text-right uppercase">Soma do dia ({modo})</td>
                   {totalDia.map((t, i) => <td key={i} className="px-1 pt-2 text-right">{t ? fmt(t) : ''}</td>)}
                   <td colSpan={2} />
                 </tr>
                 {modo === 'previsto' && !!v.total_hh_previsto && (
                   <tr className="text-xs font-semibold text-m-text-muted">
-                    <td colSpan={5} className="px-2 pt-1 text-right uppercase">HH previsto do dia (CPU)</td>
+                    <td colSpan={6} className="px-2 pt-1 text-right uppercase">HH previsto do dia (CPU)</td>
                     {(v.hh_previsto_dia ?? []).map((t, i) => <td key={i} className="px-1 pt-1 text-right">{t ? fmt(t, 1) : ''}</td>)}
                     <td className="px-2 pt-1 text-right text-m-text-primary">{fmt(v.total_hh_previsto, 1)}</td>
                     <td />
@@ -275,7 +345,14 @@ export default function MontarPage() {
             )}
           </table>
         </div>
-        <Erro erro={valor.error ?? emitir.error ?? excluir.error} />
+        {nPend > 0 && (
+          <div className="flex items-center justify-end gap-3 border-t border-m-stroke-subtle pt-3">
+            <span className="text-[13px] text-m-text-secondary">{nPend} alteraç{nPend === 1 ? 'ão' : 'ões'} não salva{nPend === 1 ? '' : 's'}</span>
+            <Botao variante="secundario" onClick={() => setPend({})}>Descartar</Botao>
+            <Botao onClick={salvar} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação</Botao>
+          </div>
+        )}
+        <Erro erro={salvarTudo.error ?? emitir.error ?? excluir.error} />
       </Painel>
     </>
   );

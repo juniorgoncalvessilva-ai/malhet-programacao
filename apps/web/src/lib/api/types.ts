@@ -40,10 +40,12 @@ export interface VinculoResolvido {
   hh_por_unidade: number | null; pendencias: string[];
 }
 export interface ComposicaoEquipe { recurso: string; tipo: 'MOD' | 'EQU'; quantidade: number }
+export interface MembroEquipe { cracha: string; nome: string; funcao: string | null }
 export interface Equipe {
   id: number; nome: string; frente_codigo: string | null; encarregado_cracha: string | null;
   encarregado_nome: string | null; jornada_horas: number; observacao: string | null; ativo: boolean;
-  composicao: ComposicaoEquipe[]; hh_disponivel_dia: number;
+  turno: string | null; codigo_simova: string | null; responsavel: string | null; equipamentos: string | null;
+  composicao: ComposicaoEquipe[]; membros: MembroEquipe[]; composicao_efetiva: ComposicaoEquipe[]; hh_disponivel_dia: number;
 }
 export interface DiaPlano { data: string; pe: number | null; hh: number | null }
 export interface ItemProgramacao {
@@ -63,7 +65,7 @@ export interface Ocupacao { data: string; hh_disponivel: number; hh_programado: 
 export interface CriarItemOut { item: ItemProgramacao; hh_disponivel_dia: number; ocupacao: Ocupacao[]; avisos: string[] }
 
 // ---- obras e acessos
-export type PapelObra = 'admin' | 'planejador' | 'encarregado' | 'leitor';
+export type PapelObra = 'admin' | 'planejador' | 'encarregado' | 'leitor' | 'seguranca';
 export interface Obra {
   id: number; codigo: string; nome: string; contrato: string | null; cliente: string | null; ativa: boolean; criado_em: string;
 }
@@ -93,6 +95,14 @@ export interface LinhaVisao {
   equipe_id: number | null; equipe: string | null; encarregado: string | null; cracha: string | null; observacao: string | null;
   previsto: (number | null)[]; realizado: (number | null)[]; total_previsto: number; total_realizado: number;
   calc: CalculoLinha;
+  qtd_periodo: number | null; natureza: 'P' | 'O' | 'E'; responsavel: string | null; turno: string | null;
+  jornada: number | null; equipe_codigo: string | null; status_crono: string | null;
+  realizado_anterior: number | null; restante: number | null; ssma: Ssma;
+}
+export interface Ssma { tecnico: string | null; rac: string | null; pts: string | null; art: string | null; pto: string | null; ata: string | null }
+export interface AtividadeArvore {
+  id_crono: string; atividade: string; caminho: string[]; inicio: string | null; fim: string | null;
+  duracao_h: number | null; status: string | null; pct: number | null; programada_em: { id: number; titulo: string }[];
 }
 /** Produção da linha a partir da CPU da obra (HH/un, recurso que governa, índice, capacidade da equipe). */
 export interface CalculoLinha {

@@ -18,7 +18,7 @@ function Logo() {
   );
 }
 
-const PAPEL: Record<string, string> = { admin: 'Admin da obra', planejador: 'Planejador', encarregado: 'Encarregado', leitor: 'Leitor' };
+const PAPEL: Record<string, string> = { admin: 'Admin da obra', planejador: 'Planejador', encarregado: 'Encarregado', leitor: 'Leitor', seguranca: 'Segurança (SSMA)' };
 
 function SeletorObra() {
   const { obras, obra, escolher, superadmin } = useObra();
@@ -75,8 +75,8 @@ function SeletorObra() {
 }
 
 function useMenuVisivel(): GrupoMenu[] {
-  const { pode, superadmin } = useObra();
-  return MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => (i.superadmin ? superadmin : !i.minimo || pode(i.minimo))) }))
+  const { pode, superadmin, editaSsma } = useObra();
+  return MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => (i.superadmin ? superadmin : i.ssma ? editaSsma : !i.minimo || pode(i.minimo))) }))
     .filter((g) => g.itens.length);
 }
 

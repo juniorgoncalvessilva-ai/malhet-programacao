@@ -13,9 +13,10 @@ export const PAPEIS: { valor: PapelObra; rotulo: string; descricao: string }[] =
   { valor: 'admin', rotulo: 'Admin da obra', descricao: 'carrega versões, importa do Simova, envia a FT e dá acesso' },
   { valor: 'planejador', rotulo: 'Planejador', descricao: 'programa, aprova, mantém vínculos e equipes' },
   { valor: 'encarregado', rotulo: 'Encarregado', descricao: 'programa a própria equipe (pelo crachá)' },
+  { valor: 'seguranca', rotulo: 'Segurança (SSMA)', descricao: 'consulta e preenche o SSMA da programação (técnico, RAC, PTS, ART, PTO, ATA)' },
   { valor: 'leitor', rotulo: 'Leitor', descricao: 'só consulta' },
 ];
-const TOM: Record<PapelObra, 'acento' | 'info' | 'atencao' | 'neutro'> = { admin: 'acento', planejador: 'info', encarregado: 'atencao', leitor: 'neutro' };
+const TOM: Record<PapelObra, 'acento' | 'info' | 'atencao' | 'neutro'> = { admin: 'acento', planejador: 'info', encarregado: 'atencao', seguranca: 'info', leitor: 'neutro' };
 export const rotuloPapel = (p: PapelObra) => PAPEIS.find((x) => x.valor === p)?.rotulo ?? p;
 
 const vazio = { email: '', papel: 'planejador' as PapelObra, cracha: '', senha_inicial: '' };

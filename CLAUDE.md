@@ -27,6 +27,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   construtor. Nova tabela de dados sem `obra_id` = bug. Teste de isolamento em `tests/test_auth.py`.
 - CPU da obra = relatório "Composição de Preços Unitários" (.xls) → `referencias/domain/cpu_obra.py` (leitura +
   achatamento das auxiliares) e `referencias/infra/cpu_gateway.py` (item PQ → HH/un, governa, índice). Spec 009.
+- Equipes: cadastro do Simova (`equipes/domain/simova_equipe.py`), composição efetiva pelos membros
+  (`equipes/infra/composicao.py`). Papel `seguranca` só edita SSMA (`Depends(ssma)`). Excel do cliente (layout S32)
+  em `planejamento/application/exportar_cliente.py`. Spec 010.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

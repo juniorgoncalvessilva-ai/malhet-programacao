@@ -10,10 +10,15 @@ class PapelObra(StrEnum):
     PLANEJADOR = "planejador"  # programa, aprova, mantém vínculos e equipes
     ENCARREGADO = "encarregado"  # programa (rascunho) a própria equipe
     LEITOR = "leitor"  # só consulta
+    SEGURANCA = "seguranca"  # consulta + preenche os itens de SSMA da programação
 
     @property
     def nivel(self) -> int:
-        return {"leitor": 0, "encarregado": 1, "planejador": 2, "admin": 3}[self.value]
+        return {"leitor": 0, "seguranca": 0, "encarregado": 1, "planejador": 2, "admin": 3}[self.value]
+
+    @property
+    def edita_ssma(self) -> bool:
+        return self in (PapelObra.SEGURANCA, PapelObra.PLANEJADOR, PapelObra.ADMIN)
 
     def pode(self, minimo: "PapelObra") -> bool:
         return self.nivel >= minimo.nivel

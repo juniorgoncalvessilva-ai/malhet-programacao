@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.auth import ContextoObra, administrar, ler, planejar, programar
+from app.core.auth import ContextoObra, administrar, ler, planejar, programar, ssma
 from app.core.db import get_session
 from app.modules.catalogo.api.router import obter_ou_criar_item
 from app.modules.catalogo.infra.models import TipoAtividadeModel
@@ -17,7 +17,7 @@ from app.modules.planejamento.domain.periodo import TipoProgramacao, periodo, ti
 from app.modules.planejamento.infra.models import EmissaoModel, LinhaProgramacaoModel, ProgramacaoModel
 from app.modules.referencias.application.importar_cpu import carregar_cpu_obra
 from app.modules.referencias.application.importar_takeoff import carregar_takeoff
-from app.modules.referencias.application.importar_xer import carregar_xer
+from app.modules.referencias.application.importar_xer import carregar_xer, status_pt
 from app.modules.referencias.infra.models import AtividadeCronogramaModel, ItemPqModel, PqQuantidadeTagModel
 from app.modules.referencias.infra.cpu_gateway import CpuGateway
 from app.modules.referencias.infra.resolvedor import JORNADA_REFERENCIA, ResolvedorReferencias
@@ -52,6 +52,9 @@ class LinhaIn(BaseModel):
     id_crono: str | None = None
     equipe_id: int | None = None
     qtd_projeto: float | None = None
+    qtd_periodo: float | None = None
+    natureza: str = "P"  # P programada | O oportunidade | E emergencial
+    responsavel: str | None = None
     observacao: str | None = None
 
 
@@ -63,6 +66,35 @@ class ValorIn(BaseModel):
 class ValoresIn(BaseModel):
     campo: str = "previsto"  # previsto | realizado
     valores: list[ValorIn]
+
+
+class LinhaSalvarIn(BaseModel):
+    id: int
+    qtd_periodo: float | None = None
+    mudar_qtd_periodo: bool = False
+    previsto: list[ValorIn] = []
+    realizado: list[ValorIn] = []
+
+
+class SalvarIn(BaseModel):
+    linhas: list[LinhaSalvarIn]
+
+
+class SsmaLinhaIn(BaseModel):
+    id: int
+    tecnico: str | None = None
+    rac: str | None = None
+    pts: str | None = None
+    art: str | None = None
+    pto: str | None = None
+    ata: str | None = None
+
+
+class SsmaIn(BaseModel):
+    linhas: list[SsmaLinhaIn]
+
+
+SSMA_CAMPOS = ("tecnico", "rac", "pts", "art", "pto", "ata")
 
 
 def _resumo(p: ProgramacaoModel) -> ResumoOut:
@@ -88,7 +120,9 @@ def nova(d: NovaIn, s: Session = Depends(get_session), c: ContextoObra = Depends
         origem = sv.obter(s, c.obra_id, d.copiar_de)
         p.linhas = [LinhaProgramacaoModel(area_id=x.area_id, tipo_id=x.tipo_id, item_simova_id=x.item_simova_id,
                                           item_pq=x.item_pq, id_crono=x.id_crono, equipe_id=x.equipe_id,
-                                          qtd_projeto=x.qtd_projeto, observacao=x.observacao, ordem=x.ordem)
+                                          qtd_projeto=x.qtd_projeto, observacao=x.observacao, ordem=x.ordem,
+                                          natureza=x.natureza, responsavel=x.responsavel,
+                                          **{f"ssma_{k}": getattr(x, f"ssma_{k}") for k in SSMA_CAMPOS})
                     for x in origem.linhas]
     s.add(p)
     s.flush()
@@ -119,6 +153,12 @@ def _validar_linha(s: Session, c: ContextoObra, d: LinhaIn) -> tuple[TipoAtivida
         e = s.get(EquipeModel, d.equipe_id)
         if e is None or e.obra_id != c.obra_id:
             raise NotFoundError("Equipe", d.equipe_id)
+        if not (d.responsavel or "").strip() and e.responsavel:
+            d.responsavel = e.responsavel
+    if d.natureza not in ("P", "O", "E"):
+        raise DomainError("natureza: P (programada), O (oportunidade) ou E (emergencial)", "natureza")
+    if d.qtd_periodo is not None and d.qtd_periodo < 0:
+        raise DomainError("quantidade do período não pode ser negativa", "qtd_periodo")
     item_id, aviso = None, None
     if d.complemento and d.complemento.strip(" ()"):
         item, _, aviso = obter_ou_criar_item(s, c.obra_id, t, d.complemento, d.item_pq)
@@ -133,6 +173,7 @@ def nova_linha(pid: int, d: LinhaIn, s: Session = Depends(get_session), c: Conte
     _, item_id, aviso = _validar_linha(s, c, d)
     ln = LinhaProgramacaoModel(area_id=d.area_id, tipo_id=d.tipo_id, item_simova_id=item_id, item_pq=d.item_pq or None,
                                id_crono=d.id_crono or None, equipe_id=d.equipe_id, qtd_projeto=d.qtd_projeto,
+                               qtd_periodo=d.qtd_periodo, natureza=d.natureza, responsavel=(d.responsavel or None),
                                observacao=d.observacao, ordem=(max([x.ordem for x in p.linhas], default=0) + 1))
     p.linhas.append(ln)
     s.flush()
@@ -150,6 +191,7 @@ def editar_linha(pid: int, lid: int, d: LinhaIn, s: Session = Depends(get_sessio
     ln.area_id, ln.tipo_id, ln.item_simova_id = d.area_id, d.tipo_id, item_id
     ln.item_pq, ln.id_crono, ln.equipe_id = d.item_pq or None, d.id_crono or None, d.equipe_id
     ln.qtd_projeto, ln.observacao = d.qtd_projeto, d.observacao
+    ln.qtd_periodo, ln.natureza, ln.responsavel = d.qtd_periodo, d.natureza, (d.responsavel or None)
     s.flush()
     return {"id": ln.id, "aviso": aviso}
 
@@ -319,3 +361,98 @@ def recursos_da_cpu(s: Session = Depends(get_session), c: ContextoObra = Depends
          .where(CpuRecursoModel.versao_id == vig["CPU"])
          .group_by(CpuRecursoModel.recurso, CpuRecursoModel.tipo).order_by(func.count().desc()))
     return [{"recurso": r, "tipo": t, "composicoes": n} for r, t, n in s.execute(q)]
+
+
+@router.put("/programacoes/{pid}/salvar")
+def salvar(pid: int, d: SalvarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Salva de uma vez as alterações da tela: quantidade do período e valores do dia (previsto/realizado)."""
+    p = sv.obter(s, c.obra_id, pid)
+    n = 0
+    for ln_in in d.linhas:
+        ln = next((x for x in p.linhas if x.id == ln_in.id), None)
+        if ln is None:
+            raise NotFoundError("Linha", ln_in.id)
+        if ln_in.mudar_qtd_periodo:
+            sv.exigir_rascunho(p)
+            if ln_in.qtd_periodo is not None and ln_in.qtd_periodo < 0:
+                raise DomainError("quantidade do período não pode ser negativa", "qtd_periodo")
+            ln.qtd_periodo = ln_in.qtd_periodo
+            n += 1
+        if ln_in.previsto:
+            sv.salvar_valores(s, p, ln.id, [v.model_dump() for v in ln_in.previsto], "previsto")
+            n += len(ln_in.previsto)
+        if ln_in.realizado:
+            sv.salvar_valores(s, p, ln.id, [v.model_dump() for v in ln_in.realizado], "realizado")
+            n += len(ln_in.realizado)
+    s.flush()
+    return {"alteracoes": n}
+
+
+@router.put("/programacoes/{pid}/ssma")
+def salvar_ssma(pid: int, d: SsmaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(ssma)):
+    """Itens de SSMA por linha (técnico, RAC, PTS, ART, PTO, ATA). Vale também com a programação emitida."""
+    p = sv.obter(s, c.obra_id, pid)
+    for x in d.linhas:
+        ln = next((y for y in p.linhas if y.id == x.id), None)
+        if ln is None:
+            raise NotFoundError("Linha", x.id)
+        for k in SSMA_CAMPOS:
+            v = (getattr(x, k) or "").strip() or None
+            setattr(ln, f"ssma_{k}", v[:150 if k == "tecnico" else 60] if v else None)
+    s.flush()
+    return {"linhas": len(d.linhas)}
+
+
+@router.get("/cronograma/arvore")
+def cronograma_arvore(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Cronograma vigente (P6) com o caminho da WBS de cada atividade e onde ela já está programada."""
+    vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes()
+    if "CRONOGRAMA" not in vig:
+        return {"versao": None, "atividades": []}
+    from app.modules.referencias.infra.models import VersaoReferenciaModel
+
+    v = s.get(VersaoReferenciaModel, vig["CRONOGRAMA"])
+    usos: dict[str, list[dict]] = {}
+    q = (select(LinhaProgramacaoModel.id_crono, ProgramacaoModel.id, ProgramacaoModel.titulo)
+         .join(ProgramacaoModel, ProgramacaoModel.id == LinhaProgramacaoModel.programacao_id)
+         .where(ProgramacaoModel.obra_id == c.obra_id, LinhaProgramacaoModel.id_crono.is_not(None)))
+    for idc, pid, tit in s.execute(q):
+        if not any(u["id"] == pid for u in usos.setdefault(idc, [])):
+            usos[idc].append({"id": pid, "titulo": tit})
+    ativ = []
+    for a in s.scalars(select(AtividadeCronogramaModel).where(AtividadeCronogramaModel.versao_id == v.id)
+                       .order_by(AtividadeCronogramaModel.id)):
+        caminho = [x for x in (a.area or "").split(" / ") if x] + ([a.wbs] if a.wbs else [])
+        ativ.append({"id_crono": a.id_crono, "atividade": a.atividade, "caminho": caminho,
+                     "inicio": a.inicio.date().isoformat() if a.inicio else None,
+                     "fim": a.fim.date().isoformat() if a.fim else None,
+                     "duracao_h": a.horas_crono, "status": status_pt(a.status), "pct": a.realizado,
+                     "programada_em": usos.get(a.id_crono, [])})
+    return {"versao": {"id": v.id, "rotulo": v.rotulo, "carregado_em": v.carregado_em.isoformat()}, "atividades": ativ}
+
+
+@router.get("/programacoes/{pid}/excel")
+def exportar_excel(pid: int, revisao: int | None = None, s: Session = Depends(get_session),
+                   c: ContextoObra = Depends(ler)):
+    """Programação no Excel do cliente (layout da aba "Programação Semanal - S32"). Sem revisão = rascunho atual."""
+    from app.modules.equipes.infra.composicao import composicao_efetiva
+    from app.modules.obras.infra.models import ObraModel
+    from app.modules.planejamento.application.exportar_cliente import gerar
+
+    p = sv.obter(s, c.obra_id, pid)
+    if revisao is not None:
+        e = s.scalar(select(EmissaoModel).where(EmissaoModel.programacao_id == pid, EmissaoModel.revisao == revisao))
+        if e is None:
+            raise NotFoundError("Emissão", revisao)
+        v = {**e.foto, "emitida_em": e.emitida_em.isoformat()}
+    else:
+        v = sv.visao(s, p)
+    obra = s.get(ObraModel, c.obra_id)
+    nome = " - ".join(x for x in (obra.codigo, obra.nome, obra.contrato) if x)
+    comps = {eq.id: composicao_efetiva(eq) for eq in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id))}
+    dados = gerar(v, nome, comps)
+    import unicodedata
+
+    base = unicodedata.normalize("NFKD", p.titulo.split(" · ")[0]).encode("ascii", "ignore").decode().replace(" ", "_")
+    arq = f"{base}_{p.inicio:%Y%m%d}{'' if revisao is None else f'_rev{revisao}'}.xlsx"
+    return Response(dados, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{arq}"'})

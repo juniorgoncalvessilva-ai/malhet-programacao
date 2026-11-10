@@ -39,7 +39,17 @@ class LinhaProgramacaoModel(Base):
     id_crono: Mapped[str | None] = mapped_column(String(40))
     equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
     qtd_projeto: Mapped[float | None] = mapped_column(Float)  # manual; vazio = take-off da TAG
+    qtd_periodo: Mapped[float | None] = mapped_column(Float)  # quanto se prevê fazer nesta semana/mês
+    natureza: Mapped[str] = mapped_column(String(1), default="P", server_default="P")  # Programada|Oportunidade|Emergencial
+    responsavel: Mapped[str | None] = mapped_column(String(150))
     observacao: Mapped[str | None] = mapped_column(String(300))
+    # SSMA (preenchido pela segurança)
+    ssma_tecnico: Mapped[str | None] = mapped_column(String(150))
+    ssma_rac: Mapped[str | None] = mapped_column(String(60))
+    ssma_pts: Mapped[str | None] = mapped_column(String(60))
+    ssma_art: Mapped[str | None] = mapped_column(String(60))
+    ssma_pto: Mapped[str | None] = mapped_column(String(60))
+    ssma_ata: Mapped[str | None] = mapped_column(String(60))
     ordem: Mapped[int] = mapped_column(Integer, default=0)
     valores: Mapped[list["ValorDiaModel"]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by="ValorDiaModel.data")

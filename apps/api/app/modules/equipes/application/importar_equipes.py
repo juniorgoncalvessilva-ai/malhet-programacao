@@ -41,3 +41,35 @@ def importar_equipes(session: Session, obra_id: int, arquivo: BinaryIO, jornada:
         n += 1
     session.flush()
     return n
+
+
+def importar_equipes_simova(session: Session, obra_id: int, arquivo: BinaryIO) -> dict:
+    """Cadastro de equipes do Simova (Código, Descrição, Encarregado, Funcionário, Equipamento, Ativo).
+
+    Casa pelo código Simova (ou pelo nome); atualiza encarregado, funcionários, equipamentos e ativo.
+    Jornada, turno, responsável e composição por função ficam como estão (são do planejamento).
+    """
+    from app.modules.equipes.domain.simova_equipe import interpretar
+    from app.modules.equipes.infra.composicao import sincronizar_membros
+
+    wb = load_workbook(arquivo, read_only=True, data_only=True)
+    linhas = [list(r) for r in wb.worksheets[0].iter_rows(values_only=True)]
+    criadas = atualizadas = 0
+    for eqs in interpretar(linhas):
+        eq = session.scalar(select(EquipeModel).where(EquipeModel.obra_id == obra_id,
+                                                      EquipeModel.codigo_simova == eqs.codigo)) \
+            or session.scalar(select(EquipeModel).where(EquipeModel.obra_id == obra_id, EquipeModel.nome == eqs.descricao))
+        if eq is None:
+            eq = EquipeModel(obra_id=obra_id, nome=eqs.descricao[:120], jornada_horas=9.0, turno="Diurno")
+            session.add(eq)
+            criadas += 1
+        else:
+            atualizadas += 1
+        eq.codigo_simova, eq.nome, eq.ativo = eqs.codigo, eqs.descricao[:120], eqs.ativo
+        eq.equipamentos = (eqs.equipamentos or None) and eqs.equipamentos[:500]
+        if eqs.encarregado:
+            eq.encarregado_cracha, eq.encarregado_nome = eqs.encarregado.cracha, eqs.encarregado.nome
+        # preserva a função já informada no app
+        sincronizar_membros(eq, [(p.cracha, p.nome, None) for p in eqs.funcionarios], manter_funcao=True)
+        session.flush()
+    return {"criadas": criadas, "atualizadas": atualizadas}
