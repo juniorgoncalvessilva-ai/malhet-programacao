@@ -180,6 +180,25 @@ def detalhe(uuid: str) -> None:
 
 
 if __name__ == "__main__":
+    if sys.argv[1] == "logs":
+        st, d = api("GET", f"/deployments/{sys.argv[2]}")
+        logs = d.get("logs") if isinstance(d, dict) else "[]"
+        try:
+            logs = json.loads(logs or "[]")
+        except Exception:
+            logs = [{"output": str(logs)}]
+        import re
+        chave = re.compile(r"api|db-|postgres|alembic|uvicorn|Traceback|Error|error|unhealthy|healthy|password|FATAL|exit", re.I)
+        linhas = [(l.get("output") or "").rstrip() for l in logs]
+        sel = [x for x in linhas if chave.search(x)]
+        print(f"LOG total={len(linhas)} filtradas={len(sel)}")
+        for x in sel[-120:]:
+            print("L|", x[:300])
+        app = os.environ.get("APP_UUID_LOGS")
+        if app:
+            st, lg = api("GET", f"/applications/{app}/logs?lines=200")
+            print("APPLOGS", st, str(lg)[:3000])
+        sys.exit(0)
     if sys.argv[1] == "detalhe":
         detalhe(sys.argv[2]); sys.exit(0)
     if sys.argv[1] == "reaproveitar":
