@@ -110,7 +110,7 @@ def criar() -> None:
         corpo = {"project_uuid": PROJETO_UUID, "server_uuid": SERVIDOR_UUID, "destination_uuid": DESTINO_UUID,
                  "environment_name": "production", "git_repository": _url_git(), "git_branch": "main",
                  "build_pack": "dockercompose", "docker_compose_location": "/docker-compose.coolify.yml",
-                 "ports_exposes": "3000", "name": NOME_APP, "description": "Malhet · Programação × Simova",
+                 "ports_exposes": "3000", "name": NOME_APP, "description": "Malhet - Programacao de obra x Simova",
                  "instant_deploy": False}
         st, app = api("POST", "/applications/public", corpo)
         print("APP", st, so(app, ("uuid",)) if st < 300 else app)
