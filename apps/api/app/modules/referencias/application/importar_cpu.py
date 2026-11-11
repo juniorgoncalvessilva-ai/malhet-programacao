@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.referencias.application.versoes import ResultadoCarga, ativar_versao, nova_versao
 from app.modules.referencias.domain import cpu_obra
-from app.modules.referencias.infra.models import CpuComposicaoModel, CpuRecursoModel, CpuServicoModel
+from app.modules.referencias.infra.models import CpuComposicaoModel, CpuLinhaModel, CpuRecursoModel, CpuServicoModel
 from app.shared.errors import DomainError
 
 
@@ -56,7 +56,13 @@ def carregar_cpu_obra(session: Session, obra_id: int, arquivo: BinaryIO, *, nome
         session.add(CpuComposicaoModel(
             versao_id=v.id, codigo=cod, descricao=comp.descricao[:500], custo=comp.custo,
             recurso_governa=gov.recurso[:120] if gov else None, coef_governa=gov.coef_por_unidade if gov else None,
-            hh_por_unidade=round(sum(r.coef_por_unidade for r in recursos if r.tipo == "MOD"), 6) or None))
+            hh_por_unidade=round(sum(r.coef_por_unidade for r in recursos if r.tipo == "MOD"), 6) or None,
+            linha_arquivo=comp.linha))
+        # linhas como estão no relatório: base da memória de cálculo (de onde sai cada h/un)
+        for i, ln in enumerate(comp.linhas, start=1):
+            session.add(CpuLinhaModel(versao_id=v.id, composicao=cod, ordem=i, codigo=ln.codigo[:60],
+                                      descricao=ln.descricao[:300], unid=(ln.unid or None) and ln.unid[:10],
+                                      quantidade=ln.quantidade, preco=ln.preco, linha_arquivo=ln.linha))
         for r in recursos:
             session.add(CpuRecursoModel(versao_id=v.id, composicao=cod, recurso=r.recurso[:120], tipo=r.tipo,
                                         unid_recurso=r.unid[:10], coef_por_unidade=r.coef_por_unidade))
@@ -72,7 +78,8 @@ def carregar_cpu_obra(session: Session, obra_id: int, arquivo: BinaryIO, *, nome
             continue
         session.add(CpuServicoModel(versao_id=v.id, item=sv.item, item_original=sv.item_original,
                                     descricao=sv.descricao[:500], unid=sv.unid, quantidade=sv.quantidade,
-                                    composicao=sv.composicao, custo_unitario=sv.custo_unitario))
+                                    composicao=sv.composicao, custo_unitario=sv.custo_unitario,
+                                    linha_arquivo=sv.linha))
     sem_mo = sum(1 for sv in rel.servicos
                  if sv.composicao and not any(True for _ in cpu_obra.achatar(rel.composicoes, sv.composicao)))
     if sem_mo:

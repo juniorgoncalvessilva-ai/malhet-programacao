@@ -67,6 +67,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (montar → emitir → imprimir → FT). Hooks em `src/hooks/programacao/planejamento.ts`.
 - Obra corrente: `useObra()` (`src/lib/obra/ObraProvider.tsx`): obras, papel, `pode('planejador')`, superadmin.
   `useApi()` já manda o `X-Obra-Id`; trocar de obra remonta as telas. Esconda ações que o papel não permite.
+- **Memória de cálculo**: todo número calculado na tela usa `<Calculado>` (`components/Obra/Calculado.tsx`) e abre a
+  conta + fontes (origem e linha/campo). Backend: `app/shared/memoria.py` (`Memoria`, `Fonte`, `pacote`); CPU com linha do
+  arquivo (`cpu_linha`, `cpu_obra.rastrear`, `referencias/application/memoria_cpu.py`). Número novo sem memória = bug. Spec 022.
 - Exclusão/remoção sempre pede confirmação com `useConfirmar()` (`components/Obra/Confirmar.tsx`); nunca
   `window.confirm`. Vários valores de lista: `components/Obra/MultiSelecao.tsx`.
 - Sessão: `useSessao()` (`src/lib/auth/AuthProvider.tsx`). Código antigo do kit usa o shim `src/lib/auth/compat.ts`.

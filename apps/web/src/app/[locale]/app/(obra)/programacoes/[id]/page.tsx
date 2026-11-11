@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileCheck2, FileSpreadsheet, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
+import { Calculado } from '@/components/Obra/Calculado';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
@@ -289,13 +290,13 @@ export default function MontarPage() {
                             <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{ln.descricao}</span>
                             <div className="text-xs text-m-text-muted">{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
                             <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}{comoLista(ln.ssma?.pto).length ? ` · PTO ${comoLista(ln.ssma?.pto).join(', ')}` : ''}</div>
-                            <Calculo ln={ln} />
+                            <Calculo ln={ln} pid={id} />
                           </td>
                           <td className="px-2 py-2">{ln.item_pq ? <span title={ln.descricao_pq ?? ''}>{ln.item_pq}</span> : <span className="text-m-warning">sem PQ</span>}</td>
-                          <td className="px-2 py-2">{ln.equipe ?? <span className="text-m-warning">sem equipe</span>}{ln.equipe && !ln.cracha && <div className="text-xs text-m-warning">sem crachá</div>}</td>
-                          <td className="whitespace-nowrap px-2 py-2 text-right">{ln.qtd_projeto != null ? `${fmt(ln.qtd_projeto)} ${ln.unidade ?? ''}` : '—'}
-                            {ln.realizado_anterior ? <div className="text-[11px] text-m-text-muted">feito {fmt(ln.realizado_anterior)}</div> : null}
-                            {ln.restante != null ? <div className="text-[11px] text-m-text-muted">resta {fmt(ln.restante)}</div> : null}</td>
+                          <td className="px-2 py-2">{ln.equipe ? <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave="composicao_equipe" titulo="Ver a composição da equipe e de onde vem a função de cada pessoa">{ln.equipe}</Calculado> : <span className="text-m-warning">sem equipe</span>}{ln.equipe && !ln.cracha && <div className="text-xs text-m-warning">sem crachá</div>}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right">{ln.qtd_projeto != null ? <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave="qtd_projeto">{`${fmt(ln.qtd_projeto)} ${ln.unidade ?? ''}`}</Calculado> : '—'}
+                            {ln.realizado_anterior ? <div className="text-[11px] text-m-text-muted">feito <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave="realizado_anterior">{fmt(ln.realizado_anterior)}</Calculado></div> : null}
+                            {ln.restante != null ? <div className="text-[11px] text-m-text-muted">resta <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave="restante">{fmt(ln.restante)}</Calculado></div> : null}</td>
                           <td className="px-1 py-1.5 text-right">
                             {(() => {
                               const pv = pend[`${ln.id}|periodo`] ?? (ln.qtd_periodo != null ? String(ln.qtd_periodo) : '');
@@ -325,12 +326,12 @@ export default function MontarPage() {
                                 title={dicaDia(ln, di)}
                                 className={`h-8 w-[58px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${pend[`${ln.id}|${modo}|${d.data}`] !== undefined ? 'border-m-accent bg-m-accent-subtle' : modo === 'previsto' && ln.calc?.acima_capacidade[di] ? 'border-m-danger text-m-danger' : modo === 'realizado' ? 'border-m-info/40' : 'border-m-stroke'}`}
                               />
-                              {modo === 'previsto' && ln.calc?.hh_previsto[di] ? <div className="mt-0.5 text-center text-[10px] text-m-text-muted">{fmt(ln.calc.hh_previsto[di], 1)} HH</div> : null}
+                              {modo === 'previsto' && ln.calc?.hh_previsto[di] ? <div className="mt-0.5 text-center text-[10px] text-m-text-muted"><Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={`hh_dia:${di}`}>{`${fmt(ln.calc.hh_previsto[di], 1)} HH`}</Calculado></div> : null}
                             </td>
                           ))}
                           <td className="whitespace-nowrap px-2 py-2 text-right font-semibold text-m-text-primary">
                             {fmt(modo === 'previsto' ? ln.total_previsto : ln.total_realizado)}
-                            {ln.calc?.hh_un ? <div className="text-[11px] font-normal text-m-text-muted">{fmt(modo === 'previsto' ? ln.calc.total_hh_previsto : ln.calc.total_hh_realizado, 1)} HH</div> : null}
+                            {ln.calc?.hh_un ? <div className="text-[11px] font-normal text-m-text-muted"><Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={modo === 'previsto' ? 'total_hh_previsto' : 'total_hh_realizado'}>{`${fmt(modo === 'previsto' ? ln.calc.total_hh_previsto : ln.calc.total_hh_realizado, 1)} HH`}</Calculado></div> : null}
                           </td>
                           <td className="whitespace-nowrap px-1 py-1.5">
                             {rascunho && pode('encarregado') && <>
@@ -355,8 +356,8 @@ export default function MontarPage() {
                 {modo === 'previsto' && !!v.total_hh_previsto && (
                   <tr className="text-xs font-semibold text-m-text-muted">
                     <td colSpan={6} className="px-2 pt-1 text-right uppercase">HH previsto do dia (CPU)</td>
-                    {(v.hh_previsto_dia ?? []).map((t, i) => <td key={i} className="px-1 pt-1 text-right">{t ? fmt(t, 1) : ''}</td>)}
-                    <td className="px-2 pt-1 text-right text-m-text-primary">{fmt(v.total_hh_previsto, 1)}</td>
+                    {(v.hh_previsto_dia ?? []).map((t, i) => <td key={i} className="px-1 pt-1 text-right">{t ? <Calculado rota={`/programacoes/${id}/memoria`} chave={`hh_dia:${i}`}>{fmt(t, 1)}</Calculado> : ''}</td>)}
+                    <td className="px-2 pt-1 text-right text-m-text-primary"><Calculado rota={`/programacoes/${id}/memoria`} chave="total_hh_previsto">{fmt(v.total_hh_previsto, 1)}</Calculado></td>
                     <td />
                   </tr>
                 )}
@@ -386,19 +387,22 @@ function dicaDia(ln: LinhaVisao, di: number): string | undefined {
   return partes.filter(Boolean).join(' · ') || undefined;
 }
 
-/** Produção da linha pela CPU da obra: HH/un, quem governa, índice e capacidade da equipe. */
-function Calculo({ ln }: { ln: LinhaVisao }) {
+/** Produção da linha pela CPU da obra: HH/un, quem governa, índice e capacidade da equipe (cada número abre a conta). */
+function Calculo({ ln, pid }: { ln: LinhaVisao; pid: number }) {
   const c = ln.calc;
   if (!c) return null;
   const un = ln.unidade ?? 'un';
+  const rota = `/programacoes/${pid}/linhas/${ln.id}/memoria`;
   return (
     <div className="mt-1 text-[11px] leading-snug text-m-text-secondary">
       {c.hh_un ? <>
-        <span title={c.descricao_composicao ?? ''}>{c.composicao}</span> · {fmt(c.hh_un, 3)} HH/{un}
-        {c.recurso_governa && c.indice_un_dia ? <> · governa <b>{c.recurso_governa}</b> ({fmt(c.indice_un_dia)} {un}/dia por pessoa)</> : null}
-        {c.capacidade_un_dia != null && <> · equipe <b>{fmt(c.capacidade_un_dia)} {un}/dia</b>{c.gargalo ? ` (gargalo ${c.gargalo})` : ''}</>}
-      </> : c.composicao ? <>{c.composicao} · sem mão de obra na CPU</> : null}
-      {c.alertas.map((a) => <div key={a} className="text-m-warning">{a}</div>)}
+        <Calculado rota={rota} chave="hh_un" titulo={`${c.descricao_composicao ?? ''} — ver de onde vem o HH`}>{c.composicao ?? ''}</Calculado>
+        {' · '}<Calculado rota={rota} chave="hh_un">{`${fmt(c.hh_un, 3)} HH/${un}`}</Calculado>
+        {c.recurso_governa && c.indice_un_dia ? <> · governa <Calculado rota={rota} chave="governa" className="font-semibold">{c.recurso_governa}</Calculado>{' '}
+          (<Calculado rota={rota} chave="indice">{`${fmt(c.indice_un_dia)} ${un}/dia por pessoa`}</Calculado>)</> : null}
+        {c.capacidade_un_dia != null && <> · equipe <Calculado rota={rota} chave="capacidade" className="font-semibold">{`${fmt(c.capacidade_un_dia)} ${un}/dia`}</Calculado>{c.gargalo ? ` (gargalo ${c.gargalo})` : ''}</>}
+      </> : c.composicao ? <><Calculado rota={rota} chave="hh_un">{c.composicao}</Calculado> · sem mão de obra na CPU</> : null}
+      {c.alertas.map((a) => <div key={a} className="text-m-warning">{a.includes('capacidade zero') ? <Calculado rota={rota} chave="capacidade">{a}</Calculado> : a}</div>)}
     </div>
   );
 }

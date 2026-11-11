@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Filter, Sen
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
+import { Calculado, nbr, type MemoriaCalculo } from '@/components/Obra/Calculado';
 import { useEquipes } from '@/hooks/programacao/queries';
 import { k, useAcao, useCatalogo, useFrentes2, useProgramacoes } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -24,6 +25,46 @@ const LIMITE_LISTA = 500;
 const cmpTxt = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' });
 const cwaDe = (a: AtividadeArvore) => a.caminho.join(' ').match(/CWA\s*([0-9]{3}\.[0-9]{2})/i)?.[1] ?? null;
 const atrasada = (a: AtividadeArvore) => !!a.fim && a.fim < HOJE && (a.pct ?? 0) < 100 && a.status !== 'Concluída';
+
+/* ---------- memória de cálculo (contas feitas nesta tela sobre o cronograma vigente) ---------- */
+const ORIGEM_P6 = 'Cronograma vigente (XER do Primavera P6)';
+const MAX_PASSOS = 60;
+const corta = <T,>(xs: T[]) => xs.slice(0, MAX_PASSOS);
+const resto = (n: number) => (n > MAX_PASSOS ? [`Mostrando ${MAX_PASSOS} de ${n} parcelas.`] : []);
+function memDuracaoAtv(a: AtividadeArvore): MemoriaCalculo {
+  return { chave: 'dur', titulo: `Duração de ${a.id_crono} (dias)`, valor: `${nbr((a.duracao_h ?? 0) / 8, 1)} dias`,
+    formula: 'dias = duração em horas do P6 ÷ 8 h/dia',
+    passos: [{ descricao: a.atividade, conta: `${nbr(a.duracao_h)} h ÷ 8`, resultado: `${nbr((a.duracao_h ?? 0) / 8, 2)} dias`, destaque: true }],
+    fontes: [{ dado: 'Duração', valor: `${nbr(a.duracao_h)} h`, origem: ORIGEM_P6, local: `atividade ${a.id_crono} · duração planejada` }],
+    notas: ['8 h/dia é o dia de referência usado para mostrar horas do P6 em dias.'] };
+}
+function memPctAtv(a: AtividadeArvore): MemoriaCalculo {
+  return { chave: 'pct', titulo: `% físico de ${a.id_crono}`, valor: `${nbr(a.pct, 1)}%`, formula: 'valor do P6 (não é calculado aqui)',
+    passos: [], fontes: [{ dado: '% concluído', valor: `${nbr(a.pct, 1)}%`, origem: ORIGEM_P6, local: `atividade ${a.id_crono} · ${a.status ?? ''}` }], notas: [] };
+}
+function memDuracaoNo(n: No): MemoriaCalculo {
+  const partes = [...n.filhos.map((f) => ({ d: `${f.codigo} ${f.nome}`, h: f.horas })), ...n.atividades.map((a) => ({ d: `${a.id_crono} ${a.atividade}`, h: a.duracao_h ?? 0 }))];
+  return { chave: 'dur', titulo: `Duração somada de ${n.codigo} ${n.nome}`, valor: `${nbr(n.horas / 8, 0)} dias`,
+    formula: 'dias = Σ horas das atividades do agrupamento ÷ 8 h/dia (soma de esforço, não o prazo do início ao fim)',
+    passos: [...corta(partes).map((x) => ({ descricao: x.d, conta: `${nbr(x.h)} h`, resultado: `${nbr(x.h / 8, 1)} dias`, destaque: false })),
+      { descricao: 'Total', conta: `${nbr(n.horas)} h ÷ 8`, resultado: `${nbr(n.horas / 8, 1)} dias`, destaque: true }],
+    fontes: [{ dado: 'Durações', valor: `${n.total} atividade(s)`, origem: ORIGEM_P6, local: `WBS ${n.codigo} ${n.nome}` }],
+    notas: resto(partes.length) };
+}
+function memPctNo(n: No): MemoriaCalculo {
+  const partes = [
+    ...n.filhos.filter((f) => f.pct != null).map((f) => ({ d: `${f.codigo} ${f.nome}`, pct: f.pct as number, w: f.horas || f.total, base: f.horas ? 'h' : 'ativ.' })),
+    ...n.atividades.filter((a) => a.pct != null).map((a) => ({ d: `${a.id_crono} ${a.atividade}`, pct: a.pct as number, w: a.duracao_h || 1, base: a.duracao_h ? 'h' : 'peso 1' })),
+  ];
+  const soma = partes.reduce((t, x) => t + x.pct * x.w, 0);
+  const peso = partes.reduce((t, x) => t + x.w, 0);
+  return { chave: 'pct', titulo: `% físico de ${n.codigo} ${n.nome}`, valor: `${nbr(n.pct, 1)}%`,
+    formula: '% = Σ (% de cada parte × peso) ÷ Σ pesos — peso = horas de duração (sem horas: nº de atividades, ou 1)',
+    passos: [...corta(partes).map((x) => ({ descricao: x.d, conta: `${nbr(x.pct, 1)}% × ${nbr(x.w)} ${x.base}`, resultado: nbr(x.pct * x.w, 1), destaque: false })),
+      { descricao: 'Total', conta: `${nbr(soma, 1)} ÷ ${nbr(peso)}`, resultado: `${nbr(peso ? soma / peso : null, 1)}%`, destaque: true }],
+    fontes: [{ dado: '% e duração das atividades', valor: `${n.total} atividade(s)`, origem: ORIGEM_P6, local: `WBS ${n.codigo} ${n.nome}` }],
+    notas: resto(partes.length) };
+}
 
 function montarArvore(ativ: AtividadeArvore[], ordemP6: Map<string, number>): No {
   const novo = (nome: string, chave: string, nivel: number, ordem: string, p6: string | null): No => ({ nome, chave, codigo: '', ordem, p6, nivel, filhos: [], atividades: [], total: 0, inicio: null, fim: null, pct: null, horas: 0, atrasadas: 0 });
@@ -239,8 +280,8 @@ export default function CronogramaPage() {
         </td>
         <td className={`${td} whitespace-nowrap`}>{dataBR(a.inicio)}</td>
         <td className={`${td} whitespace-nowrap ${tp === 'atr' ? 'font-semibold text-m-danger' : ''}`}>{dataBR(a.fim)}</td>
-        <td className={`${td} text-right`}>{a.duracao_h != null ? fmt(a.duracao_h / 8, 1) : '—'}</td>
-        <td className={`${td} text-right font-semibold`}>{a.pct != null ? `${fmt(a.pct, 0)}%` : '—'}</td>
+        <td className={`${td} text-right`}>{a.duracao_h != null ? <Calculado chave="dur" memoria={() => memDuracaoAtv(a)}>{fmt(a.duracao_h / 8, 1)}</Calculado> : '—'}</td>
+        <td className={`${td} text-right font-semibold`}>{a.pct != null ? <Calculado chave="pct" memoria={() => memPctAtv(a)} titulo="Ver de onde vem o %">{`${fmt(a.pct, 0)}%`}</Calculado> : '—'}</td>
         <td className={`${td} whitespace-nowrap`}>{tp === 'atr' ? <Pilula tom="perigo">Atrasada</Pilula> : a.status ? <Pilula tom={tp === 'ok' ? 'sucesso' : tp === 'and' ? 'info' : 'neutro'}>{a.status}</Pilula> : '—'}</td>
         <td className={`${td} w-[340px] min-w-[320px]`}><Barra ini={a.inicio} fim={a.fim} pct={a.pct} tipo={tp} /></td>
         <td className={`${td} text-[11px]`}>{a.programada_em.map((p) => <Link key={p.id} href={`/app/programacoes/${p.id}`} className="mr-2 whitespace-nowrap font-semibold text-m-accent">{p.titulo.replace('Programação ', '').split(' · ')[0]}</Link>)}</td>
@@ -263,8 +304,8 @@ export default function CronogramaPage() {
           </td>
           <td className={`${td} whitespace-nowrap font-semibold`}>{dataBR(f.inicio)}</td>
           <td className={`${td} whitespace-nowrap font-semibold`}>{dataBR(f.fim)}</td>
-          <td className={`${td} text-right`}>{f.horas ? fmt(f.horas / 8, 0) : ''}</td>
-          <td className={`${td} text-right font-bold`}>{f.pct != null ? `${fmt(f.pct, 0)}%` : '—'}</td>
+          <td className={`${td} text-right`}>{f.horas ? <Calculado chave="dur" memoria={() => memDuracaoNo(f)}>{fmt(f.horas / 8, 0)}</Calculado> : ''}</td>
+          <td className={`${td} text-right font-bold`}>{f.pct != null ? <Calculado chave="pct" memoria={() => memPctNo(f)}>{`${fmt(f.pct, 0)}%`}</Calculado> : '—'}</td>
           <td className={td} />
           <td className={td}><Barra ini={f.inicio} fim={f.fim} pct={f.pct} tipo="no" /></td>
           <td className={td} />

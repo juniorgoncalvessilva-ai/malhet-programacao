@@ -11,6 +11,7 @@ import { Link } from '@/i18n/navigation';
 import type { GrupoCatalogo, ItemCatalogo, LinhaPq, TipoCatalogo } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { Calculado, nbr } from '@/components/Obra/Calculado';
 
 type GrupoForm = { id?: number; descricao: string; numero: string; ativo: boolean };
 type TipoForm = { id: number; grupo_id: string; numero: string; ativo: boolean; codigo: string };
@@ -266,7 +267,18 @@ export default function CatalogoPage() {
                     <td className={`${tdc} whitespace-nowrap`}>{l.criterio && <span className="rounded-[6px] bg-m-info-subtle px-2 py-0.5 text-[11px] font-semibold text-m-info">{l.criterio}</span>}<div className="mt-0.5 text-[11px] text-m-text-muted">{l.codigo_atividade}</div></td>
                     <td className={`${tdc} text-right`}>{fmt(l.quantidade)}</td>
                     <td className={`${tdc} text-right`}>{fmt(l.pu)}</td>
-                    <td className={`${tdc} text-right font-semibold`}>{fmt(l.total)}</td>
+                    <td className={`${tdc} text-right font-semibold`}>{l.total != null ? <Calculado chave="total" memoria={() => {
+                      const conta = l.quantidade != null && l.pu != null ? l.quantidade * l.pu : null;
+                      const daColuna = conta == null || Math.abs(conta - (l.total ?? 0)) > 0.01;
+                      return { chave: 'total', titulo: `Total contratado do item ${l.item}`, valor: `R$ ${nbr(l.total)}`,
+                        formula: 'total = quantidade × preço unitário',
+                        passos: conta != null ? [{ descricao: l.descricao, conta: `${nbr(l.quantidade, 4)} ${l.unid ?? ''} × R$ ${nbr(l.pu, 4)}`, resultado: `R$ ${nbr(conta)}`, destaque: true }] : [],
+                        fontes: [{ dado: 'Quantidade', valor: `${nbr(l.quantidade, 4)} ${l.unid ?? ''}`, origem: `PQ vigente · ${pq.data?.versao?.rotulo ?? ''}`, local: `aba PQ · item ${l.item} · coluna Qtd.` },
+                          { dado: 'Preço unitário', valor: `R$ ${nbr(l.pu, 4)}`, origem: `PQ vigente · ${pq.data?.versao?.arquivo ?? ''}`, local: `aba PQ · item ${l.item} · coluna P. unit.` },
+                          { dado: 'Total', valor: `R$ ${nbr(l.total)}`, origem: 'PQ vigente', local: `aba PQ · item ${l.item} · coluna Total` }],
+                        notas: daColuna && conta != null ? [`A coluna Total da PQ (R$ ${nbr(l.total)}) difere de quantidade × preço (R$ ${nbr(conta)}): vale a da planilha.`] : [],
+                      };
+                    }}>{fmt(l.total)}</Calculado> : '—'}</td>
                     <td className={`${tdc} whitespace-nowrap`}>
                       {l.tipo && <span title={l.tipo.grupo} className="mr-1.5 rounded-[6px] bg-m-accent-subtle px-2 py-0.5 text-[11px] font-semibold text-m-accent">{l.tipo.codigo}</span>}
                       {editar ? (

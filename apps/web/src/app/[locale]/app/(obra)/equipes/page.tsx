@@ -13,6 +13,7 @@ import { ROTULO_SITUACAO, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
 import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { Calculado } from '@/components/Obra/Calculado';
 
 type Form = Omit<Equipe, 'id' | 'hh_disponivel_dia' | 'composicao_efetiva' | 'encarregado_efetivo' | 'fora_do_efetivo'> & { id?: number };
 type Vinculo = { equipes: number; vinculados: number; nao_encontrados: string[]; sem_numero: string[] };
@@ -252,11 +253,11 @@ export default function EquipesPage() {
                   </td>
                   <td className={td}>{e.turno ?? 'Diurno'} · {fmt(e.jornada_horas, 2)} h</td>
                   <td className={td}><div className="flex flex-wrap gap-1">
-                    {e.composicao_efetiva.map((c) => <Pilula key={c.recurso + c.tipo} ponto={false} tom={c.tipo === 'MOD' ? 'acento' : 'neutro'}>{fmt(c.quantidade, 0)} {c.recurso}</Pilula>)}
+                    {e.composicao_efetiva.map((c) => <Calculado key={c.recurso + c.tipo} rota={`/equipes/${e.id}/memoria`} chave="composicao_equipe" titulo="Ver quem conta em cada função e de onde vem a função" className="no-underline"><Pilula ponto={false} tom={c.tipo === 'MOD' ? 'acento' : 'neutro'}>{fmt(c.quantidade, 0)} {c.recurso}</Pilula></Calculado>)}
                     {!e.composicao_efetiva.length && <span className="text-xs text-m-text-muted">{e.membros.length} funcionário(s), funções não informadas</span>}
                   </div>
                   {!!e.fora_do_efetivo && <div className="mt-1"><Pilula tom="atencao">{e.fora_do_efetivo} fora do efetivo</Pilula></div>}</td>
-                  <td className={td}>{fmt(e.hh_disponivel_dia)}</td>
+                  <td className={td}><Calculado rota={`/equipes/${e.id}/memoria`} chave="hh_disponivel">{fmt(e.hh_disponivel_dia)}</Calculado></td>
                   <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <>
                     <button type="button" className="font-semibold text-m-accent" onClick={() => { setErro(null); setForm({ ...e }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar</button>
                     <button type="button" aria-label={`Excluir ${e.nome}`} className="ml-3 p-1 align-middle text-m-text-muted hover:text-m-danger" onClick={() => excluir([e.id])}><Trash2 size={15} /></button>

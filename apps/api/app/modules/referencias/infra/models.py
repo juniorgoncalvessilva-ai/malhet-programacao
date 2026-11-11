@@ -179,6 +179,7 @@ class CpuServicoModel(Base):
     quantidade: Mapped[float | None] = mapped_column(Float)
     composicao: Mapped[str] = mapped_column(String(40), index=True)
     custo_unitario: Mapped[float | None] = mapped_column(Float)
+    linha_arquivo: Mapped[int | None] = mapped_column(Integer)  # linha do "Serviço da Planilha" no relatório
 
 
 class CpuComposicaoModel(Base):
@@ -194,6 +195,23 @@ class CpuComposicaoModel(Base):
     recurso_governa: Mapped[str | None] = mapped_column(String(120))
     coef_governa: Mapped[float | None] = mapped_column(Float)
     hh_por_unidade: Mapped[float | None] = mapped_column(Float)
+    linha_arquivo: Mapped[int | None] = mapped_column(Integer)  # linha do cabeçalho "Composição:" no relatório
+
+
+class CpuLinhaModel(Base):
+    """Linha de uma composição como está no relatório (insumo ou auxiliar), para a memória de cálculo."""
+
+    __tablename__ = "cpu_linha"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    versao_id: Mapped[int] = mapped_column(ForeignKey("versao_referencia.id", ondelete="CASCADE"), index=True)
+    composicao: Mapped[str] = mapped_column(String(40), index=True)
+    ordem: Mapped[int] = mapped_column(Integer)
+    codigo: Mapped[str] = mapped_column(String(60))
+    descricao: Mapped[str] = mapped_column(String(300))
+    unid: Mapped[str | None] = mapped_column(String(10))
+    quantidade: Mapped[float] = mapped_column(Float)
+    preco: Mapped[float | None] = mapped_column(Float)
+    linha_arquivo: Mapped[int | None] = mapped_column(Integer)
 
 
 class NomeSimplificadoPqModel(Base):

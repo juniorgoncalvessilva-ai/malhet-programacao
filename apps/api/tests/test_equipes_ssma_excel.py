@@ -89,6 +89,14 @@ def test_equipes_programacao_ssma_e_excel(client, monkeypatch):
     p2 = client.post("/api/programacoes", json={"tipo": "SEMANAL", "referencia": "2026-11-17", "copiar_de": p["id"]}).json()
     ln2 = client.get(f"/api/programacoes/{p2['id']}").json()["locais"][0]["areas"][0]["linhas"][0]
     assert ln2["realizado_anterior"] == 8 and ln2["natureza"] == "O"
+    # memória: quantidade digitada, resta e feito antes, com a programação e o dia de onde veio cada valor
+    m = client.get(f"/api/programacoes/{p['id']}/linhas/{lid}/memoria").json()["memorias"]
+    assert m["qtd_projeto"]["fontes"][0]["local"].endswith("campo Qtd projeto")
+    assert (m["restante"]["valor"], m["restante"]["passos"][0]["conta"]) == ("92 m³", "100 − 0 − 8")
+    m2 = client.get(f"/api/programacoes/{p2['id']}/linhas/{ln2['id']}/memoria").json()["memorias"]
+    ant = m2["realizado_anterior"]
+    assert ant["valor"] == "8 m³" and ant["fontes"][0]["local"] == "09/11/2026" and ant["fontes"][0]["origem"].startswith("Programação ")
+    assert "função escolhida nesta equipe" in m2["composicao_equipe"]["fontes"][0]["local"]
 
     # segurança: só SSMA (inclusive com a programação emitida)
     obra = client.headers["X-Obra-Id"]

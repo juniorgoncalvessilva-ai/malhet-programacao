@@ -34,6 +34,7 @@ class LinhaCpu:
     unid: str | None
     quantidade: float
     preco: float | None = None
+    linha: int | None = None  # linha do arquivo (Excel, 1 = primeira)
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class Composicao:
     descricao: str
     linhas: tuple[LinhaCpu, ...]
     custo: float | None = None
+    linha: int | None = None  # linha do cabeçalho "Composição: …" no arquivo
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,7 @@ class ServicoPq:
     quantidade: float | None
     composicao: str | None
     custo_unitario: float | None
+    linha: int | None = None  # linha do "Serviço da Planilha" no arquivo
 
 
 @dataclass(frozen=True)
@@ -138,7 +141,7 @@ def interpretar(linhas: list[list]) -> Relatorio:
             return
         cod = atual["codigo"]
         if cod not in rel.composicoes or not rel.composicoes[cod].linhas:
-            rel.composicoes[cod] = Composicao(cod, atual["descricao"], tuple(atual["linhas"]), custo)
+            rel.composicoes[cod] = Composicao(cod, atual["descricao"], tuple(atual["linhas"]), custo, atual.get("linha"))
         atual = None
 
     for n, linha in enumerate(linhas, start=1):
@@ -155,7 +158,7 @@ def interpretar(linhas: list[list]) -> Relatorio:
             nums = [x for x in resto[1:] if isinstance(x, (int, float))]
             txt = [x for x in resto[1:] if isinstance(x, str)]
             servico = {"item": str(resto[0]), "descricao": txt[0] if txt else "", "unid": txt[1] if len(txt) > 1 else None,
-                       "quantidade": nums[-1] if nums else None, "composicao": None}
+                       "quantidade": nums[-1] if nums else None, "composicao": None, "linha": n}
             continue
         if any("Composição:" in t and "Auxiliar" not in t for t in textos):
             fechar()
@@ -163,7 +166,7 @@ def interpretar(linhas: list[list]) -> Relatorio:
             if not resto:
                 rel.avisos.append(f"linha {n}: composição sem código")
                 continue
-            atual = {"codigo": resto[0], "descricao": resto[1] if len(resto) > 1 else "", "linhas": []}
+            atual = {"codigo": resto[0], "descricao": resto[1] if len(resto) > 1 else "", "linhas": [], "linha": n}
             if servico is not None and servico["composicao"] is None:
                 servico["composicao"] = resto[0]
             continue
@@ -177,7 +180,7 @@ def interpretar(linhas: list[list]) -> Relatorio:
                 except DomainError:
                     item = servico["item"]
                 rel.servicos.append(ServicoPq(item, servico["item"], servico["descricao"], servico["unid"],
-                                              servico["quantidade"], servico["composicao"], custo))
+                                              servico["quantidade"], servico["composicao"], custo, servico["linha"]))
                 servico = None
             continue
         if any(t.startswith("Total da Composição Auxiliar") for t in textos):
@@ -195,7 +198,7 @@ def interpretar(linhas: list[list]) -> Relatorio:
         nums = [_num(x) for x in cels[2:] if _num(x) is not None]
         if not nums:
             continue
-        atual["linhas"].append(LinhaCpu(cod, cels[1], unid, nums[0], nums[1] if len(nums) > 1 else None))
+        atual["linhas"].append(LinhaCpu(cod, cels[1], unid, nums[0], nums[1] if len(nums) > 1 else None, n))
     fechar()
     if not rel.composicoes:
         raise DomainError("não encontrei composições: o arquivo é o relatório 'Composição de Preços Unitários'?")
@@ -240,3 +243,60 @@ def recurso_que_governa(recursos: list[RecursoAchatado]) -> RecursoAchatado | No
     oficiais = [r for r in mod if not eh_apoio(r.recurso)]
     pool = oficiais or mod or [r for r in recursos if r.coef_por_unidade > 0]
     return max(pool, key=lambda r: r.coef_por_unidade) if pool else None
+
+
+# ---- rastreio (memória de cálculo) -------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Passagem:
+    """Uma composição auxiliar no caminho até o insumo: quanto dela entra por unidade do nível acima."""
+    codigo: str
+    descricao: str
+    quantidade: float
+    linha: int | None  # linha do arquivo onde a auxiliar é usada
+
+
+@dataclass(frozen=True)
+class Contribuicao:
+    """Uma linha de insumo (HH/H) e o caminho pelas auxiliares: contribuição = Π quantidades × coeficiente."""
+    recurso: str
+    tipo: str  # MOD | EQU
+    unid: str
+    composicao: str  # composição onde a linha do insumo está
+    codigo_insumo: str
+    coef_insumo: float
+    linha_insumo: int | None
+    caminho: tuple[Passagem, ...]
+    contribuicao: float
+
+    @property
+    def fator(self) -> float:
+        f = 1.0
+        for p in self.caminho:
+            f *= p.quantidade
+        return f
+
+
+def rastrear(composicoes: dict[str, Composicao], codigo: str) -> list[Contribuicao]:
+    """Cada linha de mão de obra/equipamento que entra na composição, com o caminho pelas auxiliares.
+
+    A soma das contribuições de um recurso é o coeficiente achatado (`achatar`)."""
+    if codigo not in composicoes:
+        raise DomainError(f"composição {codigo} não está no relatório")
+    out: list[Contribuicao] = []
+
+    def desce(cod: str, caminho: tuple[Passagem, ...], fator: float, pilha: tuple[str, ...]) -> None:
+        if cod in pilha:
+            raise DomainError(f"composição {cod} referencia a si mesma ({' → '.join(pilha + (cod,))})")
+        for ln in composicoes[cod].linhas:
+            tipo = tipo_do_insumo(ln.unid)
+            if tipo is None and ln.codigo in composicoes and ln.codigo != cod:
+                desce(ln.codigo, caminho + (Passagem(ln.codigo, ln.descricao, ln.quantidade, ln.linha),),
+                      fator * ln.quantidade, pilha + (cod,))
+                continue
+            if tipo is None or not ln.quantidade:
+                continue
+            out.append(Contribuicao(nome_recurso(ln.descricao), tipo, (ln.unid or "").upper(), cod, ln.codigo,
+                                    ln.quantidade, ln.linha, caminho, round(fator * ln.quantidade, 6)))
+
+    desce(codigo, (), 1.0, ())
+    return out

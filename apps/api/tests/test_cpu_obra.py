@@ -118,6 +118,28 @@ def test_fluxo_cpu_calcula_hh_indice_capacidade_e_ft(client):
     assert "Encarregado de pedreiro" in calc["apoio_externo"] and "Vibrador de imersão" in calc["apoio_externo"]
     assert v["total_hh_previsto"] == pytest.approx(round(15 * hh_un, 2), abs=0.02)
 
+    # memória de cálculo: cada número com a conta e a linha do arquivo de onde veio
+    m = client.get(f"/api/programacoes/{p['id']}/linhas/{lid}/memoria").json()["memorias"]
+    assert {"hh_un", "governa", "indice", "capacidade", "composicao_equipe", "hh_dia:3", "oficiais:3",
+            "total_hh_previsto"} <= set(m)
+    ped = next(x for x in m["hh_un"]["passos"] if x["descricao"].startswith("Pedreiro"))
+    assert "linha 13" in ped["descricao"] and "ESP.9" in ped["descricao"] and "(ESP.9, linha 6)" in ped["conta"]
+    locais = " | ".join(f["local"] or "" for f in m["hh_un"]["fontes"])
+    assert "linha 2: Serviço da Planilha 1.08.03.01.02" in locais and "linha 3: Composição: ESP.1" in locais
+    assert m["indice"]["passos"][0]["conta"] == "9 h ÷ 1,3 HH/m³" and m["indice"]["valor"] == "6,92 m³/dia"
+    assert m["indice"]["fontes"][0]["origem"] == "Equipe EQ" and "linha 13 (ESP.9)" in m["indice"]["fontes"][1]["local"]
+    gar = [x for x in m["capacidade"]["passos"] if x["destaque"]]
+    assert gar[0]["descricao"].startswith("Servente") and gar[0]["conta"] == "2,8 ÷ 3"
+    assert gar[-1]["conta"] == "9 h ÷ 0,9333 h/m³" and m["capacidade"]["valor"] == "9,64 m³/dia"
+    assert m["hh_dia:3"]["passos"][0]["conta"] == "10 m³ × 4,4583 HH/m³"
+    assert m["governa"]["valor"] == "Pedreiro" and "apoio" in m["governa"]["passos"][0]["descricao"]
+    tot = client.get(f"/api/programacoes/{p['id']}/memoria").json()["memorias"]
+    assert tot["total_hh_previsto"]["valor"] == f"{round(15 * hh_un, 1):.1f} HH".replace(".", ",")
+    me = client.get(f"/api/equipes/{eq['id']}/memoria").json()["memorias"]
+    assert me["hh_disponivel"]["valor"] == "45 HH/dia" and "composição digitada" in me["composicao_equipe"]["fontes"][0]["local"]
+    mi = client.get("/api/cpu/item/memoria", params={"item": "1.8.3.1.2"}).json()["memorias"]
+    assert mi["hh_un"]["valor"].startswith("4,458 HH/")
+
     ws = load_workbook(BytesIO(client.get(f"/api/programacoes/{p['id']}/ft").content)).active
     cab = [x.value for x in ws[1]]
     ln = dict(zip(cab, [x.value for x in ws[2]]))

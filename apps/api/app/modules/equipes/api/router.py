@@ -168,6 +168,18 @@ def excluir(equipe_id: int, s: Session = Depends(get_session), c: ContextoObra =
     s.delete(e)
 
 
+@router.get("/{equipe_id}/memoria")
+def memoria_equipe(equipe_id: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Memória de cálculo da equipe: composição por função (de onde veio cada função) e HH disponível por dia."""
+    from app.modules.planejamento.application.memoria import memoria_composicao_equipe, memoria_hh_disponivel
+    from app.shared.memoria import pacote
+
+    e = s.get(EquipeModel, equipe_id)
+    if e is None or e.obra_id != c.obra_id:
+        raise NotFoundError("Equipe", equipe_id)
+    return pacote(memoria_composicao_equipe(s, c.obra_id, e), memoria_hh_disponivel(s, c.obra_id, e))
+
+
 @router.post("/importar")
 def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session),
              c: ContextoObra = Depends(administrar)):

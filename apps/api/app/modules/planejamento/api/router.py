@@ -242,6 +242,23 @@ def reabrir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depen
     sv.reabrir(sv.obter(s, c.obra_id, pid))
 
 
+@router.get("/programacoes/{pid}/linhas/{lid}/memoria")
+def memoria_linha(pid: int, lid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Memória de cálculo de cada número da linha (HH/un, índice, capacidade, HH e oficiais do dia, totais,
+    quantidade de projeto, feito, resta) com a origem de cada dado."""
+    from app.modules.planejamento.application.memoria import memorias_linha
+
+    return memorias_linha(s, sv.obter(s, c.obra_id, pid), lid)
+
+
+@router.get("/programacoes/{pid}/memoria")
+def memoria_programacao(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Memória de cálculo dos totais da programação (HH por dia e no período)."""
+    from app.modules.planejamento.application.memoria import memorias_programacao
+
+    return memorias_programacao(s, sv.obter(s, c.obra_id, pid))
+
+
 @router.get("/programacoes/{pid}/emissoes")
 def emissoes(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     sv.obter(s, c.obra_id, pid)
@@ -361,6 +378,20 @@ def cpu_do_item(item: str, jornada: float = JORNADA_REFERENCIA, s: Session = Dep
                       "un_dia_por_pessoa": round(jornada / r.coef_por_unidade, 4) if r.coef_por_unidade else None}
                      for r in sorted(par.recursos, key=lambda r: (r.tipo != "MOD", -r.coef_por_unidade))],
     }
+
+
+@router.get("/cpu/item/memoria")
+def memoria_cpu_item(item: str, jornada: float = JORNADA_REFERENCIA, s: Session = Depends(get_session),
+                     c: ContextoObra = Depends(ler)):
+    """Memória de cálculo do item da PQ na CPU: HH/un, recurso que governa e índice, com a linha de cada insumo."""
+    from app.modules.referencias.application.memoria_cpu import memorias_cpu, origem_cpu
+    from app.shared.memoria import Fonte, num, pacote
+
+    vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes()
+    o = origem_cpu(s, c.obra_id, item.strip(), vig)
+    fj = Fonte("Jornada", f"{num(jornada)} h/dia", "jornada usada no rastreio",
+               "padrão do app" if jornada == JORNADA_REFERENCIA else "informada na consulta")
+    return pacote(*memorias_cpu(o, jornada, fj))
 
 
 @router.get("/cpu/recursos")
