@@ -4,10 +4,17 @@ from collections import Counter
 from app.modules.equipes.infra.models import EquipeModel
 
 
-def composicao_efetiva(eq: EquipeModel) -> list[tuple[str, str, float]]:
-    """(recurso, tipo, quantidade). Mão de obra: conta os funcionários pela função quando ela foi informada;
-    senão vale a composição digitada. Equipamentos: sempre a composição digitada."""
-    por_funcao = Counter(m.funcao.strip() for m in eq.membros if m.funcao and m.funcao.strip())
+def composicao_efetiva(eq: EquipeModel, funcao_de: dict[str, str] | None = None) -> list[tuple[str, str, float]]:
+    """(recurso, tipo, quantidade). Mão de obra: conta os funcionários pela função da composição — a informada no
+    membro ou, sem ela, a do de-para da função do efetivo (`funcao_de`: crachá → função da CPU). Sem nenhuma das
+    duas, vale a composição digitada. Equipamentos: sempre a composição digitada."""
+    funcao_de = funcao_de or {}
+
+    def funcao(m) -> str | None:
+        f = (m.funcao or "").strip() or funcao_de.get(m.cracha)
+        return f or None
+
+    por_funcao = Counter(f for f in (funcao(m) for m in eq.membros) if f)
     equ = [(c.recurso, "EQU", float(c.quantidade)) for c in eq.composicao if c.tipo == "EQU"]
     if por_funcao:
         return [(f, "MOD", float(n)) for f, n in sorted(por_funcao.items())] + equ

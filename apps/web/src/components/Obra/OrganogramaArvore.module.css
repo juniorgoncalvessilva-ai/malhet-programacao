@@ -1,0 +1,118 @@
+/* Organograma em árvore horizontal — trazido do Malhet (components/shared/organograma-arvore), nos tokens m-*. */
+.moldura {
+  overflow-x: auto;
+  padding-bottom: 1rem;
+}
+
+.arvore,
+.no > ul {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.no {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 0.75rem 0.375rem 0;
+}
+
+.arvore > .no {
+  padding-top: 0;
+}
+
+.no::before,
+.no::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 0.75rem;
+  border-top: 1px solid var(--m-stroke);
+}
+
+.no::before {
+  right: 50%;
+}
+
+.no::after {
+  left: 50%;
+  border-left: 1px solid var(--m-stroke);
+}
+
+.no:first-child::before,
+.no:last-child::after {
+  border: 0;
+}
+
+.no:last-child::before {
+  border-top: 1px solid var(--m-stroke);
+  border-right: 1px solid var(--m-stroke);
+}
+
+.no:only-child::before {
+  display: none;
+}
+
+.no:only-child::after {
+  left: 50%;
+  width: 0;
+  border-top: 0;
+  border-left: 1px solid var(--m-stroke);
+}
+
+.arvore > .no::before,
+.arvore > .no::after {
+  display: none;
+}
+
+.haste {
+  width: 1px;
+  height: 0.75rem;
+  background: var(--m-stroke);
+}
+
+.card {
+  width: 11rem;
+  border: 1px solid var(--m-stroke);
+  border-radius: 0.75rem;
+  background: var(--m-surface);
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+}
+
+.card[data-tipo='setor'] {
+  border-color: var(--m-accent);
+}
+
+.card[data-tipo='obra'] {
+  width: 12rem;
+  border-color: var(--m-stroke-strong);
+}
+
+.aberta {
+  border-color: var(--m-accent);
+}
+
+.folha {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pessoas {
+  margin-top: 0.5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  text-align: left;
+}

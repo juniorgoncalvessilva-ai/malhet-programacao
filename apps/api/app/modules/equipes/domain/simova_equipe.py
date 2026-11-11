@@ -85,3 +85,21 @@ def interpretar(linhas: list[list]) -> list[EquipeSimova]:
         out.append(EquipeSimova(cod, desc, enc[0] if enc else None, pessoas(cel("funcionario")),
                                 _texto(cel("equipamento")) or None, ativo))
     return out
+
+
+# ---- exportação no padrão do Simova (mesmo layout do cadastro de equipes que o Simova exporta) ------------
+CABECALHO_SIMOVA = [None, "Código", "Descrição", "Encarregado", "Funcionário", "Equipamento", "Ativo", None]
+
+
+def pessoa_simova(cracha: str, nome: str) -> str:
+    return f"{cracha} :: {' '.join(nome.upper().split())}"
+
+
+def linha_simova(codigo: str, descricao: str, encarregado: tuple[str, str] | None,
+                 funcionarios: list[tuple[str, str]], equipamentos: str | None, ativo: bool) -> list:
+    """Funcionários um atrás do outro na mesma célula, sem separador — como o Simova grava."""
+    if not descricao.strip():
+        raise DomainError("equipe sem descrição")
+    cod = int(codigo) if str(codigo).isdigit() else codigo
+    return [None, cod, descricao.strip(), pessoa_simova(*encarregado) if encarregado else "",
+            "".join(pessoa_simova(c, n) for c, n in funcionarios), equipamentos or None, 1 if ativo else 0, ""]

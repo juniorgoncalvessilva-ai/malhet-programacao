@@ -1,4 +1,4 @@
-import { BookOpen, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, HardHat, KeyRound, MapPin, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { BookOpen, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, MapPin, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -14,7 +14,16 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
       { titulo: 'PTO (planejamento)', url: '/app/pto', icone: ClipboardList, minimo: 'planejador' },
       { titulo: 'SSMA da programação', url: '/app/ssma', icone: HardHat, ssma: true },
+    ],
+  },
+  {
+    etapa: 'Efetivo',
+    cor: 'var(--m-proc-executar)',
+    itens: [
+      { titulo: 'Efetivo e mobilização', url: '/app/efetivo', icone: IdCard },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
+      { titulo: 'Organograma', url: '/app/efetivo/organograma', icone: GitFork },
+      { titulo: 'De-para de funções', url: '/app/efetivo/funcoes', icone: Shuffle },
     ],
   },
   {

@@ -473,7 +473,10 @@ def exportar_excel(pid: int, revisao: int | None = None, s: Session = Depends(ge
         v = sv.visao(s, p)
     obra = s.get(ObraModel, c.obra_id)
     nome = " - ".join(x for x in (obra.codigo, obra.nome, obra.contrato) if x)
-    comps = {eq.id: composicao_efetiva(eq) for eq in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id))}
+    from app.modules.efetivo.infra.gateway import funcoes_por_cracha
+
+    fd = funcoes_por_cracha(s, c.obra_id)
+    comps = {eq.id: composicao_efetiva(eq, fd) for eq in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id))}
     dados = gerar(v, nome, comps)
     import unicodedata
 

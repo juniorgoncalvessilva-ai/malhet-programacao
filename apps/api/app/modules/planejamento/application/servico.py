@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.catalogo.domain import catalogo as cat
 from app.modules.catalogo.infra.models import GrupoAtividadeModel, ItemSimovaModel, TipoAtividadeModel
+from app.modules.efetivo.infra.gateway import funcoes_por_cracha
 from app.modules.equipes.infra.composicao import composicao_efetiva
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
@@ -49,7 +50,8 @@ def _chave(nome: str) -> str:
     return nome_recurso(nome).casefold()
 
 
-def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previsto: list, realizado: list) -> dict:
+def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previsto: list, realizado: list,
+                  funcao_de: dict[str, str] | None = None) -> dict:
     """Produção da linha a partir da CPU da obra: HH/un, recurso que governa, índice e capacidade da equipe.
 
     HH do dia            = quantidade × HH/un (soma da mão de obra da composição, auxiliares incluídas)
@@ -73,9 +75,9 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
     indice = par.indice_un_dia(jornada)
     cap = gargalo = None
     apoio: list[str] = []
-    if equipe is not None and (equipe.composicao or any(m.funcao for m in equipe.membros)) and par.recursos:
+    if equipe is not None and (equipe.composicao or any(m.funcao or (funcao_de or {}).get(m.cracha) for m in equipe.membros)) and par.recursos:
         tem = {}
-        for rec, _t, q in composicao_efetiva(equipe):
+        for rec, _t, q in composicao_efetiva(equipe, funcao_de):
             tem[_chave(rec)] = tem.get(_chave(rec), 0.0) + q
         comp = {r.recurso: tem.get(_chave(r.recurso), 0.0) for r in par.recursos}
         ce = capacidade_da_equipe(par.coefs, comp, jornada, par.recurso_governa)
@@ -143,6 +145,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             select(PqQuantidadeTagModel).where(PqQuantidadeTagModel.versao_id == vig["PQ"],
                                                PqQuantidadeTagModel.item.in_(cods_pq)))}
     cpu = CpuGateway(s, p.obra_id, vig).por_itens(cods_pq)
+    funcao_de = funcoes_por_cracha(s, p.obra_id)
     cron = {}
     ids_crono = {ln.id_crono for ln in p.linhas if ln.id_crono}
     if "CRONOGRAMA" in vig and ids_crono:
@@ -184,7 +187,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "realizado_anterior": anterior.get(_chave_linha(ln)),
             "ssma": {k: getattr(ln, f"ssma_{k}") for k in ("tecnico", "rac", "pts", "art", "pto", "ata")},
             "total_previsto": round(sum(_num(x) for x in prev), 4), "total_realizado": round(sum(_num(x) for x in real), 4),
-            "calc": calculo_linha(cpu.get(ln.item_pq) if ln.item_pq else None, eq, prev, real),
+            "calc": calculo_linha(cpu.get(ln.item_pq) if ln.item_pq else None, eq, prev, real, funcao_de),
         })
         reg = por_area[a.id][-1]
         feito = (reg["realizado_anterior"] or 0) + reg["total_realizado"]

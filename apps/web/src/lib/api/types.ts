@@ -149,3 +149,22 @@ export interface CadastroSsma {
   id: number; tipo: TipoCadastroSsma; codigo: string; descricao: string | null; validade: string | null; ativo: boolean; em_uso: number;
   aceita_anexo: boolean; anexos: AnexoSsma[];
 }
+
+/** Efetivo da obra (chave = matrícula) e mobilização. */
+export type SituacaoEfetivo = 'MOBILIZADO' | 'AGUARDANDO_CRACHA' | 'EM_PROCESSO' | 'PREVISTO' | 'AFASTADO' | 'DESMOBILIZADO' | 'DESISTENCIA';
+export interface Colaborador {
+  id: number; chave: string; empresa: string; matricula: string | null; cracha: string | null; nome: string;
+  funcao: string | null; funcao_composicao: string | null; dp: string | null; tipo_mo: string | null;
+  status_original: string | null; situacao: SituacaoEfetivo; situacao_rotulo: string; mobilizacao_prevista: string | null;
+  admissao: string | null; demissao: string | null; cracha_vale: string | null; rac2: boolean | null; paebm: boolean | null;
+  no_ultimo_arquivo: boolean; equipe_id: number | null; equipe: string | null; encarregado_de: string | null;
+}
+export interface ResumoEfetivo {
+  total: number; ativos: number; em_mobilizacao: number; sem_equipe: number; fora_do_ultimo_arquivo: number;
+  por_situacao: Partial<Record<SituacaoEfetivo, number>>; por_empresa: Record<string, number>;
+  desmobilizados_em_equipe: string[]; funcoes_sem_depara: number;
+  ultima_importacao: { arquivo: string; em: string; resumo: Record<string, unknown> } | null;
+}
+export interface FuncaoDePara { funcao_chave: string; funcao: string; total: number; ativos: number; recurso: string | null; ignorar: boolean; definido: boolean; sugestao: string | null }
+export interface NoOrganograma { id: string; tipo: 'obra' | 'setor' | 'supervisor' | 'encarregado' | 'funcao'; titulo: string; detalhe: string; qtd: number; pessoas: { matricula: string; nome: string; funcao: string; situacao: string; turno: string }[]; filhos: NoOrganograma[] }
+export interface MovimentoEfetivo { id: number; colaborador_id: number; nome: string; tipo: string; de: string | null; para: string | null; em: string }

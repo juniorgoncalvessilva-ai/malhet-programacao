@@ -23,6 +23,7 @@ from app.modules.obras.infra.contas_authkit import ContasAuthKit
 from app.modules.programacao.api.router import router as programacao
 from app.modules.referencias.api.router import router as referencias
 from app.modules.ssma.api.router import router as ssma
+from app.modules.efetivo.api.router import router as efetivo
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -80,5 +81,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo):
     app.include_router(r, prefix="/api")

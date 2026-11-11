@@ -36,6 +36,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   ART/ATA = segurança; PTO = Planejamento (linha da programação). Spec 012.
 - SSMA/PTO: RAC/PTS/ART/ATA/PTO são listas na linha (JSONB, `lista_da_linha`) e aceitam arquivos (`anexo_ssma`,
   `validar_anexo`). Spec 014.
+- Efetivo (`efetivo/`): planilha do DP com **matrícula como chave** (reimportar não apaga; `no_ultimo_arquivo`),
+  situação de mobilização, movimentos, sem dados pessoais sensíveis. De-para função do efetivo → recurso da CPU
+  (`de_para_funcao`, gateway `funcoes_por_cracha` usado em `composicao_efetiva`). Equipes a partir do efetivo e
+  exportação no layout Simova (`equipes/domain/simova_equipe.py::linha_simova`). Organograma em
+  `efetivo/domain/organograma.py`. Spec 015.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,

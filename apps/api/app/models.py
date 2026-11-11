@@ -9,3 +9,4 @@ from app.modules.frentes.infra import models as _frentes  # noqa: F401
 from app.modules.catalogo.infra import models as _catalogo  # noqa: F401
 from app.modules.planejamento.infra import models as _planejamento  # noqa: F401
 from app.modules.ssma.infra import models as _ssma  # noqa: F401
+from app.modules.efetivo.infra import models as _efetivo  # noqa: F401

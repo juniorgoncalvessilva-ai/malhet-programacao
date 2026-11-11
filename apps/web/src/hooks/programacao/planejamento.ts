@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qs } from '@/lib/api/client';
-import type { CadastroSsma, GrupoCatalogo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
+import type { CadastroSsma, Colaborador, FuncaoDePara, GrupoCatalogo, MovimentoEfetivo, NoOrganograma, ResumoEfetivo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
 import { useApi } from './useApi';
 
 export const k = {
@@ -11,7 +11,30 @@ export const k = {
   programacoes: ['programacoes'] as const,
   programacao: (id: number) => ['programacao', id] as const,
   cadastrosSsma: ['cadastros-ssma'] as const,
+  efetivo: ['efetivo'] as const,
 };
+
+/** Efetivo: lista completa (filtros na tela), resumo, movimentos, de-para e organograma. */
+export function useEfetivo() {
+  const api = useApi();
+  return useQuery({ queryKey: [...k.efetivo, 'colaboradores'], queryFn: () => api.get<Colaborador[]>('/efetivo/colaboradores') });
+}
+export function useResumoEfetivo() {
+  const api = useApi();
+  return useQuery({ queryKey: [...k.efetivo, 'resumo'], queryFn: () => api.get<ResumoEfetivo>('/efetivo/resumo') });
+}
+export function useMovimentosEfetivo() {
+  const api = useApi();
+  return useQuery({ queryKey: [...k.efetivo, 'movimentos'], queryFn: () => api.get<MovimentoEfetivo[]>('/efetivo/movimentos?limite=80') });
+}
+export function useFuncoesEfetivo() {
+  const api = useApi();
+  return useQuery({ queryKey: [...k.efetivo, 'funcoes'], queryFn: () => api.get<{ recursos_cpu: string[]; funcoes: FuncaoDePara[] }>('/efetivo/funcoes') });
+}
+export function useOrganograma(q: string) {
+  const api = useApi();
+  return useQuery({ queryKey: [...k.efetivo, 'organograma', q], queryFn: () => api.get<{ raiz: NoOrganograma | null; total: number }>(`/efetivo/organograma${q ? `?q=${encodeURIComponent(q)}` : ''}`) });
+}
 
 /** Todos os cadastros de SSMA/PTO da obra (as telas filtram por tipo). */
 export function useCadastrosSsma() {

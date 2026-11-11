@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Plus, Trash2 } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Selecao, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
@@ -82,8 +82,11 @@ export default function EquipesPage() {
       <Cabecalho
         eyebrow="Equipes · frentes de trabalho"
         titulo="Quem trabalha em cada frente, em que turno e quanto produz"
-        descricao="As equipes vêm do cadastro do Simova (encarregado e funcionários pelo crachá). Aqui você completa turno, jornada, responsável e a função de cada pessoa: a programação usa isso para calcular a capacidade e o gargalo pela CPU."
-        acoes={pode('planejador') && <Botao variante="secundario" onClick={() => { setErro(null); setForm({ ...NOVA, composicao: [], membros: [] }); }}><Plus size={16} /> Nova equipe</Botao>}
+        descricao="Monte as equipes pelo Efetivo (selecione as pessoas e crie a equipe) ou importe o cadastro do Simova. Aqui você completa turno, jornada e responsável; a função de cada pessoa vem do de-para de funções (ou pode ser informada aqui). Exporte no padrão do Simova para importar lá."
+        acoes={<div className="flex flex-wrap gap-2">
+          <Botao variante="secundario" onClick={() => api.download('/equipes/simova.xlsx', 'Equipe_Simova.xlsx').then(() => toast.success('Arquivo no padrão do Simova gerado (equipes ativas)')).catch((e) => toast.error(e.message))}><Download size={16} /> Exportar para o Simova</Botao>
+          {pode('planejador') && <Botao variante="secundario" onClick={() => { setErro(null); setForm({ ...NOVA, composicao: [], membros: [] }); }}><Plus size={16} /> Nova equipe</Botao>}
+        </div>}
       />
       <div className="flex flex-col gap-4">
         {pode('planejador') && (

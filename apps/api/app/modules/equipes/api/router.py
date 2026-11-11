@@ -7,6 +7,7 @@ from app.core.auth import ContextoObra, administrar, ler, planejar
 from app.core.db import get_session
 from app.modules.equipes.application.importar_equipes import importar_equipes, importar_equipes_simova
 from app.modules.equipes.infra.composicao import composicao_efetiva, sincronizar_membros
+from app.modules.efetivo.infra.gateway import funcoes_por_cracha
 from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeModel
 from app.shared.errors import NotFoundError
 
@@ -50,9 +51,9 @@ class EquipeOut(EquipeIn):
     composicao_efetiva: list[ComposicaoIO] = []
 
 
-def _out(e: EquipeModel) -> EquipeOut:
+def _out(e: EquipeModel, funcao_de: dict[str, str] | None = None) -> EquipeOut:
     o = EquipeOut.model_validate(e)
-    ef = composicao_efetiva(e)
+    ef = composicao_efetiva(e, funcao_de)
     o.composicao_efetiva = [ComposicaoIO(recurso=r, tipo=t, quantidade=q) for r, t, q in ef]
     mod = sum(q for _, t, q in ef if t == "MOD") or len(e.membros)
     o.hh_disponivel_dia = round(mod * e.jornada_horas, 2)
@@ -61,7 +62,8 @@ def _out(e: EquipeModel) -> EquipeOut:
 
 @router.get("", response_model=list[EquipeOut])
 def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    return [_out(e) for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id).order_by(EquipeModel.nome))]
+    fd = funcoes_por_cracha(s, c.obra_id)
+    return [_out(e, fd) for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id).order_by(EquipeModel.nome))]
 
 
 @router.post("", response_model=EquipeOut, status_code=201)
@@ -108,3 +110,48 @@ def importar_simova(arquivo: UploadFile = File(...), s: Session = Depends(get_se
                     c: ContextoObra = Depends(planejar)):
     """Cadastro de equipes exportado do Simova (Código, Descrição, Encarregado, Funcionário, Equipamento, Ativo)."""
     return importar_equipes_simova(s, c.obra_id, arquivo.file)
+
+
+@router.get("/simova.xlsx")
+def exportar_simova(ativas: bool = True, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Cadastro de equipes no padrão do Simova (Código, Descrição, Encarregado, Funcionário, Equipamento, Ativo),
+    para importar no Simova. Nomes vêm do efetivo quando a pessoa está lá (crachá = matrícula)."""
+    from io import BytesIO
+
+    from fastapi.responses import Response
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font
+
+    from app.modules.efetivo.infra.gateway import pessoas_por_cracha
+    from app.modules.equipes.domain.simova_equipe import CABECALHO_SIMOVA, linha_simova
+
+    pessoas = pessoas_por_cracha(s, c.obra_id)
+    nome = lambda cracha, padrao: pessoas[cracha].nome if cracha in pessoas else padrao  # noqa: E731
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Sheet1"
+    ws.append(CABECALHO_SIMOVA)
+    for cel in ws[1]:
+        cel.font = Font(bold=True)
+    q = select(EquipeModel).where(EquipeModel.obra_id == c.obra_id)
+    if ativas:
+        q = q.where(EquipeModel.ativo.is_(True))
+    equipes = sorted(s.scalars(q), key=lambda e: (int(e.codigo_simova) if (e.codigo_simova or "").isdigit() else 10**6, e.nome))
+    proximo = max([int(e.codigo_simova) for e in equipes if (e.codigo_simova or "").isdigit()], default=0)
+    for e in equipes:
+        codigo = e.codigo_simova
+        if not codigo:
+            proximo += 1
+            codigo = str(proximo)
+        enc = (e.encarregado_cracha, nome(e.encarregado_cracha, e.encarregado_nome or "")) if e.encarregado_cracha else None
+        func = [(m.cracha, nome(m.cracha, m.nome)) for m in sorted(e.membros, key=lambda m: m.nome)]
+        ws.append(linha_simova(codigo, e.nome, enc, func, e.equipamentos, e.ativo))
+    for col, w in {"A": 6, "B": 7.8, "C": 44, "D": 54, "E": 263, "F": 14, "G": 6.4, "H": 6}.items():
+        ws.column_dimensions[col].width = w
+    for row in ws.iter_rows(min_row=2):
+        for cel in row:
+            cel.alignment = Alignment(vertical="top")
+    buf = BytesIO()
+    wb.save(buf)
+    return Response(buf.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="Equipe_Simova.xlsx"'})
