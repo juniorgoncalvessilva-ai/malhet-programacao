@@ -19,7 +19,7 @@ type Vinculo = { equipes: number; vinculados: number; nao_encontrados: string[];
 /** Crachá provisório ("?nome") = pessoa ainda sem número. */
 const semNumero = (c: string | null | undefined) => !c || c.startsWith('?');
 const NOVA: Form = {
-  nome: '', frente_codigo: null, setor_id: null, encarregado_cracha: null, encarregado_nome: null, jornada_horas: 9, turno: 'Diurno',
+  nome: '', frente_codigo: null, setor_id: null, subsetor_id: null, encarregado_cracha: null, encarregado_nome: null, jornada_horas: 9, turno: 'Diurno',
   codigo_simova: null, responsavel: null, equipamentos: null, observacao: null, ativo: true, composicao: [], membros: [],
 };
 const TURNOS = ['Diurno', 'Noturno', 'Administrativo', 'Turno A', 'Turno B', 'Turno C'];
@@ -149,9 +149,18 @@ export default function EquipesPage() {
               <Campo rotulo="Matrícula / crachá do encarregado" value={form.encarregado_cracha ?? ''} onChange={(e) => setForm({ ...form, encarregado_cracha: e.target.value || null })} />
               <div className="md:col-span-2"><Campo rotulo="Encarregado" placeholder="nome, ou 115532 - nome" value={form.encarregado_nome ?? ''} onChange={(e) => setForm({ ...form, encarregado_nome: e.target.value || null })} /></div>
               <div className="md:col-span-2"><Campo rotulo="Responsável (supervisor/engenheiro)" value={form.responsavel ?? ''} onChange={(e) => setForm({ ...form, responsavel: e.target.value || null })} /></div>
-              <Selecao rotulo="Setor da obra" value={form.setor_id ?? ''} onChange={(e) => setForm({ ...form, setor_id: e.target.value ? Number(e.target.value) : null })}>
+              <Selecao rotulo="Setor da obra" value={form.setor_id ?? ''} onChange={(e) => {
+                const sid = e.target.value ? Number(e.target.value) : null;
+                const manter = setores.data?.setores.find((x) => x.id === sid)?.disciplinas.some((x) => x.id === form.subsetor_id);
+                setForm({ ...form, setor_id: sid, subsetor_id: manter ? form.subsetor_id : null });
+              }}>
                 <option value="">{setores.data?.setores.length ? '— sem setor —' : 'cadastre em Setores da obra'}</option>
                 {setores.data?.setores.map((st) => <option key={st.id} value={st.id}>{st.nome}</option>)}
+              </Selecao>
+              <Selecao rotulo="Disciplina" value={form.subsetor_id ?? ''} disabled={!form.setor_id}
+                onChange={(e) => setForm({ ...form, subsetor_id: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">{form.setor_id ? '— sem disciplina —' : 'escolha o setor'}</option>
+                {setores.data?.setores.find((x) => x.id === form.setor_id)?.disciplinas.map((dc) => <option key={dc.id} value={dc.id}>{dc.nome}</option>)}
               </Selecao>
               <Campo rotulo="Frente" value={form.frente_codigo ?? ''} onChange={(e) => setForm({ ...form, frente_codigo: e.target.value || null })} />
 
@@ -228,7 +237,11 @@ export default function EquipesPage() {
                   <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <input type="checkbox" className="mr-2 align-middle" aria-label={`Selecionar ${e.nome}`} checked={marcadas.has(e.id)} onChange={() => setMarcadas((m) => { const n = new Set(m); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })} />}<button type="button" aria-label={`Ver funcionários de ${e.nome}`} className="text-m-text-muted" onClick={() => setAberta(aberta === e.id ? null : e.id)}>{aberta === e.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
                   <td className={td}>{e.codigo_simova ?? '—'}</td>
                   <td className={td}><b className="text-m-text-primary">{e.nome}</b>
-                    {(() => { const st = setores.data?.setores.find((x) => x.id === e.setor_id); return st && <div className="mt-0.5 flex items-center gap-1 text-xs text-m-text-secondary"><span className="h-2 w-2 rounded-full" style={{ background: st.cor ?? setores.data?.cores.setor }} aria-hidden="true" />{st.nome}</div>; })()}
+                    {(() => {
+                      const st = setores.data?.setores.find((x) => x.id === e.setor_id);
+                      const dc = st?.disciplinas.find((x) => x.id === e.subsetor_id);
+                      return st && <div className="mt-0.5 flex items-center gap-1 text-xs text-m-text-secondary"><span className="h-2 w-2 rounded-full" style={{ background: dc?.cor ?? st.cor ?? setores.data?.cores.setor }} aria-hidden="true" />{st.nome}{dc && ` / ${dc.nome}`}</div>;
+                    })()}
                     {e.responsavel && <div className="text-xs text-m-text-muted">resp. {e.responsavel}</div>}</td>
                   <td className={td}>{e.encarregado_nome ?? '—'}
                     <div className="text-xs text-m-text-muted">{e.encarregado_cracha

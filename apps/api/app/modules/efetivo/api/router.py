@@ -12,6 +12,7 @@ from app.modules.efetivo.application.importar_efetivo import importar_efetivo
 from app.modules.efetivo.domain.efetivo import Situacao, chave_texto, sugerir_recurso
 from app.modules.efetivo.domain.organograma import (
     CORES_PADRAO,
+    DisciplinaOrg,
     PessoaOrg,
     SetorOrg,
     filtrar,
@@ -27,6 +28,7 @@ from app.modules.efetivo.infra.models import (
     MovimentoEfetivoModel,
     OrganogramaConfigModel,
     SetorObraModel,
+    SubsetorObraModel,
 )
 from app.modules.equipes.infra.models import EquipeMembroModel, EquipeModel
 from app.shared.errors import DomainError, NotFoundError
@@ -381,26 +383,34 @@ def organograma(q: str | None = None, s: Session = Depends(get_session), c: Cont
     cfg = s.scalar(select(OrganogramaConfigModel).where(OrganogramaConfigModel.obra_id == c.obra_id))
     geral = por_id.get(cfg.responsavel_id) if cfg and cfg.responsavel_id else None
     setores_m = list(s.scalars(select(SetorObraModel).where(SetorObraModel.obra_id == c.obra_id)))
+    disc_m = list(s.scalars(select(SubsetorObraModel).where(SubsetorObraModel.obra_id == c.obra_id)))
     setor_nome = {st.id: st.nome for st in setores_m}
-    responsaveis = {m.id for m in [geral, *(por_id.get(st.responsavel_id) for st in setores_m)] if m is not None}
+    disc_nome = {d.id: (d.setor_id, d.nome) for d in disc_m}
+    # responsáveis (obra, setores, disciplinas) aparecem só na própria caixa: fora das listas de funções e da contagem
+    responsaveis = {m.id for m in [geral, *(por_id.get(x.responsavel_id) for x in [*setores_m, *disc_m])] if m is not None}
     pessoas: list[PessoaOrg] = []
     na_equipe: set[str] = set()
     for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.ativo.is_(True))):
         enc = cs.get(e.encarregado_cracha or "")
-        if setores_m:  # com setores cadastrados, vale o setor da equipe
+        disciplina = None
+        if setores_m:  # com setores cadastrados, vale o setor (e a disciplina) da equipe
             setor = setor_nome.get(e.setor_id) if e.setor_id else None
+            d = disc_nome.get(e.subsetor_id) if e.subsetor_id else None
+            if d and d[0] == e.setor_id:
+                disciplina = d[1]
         else:
             setor = e.frente_codigo or (enc.dp if enc else None)
         base = {"equipe": e.nome, "encarregado": enc.nome if enc else e.encarregado_nome, "setor": setor,
-                "turno": e.turno or ""}
+                "disciplina": disciplina, "turno": e.turno or ""}
         for mb in e.membros:
             m = cs.get(mb.cracha)
-            if m is not None and not Situacao(m.situacao).ativo:
-                continue  # desmobilizado ainda na equipe: some do organograma (aparece como alerta no efetivo)
+            if m is not None and (not Situacao(m.situacao).ativo or m.id in responsaveis):
+                na_equipe.add(mb.cracha)
+                continue  # desmobilizado (alerta no efetivo) ou responsável (já está na caixa dele)
             pessoas.append(PessoaOrg(mb.cracha, m.nome if m else mb.nome, (m.funcao if m else None) or mb.funcao or "",
                                      "equipe", **base))
             na_equipe.add(mb.cracha)
-        if enc is not None:
+        if enc is not None and enc.id not in responsaveis:
             pessoas.append(PessoaOrg(enc.cracha, enc.nome, enc.funcao or "Encarregado", "equipe", **base))
             na_equipe.add(enc.cracha)
     for m in todos:
@@ -411,7 +421,10 @@ def organograma(q: str | None = None, s: Session = Depends(get_session), c: Cont
             pessoas.append(PessoaOrg(m.matricula or "", m.nome, m.funcao or "", "sem-equipe"))
         elif sit.em_mobilizacao:
             pessoas.append(PessoaOrg(m.matricula or "", m.nome, m.funcao or "", "mobilizacao"))
-    setores = [SetorOrg(st.nome, por_id[st.responsavel_id].nome if st.responsavel_id in por_id else None, st.cor, st.ordem)
+    nome_de = lambda cid: por_id[cid].nome if cid in por_id else None  # noqa: E731
+    setores = [SetorOrg(st.nome, nome_de(st.responsavel_id), st.cor, st.ordem,
+                        tuple(DisciplinaOrg(d.nome, nome_de(d.responsavel_id), d.cor, d.ordem)
+                              for d in disc_m if d.setor_id == st.id))
                for st in setores_m]
     raiz = montar_organograma(obra.nome if obra else "Obra", pessoas, setores, geral.nome if geral else None)
     vis = filtrar(raiz, q or "")
@@ -459,12 +472,20 @@ def listar_setores(s: Session = Depends(get_session), c: ContextoObra = Depends(
     equipes = list(s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id).order_by(EquipeModel.nome)))
     setores = list(s.scalars(select(SetorObraModel).where(SetorObraModel.obra_id == c.obra_id)
                              .order_by(SetorObraModel.ordem, SetorObraModel.nome)))
+    discs = list(s.scalars(select(SubsetorObraModel).where(SubsetorObraModel.obra_id == c.obra_id)
+                           .order_by(SubsetorObraModel.ordem, SubsetorObraModel.nome)))
+    resp = lambda cid: _ref(s.get(ColaboradorModel, cid) if cid else None)  # noqa: E731
+    eq_ref = lambda e: {"id": e.id, "nome": e.nome}  # noqa: E731
     return {
-        "setores": [{"id": st.id, "nome": st.nome, "cor": st.cor, "ordem": st.ordem,
-                     "responsavel": _ref(s.get(ColaboradorModel, st.responsavel_id) if st.responsavel_id else None),
-                     "equipes": [{"id": e.id, "nome": e.nome} for e in equipes if e.setor_id == st.id]}
+        "setores": [{"id": st.id, "nome": st.nome, "cor": st.cor, "ordem": st.ordem, "responsavel": resp(st.responsavel_id),
+                     "equipes": [eq_ref(e) for e in equipes if e.setor_id == st.id],
+                     "disciplinas": [{"id": d.id, "nome": d.nome, "cor": d.cor, "ordem": d.ordem, "setor_id": st.id,
+                                      "responsavel": resp(d.responsavel_id),
+                                      "equipes": [eq_ref(e) for e in equipes if e.subsetor_id == d.id]}
+                                     for d in discs if d.setor_id == st.id]}
                     for st in setores],
-        "equipes": [{"id": e.id, "nome": e.nome, "setor_id": e.setor_id, "ativo": e.ativo} for e in equipes],
+        "equipes": [{"id": e.id, "nome": e.nome, "setor_id": e.setor_id, "subsetor_id": e.subsetor_id, "ativo": e.ativo}
+                    for e in equipes],
         "responsavel_geral": _ref(s.get(ColaboradorModel, cfg.responsavel_id) if cfg and cfg.responsavel_id else None),
         "cores": _cores(cfg),
         "cores_padrao": CORES_PADRAO,
@@ -483,9 +504,11 @@ def _salvar_setor(s: Session, c: ContextoObra, st: SetorObraModel, d: SetorIn) -
     s.flush()
     for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id)):
         if e.id in d.equipes:
+            if e.setor_id != st.id:
+                e.subsetor_id = None  # disciplina é de outro setor
             e.setor_id = st.id
         elif e.setor_id == st.id:
-            e.setor_id = None
+            e.setor_id = e.subsetor_id = None
     s.flush()
     return {"id": st.id, "nome": st.nome}
 
@@ -509,8 +532,60 @@ def excluir_setor(setor_id: int, s: Session = Depends(get_session), c: ContextoO
     if st is None or st.obra_id != c.obra_id:
         raise NotFoundError("Setor", setor_id)
     for e in s.scalars(select(EquipeModel).where(EquipeModel.setor_id == st.id)):
-        e.setor_id = None
+        e.setor_id = e.subsetor_id = None
+    for dsc in s.scalars(select(SubsetorObraModel).where(SubsetorObraModel.setor_id == st.id)):
+        s.delete(dsc)
+    s.flush()
     s.delete(st)
+
+
+# ---- disciplinas (subsetores) ---------------------------------------------------------------------------
+def _salvar_disciplina(s: Session, c: ContextoObra, dsc: SubsetorObraModel, d: SetorIn) -> dict:
+    nome = " ".join(d.nome.split())
+    outro = s.scalar(select(SubsetorObraModel).where(SubsetorObraModel.setor_id == dsc.setor_id,
+                                                     SubsetorObraModel.nome == nome, SubsetorObraModel.id != (dsc.id or 0)))
+    if outro is not None:
+        raise DomainError(f"já existe a disciplina {nome} neste setor")
+    dsc.nome, dsc.cor, dsc.ordem = nome, validar_cor(d.cor), d.ordem
+    dsc.responsavel_id = _colaborador(s, c.obra_id, d.responsavel_id).id if d.responsavel_id else None
+    s.add(dsc)
+    s.flush()
+    for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id)):
+        if e.id in d.equipes:  # entra na disciplina e, com ela, no setor
+            e.setor_id, e.subsetor_id = dsc.setor_id, dsc.id
+        elif e.subsetor_id == dsc.id:
+            e.subsetor_id = None  # sai da disciplina e continua no setor
+    s.flush()
+    return {"id": dsc.id, "nome": dsc.nome, "setor_id": dsc.setor_id}
+
+
+def _disciplina(s: Session, c: ContextoObra, did: int) -> SubsetorObraModel:
+    dsc = s.get(SubsetorObraModel, did)
+    if dsc is None or dsc.obra_id != c.obra_id:
+        raise NotFoundError("Disciplina", did)
+    return dsc
+
+
+@router.post("/setores/{setor_id}/disciplinas", status_code=201)
+def criar_disciplina(setor_id: int, d: SetorIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    st = s.get(SetorObraModel, setor_id)
+    if st is None or st.obra_id != c.obra_id:
+        raise NotFoundError("Setor", setor_id)
+    return _salvar_disciplina(s, c, SubsetorObraModel(obra_id=c.obra_id, setor_id=st.id), d)
+
+
+@router.put("/disciplinas/{disciplina_id}")
+def atualizar_disciplina(disciplina_id: int, d: SetorIn, s: Session = Depends(get_session),
+                         c: ContextoObra = Depends(planejar)):
+    return _salvar_disciplina(s, c, _disciplina(s, c, disciplina_id), d)
+
+
+@router.delete("/disciplinas/{disciplina_id}", status_code=204)
+def excluir_disciplina(disciplina_id: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    dsc = _disciplina(s, c, disciplina_id)
+    for e in s.scalars(select(EquipeModel).where(EquipeModel.subsetor_id == dsc.id)):
+        e.subsetor_id = None  # equipes continuam no setor
+    s.delete(dsc)
 
 
 @router.put("/organograma/config")

@@ -11,10 +11,12 @@ const ZOOM_MAX = 1.6;
 const LISTA_LONGA = 12;
 const NIVEIS = [
   { n: 1, rotulo: 'Setores' },
-  { n: 2, rotulo: 'Equipes' },
+  { n: 2, rotulo: 'Disciplinas' },
+  { n: 3, rotulo: 'Equipes' },
   { n: 99, rotulo: 'Funções' },
 ];
-const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', equipe: '#2563EB', funcao: '#64748B' };
+const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', disciplina: '#0891B2', equipe: '#2563EB', funcao: '#64748B' };
+const NIVEL_PADRAO = 3; // até as equipes
 const RAMOS_ESPECIAIS = new Set(['Sem equipe', 'Em mobilização', 'Sem setor']);
 
 /** ids dos nós que, até a profundidade `nivel`, ficam abertos (mostram os filhos). */
@@ -38,8 +40,8 @@ function abertosAte(raiz: NoOrganograma, nivel: number): Set<string> {
 export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores = CORES_PADRAO, acoes }: {
   raiz: NoOrganograma; ariaLabel: string; expandirTudo?: boolean; cores?: CoresOrganograma; acoes?: React.ReactNode;
 }) {
-  const [nivel, setNivel] = useState(expandirTudo ? 99 : 2);
-  const [abertos, setAbertos] = useState<Set<string>>(() => abertosAte(raiz, expandirTudo ? 99 : 2));
+  const [nivel, setNivel] = useState(expandirTudo ? 99 : NIVEL_PADRAO);
+  const [abertos, setAbertos] = useState<Set<string>>(() => abertosAte(raiz, expandirTudo ? 99 : NIVEL_PADRAO));
   const [pessoas, setPessoas] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(1);
   const [cheia, setCheia] = useState(false);
@@ -133,7 +135,7 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
         <button type="button" className={botao} onClick={() => escolherNivel(1)}><ChevronsDownUp size={14} /> Recolher tudo</button>
         <span className="text-[12px] text-m-text-muted">{visiveis} caixas visíveis</span>
         <span className="flex items-center gap-2.5 text-[11.5px] text-m-text-secondary" aria-label="Cores dos níveis">
-          {(['obra', 'setor', 'equipe', 'funcao'] as const).map((n) => (
+          {(['obra', 'setor', 'disciplina', 'equipe', 'funcao'] as const).map((n) => (
             <span key={n} className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: cores[n] }} aria-hidden="true" />{ROTULO_TIPO[n]}</span>
           ))}
         </span>
@@ -187,7 +189,8 @@ function Ramo(props: PropsRamo) {
   const temFilhos = no.filhos.length > 0;
   // filhos que são todos folhas (funções) empilham na vertical: a árvore fica estreita
   const empilhar = temFilhos && no.filhos.every((f) => !f.filhos.length);
-  const corFilhos = no.tipo === 'setor' ? no.cor : props.corSetor;
+  // cor própria do setor/disciplina passa para o ramo; disciplina sem cor herda a do setor
+  const corFilhos = no.tipo === 'setor' ? no.cor : no.tipo === 'disciplina' ? (no.cor ?? props.corSetor) : props.corSetor;
   return (
     <li className={styles.no}>
       <Caixa {...props} />
@@ -206,6 +209,7 @@ function Ramo(props: PropsRamo) {
 function corDaCaixa(no: NoOrganograma, cores: CoresOrganograma, corSetor: string | null): string {
   if (no.tipo === 'setor') return no.cor ?? (RAMOS_ESPECIAIS.has(no.titulo) ? cores.funcao : cores.setor);
   if (no.tipo === 'obra') return cores.obra;
+  if (no.tipo === 'disciplina') return no.cor ?? corSetor ?? cores.disciplina;
   return corSetor ?? cores[no.tipo] ?? cores.funcao;
 }
 
@@ -242,11 +246,11 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
   );
 }
 
-const ROTULO_TIPO: Record<NoOrganograma['tipo'], string> = { obra: 'Obra', setor: 'Setor', equipe: 'Equipe', funcao: 'Função' };
+const ROTULO_TIPO: Record<NoOrganograma['tipo'], string> = { obra: 'Obra', setor: 'Setor', disciplina: 'Disciplina', equipe: 'Equipe', funcao: 'Função' };
 
 function Cartao({ no }: { no: NoOrganograma }) {
   const tipo = RAMOS_ESPECIAIS.has(no.titulo) && no.tipo === 'setor' ? 'Grupo' : ROTULO_TIPO[no.tipo];
-  const detalhe = no.detalhe && !['Setor', 'Função', 'Obra'].includes(no.detalhe) ? no.detalhe : '';
+  const detalhe = no.detalhe && !['Setor', 'Função', 'Obra', 'Disciplina'].includes(no.detalhe) ? no.detalhe : '';
   const dica = [no.titulo, detalhe, `${no.qtd} ${no.qtd === 1 ? 'pessoa' : 'pessoas'}`].filter(Boolean).join('\n');
   return (
     <div className={styles.cartao} title={dica}>

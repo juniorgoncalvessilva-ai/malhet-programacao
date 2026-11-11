@@ -151,6 +151,31 @@ def test_efetivo_equipes_simova_depara_organograma(client):
     em_mob = {p["nome"] for f in setores.get("Em mobilização", {"filhos": []})["filhos"] for p in f["pessoas"]}
     assert "CANDIDATO TESTE" not in em_mob  # responsável aparece na caixa da obra, não nos ramos soltos
     sid = st["setores"][0]["id"]
+
+    # disciplina (subsetor) dentro do setor: Obra → Setor → Disciplina → Equipe → Função; responsável da disciplina
+    # (o encarregado da equipe) aparece só na caixa, fora da lista de funções e da contagem
+    enc_id = cs["ENCARREGADO TESTE UM"]["id"]
+    r = client.post(f"/api/efetivo/setores/{sid}/disciplinas", json={"nome": "Formas", "responsavel_id": enc_id,
+                                                                      "equipes": [eq], "cor": "#EA580C"})
+    assert r.status_code == 201, r.text
+    did = r.json()["id"]
+    assert client.post(f"/api/efetivo/setores/{sid}/disciplinas", json={"nome": "Formas"}).status_code == 422
+    st = client.get("/api/efetivo/setores").json()
+    disc = st["setores"][0]["disciplinas"][0]
+    assert (disc["nome"], disc["responsavel"]["nome"], disc["equipes"][0]["id"]) == ("Formas", "ENCARREGADO TESTE UM", eq)
+    civil = next(f for f in client.get("/api/efetivo/organograma").json()["raiz"]["filhos"] if f["titulo"] == "Civil")
+    formas = civil["filhos"][0]
+    assert (formas["tipo"], formas["titulo"], formas["cor"], formas["responsavel"]) == ("disciplina", "Formas", "#EA580C", "ENCARREGADO TESTE UM")
+    equipe = formas["filhos"][0]
+    nomes = {p["nome"] for f in equipe["filhos"] for p in f["pessoas"]}
+    assert equipe["titulo"] == "EQUIPE.1_FORMA" and "ENCARREGADO TESTE UM" not in nomes and "PEDREIRO TESTE DOIS" in nomes
+    assert "ENCARREGADO DE FORMAS" not in {f["titulo"] for f in equipe["filhos"]}
+    # equipe salva com a disciplina leva o setor junto; excluir a disciplina mantém a equipe no setor
+    e1 = next(e for e in client.get("/api/equipes").json() if e["id"] == eq)
+    assert (e1["setor_id"], e1["subsetor_id"]) == (sid, did)
+    assert client.delete(f"/api/efetivo/disciplinas/{did}").status_code == 204
+    e1 = next(e for e in client.get("/api/equipes").json() if e["id"] == eq)
+    assert (e1["setor_id"], e1["subsetor_id"]) == (sid, None)
     assert client.delete(f"/api/efetivo/setores/{sid}").status_code == 204
     assert next(e for e in client.get("/api/equipes").json() if e["id"] == eq)["setor_id"] is None
     with SessionLocal() as s:  # colaborador desmobilizado continua na equipe até o planejamento tirar

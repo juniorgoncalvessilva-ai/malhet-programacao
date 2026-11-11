@@ -77,3 +77,13 @@ class LocalizadorEfetivo:
             m.cracha = numero  # o número que o Simova usa para a pessoa vira o crachá dela no efetivo
             self._por_cracha[numero] = m
         return _pessoa(m)
+
+
+def setor_da_disciplina(s: Session, obra_id: int, disciplina_id: int | None) -> int | None:
+    """Setor a que a disciplina (subsetor) pertence; None se não existir nesta obra."""
+    from app.modules.efetivo.infra.models import SubsetorObraModel
+
+    if not disciplina_id:
+        return None
+    d = s.get(SubsetorObraModel, disciplina_id)
+    return d.setor_id if d is not None and d.obra_id == obra_id else None

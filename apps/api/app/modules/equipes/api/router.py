@@ -7,7 +7,13 @@ from app.core.auth import ContextoObra, administrar, ler, planejar
 from app.core.db import get_session
 from app.modules.equipes.application.importar_equipes import importar_equipes, importar_equipes_simova
 from app.modules.equipes.infra.composicao import composicao_efetiva, sincronizar_membros
-from app.modules.efetivo.infra.gateway import LocalizadorEfetivo, PessoaEfetivo, funcoes_por_cracha, pessoas_por_cracha
+from app.modules.efetivo.infra.gateway import (
+    LocalizadorEfetivo,
+    PessoaEfetivo,
+    funcoes_por_cracha,
+    pessoas_por_cracha,
+    setor_da_disciplina,
+)
 from app.modules.equipes.application.vincular_efetivo import vincular_equipe, vincular_equipes
 from app.modules.equipes.domain.simova_equipe import separar_cracha
 from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeModel
@@ -49,6 +55,7 @@ class EquipeIn(BaseModel):
     nome: str
     frente_codigo: str | None = None
     setor_id: int | None = None
+    subsetor_id: int | None = None  # disciplina; define o setor
     encarregado_cracha: str | None = None
     encarregado_nome: str | None = None
     jornada_horas: float = Field(9.0, gt=0, le=24)
@@ -77,6 +84,16 @@ def _pessoa_io(p: PessoaEfetivo | None, funcao_de: dict[str, str]) -> PessoaEfet
         return None
     return PessoaEfetivoIO(matricula=p.matricula, nome=p.nome, funcao=p.funcao, funcao_cpu=funcao_de.get(p.cracha or ""),
                            situacao=p.situacao, empresa=p.empresa, no_ultimo_arquivo=p.no_ultimo_arquivo)
+
+
+def _setor_e_disciplina(s: Session, obra_id: int, e: EquipeModel) -> None:
+    """Disciplina manda no setor; disciplina de outro setor (ou inexistente) é descartada."""
+    if e.subsetor_id:
+        setor = setor_da_disciplina(s, obra_id, e.subsetor_id)
+        if setor is None:
+            e.subsetor_id = None
+        else:
+            e.setor_id = setor
 
 
 def _membros(d: "EquipeIn") -> list[tuple[str, str, str | None]]:
@@ -119,6 +136,7 @@ def criar(d: EquipeIn, s: Session = Depends(get_session), c: ContextoObra = Depe
     e = EquipeModel(**d.model_dump(exclude={"composicao", "membros"}), obra_id=c.obra_id,
                     composicao=[EquipeComposicaoModel(**c.model_dump()) for c in d.composicao])
     sincronizar_membros(e, _membros(d))
+    _setor_e_disciplina(s, c.obra_id, e)
     s.add(e)
     vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()
@@ -135,6 +153,7 @@ def atualizar(equipe_id: int, d: EquipeIn, s: Session = Depends(get_session),
         setattr(e, k, v)
     e.composicao = [EquipeComposicaoModel(**c.model_dump()) for c in d.composicao]
     sincronizar_membros(e, _membros(d))
+    _setor_e_disciplina(s, c.obra_id, e)
     s.flush()
     vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()

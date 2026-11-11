@@ -100,3 +100,17 @@ class OrganogramaConfigModel(Base):
     obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     responsavel_id: Mapped[int | None] = mapped_column(ForeignKey("colaborador.id", ondelete="SET NULL"))
     cores: Mapped[dict] = mapped_column(JSONB, default=dict)  # {obra, setor, equipe, funcao}: #RRGGBB
+
+
+class SubsetorObraModel(Base):
+    """Subsetor / disciplina dentro de um setor (Civil → Formas, Armação…). Equipes apontam para a disciplina."""
+
+    __tablename__ = "subsetor_obra"
+    __table_args__ = (UniqueConstraint("setor_id", "nome", name="uq_subsetor_obra_nome"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    setor_id: Mapped[int] = mapped_column(ForeignKey("setor_obra.id", ondelete="CASCADE"), index=True)
+    nome: Mapped[str] = mapped_column(String(80))
+    cor: Mapped[str | None] = mapped_column(String(9))  # sem cor: herda a do setor
+    ordem: Mapped[int] = mapped_column(Integer, default=0)
+    responsavel_id: Mapped[int | None] = mapped_column(ForeignKey("colaborador.id", ondelete="SET NULL"))

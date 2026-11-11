@@ -1,10 +1,11 @@
-"""Organograma da obra (modelo do Malhet): Obra (responsável geral) → Setor (responsável) → Equipe → Função → pessoas.
+"""Organograma da obra (modelo do Malhet): Obra (responsável geral) → Setor (responsável) → Disciplina (subsetor,
+responsável) → Equipe → Função → pessoas. Equipe sem disciplina fica direto no setor.
 
 Os setores são cadastrados na obra, cada um com responsável e cor; a equipe aponta para o seu setor. Sem nenhum
 setor cadastrado, o setor da equipe é a frente ou o DP do encarregado (como antes). Quem está mobilizado e sem equipe
 vai para o ramo "Sem equipe"; quem ainda está em mobilização (crachá, exame, previsto), para "Em mobilização".
-Desmobilizados e desistências não entram. Responsáveis da obra e dos setores aparecem na própria caixa, não como
-"sem equipe".
+Desmobilizados e desistências não entram. Responsáveis (obra, setor, disciplina) aparecem só na própria caixa: não
+entram nas listas de funções nem na contagem.
 """
 import re
 from dataclasses import dataclass, field
@@ -12,8 +13,9 @@ from dataclasses import dataclass, field
 from app.shared.errors import DomainError
 
 SEM_SETOR, SEM_EQUIPE, EM_MOBILIZACAO, SEM_FUNCAO = ("Sem setor", "Sem equipe", "Em mobilização", "Sem função")
-NIVEIS_COR = ("obra", "setor", "equipe", "funcao")
-CORES_PADRAO = {"obra": "#1F3A3A", "setor": "#0F766E", "equipe": "#2563EB", "funcao": "#64748B"}
+NIVEIS_COR = ("obra", "setor", "disciplina", "equipe", "funcao")
+CORES_PADRAO = {"obra": "#1F3A3A", "setor": "#0F766E", "disciplina": "#0891B2", "equipe": "#2563EB",
+                "funcao": "#64748B"}
 _COR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
@@ -46,6 +48,15 @@ class PessoaOrg:
     equipe: str | None = None
     encarregado: str | None = None
     setor: str | None = None
+    disciplina: str | None = None
+
+
+@dataclass(frozen=True)
+class DisciplinaOrg:
+    nome: str
+    responsavel: str | None = None
+    cor: str | None = None
+    ordem: int = 0
 
 
 @dataclass(frozen=True)
@@ -54,12 +65,13 @@ class SetorOrg:
     responsavel: str | None = None
     cor: str | None = None
     ordem: int = 0
+    disciplinas: tuple[DisciplinaOrg, ...] = ()
 
 
 @dataclass
 class No:
     id: str
-    tipo: str  # obra | setor | equipe | funcao
+    tipo: str  # obra | setor | disciplina | equipe | funcao
     titulo: str
     detalhe: str
     qtd: int = 0
@@ -95,7 +107,8 @@ def _contar(n: No) -> int:
 
 def _ordenar(n: No) -> None:
     fim = {SEM_SETOR: 1, SEM_EQUIPE: 2, EM_MOBILIZACAO: 3}
-    n.filhos.sort(key=lambda f: (fim.get(f.titulo, 0) if f.tipo == "setor" else 0, f.ordem, f.titulo))
+    tipo = {"disciplina": 0, "equipe": 1}
+    n.filhos.sort(key=lambda f: (fim.get(f.titulo, 0) if f.tipo == "setor" else 0, tipo.get(f.tipo, 0), f.ordem, f.titulo))
     n.pessoas.sort(key=lambda p: p.nome)
     for f in n.filhos:
         _ordenar(f)
@@ -108,10 +121,14 @@ def montar_organograma(obra: str, pessoas: list[PessoaOrg], setores: list[SetorO
     for st in setores:  # setores cadastrados aparecem mesmo vazios, na ordem escolhida
         n = _filho(raiz, "setor", st.nome, f"Resp.: {st.responsavel}" if st.responsavel else "Setor")
         n.cor, n.responsavel, n.ordem = st.cor, st.responsavel, st.ordem
+        for dc in st.disciplinas:
+            d = _filho(n, "disciplina", dc.nome, f"Resp.: {dc.responsavel}" if dc.responsavel else "Disciplina")
+            d.cor, d.responsavel, d.ordem = dc.cor, dc.responsavel, dc.ordem
     for p in pessoas:
         if p.situacao == "equipe":
             setor = _filho(raiz, "setor", p.setor or SEM_SETOR, "Setor")
-            equipe = _filho(setor, "equipe", p.equipe or SEM_EQUIPE, f"Enc.: {p.encarregado or '—'}")
+            pai = _filho(setor, "disciplina", p.disciplina, "Disciplina") if p.disciplina and p.setor else setor
+            equipe = _filho(pai, "equipe", p.equipe or SEM_EQUIPE, f"Enc.: {p.encarregado or '—'}")
             _por_funcao(equipe, p)
         elif p.situacao == "sem-equipe":
             _por_funcao(_filho(raiz, "setor", SEM_EQUIPE, "Mobilizados sem equipe"), p)
