@@ -91,13 +91,14 @@ export interface Local { id: number; codigo: string; descricao: string; ordem: n
 export interface ItemCatalogo { id: number; tipo_id: number; numero: number; codigo: string; complemento: string; descricao: string; item_pq: string | null; ativo: boolean }
 /** Tipo = item da PQ vinculado ao grupo (descrição e unidade vêm da PQ vigente). */
 export interface TipoCatalogo {
-  id: number; grupo_id: number; numero: number; codigo: string; item_pq: string | null; descricao: string; unidade: string | null;
+  id: number; grupo_id: number; numero: number; codigo: string; item_pq: string | null; descricao: string; descricao_pq: string | null;
+  nome_simplificado: string | null; unidade: string | null;
   quantidade_pq: number | null; pu: number | null; na_pq_vigente: boolean; ativo: boolean; itens: ItemCatalogo[];
 }
 export interface LinhaPq {
   item: string; nivel: number; folha: boolean; descricao: string; unid: string | null; codigo_atividade: string | null;
   criterio: string | null; quantidade: number | null; pu: number | null; total: number | null;
-  tipo: { id: number; codigo: string; grupo: string } | null;
+  tipo: { id: number; codigo: string; grupo: string; grupo_id: number } | null; nome_simplificado: string | null;
 }
 export interface GrupoCatalogo { id: number; numero: number; codigo: string; descricao: string; ativo: boolean; tipos: TipoCatalogo[] }
 export interface ProgramacaoResumo { id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: 'rascunho' | 'emitida'; revisao: number; linhas: number }

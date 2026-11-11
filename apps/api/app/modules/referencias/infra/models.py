@@ -194,3 +194,14 @@ class CpuComposicaoModel(Base):
     recurso_governa: Mapped[str | None] = mapped_column(String(120))
     coef_governa: Mapped[float | None] = mapped_column(Float)
     hh_por_unidade: Mapped[float | None] = mapped_column(Float)
+
+
+class NomeSimplificadoPqModel(Base):
+    """Nome simplificado de um item da PQ (texto do Simova). Por obra e código do item: vale para qualquer revisão."""
+
+    __tablename__ = "pq_nome_simplificado"
+    __table_args__ = (UniqueConstraint("obra_id", "item", name="uq_pq_nome_simplificado_item"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    item: Mapped[str] = mapped_column(String(40))
+    nome: Mapped[str] = mapped_column(String(120))

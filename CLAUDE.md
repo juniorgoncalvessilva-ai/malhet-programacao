@@ -32,6 +32,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   em `planejamento/application/exportar_cliente.py`. Spec 010.
 - Catálogo: tipo = item da PQ (`tipo_atividade.item_pq`, um por obra); PQ com estrutura (títulos/folhas) em
   `item_pq` (`folha`, `nivel`, `ordem`), lida por `referencias/infra/pq_gateway.py`. Spec 011.
+  Grupo com um ou vários itens da PQ (lote ou lista por linha, `PUT /catalogo/itens-pq/{item}/grupo`); nome
+  simplificado por obra+item (`pq_nome_simplificado`, `ItemPqInfo.texto_simova`) é o texto do Simova. Spec 021.
 - SSMA: listas suspensas vêm de `ssma/` (`cadastro_ssma`, gateway `CadastroSsmaGateway.conferir`). Técnico/RAC/PTS/
   ART/ATA = segurança; PTO = Planejamento (linha da programação). Spec 012.
 - SSMA/PTO: RAC/PTS/ART/ATA/PTO são listas na linha (JSONB, `lista_da_linha`) e aceitam arquivos (`anexo_ssma`,

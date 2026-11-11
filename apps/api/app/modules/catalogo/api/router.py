@@ -7,7 +7,7 @@ from app.core.auth import ContextoObra, ler, planejar
 from app.core.db import get_session
 from app.modules.catalogo.domain import catalogo as cat
 from app.modules.catalogo.infra.models import GrupoAtividadeModel, ItemSimovaModel, TipoAtividadeModel
-from app.modules.referencias.infra.pq_gateway import ItemPqInfo, itens_pq
+from app.modules.referencias.infra.pq_gateway import ItemPqInfo, itens_pq, salvar_nome_simplificado
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(prefix="/catalogo", tags=["catálogo de atividades (ID Simova)"])
@@ -30,7 +30,9 @@ class TipoOut(BaseModel):
     numero: int
     codigo: str
     item_pq: str | None
-    descricao: str
+    descricao: str  # texto do Simova: nome simplificado, senão a descrição da PQ
+    descricao_pq: str | None = None
+    nome_simplificado: str | None = None
     unidade: str | None
     quantidade_pq: float | None = None
     pu: float | None = None
@@ -75,6 +77,19 @@ class ItemIn(BaseModel):
     ativo: bool = True
 
 
+class NomeIn(BaseModel):
+    item: str
+    nome: str | None = None
+
+
+class NomesIn(BaseModel):
+    itens: list[NomeIn]
+
+
+class GrupoDoItemIn(BaseModel):
+    grupo_id: int | None = None  # None = desvincular
+
+
 class ItemResp(BaseModel):
     item: ItemOut
     criado: bool
@@ -85,9 +100,10 @@ def _tipo_out(t: TipoAtividadeModel, g: GrupoAtividadeModel, itens: list[ItemSim
               pq: dict[str, ItemPqInfo] | None = None) -> TipoOut:
     info = (pq or {}).get(t.item_pq) if t.item_pq else None
     info = info if info is not None and info.folha else None  # título da PQ não serve de tipo
-    desc = info.descricao if info else t.descricao
+    desc = info.texto_simova if info else t.descricao
     return TipoOut(id=t.id, grupo_id=t.grupo_id, numero=t.numero, codigo=cat.codigo_tipo(g.numero, t.numero),
-                   item_pq=t.item_pq, descricao=desc, unidade=(info.unid if info else t.unidade),
+                   item_pq=t.item_pq, descricao=desc, descricao_pq=info.descricao if info else None,
+                   nome_simplificado=info.nome_simplificado if info else None, unidade=(info.unid if info else t.unidade),
                    quantidade_pq=info.quantidade if info else None, pu=info.pu if info else None,
                    na_pq_vigente=bool(info) or not t.item_pq or pq is None, ativo=t.ativo,
                    itens=[_item_out(i, t, g, desc) for i in itens])
@@ -190,7 +206,7 @@ def _novo_tipo(s: Session, obra_id: int, g: GrupoAtividadeModel, item_pq: str | 
         if info is not None and not info.folha:
             raise DomainError(f"{item_pq} é um título da PQ: escolha um item com unidade", "item_pq")
         if info is not None:
-            descricao, unidade = info.descricao, info.unid
+            descricao, unidade = info.texto_simova, info.unid
     if not (descricao or "").strip():
         raise DomainError("escolha um item da PQ", "item_pq")
     t = TipoAtividadeModel(obra_id=obra_id, grupo_id=g.id, numero=n, item_pq=item_pq or None,
@@ -236,7 +252,7 @@ def editar_tipo(tid: int, d: TipoIn, s: Session = Depends(get_session), c: Conte
         info = itens_pq(s, c.obra_id, {d.item_pq.strip()}).get(d.item_pq.strip())
         if info is None or not info.folha:
             raise DomainError(f"o item {d.item_pq} não é um item da PQ vigente", "item_pq")
-        t.item_pq, t.descricao, t.unidade = info.item, info.descricao[:500], info.unid
+        t.item_pq, t.descricao, t.unidade = info.item, info.texto_simova[:500], info.unid
     elif not t.item_pq and d.descricao:
         t.descricao, t.unidade = d.descricao.strip()[:500], (d.unidade or "").strip() or None
     s.flush()
@@ -256,6 +272,50 @@ def desvincular_tipo(tid: int, s: Session = Depends(get_session), c: ContextoObr
         s.delete(i)
     s.flush()
     s.delete(t)
+
+
+# ---- nome simplificado do item da PQ e vínculo de um item a um grupo -----------------------------------
+@router.put("/nomes-simplificados")
+def salvar_nomes(d: NomesIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Nome simplificado dos itens da PQ (texto curto do Simova). Vazio volta para a descrição da PQ. O tipo vinculado
+    ao item (e os itens complementares dele) passam a usar o nome no Simova."""
+    salvos = 0
+    for x in d.itens:
+        item = x.item.strip()
+        nome = cat.limpar_texto(x.nome)
+        if nome:
+            nome = cat.validar_descricao(nome, "nome simplificado", 120)
+        info = itens_pq(s, c.obra_id, {item}).get(item)
+        if info is None or not info.folha:
+            raise DomainError(f"{item} não é um item da PQ vigente", "item")
+        salvar_nome_simplificado(s, c.obra_id, item, nome or None)
+        t = s.scalar(select(TipoAtividadeModel).where(TipoAtividadeModel.obra_id == c.obra_id,
+                                                      TipoAtividadeModel.item_pq == item))
+        if t is not None:
+            t.descricao = (nome or info.descricao)[:500]
+        salvos += 1
+    s.flush()
+    return {"salvos": salvos}
+
+
+@router.put("/itens-pq/{item}/grupo")
+def grupo_do_item(item: str, d: GrupoDoItemIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Liga um único item da PQ a um grupo, troca de grupo (novo número no grupo de destino) ou desvincula."""
+    item = item.strip()
+    t = s.scalar(select(TipoAtividadeModel).where(TipoAtividadeModel.obra_id == c.obra_id,
+                                                  TipoAtividadeModel.item_pq == item))
+    if d.grupo_id is None:
+        if t is not None:
+            desvincular_tipo(t.id, s, c)
+        return {"codigo": None}
+    g = _grupo(s, c, d.grupo_id)
+    if t is None:
+        t = _novo_tipo(s, c.obra_id, g, item, None, None)
+    elif t.grupo_id != g.id:
+        nums = list(s.scalars(select(TipoAtividadeModel.numero).where(TipoAtividadeModel.grupo_id == g.id)))
+        t.grupo_id, t.numero = g.id, cat.proximo_numero(nums)
+        s.flush()
+    return {"codigo": cat.codigo_tipo(g.numero, t.numero)}
 
 
 # ---- itens (tipo + complemento) -----------------------------------------------------------------

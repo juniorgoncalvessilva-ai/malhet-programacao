@@ -93,3 +93,37 @@ def test_codigo_repetido_vai_para_o_bloco_da_area_da_tag():
     assert bloco == {"1": 0, "2": 1} and area == {1: "1485AA"}
     assert escolher_item(["1.1.1.1.1", "2.1.1.1.1"], "1485AA-ED-12", bloco, area) == "2.1.1.1.1"
     assert escolher_item(["1.1.1.1.1", "2.1.1.1.1"], "1800AA-ED-01", bloco, area) == "1.1.1.1.1"
+
+
+def test_nome_simplificado_e_item_unico_no_grupo(client):
+    """Nome simplificado do item da PQ vira o texto do Simova; um item sozinho é ligado, trocado de grupo e solto."""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    client.post("/api/importar/takeoff", data={"rotulo": "PQ"}, files={"arquivo": ("pq.xlsx", pq_contrato())})
+    g1 = client.post("/api/catalogo/grupos", json={"descricao": "Concreto"}).json()
+    g2 = client.post("/api/catalogo/grupos", json={"descricao": "Forma"}).json()
+    # vários itens de uma vez e um item sozinho
+    assert client.post(f"/api/catalogo/grupos/{g1['id']}/itens-pq", json={"itens": ["1.8.3.1.2"]}).json()["criados"] == ["1.1"]
+    assert client.put("/api/catalogo/itens-pq/1.8.3.1.3/grupo", json={"grupo_id": g1["id"]}).json()["codigo"] == "1.2"
+    assert client.put("/api/catalogo/itens-pq/1.8.3.1.3/grupo", json={"grupo_id": g2["id"]}).json()["codigo"] == "2.1"
+    assert client.put("/api/catalogo/itens-pq/1.8.3/grupo", json={"grupo_id": g2["id"]}).status_code == 422  # título
+    # nome simplificado: salvo, aparece na PQ e no tipo; complemento usa o nome
+    r = client.put("/api/catalogo/nomes-simplificados", json={"itens": [{"item": "1.8.3.1.2", "nome": "Concreto fck 30"}]})
+    assert r.status_code == 200 and r.json()["salvos"] == 1
+    assert client.put("/api/catalogo/nomes-simplificados", json={"itens": [{"item": "1.8", "nome": "x título"}]}).status_code == 422
+    linha = next(x for x in client.get("/api/pq/estrutura").json()["linhas"] if x["item"] == "1.8.3.1.2")
+    assert linha["nome_simplificado"] == "Concreto fck 30"
+    t = next(t for g in client.get("/api/catalogo").json() for t in g["tipos"] if t["item_pq"] == "1.8.3.1.2")
+    assert t["descricao"] == "Concreto fck 30" and t["descricao_pq"] != t["descricao"]
+    it = client.post("/api/catalogo/itens", json={"tipo_id": t["id"], "complemento": "Fundo canaleta 2A"}).json()["item"]
+    assert it["descricao"] == "Concreto fck 30 - (Fundo canaleta 2A)"
+    oper = {r[0].value: r[1].value for r in load_workbook(BytesIO(client.get("/api/simova/cadastros.xlsx").content))["OPER"].iter_rows(min_row=2)}
+    assert oper["1.1"] == "Concreto fck 30" and oper["1.1.1"] == "Concreto fck 30 - (Fundo canaleta 2A)"
+    # apagar o nome volta para a descrição da PQ; desvincular solta o item
+    client.put("/api/catalogo/nomes-simplificados", json={"itens": [{"item": "1.8.3.1.2", "nome": ""}]})
+    t = next(t for g in client.get("/api/catalogo").json() for t in g["tipos"] if t["item_pq"] == "1.8.3.1.2")
+    assert t["descricao"] == t["descricao_pq"] and t["nome_simplificado"] is None
+    assert client.put("/api/catalogo/itens-pq/1.8.3.1.3/grupo", json={"grupo_id": None}).json()["codigo"] is None
+    assert next(x for x in client.get("/api/pq/estrutura").json()["linhas"] if x["item"] == "1.8.3.1.3")["tipo"] is None

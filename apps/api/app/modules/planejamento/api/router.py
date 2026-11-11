@@ -496,16 +496,19 @@ def pq_estrutura(s: Session = Depends(get_session), c: ContextoObra = Depends(le
     if not vig:
         return {"versao": None, "linhas": []}
     v = s.get(VersaoReferenciaModel, vig)
+    from app.modules.referencias.infra.pq_gateway import nomes_simplificados
+
+    nomes = nomes_simplificados(s, c.obra_id)
     grupos = {g.id: g for g in s.scalars(select(GrupoAtividadeModel).where(GrupoAtividadeModel.obra_id == c.obra_id))}
     tipo_de = {t.item_pq: {"id": t.id, "codigo": codigo_tipo(grupos[t.grupo_id].numero, t.numero),
-                           "grupo": grupos[t.grupo_id].descricao}
+                           "grupo": grupos[t.grupo_id].descricao, "grupo_id": t.grupo_id}
                for t in s.scalars(select(TipoAtividadeModel).where(TipoAtividadeModel.obra_id == c.obra_id,
                                                                    TipoAtividadeModel.item_pq.is_not(None)))}
     linhas = [{"item": x.item, "nivel": x.nivel, "folha": x.folha, "descricao": x.descricao, "unid": x.unid,
                "codigo_atividade": x.codigo_atividade, "criterio": x.criterio, "quantidade": x.quantidade,
                "pu": x.pu, "total": x.total if x.total is not None else (
                    round(x.quantidade * x.pu, 2) if x.quantidade is not None and x.pu is not None else None),
-               "tipo": tipo_de.get(x.item)}
+               "tipo": tipo_de.get(x.item), "nome_simplificado": nomes.get(x.item)}
               for x in s.scalars(select(ItemPqModel).where(ItemPqModel.versao_id == vig)
                                  .order_by(ItemPqModel.ordem, ItemPqModel.id))]
     return {"versao": {"id": v.id, "rotulo": v.rotulo, "arquivo": v.arquivo_origem}, "linhas": linhas}

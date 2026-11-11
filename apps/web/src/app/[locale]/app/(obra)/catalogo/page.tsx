@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Download, Link2, Pencil, Plus, Trash2, Unlink } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Link2, Pencil, Plus, Save, Trash2, Unlink } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, fmt } from '@/components/Obra/ui';
@@ -43,6 +43,20 @@ export default function CatalogoPage() {
   const [q, setQ] = useState('');
   const [soLivres, setSoLivres] = useState(false);
   const [fechados, setFechados] = useState<Set<string>>(new Set());
+  const [nomes, setNomes] = useState<Record<string, string>>({});
+  const salvarNomes = useAcao((a, d: Record<string, string>) => a.put<{ salvos: number }>('/catalogo/nomes-simplificados', {
+    itens: Object.entries(d).map(([item, nome]) => ({ item, nome })),
+  }), inv);
+  const grupoDoItem = useAcao((a, d: { item: string; grupo_id: number | null }) => a.put<{ codigo: string | null }>(`/catalogo/itens-pq/${encodeURIComponent(d.item)}/grupo`, { grupo_id: d.grupo_id }), inv);
+  const mudarGrupo = async (l: LinhaPq, valor: string) => {
+    const gid = valor ? Number(valor) : null;
+    if (gid === null && l.tipo && !(await confirmar({ titulo: `Desvincular o item ${l.item} do grupo?`, mensagem: <>{l.descricao}<br />Os itens complementares do tipo {l.tipo.codigo} também saem. Tipo usado em programação não pode ser desvinculado: inative-o no catálogo.</>, acao: 'Desvincular' }))) return;
+    grupoDoItem.mutate({ item: l.item, grupo_id: gid }, {
+      onSuccess: (r) => toast.success(r.codigo ? `${l.item} é o tipo ${r.codigo}` : `${l.item} desvinculado`),
+      onError: (e) => toast.error(e.message),
+    });
+  };
+  const nNomes = Object.keys(nomes).length;
 
   const salvarGrupo = useAcao((a, d: GrupoForm) => {
     const corpo = { descricao: d.descricao, numero: num(d.numero), ativo: d.ativo };
@@ -86,7 +100,7 @@ export default function CatalogoPage() {
         eyebrow="Cadastros · catálogo de atividades"
         cor="var(--m-proc-medir)"
         titulo={grupos.length ? `${grupos.length} grupos e ${nTipos} itens da PQ no catálogo` : 'Catálogo vazio'}
-        descricao="O encarregado escolhe o Grupo (ex.: 2 Concreto) e o item da PQ, que é o tipo da atividade (2.3 = item 1.8.3.1.2). O texto complementar cria um item com ID próprio no Simova (2.3.1 … - (Fundo canaleta 2A)). A descrição vem da PQ do contrato; a coluna de texto simplificado para o Simova entra na próxima etapa."
+        descricao="O encarregado escolhe o Grupo (ex.: 2 Concreto) e o item da PQ, que é o tipo da atividade (2.3 = item 1.8.3.1.2). Um grupo reúne um ou vários itens da PQ. O texto complementar cria um item com ID próprio no Simova (2.3.1 Nome simplificado - (Fundo canaleta 2A)). No Simova vai o nome simplificado do item da PQ (coluna na aba PQ abaixo); sem ele, a descrição da PQ."
         acoes={<Botao variante="secundario" onClick={() => api.download('/simova/cadastros.xlsx', 'cadastros-simova.xlsx').catch((e) => toast.error(e.message))}><Download size={16} /> Cadastros p/ Simova</Botao>}
       />
 
@@ -138,7 +152,7 @@ export default function CatalogoPage() {
         <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full border-collapse">
             <thead><tr className="text-left">
-              <th className={th}>ID Simova</th><th className={th}>Item PQ</th><th className={th}>Descrição (PQ)</th><th className={th}>Un.</th>
+              <th className={th}>ID Simova</th><th className={th}>Item PQ</th><th className={th}>Descrição no Simova</th><th className={th}>Un.</th>
               <th className={`${th} text-right`}>Qtd. contrato</th><th className={`${th} text-right`}>P. unit.</th><th className={th}>Situação</th><th className={th} />
             </tr></thead>
             <tbody>
@@ -160,7 +174,7 @@ export default function CatalogoPage() {
                       <tr className={t.ativo ? '' : 'opacity-50'}>
                         <td className={`${tdc} font-semibold text-m-text-primary`}>{t.codigo}</td>
                         <td className={tdc}>{t.item_pq ? <span className="rounded-[6px] bg-m-info-subtle px-2 py-0.5 text-[11px] font-semibold text-m-info">{t.item_pq}</span> : <Pilula tom="atencao">sem PQ</Pilula>}</td>
-                        <td className={`${tdc} min-w-[320px] whitespace-normal`}>{t.descricao}{!t.na_pq_vigente && <div className="text-[11px] text-m-warning">não está na PQ vigente</div>}</td>
+                        <td className={`${tdc} min-w-[320px] whitespace-normal`}>{t.nome_simplificado ? <><b className="text-m-text-primary">{t.nome_simplificado}</b><div className="text-[11px] text-m-text-muted">PQ: {t.descricao_pq}</div></> : t.descricao}{!t.na_pq_vigente && <div className="text-[11px] text-m-warning">não está na PQ vigente</div>}</td>
                         <td className={tdc}>{t.unidade ?? '—'}</td>
                         <td className={`${tdc} text-right`}>{t.quantidade_pq != null ? fmt(t.quantidade_pq) : '—'}</td>
                         <td className={`${tdc} text-right`}>{t.pu != null ? fmt(t.pu) : '—'}</td>
@@ -198,7 +212,8 @@ export default function CatalogoPage() {
         titulo="Aba PQ do contrato"
         subtitulo={pq.data?.versao ? `${pq.data.versao.rotulo}${pq.data.versao.arquivo ? ` · ${pq.data.versao.arquivo}` : ''} · ${linhas.filter((l) => l.folha).length} itens em ${linhas.filter((l) => !l.folha).length} títulos` : 'Nenhuma PQ importada'}
         acoes={editar && <div className="flex flex-wrap items-end gap-2">
-          <Selecao rotulo="Vincular ao grupo" value={destino} onChange={(e) => setDestino(e.target.value)} className="min-w-[220px]">
+          <Botao variante={nNomes ? 'primario' : 'secundario'} disabled={!nNomes || salvarNomes.isPending} onClick={() => salvarNomes.mutate(nomes, { onSuccess: (r) => { toast.success(`${r.salvos} nome(s) simplificado(s) salvo(s)`); setNomes({}); } })}><Save size={16} /> Salvar nomes{nNomes ? ` (${nNomes})` : ''}</Botao>
+          <Selecao rotulo="Vincular selecionados ao grupo" value={destino} onChange={(e) => setDestino(e.target.value)} className="min-w-[220px]">
             <option value="">Escolha o grupo…</option>
             {grupos.map((g) => <option key={g.id} value={g.id}>{g.codigo} · {g.descricao}</option>)}
           </Selecao>
@@ -219,16 +234,17 @@ export default function CatalogoPage() {
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10 bg-m-surface-raised">
                 <tr>
-                  <th colSpan={3} />
+                  <th colSpan={4} />
                   <th colSpan={2} className="rounded-t-[8px] bg-m-surface-active px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-secondary">Medição</th>
                   <th colSpan={3} className="rounded-t-[8px] bg-m-accent-subtle px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.4px] text-m-accent">Contratado</th>
                   <th />
                 </tr>
                 <tr className="text-left">
                   <th className={th} /><th className={th}>Item</th><th className={th}>Descrição das atividades</th>
+                  <th className={th}>Nome simplificado (Simova)</th>
                   <th className={th}>Un.</th><th className={th}>CMS · cód. atividade</th>
                   <th className={`${th} text-right`}>Qtd.</th><th className={`${th} text-right`}>P. unit. (R$)</th><th className={`${th} text-right`}>Total (R$)</th>
-                  <th className={th}>Catálogo</th>
+                  <th className={th}>Grupo (catálogo)</th>
                 </tr>
               </thead>
               <tbody>
@@ -236,17 +252,35 @@ export default function CatalogoPage() {
                   <tr key={l.item} className={sel.has(l.item) ? 'bg-m-accent-subtle' : ''}>
                     <td className={`${tdc} w-8`}>{editar && !l.tipo && <input type="checkbox" aria-label={`Selecionar ${l.item}`} checked={sel.has(l.item)} onChange={() => marcar(l.item)} />}</td>
                     <td className={`${tdc} whitespace-nowrap font-semibold text-m-text-primary`}>{l.item}</td>
-                    <td className={`${tdc} min-w-[340px] whitespace-normal`}>{l.descricao}</td>
+                    <td className={`${tdc} min-w-[300px] whitespace-normal`}>{l.descricao}</td>
+                    <td className={`${tdc} min-w-[220px]`}>
+                      {editar ? (() => {
+                        const v = nomes[l.item] ?? l.nome_simplificado ?? '';
+                        const mudou = l.item in nomes;
+                        return <input aria-label={`Nome simplificado de ${l.item}`} maxLength={120} value={v} placeholder="escreva o nome curto"
+                          onChange={(e) => setNomes((n) => { const x = { ...n }; if (e.target.value === (l.nome_simplificado ?? '')) delete x[l.item]; else x[l.item] = e.target.value; return x; })}
+                          className={`h-8 w-full rounded-[8px] border bg-m-surface-field px-2 text-[12.5px] outline-none focus:border-m-accent ${mudou ? 'border-m-accent bg-m-accent-subtle/40' : 'border-m-stroke'}`} />;
+                      })() : (l.nome_simplificado ?? <span className="text-m-text-muted">—</span>)}
+                    </td>
                     <td className={tdc}>{l.unid}</td>
                     <td className={`${tdc} whitespace-nowrap`}>{l.criterio && <span className="rounded-[6px] bg-m-info-subtle px-2 py-0.5 text-[11px] font-semibold text-m-info">{l.criterio}</span>}<div className="mt-0.5 text-[11px] text-m-text-muted">{l.codigo_atividade}</div></td>
                     <td className={`${tdc} text-right`}>{fmt(l.quantidade)}</td>
                     <td className={`${tdc} text-right`}>{fmt(l.pu)}</td>
                     <td className={`${tdc} text-right font-semibold`}>{fmt(l.total)}</td>
-                    <td className={`${tdc} whitespace-nowrap`}>{l.tipo ? <span title={l.tipo.grupo} className="rounded-[6px] bg-m-accent-subtle px-2 py-0.5 text-[11px] font-semibold text-m-accent">{l.tipo.codigo}</span> : <span className="text-[11px] text-m-text-muted">—</span>}</td>
+                    <td className={`${tdc} whitespace-nowrap`}>
+                      {l.tipo && <span title={l.tipo.grupo} className="mr-1.5 rounded-[6px] bg-m-accent-subtle px-2 py-0.5 text-[11px] font-semibold text-m-accent">{l.tipo.codigo}</span>}
+                      {editar ? (
+                        <select aria-label={`Grupo do item ${l.item}`} value={l.tipo?.grupo_id ?? ''} disabled={grupoDoItem.isPending} onChange={(e) => mudarGrupo(l, e.target.value)}
+                          className="h-8 max-w-[170px] rounded-[8px] border border-m-stroke bg-m-surface-field px-1.5 text-[12px]">
+                          <option value="">{l.tipo ? '— desvincular —' : 'sem grupo'}</option>
+                          {grupos.map((g) => <option key={g.id} value={g.id}>{g.codigo} · {g.descricao}</option>)}
+                        </select>
+                      ) : !l.tipo && <span className="text-[11px] text-m-text-muted">—</span>}
+                    </td>
                   </tr>
                 ) : (
                   <tr key={l.item}>
-                    <td colSpan={9} className={`border-b border-m-row px-2 py-2 text-[12px] ${NIVEL[l.nivel] ?? ''}`} style={{ paddingLeft: 8 + (l.nivel - 1) * 14 }}>
+                    <td colSpan={10} className={`border-b border-m-row px-2 py-2 text-[12px] ${NIVEL[l.nivel] ?? ''}`} style={{ paddingLeft: 8 + (l.nivel - 1) * 14 }}>
                       <button type="button" className="inline-flex items-center gap-1 text-left" onClick={() => alternar(l.item)} aria-label={`${fechados.has(l.item) ? 'Abrir' : 'Recolher'} ${l.item}`}>
                         {fechados.has(l.item) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}{l.item} · {l.descricao}
                       </button>
@@ -257,7 +291,7 @@ export default function CatalogoPage() {
             </table>
           </div>
         </>}
-        <Erro erro={vincular.error} />
+        <Erro erro={vincular.error ?? salvarNomes.error} />
       </Painel>
     </>
   );
