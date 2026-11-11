@@ -10,13 +10,23 @@ from app.core.auth import ContextoObra, ler, planejar
 from app.core.db import get_session
 from app.modules.efetivo.application.importar_efetivo import importar_efetivo
 from app.modules.efetivo.domain.efetivo import Situacao, chave_texto, sugerir_recurso
-from app.modules.efetivo.domain.organograma import PessoaOrg, filtrar, montar_organograma
+from app.modules.efetivo.domain.organograma import (
+    CORES_PADRAO,
+    PessoaOrg,
+    SetorOrg,
+    filtrar,
+    montar_organograma,
+    validar_cor,
+    validar_cores,
+)
 from app.modules.efetivo.infra.gateway import depara
 from app.modules.efetivo.infra.models import (
     ColaboradorModel,
     DeParaFuncaoModel,
     ImportacaoEfetivoModel,
     MovimentoEfetivoModel,
+    OrganogramaConfigModel,
+    SetorObraModel,
 )
 from app.modules.equipes.infra.models import EquipeMembroModel, EquipeModel
 from app.shared.errors import DomainError, NotFoundError
@@ -347,20 +357,41 @@ def aplicar_sugestoes(s: Session = Depends(get_session), c: ContextoObra = Depen
 
 
 # ---- organograma ---------------------------------------------------------------------------------------
+def _config(s: Session, obra_id: int) -> OrganogramaConfigModel:
+    cfg = s.scalar(select(OrganogramaConfigModel).where(OrganogramaConfigModel.obra_id == obra_id))
+    if cfg is None:
+        cfg = OrganogramaConfigModel(obra_id=obra_id, cores={})
+        s.add(cfg)
+        s.flush()
+    return cfg
+
+
+def _cores(cfg: OrganogramaConfigModel | None) -> dict:
+    return {**CORES_PADRAO, **((cfg.cores if cfg else None) or {})}
+
+
 @router.get("/organograma")
 def organograma(q: str | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     from app.modules.obras.infra.models import ObraModel
 
     obra = s.get(ObraModel, c.obra_id)
-    cs = {m.cracha: m for m in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id))
-          if m.cracha}
     todos = list(s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id)))
+    por_id = {m.id: m for m in todos}
+    cs = {m.cracha: m for m in todos if m.cracha}
+    cfg = s.scalar(select(OrganogramaConfigModel).where(OrganogramaConfigModel.obra_id == c.obra_id))
+    geral = por_id.get(cfg.responsavel_id) if cfg and cfg.responsavel_id else None
+    setores_m = list(s.scalars(select(SetorObraModel).where(SetorObraModel.obra_id == c.obra_id)))
+    setor_nome = {st.id: st.nome for st in setores_m}
+    responsaveis = {m.id for m in [geral, *(por_id.get(st.responsavel_id) for st in setores_m)] if m is not None}
     pessoas: list[PessoaOrg] = []
     na_equipe: set[str] = set()
     for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.ativo.is_(True))):
         enc = cs.get(e.encarregado_cracha or "")
-        setor = e.frente_codigo or (enc.dp if enc else None)
-        base = {"equipe": e.nome, "encarregado": e.encarregado_nome, "supervisor": e.responsavel, "setor": setor,
+        if setores_m:  # com setores cadastrados, vale o setor da equipe
+            setor = setor_nome.get(e.setor_id) if e.setor_id else None
+        else:
+            setor = e.frente_codigo or (enc.dp if enc else None)
+        base = {"equipe": e.nome, "encarregado": enc.nome if enc else e.encarregado_nome, "setor": setor,
                 "turno": e.turno or ""}
         for mb in e.membros:
             m = cs.get(mb.cracha)
@@ -374,12 +405,120 @@ def organograma(q: str | None = None, s: Session = Depends(get_session), c: Cont
             na_equipe.add(enc.cracha)
     for m in todos:
         sit = Situacao(m.situacao)
-        if m.cracha in na_equipe:
+        if m.cracha in na_equipe or m.id in responsaveis:
             continue
         if sit.ativo:
             pessoas.append(PessoaOrg(m.matricula or "", m.nome, m.funcao or "", "sem-equipe"))
         elif sit.em_mobilizacao:
             pessoas.append(PessoaOrg(m.matricula or "", m.nome, m.funcao or "", "mobilizacao"))
-    raiz = montar_organograma(obra.nome if obra else "Obra", pessoas)
+    setores = [SetorOrg(st.nome, por_id[st.responsavel_id].nome if st.responsavel_id in por_id else None, st.cor, st.ordem)
+               for st in setores_m]
+    raiz = montar_organograma(obra.nome if obra else "Obra", pessoas, setores, geral.nome if geral else None)
     vis = filtrar(raiz, q or "")
-    return {"raiz": vis.como_dict() if vis else None, "total": raiz.qtd}
+    return {"raiz": vis.como_dict() if vis else None, "total": raiz.qtd, "cores": _cores(cfg)}
+
+
+# ---- setores da obra e configuração do organograma -----------------------------------------------------
+class PessoaRef(BaseModel):
+    id: int
+    nome: str
+    matricula: str | None
+    funcao: str | None
+    situacao: str
+
+
+class SetorIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=80)
+    cor: str | None = None
+    ordem: int = 0
+    responsavel_id: int | None = None
+    equipes: list[int] = []
+
+
+class ConfigIn(BaseModel):
+    responsavel_id: int | None = None
+    cores: dict[str, str] = {}
+
+
+def _ref(m: ColaboradorModel | None) -> PessoaRef | None:
+    return PessoaRef(id=m.id, nome=m.nome, matricula=m.matricula, funcao=m.funcao, situacao=m.situacao) if m else None
+
+
+def _colaborador(s: Session, obra_id: int, cid: int | None) -> ColaboradorModel | None:
+    if cid is None:
+        return None
+    m = s.get(ColaboradorModel, cid)
+    if m is None or m.obra_id != obra_id:
+        raise NotFoundError("Colaborador", cid)
+    return m
+
+
+@router.get("/setores")
+def listar_setores(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    cfg = s.scalar(select(OrganogramaConfigModel).where(OrganogramaConfigModel.obra_id == c.obra_id))
+    equipes = list(s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id).order_by(EquipeModel.nome)))
+    setores = list(s.scalars(select(SetorObraModel).where(SetorObraModel.obra_id == c.obra_id)
+                             .order_by(SetorObraModel.ordem, SetorObraModel.nome)))
+    return {
+        "setores": [{"id": st.id, "nome": st.nome, "cor": st.cor, "ordem": st.ordem,
+                     "responsavel": _ref(s.get(ColaboradorModel, st.responsavel_id) if st.responsavel_id else None),
+                     "equipes": [{"id": e.id, "nome": e.nome} for e in equipes if e.setor_id == st.id]}
+                    for st in setores],
+        "equipes": [{"id": e.id, "nome": e.nome, "setor_id": e.setor_id, "ativo": e.ativo} for e in equipes],
+        "responsavel_geral": _ref(s.get(ColaboradorModel, cfg.responsavel_id) if cfg and cfg.responsavel_id else None),
+        "cores": _cores(cfg),
+        "cores_padrao": CORES_PADRAO,
+    }
+
+
+def _salvar_setor(s: Session, c: ContextoObra, st: SetorObraModel, d: SetorIn) -> dict:
+    nome = " ".join(d.nome.split())
+    outro = s.scalar(select(SetorObraModel).where(SetorObraModel.obra_id == c.obra_id, SetorObraModel.nome == nome,
+                                                  SetorObraModel.id != (st.id or 0)))
+    if outro is not None:
+        raise DomainError(f"já existe o setor {nome}")
+    st.nome, st.cor, st.ordem = nome, validar_cor(d.cor), d.ordem
+    st.responsavel_id = _colaborador(s, c.obra_id, d.responsavel_id).id if d.responsavel_id else None
+    s.add(st)
+    s.flush()
+    for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id)):
+        if e.id in d.equipes:
+            e.setor_id = st.id
+        elif e.setor_id == st.id:
+            e.setor_id = None
+    s.flush()
+    return {"id": st.id, "nome": st.nome}
+
+
+@router.post("/setores", status_code=201)
+def criar_setor(d: SetorIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    return _salvar_setor(s, c, SetorObraModel(obra_id=c.obra_id), d)
+
+
+@router.put("/setores/{setor_id}")
+def atualizar_setor(setor_id: int, d: SetorIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    st = s.get(SetorObraModel, setor_id)
+    if st is None or st.obra_id != c.obra_id:
+        raise NotFoundError("Setor", setor_id)
+    return _salvar_setor(s, c, st, d)
+
+
+@router.delete("/setores/{setor_id}", status_code=204)
+def excluir_setor(setor_id: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    st = s.get(SetorObraModel, setor_id)
+    if st is None or st.obra_id != c.obra_id:
+        raise NotFoundError("Setor", setor_id)
+    for e in s.scalars(select(EquipeModel).where(EquipeModel.setor_id == st.id)):
+        e.setor_id = None
+    s.delete(st)
+
+
+@router.put("/organograma/config")
+def salvar_config(d: ConfigIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Responsável geral da obra (pessoa do efetivo) e cores dos níveis (obra, setor, equipe, função)."""
+    cfg = _config(s, c.obra_id)
+    cfg.responsavel_id = _colaborador(s, c.obra_id, d.responsavel_id).id if d.responsavel_id else None
+    cfg.cores = validar_cores(d.cores)
+    s.flush()
+    return {"responsavel_geral": _ref(s.get(ColaboradorModel, cfg.responsavel_id) if cfg.responsavel_id else None),
+            "cores": _cores(cfg)}

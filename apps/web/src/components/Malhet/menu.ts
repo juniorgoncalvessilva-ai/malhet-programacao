@@ -1,4 +1,4 @@
-import { BookOpen, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, MapPin, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { BookOpen, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -22,6 +22,7 @@ export const MENU: GrupoMenu[] = [
     itens: [
       { titulo: 'Efetivo e mobilização', url: '/app/efetivo', icone: IdCard },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
+      { titulo: 'Setores da obra', url: '/app/efetivo/setores', icone: Network },
       { titulo: 'Organograma', url: '/app/efetivo/organograma', icone: GitFork },
       { titulo: 'De-para de funções', url: '/app/efetivo/funcoes', icone: Shuffle },
     ],

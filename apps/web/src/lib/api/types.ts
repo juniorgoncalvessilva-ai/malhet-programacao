@@ -46,7 +46,7 @@ export interface PessoaEfetivoEquipe {
 }
 export interface MembroEquipe { cracha: string; nome: string; funcao: string | null; efetivo?: PessoaEfetivoEquipe | null }
 export interface Equipe {
-  id: number; nome: string; frente_codigo: string | null; encarregado_cracha: string | null;
+  id: number; nome: string; frente_codigo: string | null; setor_id?: number | null; encarregado_cracha: string | null;
   encarregado_nome: string | null; jornada_horas: number; observacao: string | null; ativo: boolean;
   turno: string | null; codigo_simova: string | null; responsavel: string | null; equipamentos: string | null;
   composicao: ComposicaoEquipe[]; membros: MembroEquipe[]; composicao_efetiva: ComposicaoEquipe[]; hh_disponivel_dia: number;
@@ -171,5 +171,17 @@ export interface ResumoEfetivo {
   ultima_importacao: { arquivo: string; em: string; resumo: Record<string, unknown> } | null;
 }
 export interface FuncaoDePara { funcao_chave: string; funcao: string; total: number; ativos: number; recurso: string | null; ignorar: boolean; definido: boolean; sugestao: string | null }
-export interface NoOrganograma { id: string; tipo: 'obra' | 'setor' | 'supervisor' | 'encarregado' | 'funcao'; titulo: string; detalhe: string; qtd: number; pessoas: { matricula: string; nome: string; funcao: string; situacao: string; turno: string }[]; filhos: NoOrganograma[] }
+export interface NoOrganograma {
+  id: string; tipo: 'obra' | 'setor' | 'equipe' | 'funcao'; titulo: string; detalhe: string; qtd: number;
+  cor: string | null; responsavel: string | null;
+  pessoas: { matricula: string; nome: string; funcao: string; situacao: string; turno: string }[]; filhos: NoOrganograma[];
+}
+export type NivelCor = 'obra' | 'setor' | 'equipe' | 'funcao';
+export type CoresOrganograma = Record<NivelCor, string>;
+export interface PessoaRef { id: number; nome: string; matricula: string | null; funcao: string | null; situacao: SituacaoEfetivo }
+export interface SetorObra { id: number; nome: string; cor: string | null; ordem: number; responsavel: PessoaRef | null; equipes: { id: number; nome: string }[] }
+export interface SetoresObra {
+  setores: SetorObra[]; equipes: { id: number; nome: string; setor_id: number | null; ativo: boolean }[];
+  responsavel_geral: PessoaRef | null; cores: CoresOrganograma; cores_padrao: CoresOrganograma;
+}
 export interface MovimentoEfetivo { id: number; colaborador_id: number; nome: string; tipo: string; de: string | null; para: string | null; em: string }

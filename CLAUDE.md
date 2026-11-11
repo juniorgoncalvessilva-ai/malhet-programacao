@@ -46,6 +46,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Spec 016.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017.
+- Setores da obra (`setor_obra`, responsável do efetivo, cor) e `organograma_config` (responsável geral + cores por
+  nível); `equipe.setor_id`. Organograma = Obra → Setor → Equipe → Função. Spec 018.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,

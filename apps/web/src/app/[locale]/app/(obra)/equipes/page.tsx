@@ -6,6 +6,7 @@ import { Fragment, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Selecao, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
+import { k as kEfetivo, useSetores } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { ComposicaoEquipe, Equipe, PessoaEfetivoEquipe } from '@/lib/api/types';
 import { ROTULO_SITUACAO, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
@@ -18,7 +19,7 @@ type Vinculo = { equipes: number; vinculados: number; nao_encontrados: string[];
 /** Crachá provisório ("?nome") = pessoa ainda sem número. */
 const semNumero = (c: string | null | undefined) => !c || c.startsWith('?');
 const NOVA: Form = {
-  nome: '', frente_codigo: null, encarregado_cracha: null, encarregado_nome: null, jornada_horas: 9, turno: 'Diurno',
+  nome: '', frente_codigo: null, setor_id: null, encarregado_cracha: null, encarregado_nome: null, jornada_horas: 9, turno: 'Diurno',
   codigo_simova: null, responsavel: null, equipamentos: null, observacao: null, ativo: true, composicao: [], membros: [],
 };
 const TURNOS = ['Diurno', 'Noturno', 'Administrativo', 'Turno A', 'Turno B', 'Turno C'];
@@ -27,6 +28,7 @@ export default function EquipesPage() {
   const confirmar = useConfirmar();
   const { pode } = useObra();
   const equipes = useEquipes();
+  const setores = useSetores();
   const api = useApi();
   const qc = useQueryClient();
   const recursos = useQuery({ queryKey: ['cpu-recursos'], queryFn: () => api.get<{ recurso: string; tipo: 'MOD' | 'EQU'; composicoes: number }[]>('/cpu/recursos') });
@@ -71,7 +73,7 @@ export default function EquipesPage() {
     if (form?.id && ids.includes(form.id)) setForm(null);
     atualizar();
   };
-  const atualizar = () => { qc.invalidateQueries({ queryKey: chaves.equipes }); qc.invalidateQueries({ queryKey: ['programacao'] }); };
+  const atualizar = () => { qc.invalidateQueries({ queryKey: chaves.equipes }); qc.invalidateQueries({ queryKey: ['programacao'] }); qc.invalidateQueries({ queryKey: kEfetivo.efetivo }); };
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +149,10 @@ export default function EquipesPage() {
               <Campo rotulo="Matrícula / crachá do encarregado" value={form.encarregado_cracha ?? ''} onChange={(e) => setForm({ ...form, encarregado_cracha: e.target.value || null })} />
               <div className="md:col-span-2"><Campo rotulo="Encarregado" placeholder="nome, ou 115532 - nome" value={form.encarregado_nome ?? ''} onChange={(e) => setForm({ ...form, encarregado_nome: e.target.value || null })} /></div>
               <div className="md:col-span-2"><Campo rotulo="Responsável (supervisor/engenheiro)" value={form.responsavel ?? ''} onChange={(e) => setForm({ ...form, responsavel: e.target.value || null })} /></div>
+              <Selecao rotulo="Setor da obra" value={form.setor_id ?? ''} onChange={(e) => setForm({ ...form, setor_id: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">{setores.data?.setores.length ? '— sem setor —' : 'cadastre em Setores da obra'}</option>
+                {setores.data?.setores.map((st) => <option key={st.id} value={st.id}>{st.nome}</option>)}
+              </Selecao>
               <Campo rotulo="Frente" value={form.frente_codigo ?? ''} onChange={(e) => setForm({ ...form, frente_codigo: e.target.value || null })} />
 
               <div className="md:col-span-6">
@@ -221,7 +227,9 @@ export default function EquipesPage() {
                 <tr className={e.ativo ? '' : 'opacity-50'}>
                   <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <input type="checkbox" className="mr-2 align-middle" aria-label={`Selecionar ${e.nome}`} checked={marcadas.has(e.id)} onChange={() => setMarcadas((m) => { const n = new Set(m); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })} />}<button type="button" aria-label={`Ver funcionários de ${e.nome}`} className="text-m-text-muted" onClick={() => setAberta(aberta === e.id ? null : e.id)}>{aberta === e.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
                   <td className={td}>{e.codigo_simova ?? '—'}</td>
-                  <td className={td}><b className="text-m-text-primary">{e.nome}</b>{e.responsavel && <div className="text-xs text-m-text-muted">resp. {e.responsavel}</div>}</td>
+                  <td className={td}><b className="text-m-text-primary">{e.nome}</b>
+                    {(() => { const st = setores.data?.setores.find((x) => x.id === e.setor_id); return st && <div className="mt-0.5 flex items-center gap-1 text-xs text-m-text-secondary"><span className="h-2 w-2 rounded-full" style={{ background: st.cor ?? setores.data?.cores.setor }} aria-hidden="true" />{st.nome}</div>; })()}
+                    {e.responsavel && <div className="text-xs text-m-text-muted">resp. {e.responsavel}</div>}</td>
                   <td className={td}>{e.encarregado_nome ?? '—'}
                     <div className="text-xs text-m-text-muted">{e.encarregado_cracha
                       ? <>{e.encarregado_cracha}{e.encarregado_efetivo?.funcao && ` · ${e.encarregado_efetivo.funcao}`}</>

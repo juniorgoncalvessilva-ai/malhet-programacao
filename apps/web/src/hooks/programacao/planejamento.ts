@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qs } from '@/lib/api/client';
-import type { CadastroSsma, Colaborador, FuncaoDePara, GrupoCatalogo, MovimentoEfetivo, NoOrganograma, ResumoEfetivo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
+import type { CadastroSsma, Colaborador, FuncaoDePara, GrupoCatalogo, MovimentoEfetivo, NoOrganograma, CoresOrganograma, SetoresObra, ResumoEfetivo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
 import { useApi } from './useApi';
 
 export const k = {
@@ -31,9 +31,14 @@ export function useFuncoesEfetivo() {
   const api = useApi();
   return useQuery({ queryKey: [...k.efetivo, 'funcoes'], queryFn: () => api.get<{ recursos_cpu: string[]; funcoes: FuncaoDePara[] }>('/efetivo/funcoes') });
 }
+export function useSetores() {
+  const api = useApi();
+  return useQuery({ queryKey: [...k.efetivo, 'setores'], queryFn: () => api.get<SetoresObra>('/efetivo/setores') });
+}
+
 export function useOrganograma(q: string) {
   const api = useApi();
-  return useQuery({ queryKey: [...k.efetivo, 'organograma', q], queryFn: () => api.get<{ raiz: NoOrganograma | null; total: number }>(`/efetivo/organograma${q ? `?q=${encodeURIComponent(q)}` : ''}`) });
+  return useQuery({ queryKey: [...k.efetivo, 'organograma', q], queryFn: () => api.get<{ raiz: NoOrganograma | null; total: number; cores: CoresOrganograma }>(`/efetivo/organograma${q ? `?q=${encodeURIComponent(q)}` : ''}`) });
 }
 
 /** Todos os cadastros de SSMA/PTO da obra (as telas filtram por tipo). */

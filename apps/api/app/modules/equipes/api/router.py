@@ -48,6 +48,7 @@ class MembroOut(MembroIO):
 class EquipeIn(BaseModel):
     nome: str
     frente_codigo: str | None = None
+    setor_id: int | None = None
     encarregado_cracha: str | None = None
     encarregado_nome: str | None = None
     jornada_horas: float = Field(9.0, gt=0, le=24)

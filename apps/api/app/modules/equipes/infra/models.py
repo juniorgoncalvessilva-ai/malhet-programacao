@@ -12,6 +12,7 @@ class EquipeModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     nome: Mapped[str] = mapped_column(String(120))
+    setor_id: Mapped[int | None] = mapped_column(ForeignKey("setor_obra.id", ondelete="SET NULL"), index=True)
     frente_codigo: Mapped[str | None] = mapped_column(String(30))
     encarregado_cracha: Mapped[str | None] = mapped_column(String(20), index=True)
     encarregado_nome: Mapped[str | None] = mapped_column(String(150))

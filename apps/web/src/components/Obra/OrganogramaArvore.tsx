@@ -3,7 +3,7 @@
 import { ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, Minus, Plus, ScanSearch } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { NoOrganograma } from '@/lib/api/types';
+import type { CoresOrganograma, NoOrganograma } from '@/lib/api/types';
 import styles from './OrganogramaArvore.module.css';
 
 const ZOOM_MIN = 0.3;
@@ -11,10 +11,11 @@ const ZOOM_MAX = 1.6;
 const LISTA_LONGA = 12;
 const NIVEIS = [
   { n: 1, rotulo: 'Setores' },
-  { n: 2, rotulo: 'Supervisores' },
-  { n: 3, rotulo: 'Equipes' },
+  { n: 2, rotulo: 'Equipes' },
   { n: 99, rotulo: 'Funções' },
 ];
+const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', equipe: '#2563EB', funcao: '#64748B' };
+const RAMOS_ESPECIAIS = new Set(['Sem equipe', 'Em mobilização', 'Sem setor']);
 
 /** ids dos nós que, até a profundidade `nivel`, ficam abertos (mostram os filhos). */
 function abertosAte(raiz: NoOrganograma, nivel: number): Set<string> {
@@ -34,7 +35,9 @@ function abertosAte(raiz: NoOrganograma, nivel: number): Set<string> {
  * Árvore do organograma (modelo do Malhet) com ramos recolhíveis, zoom (botões, Ctrl + rolagem, ajustar à tela),
  * arrastar para navegar e tela cheia. Clique numa função para ver as pessoas.
  */
-export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false }: { raiz: NoOrganograma; ariaLabel: string; expandirTudo?: boolean }) {
+export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores = CORES_PADRAO, acoes }: {
+  raiz: NoOrganograma; ariaLabel: string; expandirTudo?: boolean; cores?: CoresOrganograma; acoes?: React.ReactNode;
+}) {
   const [nivel, setNivel] = useState(expandirTudo ? 99 : 2);
   const [abertos, setAbertos] = useState<Set<string>>(() => abertosAte(raiz, expandirTudo ? 99 : 2));
   const [pessoas, setPessoas] = useState<Set<string>>(new Set());
@@ -129,6 +132,12 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false }: { r
         <button type="button" className={botao} onClick={() => escolherNivel(99)}><ChevronsUpDown size={14} /> Expandir tudo</button>
         <button type="button" className={botao} onClick={() => escolherNivel(1)}><ChevronsDownUp size={14} /> Recolher tudo</button>
         <span className="text-[12px] text-m-text-muted">{visiveis} caixas visíveis</span>
+        <span className="flex items-center gap-2.5 text-[11.5px] text-m-text-secondary" aria-label="Cores dos níveis">
+          {(['obra', 'setor', 'equipe', 'funcao'] as const).map((n) => (
+            <span key={n} className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: cores[n] }} aria-hidden="true" />{ROTULO_TIPO[n]}</span>
+          ))}
+        </span>
+        {acoes}
         <div className="ml-auto flex items-center gap-1">
           <button type="button" className={botao} aria-label="Diminuir zoom" disabled={zoom <= ZOOM_MIN} onClick={() => mudarZoom((z) => z - 0.1)}><Minus size={14} /></button>
           <button type="button" className={cn(botao, 'w-16 justify-center tabular-nums')} title="Voltar a 100%" onClick={() => mudarZoom(() => 1)}>{Math.round(zoom * 100)}%</button>
@@ -157,7 +166,7 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false }: { r
         <div style={{ width: Math.max(tam.w * zoom, 1), height: Math.max(tam.h * zoom, 1) }} className="mx-auto">
           <div ref={conteudo} className={styles.conteudo} style={{ transform: `scale(${zoom})` }}>
             <ul className={styles.arvore} aria-label={ariaLabel}>
-              <Ramo no={raiz} abertos={abertos} alternar={alternar} pessoas={pessoas} alternarPessoas={alternarPessoas} />
+              <Ramo no={raiz} abertos={abertos} alternar={alternar} pessoas={pessoas} alternarPessoas={alternarPessoas} cores={cores} corSetor={null} />
             </ul>
           </div>
         </div>
@@ -167,7 +176,10 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false }: { r
   );
 }
 
-type PropsRamo = { no: NoOrganograma; abertos: Set<string>; alternar: (id: string) => void; pessoas: Set<string>; alternarPessoas: (id: string) => void };
+type PropsRamo = {
+  no: NoOrganograma; abertos: Set<string>; alternar: (id: string) => void; pessoas: Set<string>; alternarPessoas: (id: string) => void;
+  cores: CoresOrganograma; corSetor: string | null; // cor própria do setor, herdada pelas equipes e funções dele
+};
 
 function Ramo(props: PropsRamo) {
   const { no, abertos } = props;
@@ -175,6 +187,7 @@ function Ramo(props: PropsRamo) {
   const temFilhos = no.filhos.length > 0;
   // filhos que são todos folhas (funções) empilham na vertical: a árvore fica estreita
   const empilhar = temFilhos && no.filhos.every((f) => !f.filhos.length);
+  const corFilhos = no.tipo === 'setor' ? no.cor : props.corSetor;
   return (
     <li className={styles.no}>
       <Caixa {...props} />
@@ -182,21 +195,28 @@ function Ramo(props: PropsRamo) {
         <>
           <span className={styles.haste} aria-hidden="true" />
           {empilhar
-            ? <ul className={styles.coluna}>{no.filhos.map((f) => <li key={f.id}><Caixa {...props} no={f} /></li>)}</ul>
-            : <ul>{no.filhos.map((f) => <Ramo key={f.id} {...props} no={f} />)}</ul>}
+            ? <ul className={styles.coluna}>{no.filhos.map((f) => <li key={f.id}><Caixa {...props} corSetor={corFilhos} no={f} /></li>)}</ul>
+            : <ul>{no.filhos.map((f) => <Ramo key={f.id} {...props} corSetor={corFilhos} no={f} />)}</ul>}
         </>
       )}
     </li>
   );
 }
 
-function Caixa({ no, abertos, alternar, pessoas, alternarPessoas }: PropsRamo) {
+function corDaCaixa(no: NoOrganograma, cores: CoresOrganograma, corSetor: string | null): string {
+  if (no.tipo === 'setor') return no.cor ?? (RAMOS_ESPECIAIS.has(no.titulo) ? cores.funcao : cores.setor);
+  if (no.tipo === 'obra') return cores.obra;
+  return corSetor ?? cores[no.tipo] ?? cores.funcao;
+}
+
+function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSetor }: PropsRamo) {
   const aberto = abertos.has(no.id);
   const verPessoas = pessoas.has(no.id);
   const temFilhos = no.filhos.length > 0;
   const temPessoas = no.pessoas.length > 0 && !temFilhos;
   return (
-    <div className={cn(styles.card, verPessoas && styles.aberta)} data-tipo={no.tipo}>
+    <div className={cn(styles.card, verPessoas && styles.aberta)} data-tipo={no.tipo}
+      style={{ '--cor': corDaCaixa(no, cores, corSetor) } as React.CSSProperties}>
       {temPessoas ? (
         <button type="button" className={styles.folha} aria-expanded={verPessoas} onClick={() => alternarPessoas(no.id)}>
           <Cartao no={no} />
@@ -222,12 +242,20 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas }: PropsRamo) {
   );
 }
 
+const ROTULO_TIPO: Record<NoOrganograma['tipo'], string> = { obra: 'Obra', setor: 'Setor', equipe: 'Equipe', funcao: 'Função' };
+
 function Cartao({ no }: { no: NoOrganograma }) {
+  const tipo = RAMOS_ESPECIAIS.has(no.titulo) && no.tipo === 'setor' ? 'Grupo' : ROTULO_TIPO[no.tipo];
+  const detalhe = no.detalhe && !['Setor', 'Função', 'Obra'].includes(no.detalhe) ? no.detalhe : '';
+  const dica = [no.titulo, detalhe, `${no.qtd} ${no.qtd === 1 ? 'pessoa' : 'pessoas'}`].filter(Boolean).join('\n');
   return (
-    <>
-      <p className="truncate text-[10px] uppercase tracking-[0.3px] text-m-text-muted">{no.detalhe}</p>
-      <p className="truncate text-[12px] font-semibold leading-4 text-m-text-primary" title={no.titulo}>{no.titulo}</p>
-      <p className="text-[10.5px] tabular-nums text-m-text-secondary">{no.qtd} {no.qtd === 1 ? 'pessoa' : 'pessoas'}</p>
-    </>
+    <div className={styles.cartao} title={dica}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={styles.tipo}>{tipo}</span>
+        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-m-text-secondary">{no.qtd} {no.qtd === 1 ? 'pessoa' : 'pessoas'}</span>
+      </div>
+      <p className={styles.titulo}>{no.titulo}</p>
+      {detalhe && <p className={styles.detalhe}>{detalhe}</p>}
+    </div>
   );
 }

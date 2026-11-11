@@ -117,14 +117,42 @@ def test_efetivo_equipes_simova_depara_organograma(client):
     e1 = next(e for e in client.get("/api/equipes").json() if e["nome"] == "EQUIPE.1_FORMA")
     assert {(c["recurso"], c["quantidade"]) for c in e1["composicao_efetiva"]} == {("Pedreiro", 1), ("Servente", 1)}
 
-    # organograma: obra → setor (DP do encarregado) → supervisor → equipe → função; sem equipe e em mobilização
+    # organograma sem setores cadastrados: obra → setor (DP do encarregado) → equipe → função
     org = client.get("/api/efetivo/organograma").json()["raiz"]
     setores = {f["titulo"]: f for f in org["filhos"]}
     assert "DP 14" in setores and "Sem equipe" in setores
-    equipe = setores["DP 14"]["filhos"][0]["filhos"][0]
-    assert setores["DP 14"]["filhos"][0]["titulo"] == "Eng. A" and equipe["titulo"] == "EQUIPE.1_FORMA"
+    equipe = setores["DP 14"]["filhos"][0]
+    assert equipe["tipo"] == "equipe" and equipe["titulo"] == "EQUIPE.1_FORMA"
     assert {f["titulo"] for f in equipe["filhos"]} >= {"PEDREIRO DE ACABAMENTO", "ENCARREGADO DE FORMAS"}
     assert client.get("/api/efetivo/organograma", params={"q": "candidato"}).json()["raiz"]["qtd"] == 1
+
+    # setores da obra com responsável e cor (do efetivo); responsável geral da obra; cores dos níveis
+    cs = {c["nome"]: c for c in client.get("/api/efetivo/colaboradores").json()}
+    geral, resp = cs["CANDIDATO TESTE"]["id"], cs["MOTORISTA TERCEIRO"]["id"]
+    r = client.post("/api/efetivo/setores", json={"nome": "Civil", "cor": "#0f766e", "responsavel_id": resp,
+                                                  "equipes": [eq]})
+    assert r.status_code == 201, r.text
+    assert client.post("/api/efetivo/setores", json={"nome": "Civil"}).status_code == 422  # nome repetido
+    assert client.post("/api/efetivo/setores", json={"nome": "Elétrica", "cor": "verde"}).status_code == 422
+    assert client.post("/api/efetivo/setores", json={"nome": "Elétrica", "ordem": 2}).status_code == 201
+    r = client.put("/api/efetivo/organograma/config", json={"responsavel_id": geral, "cores": {"setor": "#aa0000"}})
+    assert r.status_code == 200 and r.json()["cores"]["setor"] == "#AA0000" and r.json()["cores"]["obra"]
+    st = client.get("/api/efetivo/setores").json()
+    assert [x["nome"] for x in st["setores"]] == ["Civil", "Elétrica"]
+    assert st["setores"][0]["responsavel"]["nome"] == "MOTORISTA TERCEIRO" and st["setores"][0]["equipes"][0]["id"] == eq
+    assert st["responsavel_geral"]["nome"] == "CANDIDATO TESTE"
+    o = client.get("/api/efetivo/organograma").json()
+    raiz = o["raiz"]
+    assert raiz["responsavel"] == "CANDIDATO TESTE" and o["cores"]["setor"] == "#AA0000"
+    setores = {f["titulo"]: f for f in raiz["filhos"]}
+    civil = setores["Civil"]
+    assert (civil["cor"], civil["responsavel"], civil["filhos"][0]["titulo"]) == ("#0F766E", "MOTORISTA TERCEIRO", "EQUIPE.1_FORMA")
+    assert setores["Elétrica"]["qtd"] == 0 and "DP 14" not in setores
+    em_mob = {p["nome"] for f in setores.get("Em mobilização", {"filhos": []})["filhos"] for p in f["pessoas"]}
+    assert "CANDIDATO TESTE" not in em_mob  # responsável aparece na caixa da obra, não nos ramos soltos
+    sid = st["setores"][0]["id"]
+    assert client.delete(f"/api/efetivo/setores/{sid}").status_code == 204
+    assert next(e for e in client.get("/api/equipes").json() if e["id"] == eq)["setor_id"] is None
     with SessionLocal() as s:  # colaborador desmobilizado continua na equipe até o planejamento tirar
         assert s.query(ColaboradorModel).count() == 8
 

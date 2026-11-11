@@ -76,3 +76,27 @@ class DeParaFuncaoModel(Base):
     recurso: Mapped[str | None] = mapped_column(String(120))  # nome da função na CPU (Pedreiro, Servente…)
     ignorar: Mapped[bool] = mapped_column(Boolean, default=False)
     atualizado_por: Mapped[str | None] = mapped_column(String(80))
+
+
+class SetorObraModel(Base):
+    """Setor da obra (organograma): nome, cor e responsável escolhido no efetivo. Equipes apontam para o setor."""
+
+    __tablename__ = "setor_obra"
+    __table_args__ = (UniqueConstraint("obra_id", "nome", name="uq_setor_obra_nome"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    nome: Mapped[str] = mapped_column(String(80))
+    cor: Mapped[str | None] = mapped_column(String(9))  # #RRGGBB
+    ordem: Mapped[int] = mapped_column(Integer, default=0)
+    responsavel_id: Mapped[int | None] = mapped_column(ForeignKey("colaborador.id", ondelete="SET NULL"))
+
+
+class OrganogramaConfigModel(Base):
+    """Um por obra: responsável geral (do efetivo) e cores dos níveis do organograma."""
+
+    __tablename__ = "organograma_config"
+    __table_args__ = (UniqueConstraint("obra_id", name="uq_organograma_config_obra"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    responsavel_id: Mapped[int | None] = mapped_column(ForeignKey("colaborador.id", ondelete="SET NULL"))
+    cores: Mapped[dict] = mapped_column(JSONB, default=dict)  # {obra, setor, equipe, funcao}: #RRGGBB
