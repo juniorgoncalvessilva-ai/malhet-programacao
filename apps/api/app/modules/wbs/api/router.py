@@ -38,6 +38,17 @@ def _no(s: Session, c: ContextoObra, nid: int) -> WbsNoModel:
     return n
 
 
+def _atividades_p6(s: Session, obra_id: int, ids: set[str]) -> dict[str, str]:
+    from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
+    from app.modules.referencias.infra.models import AtividadeCronogramaModel
+
+    vig = ResolvedorReferencias(s, obra_id).versoes_vigentes().get("CRONOGRAMA")
+    if not vig or not ids:
+        return {}
+    return {a.id_crono: a.atividade for a in s.scalars(select(AtividadeCronogramaModel).where(
+        AtividadeCronogramaModel.versao_id == vig, AtividadeCronogramaModel.id_crono.in_(ids)))}
+
+
 @router.get("")
 def arvore(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     todos = nos(s, c.obra_id)
@@ -49,6 +60,7 @@ def arvore(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     tk = quantidades_por_tag(s, c.obra_id, itens)
     uso = dict(s.execute(select(LinhaProgramacaoModel.wbs_no_id, func.count()).where(
         LinhaProgramacaoModel.wbs_no_id.in_(list(todos) or [0])).group_by(LinhaProgramacaoModel.wbs_no_id)).all())
+    atividades_p6 = _atividades_p6(s, c.obra_id, {n.id_crono for n in todos.values() if n.id_crono})
     filhos: dict[int | None, list[WbsNoModel]] = {}
     for n in todos.values():
         filhos.setdefault(n.pai_id, []).append(n)
@@ -62,7 +74,9 @@ def arvore(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
         d = {"id": n.id, "pai_id": n.pai_id, "tipo": n.tipo, "seq": n.seq, "codigo": cods[n.id].codigo,
              "caminho": cods[n.id].caminho, "ativo": n.ativo, "observacao": n.observacao,
              "linhas": uso.get(n.id, 0), "area_id": n.area_id, "elemento": n.elemento, "complemento": n.complemento,
-             "grupo_id": n.grupo_id, "tipo_id": n.tipo_atividade_id, "item_pq": n.item_pq}
+             "grupo_id": n.grupo_id, "tipo_id": n.tipo_atividade_id, "item_pq": n.item_pq,
+             "origem": n.origem, "fora_cronograma": n.fora_cronograma, "id_crono": n.id_crono,
+             "atividade_p6": atividades_p6.get(n.id_crono) if n.id_crono else None}
         if n.tipo == "area":
             a = areas.get(n.area_id)
             d["titulo"], d["detalhe"] = (a.descricao if a else "?"), (f"CWA {a.cwa}" + (f" · Ativo {a.ativo_codigo}" if a and a.ativo_codigo else "") if a else "")
@@ -84,8 +98,19 @@ def arvore(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
         d["filhos"] = [saida(f) for f in sorted(filhos.get(n.id, []), key=lambda x: (x.seq, x.id))]
         return d
 
-    raizes = sorted(filhos.get(None, []), key=lambda n: (areas[n.area_id].ordem if n.area_id in areas else 0, cods[n.id].codigo))
+    import re
+
+    natural = lambda t: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", t)]  # noqa: E731
+    raizes = sorted(filhos.get(None, []), key=lambda n: natural(cods[n.id].codigo))
     return {"arvore": [saida(n) for n in raizes]}
+
+
+@router.post("/sincronizar-cronograma")
+def sincronizar_cronograma(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Traz a WBS do cronograma vigente (P6): áreas, CWPs e IWPs (atividades com item da PQ no Catálogo)."""
+    from app.modules.wbs.application.sincronizar_cronograma import sincronizar
+
+    return sincronizar(s, c.obra_id)
 
 
 @router.post("/nos", status_code=201)

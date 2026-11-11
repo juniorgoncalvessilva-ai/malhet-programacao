@@ -156,6 +156,8 @@ def _validar_linha(s: Session, c: ContextoObra, d: LinhaIn) -> tuple[TipoAtivida
         d.area_id, d.tipo_id, d.complemento = iwp.area_id, iwp.tipo_id, iwp.complemento
         if d.qtd_projeto is None and iwp.quantidade is not None:
             d.qtd_projeto = iwp.quantidade
+        if not d.id_crono and iwp.id_crono:
+            d.id_crono = iwp.id_crono
     if not d.area_id or not d.tipo_id:
         raise DomainError("escolha a área e o tipo, ou um IWP da WBS", "area_id")
     a = s.get(AreaFrenteModel, d.area_id)
@@ -387,7 +389,10 @@ def importar_xer(arquivo: UploadFile = File(...), rotulo: str = Form(...), s: Se
                  c: ContextoObra = Depends(administrar)):
     r = carregar_xer(s, c.obra_id, arquivo.file, nome_arquivo=arquivo.filename or "", rotulo=rotulo,
                      usuario=c.usuario.id)
-    return {"versoes": r.versoes, "contagem": r.contagem, "avisos": r.avisos}
+    from app.modules.wbs.application.sincronizar_cronograma import sincronizar
+
+    s.flush()
+    return {"versoes": r.versoes, "contagem": r.contagem, "avisos": r.avisos, "wbs": sincronizar(s, c.obra_id)}
 
 
 @router.post("/importar/cpu")

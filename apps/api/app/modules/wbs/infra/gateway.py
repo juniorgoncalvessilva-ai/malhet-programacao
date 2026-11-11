@@ -20,6 +20,7 @@ class IwpParaLinha:
     item_pq: str | None
     complemento: str  # texto do CWP → texto complementar do Simova
     quantidade: float | None  # digitada no IWP (vazio = take-off da TAG, calculado na programação)
+    id_crono: str | None = None  # IWP vindo do P6: a linha fica ligada à atividade do cronograma
 
 
 def nos(s: Session, obra_id: int) -> dict[int, WbsNoModel]:
@@ -67,4 +68,4 @@ def iwp_para_linha(s: Session, obra_id: int, no_id: int) -> IwpParaLinha:
     cwp = todos[grupo.pai_id]
     area = todos[cwp.pai_id]
     return IwpParaLinha(n.id, codigos(s, obra_id, todos)[n.id].codigo, area.area_id, n.tipo_atividade_id, n.item_pq,
-                        dom.texto_cwp(cwp.elemento, cwp.complemento), n.quantidade)
+                        dom.texto_cwp(cwp.elemento, cwp.complemento), n.quantidade, n.id_crono)

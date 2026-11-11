@@ -21,7 +21,10 @@ class WbsNoModel(Base):
     tipo_atividade_id: Mapped[int | None] = mapped_column(ForeignKey("tipo_atividade.id", ondelete="RESTRICT"))
     item_pq: Mapped[str | None] = mapped_column(String(40))  # IWP
     quantidade: Mapped[float | None] = mapped_column(Float)  # IWP: vazio = take-off da TAG da área
-    id_crono: Mapped[str | None] = mapped_column(String(40))  # âncora futura no cronograma (exportar para o P6)
+    id_crono: Mapped[str | None] = mapped_column(String(40), index=True)  # IWP vindo do P6: código da atividade
+    origem: Mapped[str] = mapped_column(String(6), default="manual", server_default="manual")  # manual | p6
+    chave_p6: Mapped[str | None] = mapped_column(String(400))  # CWP vindo do P6: caminho da WBS abaixo do CWA
+    fora_cronograma: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # sumiu do P6 vigente
     observacao: Mapped[str | None] = mapped_column(String(300))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

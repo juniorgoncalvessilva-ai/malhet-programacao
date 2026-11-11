@@ -197,4 +197,10 @@ export interface NoWbs {
   grupo_id: number | null; tipo_id: number | null; item_pq: string | null;
   unid?: string | null; quantidade?: number | null; qtd_takeoff?: number | null; quantidade_efetiva?: number | null;
   origem_qtd?: 'digitada' | 'take-off' | null; na_pq_vigente?: boolean; filhos: NoWbs[];
+  origem?: 'manual' | 'p6'; fora_cronograma?: boolean; id_crono?: string | null; atividade_p6?: string | null;
+}
+export interface SincronizacaoWbs {
+  atividades: number; fora_do_ramo_de_construcao: number; sem_area: string[]; sem_item_pq: number; sem_grupo: string[];
+  atividades_sem_grupo: number; itens_sem_grupo: number; areas_novas: number; cwps_novos: number; grupos_novos: number;
+  iwps_novos: number; iwps_atualizados: number; fora_do_cronograma: number; aviso?: string;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Calculado, nbr, type MemoriaCalculo } from '@/components/Obra/Calculado';
@@ -10,7 +10,7 @@ import { Botao, Cabecalho, Campo, Erro, Painel, Pilula, Selecao, fmt } from '@/c
 import { useCatalogo, useFrentes2, useWbs } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
-import type { NoWbs, TipoNoWbs } from '@/lib/api/types';
+import type { NoWbs, SincronizacaoWbs, TipoNoWbs } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 
 const FILHO: Record<TipoNoWbs, TipoNoWbs | null> = { area: 'cwp', cwp: 'grupo', grupo: 'iwp', iwp: null };
@@ -47,7 +47,10 @@ export default function WbsPage() {
   const api = useApi();
   const qc = useQueryClient();
   const confirmar = useConfirmar();
-  const [fechados, setFechados] = useState<Set<number>>(new Set());
+  const [abertos, setAbertos] = useState<Set<number>>(new Set());
+  const [busca, setBusca] = useState('');
+  const [sinc, setSinc] = useState<SincronizacaoWbs | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
   const [erro, setErro] = useState<unknown>(null);
   const arvore = useMemo(() => wbs.data?.arvore ?? [], [wbs.data]);
@@ -77,7 +80,7 @@ export default function WbsPage() {
           quantidade: q, observacao: form.observacao,
         });
         toast.success(`${ROTULO[form.tipo]} ${r.codigo} criado`);
-        if (form.pai) setFechados((f) => { const n = new Set(f); n.delete(form.pai!.id); return n; });
+        if (form.pai) setAbertos((f) => new Set(f).add(form.pai!.id));
       }
       setForm(null); setErro(null); atualizar();
     } catch (e) { setErro(e); }
@@ -86,7 +89,27 @@ export default function WbsPage() {
     if (!(await confirmar({ titulo: `Excluir ${ROTULO[n.tipo]} ${n.codigo}?`, mensagem: <>{n.titulo}<br />Só sai nó sem itens abaixo e sem programação (IWP em programação: inative).</> }))) return;
     try { await api.del(`/wbs/nos/${n.id}`); toast.success('Excluído'); atualizar(); } catch (e) { toast.error((e as Error).message); }
   };
-  const alternar = (id: number) => setFechados((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const alternar = (id: number) => setAbertos((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const sincronizar = async () => {
+    setSincronizando(true);
+    try { const r = await api.post<SincronizacaoWbs>('/wbs/sincronizar-cronograma'); setSinc(r); atualizar(); toast.success('WBS atualizada pelo cronograma'); }
+    catch (e) { toast.error((e as Error).message); } finally { setSincronizando(false); }
+  };
+  // busca: mostra o nó que casa e os pais dele (abertos)
+  const termo = busca.trim().toLowerCase();
+  const casa = useMemo(() => {
+    if (!termo) return null;
+    const vis = new Set<number>();
+    const ir = (n: NoWbs, pais: number[]): boolean => {
+      const eu = [n.codigo, n.titulo, n.detalhe, n.id_crono ?? '', n.atividade_p6 ?? '', n.item_pq ?? ''].join(' ').toLowerCase().includes(termo);
+      const algum = n.filhos.map((f) => ir(f, [...pais, n.id])).some(Boolean);
+      if (eu || algum) { vis.add(n.id); pais.forEach((p) => vis.add(p)); }
+      return eu || algum;
+    };
+    arvore.forEach((n) => ir(n, []));
+    return vis;
+  }, [arvore, termo]);
+  const todosIds = useMemo(() => { const ids: number[] = []; const ir = (n: NoWbs) => { if (n.filhos.length) ids.push(n.id); n.filhos.forEach(ir); }; arvore.forEach(ir); return ids; }, [arvore]);
 
   const formInline = (f: Form) => {
     const grupoPai = f.tipo === 'iwp' && f.pai ? grupos.find((g) => g.id === f.pai!.grupo_id) : undefined;
@@ -127,7 +150,8 @@ export default function WbsPage() {
 
   const td = 'border-b border-m-row px-2 py-1.5 align-top';
   const linhas = (n: NoWbs, nivel: number): React.ReactNode => {
-    const aberto = !fechados.has(n.id);
+    if (casa && !casa.has(n.id)) return null;
+    const aberto = casa ? true : abertos.has(n.id);
     const filho = FILHO[n.tipo];
     const editandoAqui = form && ((form.modo === 'editar' && form.no?.id === n.id) || (form.modo === 'novo' && form.pai?.id === n.id));
     return (
@@ -141,6 +165,9 @@ export default function WbsPage() {
           </td>
           <td className={td}><span className="text-[10.5px] uppercase tracking-[0.3px] opacity-80">{ROTULO[n.tipo]}</span></td>
           <td className={`${td} min-w-[360px]`}>{n.titulo}{n.detalhe && <span className={`ml-2 text-[11px] font-normal ${n.tipo === 'area' ? 'opacity-80' : 'text-m-text-muted'}`}>{n.detalhe}</span>}
+            {n.origem === 'p6' && <span className="ml-2 rounded-[5px] bg-m-info-subtle px-1.5 py-px text-[10px] font-semibold text-m-info" title="Veio da WBS do cronograma (P6)">P6</span>}
+            {n.fora_cronograma && <span className="ml-1"><Pilula tom="atencao">fora do cronograma</Pilula></span>}
+            {n.id_crono && <div className="text-[11px] font-normal text-m-text-muted">atividade {n.id_crono}{n.atividade_p6 ? ` · ${n.atividade_p6}` : ''}</div>}
             {n.observacao && <div className="text-[11px] font-normal opacity-80">{n.observacao}</div>}
             {n.tipo === 'iwp' && n.na_pq_vigente === false && <div className="text-[11px] text-m-warning">item fora da PQ vigente</div>}</td>
           <td className={td}>{n.unid ?? ''}</td>
@@ -168,10 +195,30 @@ export default function WbsPage() {
         eyebrow="Programar · WBS de execução"
         titulo={arvore.length ? `${arvore.length} área(s) · ${conta.cwp} CWP · ${conta.iwp} IWP` : 'WBS de execução vazia'}
         descricao={<>Detalhe aqui o que a programação precisa e o cronograma não tem: <b>Área</b> (CWA das Frentes) → <b>CWP</b> (elemento + texto complementar, ex.: Radier · Eixo A–B) → <b>Grupo</b> (Concreto, Forma, Aço… do <Link href="/app/catalogo" className="font-semibold text-m-accent">Catálogo</Link>) → <b>IWP</b> (item da PQ do grupo, com a quantidade digitada ou a do take-off pela TAG da área). Na programação, &quot;Nova linha&quot; pode partir do IWP: área, item, quantidade e o texto complementar do Simova (o CWP) vêm daqui.</>}
-        acoes={editar && <Botao onClick={() => { setErro(null); setForm(vazio('area')); }}><Plus size={16} /> Área</Botao>}
+        acoes={editar && <div className="flex flex-wrap gap-2">
+          <Botao variante="secundario" disabled={sincronizando} onClick={sincronizar} title="Traz áreas, CWPs e IWPs do cronograma vigente; não apaga nada"><RefreshCw size={16} /> {sincronizando ? 'Atualizando…' : 'Atualizar pela WBS do cronograma'}</Botao>
+          <Botao onClick={() => { setErro(null); setForm(vazio('area')); }}><Plus size={16} /> Área</Botao>
+        </div>}
       />
+      {sinc && (
+        <Painel titulo="WBS do cronograma trazida para a WBS de execução" subtitulo={`${sinc.atividades} atividades no cronograma vigente · nada é apagado: o que saiu do P6 fica marcado "fora do cronograma"`}
+          acoes={<Botao variante="secundario" onClick={() => setSinc(null)}>Fechar</Botao>}>
+          <div className="grid gap-2 text-[13px] text-m-text-secondary md:grid-cols-2">
+            <p>Novos: <b className="text-m-text-primary">{sinc.areas_novas}</b> área(s), <b className="text-m-text-primary">{sinc.cwps_novos}</b> CWP, <b className="text-m-text-primary">{sinc.grupos_novos}</b> grupo(s), <b className="text-m-text-primary">{sinc.iwps_novos}</b> IWP · atualizados {sinc.iwps_atualizados} · fora do cronograma {sinc.fora_do_cronograma}</p>
+            <p>Fora do ramo de construção (EWP/PWP): {sinc.fora_do_ramo_de_construcao} atividade(s)</p>
+            {!!sinc.atividades_sem_grupo && <p className="text-m-warning">{sinc.atividades_sem_grupo} atividade(s) com item da PQ que ainda não está em grupo do Catálogo ({sinc.itens_sem_grupo} itens): vincule os itens aos grupos no <Link href="/app/catalogo" className="font-semibold underline">Catálogo</Link> e atualize de novo.</p>}
+            {!!sinc.sem_item_pq && <p>{sinc.sem_item_pq} atividade(s) sem item da PQ com a mesma descrição: ficam só como CWP (crie o IWP à mão se precisar).</p>}
+            {!!sinc.sem_area.length && <p className="text-m-warning">CWA do cronograma sem área nas Frentes: {sinc.sem_area.join(', ')}</p>}
+          </div>
+        </Painel>
+      )}
       {form && form.tipo === 'area' && form.modo === 'novo' && <Painel titulo="Nova área na WBS">{formInline(form)}</Painel>}
-      <Painel titulo="Estrutura" subtitulo="Clique em + para descer um nível. Nó usado em programação não pode ser excluído (inative).">
+      <Painel titulo="Estrutura" subtitulo="Clique em + para descer um nível. Nó usado em programação não pode ser excluído (inative). P6 = veio da WBS do cronograma."
+        acoes={<div className="flex flex-wrap items-end gap-2">
+          <Campo rotulo="Buscar" placeholder="código, CWP, item da PQ, atividade do P6" value={busca} onChange={(e) => setBusca(e.target.value)} className="w-[300px]" />
+          <Botao variante="secundario" onClick={() => setAbertos(new Set(todosIds))}>Abrir tudo</Botao>
+          <Botao variante="secundario" onClick={() => setAbertos(new Set())}>Recolher</Botao>
+        </div>}>
         <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full border-collapse">
             <thead><tr className="text-left text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted">

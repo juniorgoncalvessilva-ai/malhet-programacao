@@ -34,3 +34,18 @@ Etapas por critério de medição (% por etapa) ficam para a etapa 2.
 "WBS de execução" (menu Programar): árvore com + CWP / + Grupo / + IWP, editar, excluir com confirmação, quantidade com
 memória de cálculo (digitada × take-off). Programação › Nova linha: "Da WBS de execução (IWP)" preenche e trava área,
 grupo e atividade; a linha mostra o selo "WBS 004.05-01-1-01".
+
+## Etapa 1b — WBS do cronograma (P6) entra na WBS de execução
+- A cada importação do .xer (e no botão "Atualizar pela WBS do cronograma", `POST /wbs/sincronizar-cronograma`):
+  - **Área** = nível "CWA 004.05 - …" do caminho (o mais fundo), casado com a área das Frentes pelo CWA (CWA repetido:
+    pela área cujo Ativo aparece no nome do nível).
+  - **CWP** = níveis do P6 abaixo do CWA: o 1º é o elemento, os demais o complemento ("Sapatas" · "Fustes"); sem
+    nível abaixo, "Geral". Âncora `chave_p6` (caminho normalizado); CWP manual com o mesmo texto é adotado.
+  - **IWP** = atividade cuja descrição é a de um item folha da PQ (normalizada; repetida: desempate pela área da TAG,
+    `escolher_item` do take-off), com o item em um grupo do Catálogo; âncora = código da atividade (`id_crono`).
+  - Só ramos de construção (nível "CWP…"); EWP/PWP ficam de fora.
+- Preservação: nada é apagado. Nó do P6 que sumiu da revisão vigente fica `fora_cronograma` (volta ao normal se a
+  atividade voltar); IWP que mudou de lugar no P6 acompanha; nós manuais não são tocados. `origem` = manual | p6.
+- Linha da programação a partir de IWP do P6 já recebe o `id_crono` da atividade. Migração `0018_wbs_p6`.
+- Resultado informa: novos/atualizados/fora do cronograma, atividades fora do ramo de construção, sem item da PQ,
+  com item sem grupo no Catálogo (vincular e atualizar de novo) e CWA sem área nas Frentes.

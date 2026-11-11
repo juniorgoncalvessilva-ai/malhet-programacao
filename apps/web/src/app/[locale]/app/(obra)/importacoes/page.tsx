@@ -10,7 +10,8 @@ import { useApi } from '@/hooks/programacao/useApi';
 import type { CpuDoItem, Versao } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 
-type Resultado = { versoes: Record<string, number>; contagem: Record<string, number>; avisos: string[] };
+type ResultadoWbs = { atividades: number; areas_novas: number; cwps_novos: number; iwps_novos: number; fora_do_cronograma: number };
+type Resultado = { versoes: Record<string, number>; contagem: Record<string, number>; avisos: string[]; wbs?: ResultadoWbs };
 
 function useImportar(caminho: string) {
   const api = useApi();
@@ -22,6 +23,10 @@ function useImportar(caminho: string) {
       qc.invalidateQueries({ queryKey: ['programacao'] });
       toast.success(Object.entries(r.contagem).map(([t, n]) => `${t}: ${n}`).join(' · ') || 'Importado');
       r.avisos.slice(0, 5).forEach((a) => toast.warning(a));
+      if (r.wbs && r.wbs.atividades) {
+        qc.invalidateQueries({ queryKey: ['wbs'] });
+        toast.info(`WBS de execução atualizada pelo cronograma: ${r.wbs.areas_novas} área(s), ${r.wbs.cwps_novos} CWP e ${r.wbs.iwps_novos} IWP novos${r.wbs.fora_do_cronograma ? ` · ${r.wbs.fora_do_cronograma} fora do cronograma` : ''}`);
+      }
     },
   });
 }
