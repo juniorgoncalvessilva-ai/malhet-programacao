@@ -86,9 +86,13 @@ def _colab(s: Session, c: ContextoObra, cid: int) -> ColaboradorModel:
 # ---- importação e consulta ------------------------------------------------------------------------------
 @router.post("/importar")
 def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    """Planilha de efetivo do DP (.xls/.xlsx). Atualiza pela matrícula; equipes não são tocadas."""
-    return importar_efetivo(s, c.obra_id, arquivo.file, nome_arquivo=arquivo.filename or "efetivo.xls",
-                            usuario=c.usuario.id)
+    """Planilha de efetivo do DP (.xls/.xlsx). Atualiza pela matrícula; a composição das equipes não muda, só o vínculo
+    das pessoas (número antes do nome → matrícula)."""
+    r = importar_efetivo(s, c.obra_id, arquivo.file, nome_arquivo=arquivo.filename or "efetivo.xls",
+                         usuario=c.usuario.id)
+    from app.modules.equipes.application.vincular_efetivo import vincular_equipes
+
+    return {**r, "vinculo_equipes": vincular_equipes(s, c.obra_id)}
 
 
 @router.get("/colaboradores", response_model=list[ColaboradorOut])

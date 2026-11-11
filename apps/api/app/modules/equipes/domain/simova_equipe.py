@@ -55,6 +55,29 @@ def pessoas(texto) -> tuple[Pessoa, ...]:
     return tuple(out)
 
 
+_NUM_ANTES = re.compile(r"^\s*(\d[\d.]{2,})\s*(?:::|[-–—:|/;,])?\s*(.*)$", re.S)
+_NUM_DEPOIS = re.compile(r"^(.*?)\s*(?:[-–—:|/;,]\s*|\(\s*)(\d[\d.]{2,})\s*\)?\s*$", re.S)
+
+
+def separar_cracha(texto) -> tuple[str | None, str]:
+    """Número (crachá/matrícula) e nome numa mesma célula: "115532 :: JOSE SILVA", "115532 - José", "115532 José",
+    "José (115532)", "José - 115.532" → ("115532", "José Silva"). Sem número → (None, texto)."""
+    t = re.sub(r"\s+", " ", _texto(texto))
+    if not t:
+        return None, ""
+    m = _NUM_ANTES.match(t)
+    if m:
+        num, nome = m.group(1), m.group(2)
+    else:
+        m = _NUM_DEPOIS.match(t)
+        if not m:
+            return None, t
+        nome, num = m.group(1), m.group(2)
+    num = num.replace(".", "").lstrip("0") or "0"
+    nome = nome.strip(" -:;,|/()")
+    return num, (nome_proprio(nome) if nome.isupper() else nome)
+
+
 def _texto(v) -> str:
     if v is None:
         return ""

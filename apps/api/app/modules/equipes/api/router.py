@@ -7,7 +7,9 @@ from app.core.auth import ContextoObra, administrar, ler, planejar
 from app.core.db import get_session
 from app.modules.equipes.application.importar_equipes import importar_equipes, importar_equipes_simova
 from app.modules.equipes.infra.composicao import composicao_efetiva, sincronizar_membros
-from app.modules.efetivo.infra.gateway import funcoes_por_cracha
+from app.modules.efetivo.infra.gateway import LocalizadorEfetivo, PessoaEfetivo, funcoes_por_cracha, pessoas_por_cracha
+from app.modules.equipes.application.vincular_efetivo import vincular_equipe, vincular_equipes
+from app.modules.equipes.domain.simova_equipe import separar_cracha
 from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeModel
 from app.shared.errors import NotFoundError
 
@@ -26,6 +28,21 @@ class MembroIO(BaseModel):
     cracha: str
     nome: str
     funcao: str | None = None
+
+
+class PessoaEfetivoIO(BaseModel):
+    """A pessoa como está no efetivo e mobilização (ligada pela matrícula/crachá)."""
+    matricula: str | None = None
+    nome: str
+    funcao: str | None = None  # função no efetivo (DP)
+    funcao_cpu: str | None = None  # função da composição pelo de-para
+    situacao: str
+    empresa: str
+    no_ultimo_arquivo: bool = True
+
+
+class MembroOut(MembroIO):
+    efetivo: PessoaEfetivoIO | None = None
 
 
 class EquipeIn(BaseModel):
@@ -49,10 +66,40 @@ class EquipeOut(EquipeIn):
     id: int
     hh_disponivel_dia: float = 0
     composicao_efetiva: list[ComposicaoIO] = []
+    membros: list[MembroOut] = []
+    encarregado_efetivo: PessoaEfetivoIO | None = None
+    fora_do_efetivo: int = 0  # pessoas da equipe que não foram achadas no efetivo
 
 
-def _out(e: EquipeModel, funcao_de: dict[str, str] | None = None) -> EquipeOut:
+def _pessoa_io(p: PessoaEfetivo | None, funcao_de: dict[str, str]) -> PessoaEfetivoIO | None:
+    if p is None:
+        return None
+    return PessoaEfetivoIO(matricula=p.matricula, nome=p.nome, funcao=p.funcao, funcao_cpu=funcao_de.get(p.cracha or ""),
+                           situacao=p.situacao, empresa=p.empresa, no_ultimo_arquivo=p.no_ultimo_arquivo)
+
+
+def _membros(d: "EquipeIn") -> list[tuple[str, str, str | None]]:
+    """Crachá vazio → número antes do nome ("115532 - José"); sem número, o próprio nome segura a vaga."""
+    out = []
+    for m in d.membros:
+        cracha = (m.cracha or "").strip()
+        if not cracha:
+            num, _ = separar_cracha(m.nome)
+            cracha = num or f"?{m.nome.strip()[:18]}"
+        out.append((cracha[:20], m.nome, (m.funcao or "").strip() or None))
+    return out
+
+
+def _out(e: EquipeModel, funcao_de: dict[str, str] | None = None,
+         pessoas: dict[str, PessoaEfetivo] | None = None) -> EquipeOut:
+    funcao_de, pessoas = funcao_de or {}, pessoas or {}
     o = EquipeOut.model_validate(e)
+    o.membros = [MembroOut(cracha=m.cracha, nome=m.nome, funcao=m.funcao, efetivo=_pessoa_io(pessoas.get(m.cracha), funcao_de))
+                 for m in sorted(e.membros, key=lambda m: m.nome)]
+    o.encarregado_efetivo = _pessoa_io(pessoas.get(e.encarregado_cracha or ""), funcao_de)
+    if pessoas:
+        o.fora_do_efetivo = sum(1 for m in o.membros if m.efetivo is None) + \
+            (1 if (e.encarregado_cracha or e.encarregado_nome) and o.encarregado_efetivo is None else 0)
     ef = composicao_efetiva(e, funcao_de)
     o.composicao_efetiva = [ComposicaoIO(recurso=r, tipo=t, quantidade=q) for r, t, q in ef]
     mod = sum(q for _, t, q in ef if t == "MOD") or len(e.membros)
@@ -62,18 +109,19 @@ def _out(e: EquipeModel, funcao_de: dict[str, str] | None = None) -> EquipeOut:
 
 @router.get("", response_model=list[EquipeOut])
 def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    fd = funcoes_por_cracha(s, c.obra_id)
-    return [_out(e, fd) for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id).order_by(EquipeModel.nome))]
+    fd, pe = funcoes_por_cracha(s, c.obra_id), pessoas_por_cracha(s, c.obra_id)
+    return [_out(e, fd, pe) for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id).order_by(EquipeModel.nome))]
 
 
 @router.post("", response_model=EquipeOut, status_code=201)
 def criar(d: EquipeIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     e = EquipeModel(**d.model_dump(exclude={"composicao", "membros"}), obra_id=c.obra_id,
                     composicao=[EquipeComposicaoModel(**c.model_dump()) for c in d.composicao])
-    sincronizar_membros(e, [(m.cracha, m.nome, m.funcao) for m in d.membros])
+    sincronizar_membros(e, _membros(d))
     s.add(e)
+    vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()
-    return _out(e)
+    return _out(e, funcoes_por_cracha(s, c.obra_id), pessoas_por_cracha(s, c.obra_id))
 
 
 @router.put("/{equipe_id}", response_model=EquipeOut)
@@ -85,9 +133,11 @@ def atualizar(equipe_id: int, d: EquipeIn, s: Session = Depends(get_session),
     for k, v in d.model_dump(exclude={"composicao", "membros"}).items():
         setattr(e, k, v)
     e.composicao = [EquipeComposicaoModel(**c.model_dump()) for c in d.composicao]
-    sincronizar_membros(e, [(m.cracha, m.nome, (m.funcao or "").strip() or None) for m in d.membros])
+    sincronizar_membros(e, _membros(d))
     s.flush()
-    return _out(e)
+    vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
+    s.flush()
+    return _out(e, funcoes_por_cracha(s, c.obra_id), pessoas_por_cracha(s, c.obra_id))
 
 
 @router.delete("/{equipe_id}", status_code=204)
@@ -102,14 +152,22 @@ def excluir(equipe_id: int, s: Session = Depends(get_session), c: ContextoObra =
 def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session),
              c: ContextoObra = Depends(administrar)):
     """Importa a aba EQUIPES da planilha auxiliar."""
-    return {"equipes": importar_equipes(s, c.obra_id, arquivo.file)}
+    n = importar_equipes(s, c.obra_id, arquivo.file)
+    return {"equipes": n, "vinculo": vincular_equipes(s, c.obra_id)}
 
 
 @router.post("/importar-simova")
 def importar_simova(arquivo: UploadFile = File(...), s: Session = Depends(get_session),
                     c: ContextoObra = Depends(planejar)):
     """Cadastro de equipes exportado do Simova (Código, Descrição, Encarregado, Funcionário, Equipamento, Ativo)."""
-    return importar_equipes_simova(s, c.obra_id, arquivo.file)
+    r = importar_equipes_simova(s, c.obra_id, arquivo.file)
+    return {**r, "vinculo": vincular_equipes(s, c.obra_id)}
+
+
+@router.post("/vincular-efetivo")
+def vincular_efetivo(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Separa o número antes do nome (crachá/matrícula) de encarregados e funcionários e liga ao efetivo."""
+    return vincular_equipes(s, c.obra_id)
 
 
 @router.get("/simova.xlsx")
@@ -144,7 +202,8 @@ def exportar_simova(ativas: bool = True, s: Session = Depends(get_session), c: C
             proximo += 1
             codigo = str(proximo)
         enc = (e.encarregado_cracha, nome(e.encarregado_cracha, e.encarregado_nome or "")) if e.encarregado_cracha else None
-        func = [(m.cracha, nome(m.cracha, m.nome)) for m in sorted(e.membros, key=lambda m: m.nome)]
+        # quem está sem crachá ("?nome") não vai para o Simova
+        func = [(m.cracha, nome(m.cracha, m.nome)) for m in sorted(e.membros, key=lambda m: m.nome) if not m.cracha.startswith("?")]
         ws.append(linha_simova(codigo, e.nome, enc, func, e.equipamentos, e.ativo))
     for col, w in {"A": 6, "B": 7.8, "C": 44, "D": 54, "E": 263, "F": 14, "G": 6.4, "H": 6}.items():
         ws.column_dimensions[col].width = w

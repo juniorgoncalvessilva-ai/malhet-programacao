@@ -124,3 +124,40 @@ def test_efetivo_equipes_simova_depara_organograma(client):
     assert client.get("/api/efetivo/organograma", params={"q": "candidato"}).json()["raiz"]["qtd"] == 1
     with SessionLocal() as s:  # colaborador desmobilizado continua na equipe até o planejamento tirar
         assert s.query(ColaboradorModel).count() == 8
+
+
+def test_separar_numero_antes_do_nome():
+    from app.modules.equipes.domain.simova_equipe import separar_cracha
+
+    assert separar_cracha("115532 :: JOSE DA SILVA") == ("115532", "Jose da Silva")
+    assert separar_cracha("115532 - José Pereira") == ("115532", "José Pereira")
+    assert separar_cracha("115.532 José") == ("115532", "José")
+    assert separar_cracha("José Pereira (115532)") == ("115532", "José Pereira")
+    assert separar_cracha("José - 115532") == ("115532", "José")
+    assert separar_cracha("José") == (None, "José")
+    assert separar_cracha(115532.0) == ("115532", "")
+
+
+def test_equipe_digitada_com_numero_no_nome_liga_ao_efetivo(client):
+    r = client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    assert r.status_code == 200, r.text
+    # equipe montada à mão: número dentro do nome, crachá vazio; um número que não está no efetivo
+    r = client.post("/api/equipes", json={
+        "nome": "EQ-FORMA (Adequações)", "encarregado_nome": "115011 - José", "jornada_horas": 9,
+        "membros": [{"cracha": "", "nome": "115013 :: PEDREIRO"}, {"cracha": "115014", "nome": "Servente"},
+                    {"cracha": "", "nome": "999999 Fulano Fora"}]})
+    assert r.status_code == 201, r.text
+    e = r.json()
+    assert (e["encarregado_cracha"], e["encarregado_nome"]) == ("115011", "ENCARREGADO TESTE UM")
+    assert e["encarregado_efetivo"]["funcao"] and e["encarregado_efetivo"]["situacao"] == "MOBILIZADO"
+    ms = {m["cracha"]: m for m in e["membros"]}
+    assert ms["115013"]["nome"] == "PEDREIRO TESTE DOIS" and ms["115013"]["efetivo"]["funcao"]
+    assert ms["115014"]["nome"] == "SERVENTE TESTE TRES"
+    assert ms["999999"]["efetivo"] is None and ms["999999"]["nome"] == "Fulano Fora" and e["fora_do_efetivo"] == 1
+    # o efetivo enxerga a equipe pela matrícula
+    cs = {c["nome"]: c for c in client.get("/api/efetivo/colaboradores").json()}
+    assert cs["PEDREIRO TESTE DOIS"]["equipe"] == "EQ-FORMA (Adequações)"
+    assert cs["ENCARREGADO TESTE UM"]["encarregado_de"] == "EQ-FORMA (Adequações)"
+    # vincular tudo de novo é idempotente
+    v = client.post("/api/equipes/vincular-efetivo").json()
+    assert v["vinculados"] == 3 and v["nao_encontrados"] == ["EQ-FORMA (Adequações): 999999 · Fulano Fora"]

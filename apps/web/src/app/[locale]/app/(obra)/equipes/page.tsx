@@ -1,17 +1,21 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Download, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Link2, Plus, Trash2, UserPlus } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Selecao, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
-import type { ComposicaoEquipe, Equipe } from '@/lib/api/types';
+import type { ComposicaoEquipe, Equipe, PessoaEfetivoEquipe } from '@/lib/api/types';
+import { ROTULO_SITUACAO, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 
-type Form = Omit<Equipe, 'id' | 'hh_disponivel_dia' | 'composicao_efetiva'> & { id?: number };
+type Form = Omit<Equipe, 'id' | 'hh_disponivel_dia' | 'composicao_efetiva' | 'encarregado_efetivo' | 'fora_do_efetivo'> & { id?: number };
+type Vinculo = { equipes: number; vinculados: number; nao_encontrados: string[]; sem_numero: string[] };
+/** Crachá provisório ("?nome") = pessoa ainda sem número. */
+const semNumero = (c: string | null | undefined) => !c || c.startsWith('?');
 const NOVA: Form = {
   nome: '', frente_codigo: null, encarregado_cracha: null, encarregado_nome: null, jornada_horas: 9, turno: 'Diurno',
   codigo_simova: null, responsavel: null, equipamentos: null, observacao: null, ativo: true, composicao: [], membros: [],
@@ -31,6 +35,26 @@ export default function EquipesPage() {
   const [aberta, setAberta] = useState<number | null>(null);
   const [importando, setImportando] = useState(false);
   const [marcadas, setMarcadas] = useState<Set<number>>(new Set());
+  const [novoMembro, setNovoMembro] = useState('');
+  const [vinculo, setVinculo] = useState<Vinculo | null>(null);
+  const [vinculando, setVinculando] = useState(false);
+  const vincular = async () => {
+    setVinculando(true);
+    try {
+      const r = await api.post<Vinculo>('/equipes/vincular-efetivo');
+      setVinculo(r);
+      toast.success(`${r.vinculados} pessoa(s) ligada(s) ao efetivo pela matrícula`);
+      atualizar();
+    } catch (er) { toast.error((er as Error).message); } finally { setVinculando(false); }
+  };
+  const addMembro = () => {
+    const t = novoMembro.trim();
+    if (!form || !t) return;
+    const num = t.match(/^\s*(\d[\d.]{2,})/)?.[1]?.replace(/\./g, '') ?? '';
+    if (num && form.membros.some((m) => m.cracha === num)) { toast.error(`Matrícula ${num} já está na equipe`); return; }
+    setForm({ ...form, membros: [...form.membros, { cracha: num, nome: t, funcao: null }] });
+    setNovoMembro('');
+  };
   const excluir = async (ids: number[]) => {
     const nomes = equipes.data?.filter((e) => ids.includes(e.id)).map((e) => e.nome) ?? [];
     if (!ids.length || !(await confirmar({
@@ -62,8 +86,9 @@ export default function EquipesPage() {
   const importarSimova = async (fd: FormData) => {
     setImportando(true);
     try {
-      const r = await api.post<{ criadas: number; atualizadas: number }>('/equipes/importar-simova', fd);
-      toast.success(`${r.criadas} equipe(s) nova(s), ${r.atualizadas} atualizada(s)`);
+      const r = await api.post<{ criadas: number; atualizadas: number; vinculo: Vinculo }>('/equipes/importar-simova', fd);
+      toast.success(`${r.criadas} equipe(s) nova(s), ${r.atualizadas} atualizada(s) · ${r.vinculo.vinculados} pessoa(s) ligada(s) ao efetivo`);
+      setVinculo(r.vinculo);
       atualizar();
     } catch (er) { toast.error((er as Error).message); } finally { setImportando(false); }
   };
@@ -82,8 +107,9 @@ export default function EquipesPage() {
       <Cabecalho
         eyebrow="Equipes · frentes de trabalho"
         titulo="Quem trabalha em cada frente, em que turno e quanto produz"
-        descricao="Monte as equipes pelo Efetivo (selecione as pessoas e crie a equipe) ou importe o cadastro do Simova. Aqui você completa turno, jornada e responsável; a função de cada pessoa vem do de-para de funções (ou pode ser informada aqui). Exporte no padrão do Simova para importar lá."
+        descricao="Monte as equipes pelo Efetivo (selecione as pessoas e crie a equipe) ou importe o cadastro do Simova. O número antes do nome (ex.: 115532 :: JOSÉ) é a matrícula: por ele cada pessoa é ligada ao Efetivo e mobilização, com nome, função e situação. A função da composição vem do de-para de funções (ou pode ser informada aqui). Exporte no padrão do Simova para importar lá."
         acoes={<div className="flex flex-wrap gap-2">
+          {pode('planejador') && <Botao variante="secundario" disabled={vinculando} onClick={vincular}><Link2 size={16} /> {vinculando ? 'Vinculando…' : 'Vincular ao efetivo'}</Botao>}
           <Botao variante="secundario" onClick={() => api.download('/equipes/simova.xlsx', 'Equipe_Simova.xlsx').then(() => toast.success('Arquivo no padrão do Simova gerado (equipes ativas)')).catch((e) => toast.error(e.message))}><Download size={16} /> Exportar para o Simova</Botao>
           {pode('planejador') && <Botao variante="secundario" onClick={() => { setErro(null); setForm({ ...NOVA, composicao: [], membros: [] }); }}><Plus size={16} /> Nova equipe</Botao>}
         </div>}
@@ -92,6 +118,18 @@ export default function EquipesPage() {
         {pode('planejador') && (
           <Painel titulo="Importar equipes do Simova" subtitulo="Exportação do cadastro de equipes (Código, Descrição, Encarregado, Funcionário, Equipamento, Ativo). Reimportar atualiza pelo código e mantém turno, jornada, responsável e funções.">
             <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Equipe.xlsx' }]} rotulo="Importar" pendente={importando} onEnviar={importarSimova} />
+          </Painel>
+        )}
+        {vinculo && (
+          <Painel titulo={`Vínculo com o efetivo: ${vinculo.vinculados} pessoa(s) ligada(s) pela matrícula`}
+            subtitulo={vinculo.nao_encontrados.length || vinculo.sem_numero.length ? 'Confira abaixo quem não foi achado. Importe o efetivo atualizado ou corrija o número na equipe.' : 'Todas as pessoas das equipes estão no efetivo.'}
+            acoes={<Botao variante="secundario" onClick={() => setVinculo(null)}>Fechar</Botao>}>
+            <div className="grid gap-4 text-[13px] md:grid-cols-2">
+              {!!vinculo.nao_encontrados.length && <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-warning">Matrícula não encontrada no efetivo ({vinculo.nao_encontrados.length})</div>
+                <ul className="max-h-48 overflow-auto text-m-text-secondary">{vinculo.nao_encontrados.map((t) => <li key={t}>{t}</li>)}</ul></div>}
+              {!!vinculo.sem_numero.length && <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-warning">Sem número antes do nome ({vinculo.sem_numero.length})</div>
+                <ul className="max-h-48 overflow-auto text-m-text-secondary">{vinculo.sem_numero.map((t) => <li key={t}>{t}</li>)}</ul></div>}
+            </div>
           </Painel>
         )}
         {form && (
@@ -105,8 +143,8 @@ export default function EquipesPage() {
               </Selecao>
               <Campo rotulo="Jornada (h/dia)" type="number" step="0.25" min="1" max="24" value={form.jornada_horas} onChange={(e) => setForm({ ...form, jornada_horas: Number(e.target.value) })} />
               <label className="flex items-end gap-2 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} /> Ativa</label>
-              <Campo rotulo="Crachá do encarregado" value={form.encarregado_cracha ?? ''} onChange={(e) => setForm({ ...form, encarregado_cracha: e.target.value || null })} />
-              <div className="md:col-span-2"><Campo rotulo="Encarregado" value={form.encarregado_nome ?? ''} onChange={(e) => setForm({ ...form, encarregado_nome: e.target.value || null })} /></div>
+              <Campo rotulo="Matrícula / crachá do encarregado" value={form.encarregado_cracha ?? ''} onChange={(e) => setForm({ ...form, encarregado_cracha: e.target.value || null })} />
+              <div className="md:col-span-2"><Campo rotulo="Encarregado" placeholder="nome, ou 115532 - nome" value={form.encarregado_nome ?? ''} onChange={(e) => setForm({ ...form, encarregado_nome: e.target.value || null })} /></div>
               <div className="md:col-span-2"><Campo rotulo="Responsável (supervisor/engenheiro)" value={form.responsavel ?? ''} onChange={(e) => setForm({ ...form, responsavel: e.target.value || null })} /></div>
               <Campo rotulo="Frente" value={form.frente_codigo ?? ''} onChange={(e) => setForm({ ...form, frente_codigo: e.target.value || null })} />
 
@@ -115,15 +153,22 @@ export default function EquipesPage() {
                 <datalist id="funcoes-cpu">{mod.map((r) => <option key={r.recurso} value={r.recurso} />)}</datalist>
                 <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-3">
                   {form.membros.map((m, i) => (
-                    <div key={m.cracha} className="flex items-center gap-2 rounded-m-md border border-m-stroke-subtle px-2 py-1">
-                      <span className="w-[64px] shrink-0 text-xs text-m-text-muted">{m.cracha}</span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-m-text-primary" title={m.nome}>{m.nome}</span>
+                    <div key={`${m.cracha}-${i}`} className="flex items-center gap-2 rounded-m-md border border-m-stroke-subtle px-2 py-1">
+                      <span className="w-[64px] shrink-0 text-xs text-m-text-muted">{semNumero(m.cracha) ? '—' : m.cracha}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-m-text-primary" title={[m.nome, m.efetivo?.funcao].filter(Boolean).join(' · ')}>{m.nome}{m.efetivo?.funcao && <span className="block truncate text-[11px] text-m-text-muted">{m.efetivo.funcao}</span>}</span>
                       <input aria-label={`Função de ${m.nome}`} list="funcoes-cpu" placeholder="função" value={m.funcao ?? ''}
                         onChange={(e) => { const ms = [...form.membros]; ms[i] = { ...m, funcao: e.target.value || null }; setForm({ ...form, membros: ms }); }}
                         className="h-8 w-[130px] rounded-[8px] border border-m-stroke bg-m-surface-field px-2 text-[13px]" />
+                      <button type="button" aria-label={`Tirar ${m.nome} da equipe`} className="p-1 text-m-text-muted hover:text-m-danger" onClick={() => setForm({ ...form, membros: form.membros.filter((_, j) => j !== i) })}><Trash2 size={14} /></button>
                     </div>
                   ))}
-                  {!form.membros.length && <span className="text-[13px] text-m-text-muted">Sem funcionários (importe do Simova).</span>}
+                  {!form.membros.length && <span className="text-[13px] text-m-text-muted">Sem funcionários (importe do Simova ou inclua pela matrícula).</span>}
+                </div>
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <Campo rotulo="Incluir pela matrícula" placeholder="115532 ou 115532 - José da Silva" value={novoMembro} className="w-[300px]"
+                    onChange={(e) => setNovoMembro(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addMembro(); } }} />
+                  <Botao type="button" variante="secundario" onClick={addMembro}><UserPlus size={16} /> Incluir</Botao>
+                  <span className="pb-2.5 text-[12px] text-m-text-muted">Ao salvar, nome e função vêm do efetivo pela matrícula.</span>
                 </div>
               </div>
 
@@ -172,12 +217,19 @@ export default function EquipesPage() {
                   <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <input type="checkbox" className="mr-2 align-middle" aria-label={`Selecionar ${e.nome}`} checked={marcadas.has(e.id)} onChange={() => setMarcadas((m) => { const n = new Set(m); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })} />}<button type="button" aria-label={`Ver funcionários de ${e.nome}`} className="text-m-text-muted" onClick={() => setAberta(aberta === e.id ? null : e.id)}>{aberta === e.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
                   <td className={td}>{e.codigo_simova ?? '—'}</td>
                   <td className={td}><b className="text-m-text-primary">{e.nome}</b>{e.responsavel && <div className="text-xs text-m-text-muted">resp. {e.responsavel}</div>}</td>
-                  <td className={td}>{e.encarregado_nome ?? '—'}<div className="text-xs text-m-text-muted">{e.encarregado_cracha ?? <Pilula tom="atencao">sem crachá</Pilula>}</div></td>
+                  <td className={td}>{e.encarregado_nome ?? '—'}
+                    <div className="text-xs text-m-text-muted">{e.encarregado_cracha
+                      ? <>{e.encarregado_cracha}{e.encarregado_efetivo?.funcao && ` · ${e.encarregado_efetivo.funcao}`}</>
+                      : <Pilula tom="atencao">sem matrícula</Pilula>}</div>
+                    {e.encarregado_cracha && !e.encarregado_efetivo && <Pilula tom="atencao">fora do efetivo</Pilula>}
+                    {e.encarregado_efetivo && e.encarregado_efetivo.situacao !== 'MOBILIZADO' && <Pilula tom={TOM_SITUACAO[e.encarregado_efetivo.situacao]}>{ROTULO_SITUACAO[e.encarregado_efetivo.situacao]}</Pilula>}
+                  </td>
                   <td className={td}>{e.turno ?? 'Diurno'} · {fmt(e.jornada_horas, 2)} h</td>
                   <td className={td}><div className="flex flex-wrap gap-1">
                     {e.composicao_efetiva.map((c) => <Pilula key={c.recurso + c.tipo} ponto={false} tom={c.tipo === 'MOD' ? 'acento' : 'neutro'}>{fmt(c.quantidade, 0)} {c.recurso}</Pilula>)}
                     {!e.composicao_efetiva.length && <span className="text-xs text-m-text-muted">{e.membros.length} funcionário(s), funções não informadas</span>}
-                  </div></td>
+                  </div>
+                  {!!e.fora_do_efetivo && <div className="mt-1"><Pilula tom="atencao">{e.fora_do_efetivo} fora do efetivo</Pilula></div>}</td>
                   <td className={td}>{fmt(e.hh_disponivel_dia)}</td>
                   <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <>
                     <button type="button" className="font-semibold text-m-accent" onClick={() => { setErro(null); setForm({ ...e }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar</button>
@@ -186,10 +238,7 @@ export default function EquipesPage() {
                 </tr>
                 {aberta === e.id && (
                   <tr><td colSpan={8} className="bg-m-surface-active px-4 py-3">
-                    <div className="grid gap-x-6 gap-y-1 text-[13px] md:grid-cols-2 xl:grid-cols-3">
-                      {e.membros.map((m) => <div key={m.cracha}><span className="text-m-text-muted">{m.cracha}</span> · {m.nome}{m.funcao ? <b className="text-m-text-primary"> · {m.funcao}</b> : ''}</div>)}
-                      {!e.membros.length && <span className="text-m-text-muted">Sem funcionários cadastrados.</span>}
-                    </div>
+                    {e.membros.length ? <PessoasDaEquipe membros={e.membros} /> : <span className="text-[13px] text-m-text-muted">Sem funcionários cadastrados.</span>}
                     {e.equipamentos && <div className="mt-2 text-[13px] text-m-text-secondary">Equipamentos (Simova): {e.equipamentos}</div>}
                   </td></tr>
                 )}
@@ -199,5 +248,31 @@ export default function EquipesPage() {
         </Painel>
       </div>
     </>
+  );
+}
+
+function PessoasDaEquipe({ membros }: { membros: Equipe['membros'] }) {
+  const th = 'px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted';
+  const c = 'border-t border-m-stroke-subtle px-2 py-1.5 align-top';
+  return (
+    <table className="w-full border-collapse text-[13px]">
+      <thead><tr><th className={th}>Matrícula</th><th className={th}>Nome</th><th className={th}>Função no efetivo</th><th className={th}>Função na composição</th><th className={th}>Situação</th></tr></thead>
+      <tbody>
+        {membros.map((m, i) => {
+          const p: PessoaEfetivoEquipe | null | undefined = m.efetivo;
+          return (
+            <tr key={`${m.cracha}-${i}`}>
+              <td className={`${c} tabular-nums text-m-text-secondary`}>{semNumero(m.cracha) ? <Pilula tom="atencao">sem matrícula</Pilula> : m.cracha}</td>
+              <td className={`${c} font-medium text-m-text-primary`}>{m.nome}{p && p.empresa && p.matricula !== m.cracha && <span className="block text-[11px] font-normal text-m-text-muted">{p.empresa} · mat. {p.matricula}</span>}</td>
+              <td className={c}>{p?.funcao ?? <span className="text-m-text-muted">—</span>}</td>
+              <td className={c}>{m.funcao ?? p?.funcao_cpu ?? <span className="text-m-text-muted">{p?.funcao ? 'sem de-para' : '—'}</span>}</td>
+              <td className={c}>{p
+                ? <><Pilula tom={TOM_SITUACAO[p.situacao]}>{ROTULO_SITUACAO[p.situacao]}</Pilula>{!p.no_ultimo_arquivo && <span className="ml-1 text-[11px] text-m-text-muted">fora do último arquivo</span>}</>
+                : <Pilula tom="atencao">fora do efetivo</Pilula>}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

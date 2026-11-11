@@ -81,7 +81,7 @@ def test_fluxo_completo(client):
                                                           "simova_oper_codigo": "1.1"}).status_code == 422
 
     # 4) equipe do encarregado (importada da aba EQUIPES e ligada ao crachá)
-    assert client.post("/api/equipes/importar", files={"arquivo": ("aux.xlsx", aux)}).json() == {"equipes": 1}
+    assert client.post("/api/equipes/importar", files={"arquivo": ("aux.xlsx", aux)}).json()["equipes"] == 1
     eq = client.get("/api/equipes").json()[0]
     assert eq["hh_disponivel_dia"] == 27.0  # (2 + 1) MOD × 9 h
     client.put(f"/api/equipes/{eq['id']}", json={**eq, "encarregado_cracha": "113321"})

@@ -12,17 +12,9 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { Colaborador, SituacaoEfetivo } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { SITUACOES, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
 
-const SITUACOES: { v: SituacaoEfetivo; rotulo: string; tom: 'sucesso' | 'info' | 'atencao' | 'neutro' | 'perigo' }[] = [
-  { v: 'MOBILIZADO', rotulo: 'Mobilizado', tom: 'sucesso' },
-  { v: 'AGUARDANDO_CRACHA', rotulo: 'Aguardando crachá', tom: 'info' },
-  { v: 'EM_PROCESSO', rotulo: 'Em processo', tom: 'info' },
-  { v: 'PREVISTO', rotulo: 'Mobilização prevista', tom: 'info' },
-  { v: 'AFASTADO', rotulo: 'Afastado', tom: 'atencao' },
-  { v: 'DESMOBILIZADO', rotulo: 'Desmobilizado', tom: 'neutro' },
-  { v: 'DESISTENCIA', rotulo: 'Desistência', tom: 'neutro' },
-];
-const TOM = Object.fromEntries(SITUACOES.map((x) => [x.v, x.tom])) as Record<SituacaoEfetivo, (typeof SITUACOES)[number]['tom']>;
+const TOM = TOM_SITUACAO;
 const LIMITE = 300;
 type NovaEquipe = { nome: string; encarregado_id: string; turno: string; jornada_horas: string; responsavel: string };
 

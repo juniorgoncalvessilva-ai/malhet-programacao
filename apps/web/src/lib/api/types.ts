@@ -40,12 +40,17 @@ export interface VinculoResolvido {
   hh_por_unidade: number | null; pendencias: string[];
 }
 export interface ComposicaoEquipe { recurso: string; tipo: 'MOD' | 'EQU'; quantidade: number }
-export interface MembroEquipe { cracha: string; nome: string; funcao: string | null }
+export interface PessoaEfetivoEquipe {
+  matricula: string | null; nome: string; funcao: string | null; funcao_cpu: string | null;
+  situacao: SituacaoEfetivo; empresa: string; no_ultimo_arquivo: boolean;
+}
+export interface MembroEquipe { cracha: string; nome: string; funcao: string | null; efetivo?: PessoaEfetivoEquipe | null }
 export interface Equipe {
   id: number; nome: string; frente_codigo: string | null; encarregado_cracha: string | null;
   encarregado_nome: string | null; jornada_horas: number; observacao: string | null; ativo: boolean;
   turno: string | null; codigo_simova: string | null; responsavel: string | null; equipamentos: string | null;
   composicao: ComposicaoEquipe[]; membros: MembroEquipe[]; composicao_efetiva: ComposicaoEquipe[]; hh_disponivel_dia: number;
+  encarregado_efetivo?: PessoaEfetivoEquipe | null; fora_do_efetivo?: number;
 }
 export interface DiaPlano { data: string; pe: number | null; hh: number | null }
 export interface ItemProgramacao {
