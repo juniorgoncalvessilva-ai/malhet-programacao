@@ -180,7 +180,7 @@ export default function EfetivoPage() {
         </div>
         <div className="-mx-1 max-h-[65vh] overflow-auto px-1">
           <table className="w-full border-separate border-spacing-0 text-[13px]">
-            <thead className="sticky top-0 z-10 bg-m-surface">
+            <thead className="sticky top-0 z-10 bg-m-surface-raised">
               <tr className="text-left text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted">
                 <th className="w-8 px-2 py-2">{planejar && <input type="checkbox" aria-label="Selecionar todos os filtrados" checked={!!sel.size} onChange={marcarTodos} />}</th>
                 <th className="px-2 py-2">Matrícula · crachá</th><th className="px-2 py-2">Nome</th><th className="px-2 py-2">Função (efetivo → composição)</th>

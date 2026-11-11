@@ -71,10 +71,10 @@ function FiltroMulti({ rotulo, opcoes, valor, onChange }: { rotulo: string; opco
   const vis = opcoes.filter((o) => !busca || o.v.toLowerCase().includes(busca.toLowerCase()));
   return (
     <details className="relative">
-      <summary className={`flex h-[34px] cursor-pointer list-none items-center gap-1.5 rounded-full border px-3.5 text-[13px] ${valor.size ? 'border-m-accent bg-m-accent-subtle font-semibold text-m-accent' : 'border-m-stroke bg-m-surface text-m-text-secondary'}`}>
+      <summary className={`flex h-[34px] cursor-pointer list-none items-center gap-1.5 rounded-full border px-3.5 text-[13px] ${valor.size ? 'border-m-accent bg-m-accent-subtle font-semibold text-m-accent' : 'border-m-stroke bg-m-surface-raised text-m-text-secondary'}`}>
         <Filter size={13} />{rotulo}{valor.size ? ` · ${valor.size}` : ''}<ChevronDown size={13} />
       </summary>
-      <div className="absolute left-0 z-30 mt-1 w-[300px] rounded-m-lg border border-m-stroke bg-m-surface p-2 shadow-lg">
+      <div className="absolute left-0 z-30 mt-1 w-[300px] rounded-m-lg border border-m-stroke bg-m-surface-raised p-2 shadow-lg">
         {opcoes.length > 8 && <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Procurar…" aria-label={`Procurar em ${rotulo}`} className="mb-2 h-8 w-full rounded-[8px] border border-m-stroke bg-m-surface-field px-2 text-[13px]" />}
         <div className="max-h-[280px] overflow-auto">
           {vis.map((o) => (
@@ -166,7 +166,7 @@ export default function CronogramaPage() {
   const Barra = ({ ini, fim, pct, tipo }: { ini: string | null; fim: string | null; pct: number | null; tipo: 'no' | 'ok' | 'and' | 'atr' | 'nao' }) => {
     if (!ini || !fim) return <div className="relative h-4">{escala.hoje > 0 && escala.hoje < 1 && <div className="absolute -top-1 h-6 w-px bg-m-danger/60" style={{ left: `${escala.hoje * 100}%` }} aria-hidden="true" />}</div>;
     const l = escala.x(ini) * 100; const w = Math.max(0.6, escala.x(fim) * 100 - l);
-    const cor = { no: 'border-m-text-secondary bg-m-surface-active', ok: 'border-m-accent bg-m-accent-subtle', and: 'border-m-info bg-m-info-subtle', atr: 'border-m-danger bg-m-danger-subtle', nao: 'border-m-stroke-strong bg-m-surface' }[tipo];
+    const cor = { no: 'border-m-text-secondary bg-m-surface-active', ok: 'border-m-accent bg-m-accent-subtle', and: 'border-m-info bg-m-info-subtle', atr: 'border-m-danger bg-m-danger-subtle', nao: 'border-m-stroke-strong bg-m-surface-raised' }[tipo];
     const fill = { no: 'bg-m-text-secondary', ok: 'bg-m-accent', and: 'bg-m-info', atr: 'bg-m-danger', nao: 'bg-m-text-muted' }[tipo];
     return (
       <div className="relative h-4">
@@ -385,7 +385,7 @@ export default function CronogramaPage() {
 
         <div className="-mx-1 max-h-[72vh] overflow-auto px-1">
           <table className="w-full border-separate border-spacing-0">
-            <thead className="sticky top-0 z-20 bg-m-surface">
+            <thead className="sticky top-0 z-20 bg-m-surface-raised">
               <tr>
                 <th colSpan={3} className="rounded-t-[8px] bg-m-surface-active px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-secondary">Estrutura (WBS)</th>
                 <th colSpan={3} className="rounded-t-[8px] bg-m-info-subtle px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.4px] text-m-info">Datas</th>

@@ -56,7 +56,7 @@ export default function DeParaFuncoesPage() {
         </div>
         <div className="-mx-1 max-h-[68vh] overflow-auto px-1">
           <table className="w-full border-separate border-spacing-0 text-[13px]">
-            <thead className="sticky top-0 z-10 bg-m-surface">
+            <thead className="sticky top-0 z-10 bg-m-surface-raised">
               <tr className="text-left text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted">
                 <th className="px-2 py-2">Função no efetivo</th><th className="px-2 py-2 text-right">Ativos · total</th>
                 <th className="px-2 py-2">Função na composição (CPU)</th><th className="px-2 py-2">Ignorar</th><th className="px-2 py-2">Sugestão</th>

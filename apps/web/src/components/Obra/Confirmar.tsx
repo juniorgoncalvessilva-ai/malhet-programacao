@@ -46,7 +46,7 @@ export function ConfirmarProvider({ children }: { children: ReactNode }) {
       {pedido && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 p-4 print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget && !rodando) fechar(false); }}>
           <div role="alertdialog" aria-modal="true" aria-labelledby="confirmar-titulo" aria-describedby="confirmar-mensagem"
-            className="w-full max-w-[460px] rounded-[20px] border border-m-stroke bg-m-surface p-6 shadow-2xl">
+            className="w-full max-w-[460px] rounded-[20px] border border-m-stroke bg-m-surface-raised p-6 shadow-2xl">
             <div className="flex items-start gap-3">
               <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${perigo ? 'bg-m-danger-subtle text-m-danger' : 'bg-m-accent-subtle text-m-accent'}`} aria-hidden="true">
                 {perigo ? <AlertTriangle size={20} /> : <Info size={20} />}

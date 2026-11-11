@@ -217,7 +217,7 @@ export default function CatalogoPage() {
           </div>
           <div className="-mx-1 max-h-[70vh] overflow-auto px-1">
             <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-10 bg-m-surface">
+              <thead className="sticky top-0 z-10 bg-m-surface-raised">
                 <tr>
                   <th colSpan={3} />
                   <th colSpan={2} className="rounded-t-[8px] bg-m-surface-active px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-secondary">Medição</th>

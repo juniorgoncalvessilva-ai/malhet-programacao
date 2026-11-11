@@ -53,7 +53,7 @@ export default function ReferenciasPage() {
                   <div className="mb-1 text-xs font-semibold text-m-text-muted">{t}</div>
                   {vig ? (
                     <>
-                      <div className="text-sm font-medium text-m-text-m-accent ">{vig.rotulo}</div>
+                      <div className="text-sm font-medium text-m-accent">{vig.rotulo}</div>
                       <div className="text-xs text-m-text-muted">{fmt(vig.qtd_itens, 0)} itens · {dataBR(vig.carregado_em)}</div>
                     </>
                   ) : (
