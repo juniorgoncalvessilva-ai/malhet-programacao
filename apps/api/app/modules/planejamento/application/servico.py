@@ -189,6 +189,11 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
         reg = por_area[a.id][-1]
         feito = (reg["realizado_anterior"] or 0) + reg["total_realizado"]
         reg["restante"] = round(reg["qtd_projeto"] - feito, 4) if reg["qtd_projeto"] is not None else None
+    # dentro de cada área, as linhas seguem a estrutura do Primavera (ordem da atividade do cronograma no P6);
+    # linhas sem atividade do cronograma vêm depois, na ordem em que foram incluídas
+    ordem_crono = {k: x.ordem_p6 for k, x in cron.items() if x.ordem_p6 is not None}
+    for lista in por_area.values():
+        lista.sort(key=lambda ln: (ordem_crono.get(ln["id_crono"], 10**9), ln["n"]))
     saida_locais = []
     for loc in sorted(locais.values(), key=lambda x: (x.ordem, x.id)):
         areas_loc = sorted([a for a in areas.values() if a.local_id == loc.id and a.id in por_area],

@@ -54,20 +54,47 @@ def _num(v: str | None) -> float | None:
 
 
 def caminhos_wbs(wbs: list[dict[str, str]]) -> dict[str, list[str]]:
-    por_id = {w["wbs_id"]: w for w in wbs}
-    cache: dict[str, list[str]] = {}
+    """wbs_id → nomes da WBS do topo até o nó (sem o nó do projeto)."""
+    return {wid: [n for n, _c, _k in niveis] for wid, niveis in estrutura_wbs(wbs).items()}
 
-    def caminho(wid: str) -> list[str]:
+
+def _seq(v: str | None) -> int:
+    try:
+        return int(float(v or 0))
+    except ValueError:
+        return 0
+
+
+def estrutura_wbs(wbs: list[dict[str, str]]) -> dict[str, list[tuple[str, str, str]]]:
+    """wbs_id → [(nome, código, chave de ordem)] por nível, como o P6 mostra a EAP.
+
+    A ordem do P6 é o seq_num do nó entre os irmãos (empate: código); a chave de cada nível acumula a do pai,
+    então ordenar por ela devolve a árvore na ordem do Primavera (O.S. 1 antes da O.S. 2…).
+    """
+    por_id = {w["wbs_id"]: w for w in wbs}
+    cache: dict[str, list[tuple[str, str, str]]] = {}
+
+    def niveis(wid: str, pilha: tuple[str, ...] = ()) -> list[tuple[str, str, str]]:
         if wid in cache:
             return cache[wid]
         w = por_id.get(wid)
-        if not w or w.get("proj_node_flag") == "Y":
+        if not w or w.get("proj_node_flag") == "Y" or wid in pilha:
             cache[wid] = []
             return []
-        cache[wid] = caminho(w.get("parent_wbs_id", "")) + [w.get("wbs_name", "").strip()]
+        pai = niveis(w.get("parent_wbs_id", ""), pilha + (wid,))
+        codigo = (w.get("wbs_short_name") or "").strip()
+        chave = f"{(pai[-1][2] + '/') if pai else ''}{_seq(w.get('seq_num')):08d}~{codigo}"
+        cache[wid] = pai + [((w.get("wbs_name") or "").strip(), codigo, chave)]
         return cache[wid]
 
-    return {wid: caminho(wid) for wid in por_id}
+    return {wid: niveis(wid) for wid in por_id}
+
+
+def _chave_codigo(code: str) -> tuple:
+    """Ordem natural do Activity ID (C-9 antes de C-10)."""
+    import re
+
+    return tuple(int(p) if p.isdigit() else p.lower() for p in re.split(r"(\d+)", code))
 
 
 def carregar_xer(session: Session, obra_id: int, arquivo: BinaryIO, *, nome_arquivo: str, rotulo: str,
@@ -82,14 +109,21 @@ def carregar_xer(session: Session, obra_id: int, arquivo: BinaryIO, *, nome_arqu
     data_base = _dt(proj.get("last_recalc_date"))
     v = nova_versao(session, obra_id, "CRONOGRAMA", rotulo, usuario, data_base.date() if data_base else None,
                     nome_arquivo, f"P6 {proj.get('proj_short_name', '')}".strip())
-    caminhos = caminhos_wbs(t.get("PROJWBS", []))
-    vistos = set()
+    estrutura = estrutura_wbs(t.get("PROJWBS", []))
+    validas, vistos = [], set()
     for r in tasks:
         code = (r.get("task_code") or "").strip()
         if not code or code in vistos or r.get("task_type") in ("TT_WBS", "TT_LOE"):
             continue
         vistos.add(code)
-        cam = caminhos.get(r.get("wbs_id", ""), [])
+        validas.append(r)
+    # ordem do P6: a WBS pelo seq_num (nível a nível); dentro de cada WBS, o Activity ID em ordem natural
+    validas.sort(key=lambda r: ((estrutura.get(r.get("wbs_id", "")) or [("", "", "~")])[-1][2],
+                                _chave_codigo(r["task_code"].strip())))
+    for ordem, r in enumerate(validas, start=1):
+        code = r["task_code"].strip()
+        niv = estrutura.get(r.get("wbs_id", ""), [])
+        cam = [n for n, _c, _k in niv]
         inicio = _dt(r.get("act_start_date")) or _dt(r.get("early_start_date")) or _dt(r.get("target_start_date"))
         fim = _dt(r.get("act_end_date")) or _dt(r.get("early_end_date")) or _dt(r.get("target_end_date"))
         session.add(AtividadeCronogramaModel(
@@ -97,7 +131,8 @@ def carregar_xer(session: Session, obra_id: int, arquivo: BinaryIO, *, nome_arqu
             area=" / ".join(cam[:-1])[:200] or None, wbs=(cam[-1][:200] if cam else None),
             detalhe_wbs=None, status=STATUS.get(r.get("status_code", ""), r.get("status_code")),
             inicio=inicio, fim=fim, realizado=_num(r.get("phys_complete_pct")),
-            horas_crono=_num(r.get("target_drtn_hr_cnt"))))
+            horas_crono=_num(r.get("target_drtn_hr_cnt")),
+            wbs_niveis=[{"nome": n, "codigo": c, "ordem": k} for n, c, k in niv] or None, ordem_p6=ordem))
     v.qtd_itens = len(vistos)
     res.contagem["CRONOGRAMA"] = len(vistos)
     res.contagem["LIGACOES"] = len(t.get("TASKPRED", []))

@@ -112,6 +112,8 @@ export interface Ssma { tecnico: string | null; rac: string | null; pts: string 
 export interface AtividadeArvore {
   id_crono: string; atividade: string; caminho: string[]; inicio: string | null; fim: string | null;
   duracao_h: number | null; status: string | null; pct: number | null; programada_em: { id: number; titulo: string }[];
+  /** Estrutura do Primavera: código e chave de ordem da WBS por nível; posição da atividade no P6. */
+  wbs_codigos: string[] | null; wbs_ordem: string[] | null; ordem_p6: number | null;
 }
 /** Produção da linha a partir da CPU da obra (HH/un, recurso que governa, índice, capacidade da equipe). */
 export interface CalculoLinha {

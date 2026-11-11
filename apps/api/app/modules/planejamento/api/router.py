@@ -313,7 +313,7 @@ def atividades(q: str | None = None, area_id: int | None = None, limite: int = 4
         stmt = stmt.where(or_(AtividadeCronogramaModel.id_crono.ilike(f"%{q}%"),
                               AtividadeCronogramaModel.atividade.ilike(f"%{q}%")))
     return [{"id_crono": x.id_crono, "atividade": x.atividade, "inicio": x.inicio, "fim": x.fim, "status": x.status,
-             "wbs": x.wbs} for x in s.scalars(stmt.order_by(AtividadeCronogramaModel.inicio).limit(min(limite, 200)))]
+             "wbs": x.wbs} for x in s.scalars(stmt.order_by(AtividadeCronogramaModel.ordem_p6.nulls_last(), AtividadeCronogramaModel.inicio).limit(min(limite, 200)))]
 
 
 @router.post("/importar/takeoff")
@@ -436,14 +436,20 @@ def cronograma_arvore(s: Session = Depends(get_session), c: ContextoObra = Depen
             usos[idc].append({"id": pid, "titulo": tit})
     ativ = []
     for a in s.scalars(select(AtividadeCronogramaModel).where(AtividadeCronogramaModel.versao_id == v.id)
-                       .order_by(AtividadeCronogramaModel.id)):
-        caminho = [x for x in (a.area or "").split(" / ") if x] + ([a.wbs] if a.wbs else [])
+                       .order_by(AtividadeCronogramaModel.ordem_p6.nulls_last(), AtividadeCronogramaModel.id)):
+        niv = a.wbs_niveis or []
+        caminho = [x["nome"] for x in niv] if niv else (
+            [x for x in (a.area or "").split(" / ") if x] + ([a.wbs] if a.wbs else []))  # importação antiga
         ativ.append({"id_crono": a.id_crono, "atividade": a.atividade, "caminho": caminho,
+                     "wbs_codigos": [x["codigo"] for x in niv] if niv else None,
+                     "wbs_ordem": [x["ordem"] for x in niv] if niv else None,
+                     "ordem_p6": a.ordem_p6,
                      "inicio": a.inicio.date().isoformat() if a.inicio else None,
                      "fim": a.fim.date().isoformat() if a.fim else None,
                      "duracao_h": a.horas_crono, "status": status_pt(a.status), "pct": a.realizado,
                      "programada_em": usos.get(a.id_crono, [])})
-    return {"versao": {"id": v.id, "rotulo": v.rotulo, "carregado_em": v.carregado_em.isoformat()}, "atividades": ativ}
+    return {"versao": {"id": v.id, "rotulo": v.rotulo, "carregado_em": v.carregado_em.isoformat(),
+                       "ordem_p6": any(x["ordem_p6"] is not None for x in ativ)}, "atividades": ativ}
 
 
 @router.get("/programacoes/{pid}/excel")

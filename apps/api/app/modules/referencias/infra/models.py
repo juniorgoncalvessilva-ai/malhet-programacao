@@ -19,6 +19,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -68,6 +69,10 @@ class AtividadeCronogramaModel(Base):
     recurso_governa: Mapped[str | None] = mapped_column(String(120))
     coef_governa: Mapped[float | None] = mapped_column(Float)
     horas_crono: Mapped[float | None] = mapped_column(Float)
+    # estrutura do Primavera, nível a nível: [{"nome", "codigo" (wbs_short_name), "ordem" (seq_num acumulado)}]
+    # (o nome da WBS pode ter " / ", então o caminho não é guardado como texto separado por barra)
+    wbs_niveis: Mapped[list | None] = mapped_column(JSONB)
+    ordem_p6: Mapped[int | None] = mapped_column(Integer, index=True)  # posição da atividade na estrutura do P6
 
 
 class ItemPqModel(Base):

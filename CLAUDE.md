@@ -34,6 +34,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `item_pq` (`folha`, `nivel`, `ordem`), lida por `referencias/infra/pq_gateway.py`. Spec 011.
 - SSMA: listas suspensas vêm de `ssma/` (`cadastro_ssma`, gateway `CadastroSsmaGateway.conferir`). Técnico/RAC/PTS/
   ART/ATA = segurança; PTO = Planejamento (linha da programação). Spec 012.
+- Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
+  `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

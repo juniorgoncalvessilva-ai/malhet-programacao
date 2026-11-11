@@ -14,7 +14,7 @@ import { useObra } from '@/lib/obra/ObraProvider';
 
 /* ---------- modelo da árvore ---------- */
 interface No {
-  nome: string; chave: string; codigo: string; ordem: number; nivel: number;
+  nome: string; chave: string; codigo: string; ordem: string; p6: string | null; nivel: number;
   filhos: No[]; atividades: AtividadeArvore[];
   total: number; inicio: string | null; fim: string | null; pct: number | null; horas: number; atrasadas: number;
 }
@@ -26,20 +26,22 @@ const cwaDe = (a: AtividadeArvore) => a.caminho.join(' ').match(/CWA\s*([0-9]{3}
 const atrasada = (a: AtividadeArvore) => !!a.fim && a.fim < HOJE && (a.pct ?? 0) < 100 && a.status !== 'Concluída';
 
 function montarArvore(ativ: AtividadeArvore[], ordemP6: Map<string, number>): No {
-  const novo = (nome: string, chave: string, nivel: number, ordem: number): No => ({ nome, chave, codigo: '', ordem, nivel, filhos: [], atividades: [], total: 0, inicio: null, fim: null, pct: null, horas: 0, atrasadas: 0 });
-  const raiz = novo('', '', 0, 0);
+  const novo = (nome: string, chave: string, nivel: number, ordem: string, p6: string | null): No => ({ nome, chave, codigo: '', ordem, p6, nivel, filhos: [], atividades: [], total: 0, inicio: null, fim: null, pct: null, horas: 0, atrasadas: 0 });
+  const raiz = novo('', '', 0, '', null);
   const idx = new Map<string, No>();
   for (const a of ativ) {
     let no = raiz;
     a.caminho.forEach((parte, i) => {
       const chave = `${no.chave}/${parte}`;
       let f = idx.get(chave);
-      if (!f) { f = novo(parte, chave, i + 1, ordemP6.get(a.id_crono) ?? 0); idx.set(chave, f); no.filhos.push(f); }
+      // ordem e código da WBS do Primavera (seq_num e wbs_short_name); sem eles (importação antiga), a 1ª aparição
+      const ordemNo = a.wbs_ordem?.[i] ?? String(ordemP6.get(a.id_crono) ?? 0).padStart(8, '0');
+      if (!f) { f = novo(parte, chave, i + 1, ordemNo, a.wbs_codigos?.[i] ?? null); idx.set(chave, f); no.filhos.push(f); }
       no = f;
     });
     no.atividades.push(a);
   }
-  // agrega de baixo para cima e numera a WBS (1, 1.2, 1.2.3) na ordem do P6
+  // agrega de baixo para cima; código da WBS = o do P6 (5, 5.1, 5.1.11) ou, sem ele, a numeração 1, 1.2…
   const agregar = (n: No, codigo: string) => {
     n.codigo = codigo;
     let soma = 0; let peso = 0;
@@ -47,8 +49,9 @@ function montarArvore(ativ: AtividadeArvore[], ordemP6: Map<string, number>): No
       if (ini && (!n.inicio || ini < n.inicio)) n.inicio = ini;
       if (fim && (!n.fim || fim > n.fim)) n.fim = fim;
     };
-    n.filhos.sort((x, y) => x.ordem - y.ordem).forEach((f, i) => {
-      agregar(f, codigo ? `${codigo}.${i + 1}` : String(i + 1));
+    n.filhos.sort((x, y) => (x.ordem < y.ordem ? -1 : x.ordem > y.ordem ? 1 : 0)).forEach((f, i) => {
+      const seg = f.p6 || String(i + 1);
+      agregar(f, codigo ? `${codigo}.${seg}` : seg);
       n.total += f.total; n.horas += f.horas; n.atrasadas += f.atrasadas; junta(f.inicio, f.fim);
       if (f.pct != null) { const w = f.horas || f.total; soma += f.pct * w; peso += w; }
     });
@@ -92,7 +95,7 @@ function FiltroMulti({ rotulo, opcoes, valor, onChange }: { rotulo: string; opco
 export default function CronogramaPage() {
   const api = useApi();
   const { pode } = useObra();
-  const dados = useQuery({ queryKey: ['cronograma-arvore'], queryFn: () => api.get<{ versao: { rotulo: string; carregado_em: string } | null; atividades: AtividadeArvore[] }>('/cronograma/arvore'), staleTime: 60_000 });
+  const dados = useQuery({ queryKey: ['cronograma-arvore'], queryFn: () => api.get<{ versao: { rotulo: string; carregado_em: string; ordem_p6?: boolean } | null; atividades: AtividadeArvore[] }>('/cronograma/arvore'), staleTime: 60_000 });
   const programacoes = useProgramacoes();
   const frentes = useFrentes2();
   const catalogo = useCatalogo();
@@ -276,7 +279,7 @@ export default function CronogramaPage() {
       <Cabecalho
         eyebrow="Programar · cronograma"
         titulo={dados.data?.versao ? `Cronograma vigente: ${dados.data.versao.rotulo}` : 'Nenhum cronograma importado'}
-        descricao={<>Estrutura do P6 (WBS → atividades) com datas, duração (dias de 8 h), % físico e linha do tempo. Clique no cabeçalho para ordenar (ID, início, fim…) e combine os filtros. Marque as tarefas e envie para a programação da semana ou do mês. {!dados.data?.versao && <Link href="/app/importacoes" className="font-semibold text-m-accent">Importar o .xer</Link>}</>}
+        descricao={<>A estrutura do Primavera como no P6: WBS na ordem do cronograma (O.S. 1 antes da O.S. 2) e com o código da WBS do P6 (5, 5.1, 5.1.11…), atividades na sequência do P6. Duração em dias de 8 h. Clique no cabeçalho para ordenar por outra coluna; &quot;ordem do P6&quot; volta à estrutura do Primavera.{dados.data?.versao && dados.data.versao.ordem_p6 === false && <> <b className="text-m-warning">Este cronograma foi importado antes: reimporte o .xer em <Link href="/app/importacoes" className="underline">Importações</Link> para usar a ordem e os códigos do P6.</b></>} Marque as tarefas e envie para a programação da semana ou do mês. {!dados.data?.versao && <Link href="/app/importacoes" className="font-semibold text-m-accent">Importar o .xer</Link>}</>}
       />
       <Painel
         titulo="Quais tarefas entram na programação?"
