@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qs } from '@/lib/api/client';
-import type { CadastroSsma, Colaborador, FuncaoDePara, GrupoCatalogo, MovimentoEfetivo, NoOrganograma, CoresOrganograma, SetoresObra, ResumoEfetivo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
+import type { CadastroSsma, Colaborador, FuncaoDePara, GrupoCatalogo, MovimentoEfetivo, NoOrganograma, CoresOrganograma, SetoresObra, NoWbs, ResumoEfetivo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
 import { useApi } from './useApi';
 
 export const k = {
@@ -31,6 +31,11 @@ export function useFuncoesEfetivo() {
   const api = useApi();
   return useQuery({ queryKey: [...k.efetivo, 'funcoes'], queryFn: () => api.get<{ recursos_cpu: string[]; funcoes: FuncaoDePara[] }>('/efetivo/funcoes') });
 }
+export function useWbs() {
+  const api = useApi();
+  return useQuery({ queryKey: ['wbs'], queryFn: () => api.get<{ arvore: NoWbs[] }>('/wbs') });
+}
+
 export function useSetores() {
   const api = useApi();
   return useQuery({ queryKey: [...k.efetivo, 'setores'], queryFn: () => api.get<SetoresObra>('/efetivo/setores') });

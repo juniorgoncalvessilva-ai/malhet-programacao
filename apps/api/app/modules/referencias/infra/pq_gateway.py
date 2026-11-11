@@ -68,3 +68,17 @@ def tags_do_takeoff(s: Session, obra_id: int) -> set[str]:
     if vid is None:
         return set()
     return set(s.scalars(select(PqQuantidadeTagModel.tag).where(PqQuantidadeTagModel.versao_id == vid).distinct()))
+
+
+def quantidades_por_tag(s: Session, obra_id: int, itens: set[str]) -> dict[tuple[str, str], float]:
+    """(item, TAG) → quantidade do take-off (aba MC) na PQ vigente."""
+    from app.modules.referencias.infra.models import PqQuantidadeTagModel
+
+    vid = versao_pq_vigente(s, obra_id)
+    if vid is None or not itens:
+        return {}
+    out: dict[tuple[str, str], float] = {}
+    for x in s.scalars(select(PqQuantidadeTagModel).where(PqQuantidadeTagModel.versao_id == vid,
+                                                          PqQuantidadeTagModel.item.in_(itens))):
+        out[(x.item, x.tag)] = out.get((x.item, x.tag), 0.0) + float(x.quantidade or 0)
+    return out

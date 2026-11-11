@@ -159,6 +159,11 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             AtividadeCronogramaModel.versao_id == vig["CRONOGRAMA"], AtividadeCronogramaModel.id_crono.in_(ids_crono)))}
 
     anterior = realizado_anterior(s, p)
+    wbs_cod = {}
+    if any(ln.wbs_no_id for ln in p.linhas):
+        from app.modules.wbs.infra.gateway import codigos
+
+        wbs_cod = codigos(s, p.obra_id)
     por_area: dict[int, list[dict]] = {}
     for n, ln in enumerate(p.linhas, start=1):
         a, t = areas[ln.area_id], tipos[ln.tipo_id]
@@ -182,6 +187,8 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "pu": ipq.pu if ipq else None,
             "qtd_takeoff": qtd_tk, "qtd_projeto": ln.qtd_projeto if ln.qtd_projeto is not None else qtd_tk,
             "id_crono": ln.id_crono, "atividade_crono": at.atividade if at else None,
+            "wbs_no_id": ln.wbs_no_id, "wbs_codigo": wbs_cod[ln.wbs_no_id].codigo if ln.wbs_no_id in wbs_cod else None,
+            "wbs_caminho": wbs_cod[ln.wbs_no_id].caminho if ln.wbs_no_id in wbs_cod else None,
             "equipe_id": ln.equipe_id, "equipe": eq.nome if eq else None,
             "encarregado": (eq.encarregado_nome if eq else None), "cracha": (eq.encarregado_cracha if eq else None),
             "observacao": ln.observacao, "previsto": prev, "realizado": real,

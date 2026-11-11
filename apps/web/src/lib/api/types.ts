@@ -105,6 +105,7 @@ export type StatusProgramacao = 'rascunho' | 'emitida' | 'concluida';
 export interface ProgramacaoResumo { id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: StatusProgramacao; revisao: number; linhas: number }
 export interface LinhaVisao {
   id: number; n: number; area_id: number; tipo_id: number; item_simova_id: number | null;
+  wbs_no_id?: number | null; wbs_codigo?: string | null; wbs_caminho?: string | null;
   grupo: { codigo: string; descricao: string }; codigo_simova: string; descricao: string; complemento: string | null;
   unidade: string | null; item_pq: string | null; descricao_pq: string | null; pu: number | null;
   qtd_takeoff: number | null; qtd_projeto: number | null; id_crono: string | null; atividade_crono: string | null;
@@ -189,3 +190,11 @@ export interface SetoresObra {
   responsavel_geral: PessoaRef | null; cores: CoresOrganograma; cores_padrao: CoresOrganograma;
 }
 export interface MovimentoEfetivo { id: number; colaborador_id: number; nome: string; tipo: string; de: string | null; para: string | null; em: string }
+export type TipoNoWbs = 'area' | 'cwp' | 'grupo' | 'iwp';
+export interface NoWbs {
+  id: number; pai_id: number | null; tipo: TipoNoWbs; seq: number; codigo: string; caminho: string; titulo: string; detalhe: string;
+  ativo: boolean; observacao: string | null; linhas: number; area_id: number | null; elemento: string | null; complemento: string | null;
+  grupo_id: number | null; tipo_id: number | null; item_pq: string | null;
+  unid?: string | null; quantidade?: number | null; qtd_takeoff?: number | null; quantidade_efetiva?: number | null;
+  origem_qtd?: 'digitada' | 'take-off' | null; na_pq_vigente?: boolean; filhos: NoWbs[];
+}

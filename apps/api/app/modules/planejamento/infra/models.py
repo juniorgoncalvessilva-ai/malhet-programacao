@@ -37,6 +37,7 @@ class LinhaProgramacaoModel(Base):
     tipo_id: Mapped[int] = mapped_column(ForeignKey("tipo_atividade.id", ondelete="RESTRICT"), index=True)
     item_simova_id: Mapped[int | None] = mapped_column(ForeignKey("item_simova.id", ondelete="RESTRICT"))
     item_pq: Mapped[str | None] = mapped_column(String(40))
+    wbs_no_id: Mapped[int | None] = mapped_column(ForeignKey("wbs_no.id", ondelete="SET NULL"), index=True)  # IWP
     id_crono: Mapped[str | None] = mapped_column(String(40))
     equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
     qtd_projeto: Mapped[float | None] = mapped_column(Float)  # manual; vazio = take-off da TAG

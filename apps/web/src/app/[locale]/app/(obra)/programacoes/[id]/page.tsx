@@ -8,20 +8,20 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
 import { useEquipes } from '@/hooks/programacao/queries';
-import { buscaAtividades, buscaPq, k, useAcao, useCadastrosSsma, useCatalogo, useFrentes2, useProgramacao } from '@/hooks/programacao/planejamento';
+import { buscaAtividades, buscaPq, k, useAcao, useCadastrosSsma, useCatalogo, useFrentes2, useProgramacao, useWbs } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
-import { comoLista, type AtividadeBusca, type ItemPqBusca, type LinhaVisao } from '@/lib/api/types';
+import { comoLista, type AtividadeBusca, type ItemPqBusca, type LinhaVisao, type NoWbs } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
 
 interface FormLinha {
-  area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
+  wbs_no_id: string; area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
   equipe_id: string; id_crono: string; qtd_projeto: string; observacao: string;
   natureza: 'P' | 'O' | 'E'; responsavel: string; qtd_periodo: string; pto: string[];
 }
-const VAZIO: FormLinha = { area_id: '', grupo_id: '', tipo_id: '', complemento: '', item_pq: '', equipe_id: '', id_crono: '', qtd_projeto: '', observacao: '', natureza: 'P', responsavel: '', qtd_periodo: '', pto: [] };
+const VAZIO: FormLinha = { wbs_no_id: '', area_id: '', grupo_id: '', tipo_id: '', complemento: '', item_pq: '', equipe_id: '', id_crono: '', qtd_projeto: '', observacao: '', natureza: 'P', responsavel: '', qtd_periodo: '', pto: [] };
 const NATUREZA = { P: 'Programada', O: 'Oportunidade', E: 'Emergencial' } as const;
 type Pendentes = Record<string, string>; // `${linha}|${campo}|${data}` → valor ; `${linha}|periodo` → qtd
 
@@ -33,6 +33,21 @@ export default function MontarPage() {
   const prog = useProgramacao(id);
   const frentes = useFrentes2();
   const catalogo = useCatalogo();
+  const wbs = useWbs();
+  // IWPs da WBS de execução, com o que cada um define na linha (área, grupo, tipo, CWP → texto complementar, qtd)
+  const iwps = useMemo(() => {
+    const out: { id: number; codigo: string; caminho: string; area_id: number; grupo_id: number; tipo_id: number; complemento: string; quantidade: number | null }[] = [];
+    const ir = (n: NoWbs, ctx: { area_id?: number; grupo_id?: number; complemento?: string }) => {
+      const c = { ...ctx };
+      if (n.tipo === 'area') c.area_id = n.area_id ?? undefined;
+      if (n.tipo === 'cwp') c.complemento = [n.elemento, n.complemento].filter(Boolean).join(' - ');
+      if (n.tipo === 'grupo') c.grupo_id = n.grupo_id ?? undefined;
+      if (n.tipo === 'iwp' && n.ativo && c.area_id && c.grupo_id && n.tipo_id) out.push({ id: n.id, codigo: n.codigo, caminho: n.caminho, area_id: c.area_id, grupo_id: c.grupo_id, tipo_id: n.tipo_id, complemento: c.complemento ?? '', quantidade: n.quantidade ?? null });
+      n.filhos.forEach((f) => ir(f, c));
+    };
+    (wbs.data?.arvore ?? []).forEach((n) => ir(n, {}));
+    return out;
+  }, [wbs.data]);
   const equipes = useEquipes();
   const cadastros = useCadastrosSsma();
   const ptos = (cadastros.data ?? []).filter((c) => c.tipo === 'PTO' && (c.ativo || form.pto.includes(c.codigo)));
@@ -59,7 +74,8 @@ export default function MontarPage() {
 
   const salvarLinha = useAcao((a, d: FormLinha) => {
     const corpo = {
-      area_id: Number(d.area_id), tipo_id: Number(d.tipo_id), complemento: d.complemento || null, item_pq: d.item_pq || null,
+      wbs_no_id: d.wbs_no_id ? Number(d.wbs_no_id) : null,
+      area_id: d.area_id ? Number(d.area_id) : null, tipo_id: d.tipo_id ? Number(d.tipo_id) : null, complemento: d.complemento || null, item_pq: d.item_pq || null,
       equipe_id: d.equipe_id ? Number(d.equipe_id) : null, id_crono: d.id_crono || null,
       qtd_projeto: d.qtd_projeto ? Number(d.qtd_projeto) : null, observacao: d.observacao || null,
       natureza: d.natureza, responsavel: d.responsavel || null, qtd_periodo: d.qtd_periodo ? Number(d.qtd_periodo) : null,
@@ -133,7 +149,7 @@ export default function MontarPage() {
   const abrirEdicao = (ln: LinhaVisao) => {
     const g = catalogo.data?.find((x) => x.tipos.some((t) => t.id === ln.tipo_id));
     setEditando(ln.id);
-    setForm({ area_id: String(ln.area_id), grupo_id: g ? String(g.id) : '', tipo_id: String(ln.tipo_id), complemento: ln.complemento ?? '',
+    setForm({ wbs_no_id: ln.wbs_no_id ? String(ln.wbs_no_id) : '', area_id: String(ln.area_id), grupo_id: g ? String(g.id) : '', tipo_id: String(ln.tipo_id), complemento: ln.complemento ?? '',
       item_pq: ln.item_pq ?? '', equipe_id: ln.equipe_id ? String(ln.equipe_id) : '', id_crono: ln.id_crono ?? '',
       qtd_projeto: ln.qtd_projeto != null && ln.qtd_projeto !== ln.qtd_takeoff ? String(ln.qtd_projeto) : '', observacao: ln.observacao ?? '',
       natureza: (ln.natureza ?? 'P') as FormLinha['natureza'], responsavel: ln.responsavel ?? '', qtd_periodo: ln.qtd_periodo != null ? String(ln.qtd_periodo) : '', pto: comoLista(ln.ssma?.pto) });
@@ -210,7 +226,17 @@ export default function MontarPage() {
               if (editando) { setAberto(false); setEditando(null); } else setForm((f) => ({ ...VAZIO, area_id: f.area_id, equipe_id: f.equipe_id }));
             } });
           }}>
-            <Selecao rotulo="Área (frente)" required value={form.area_id} onChange={(e) => setForm({ ...form, area_id: e.target.value, id_crono: '' })}>
+            <div className="md:col-span-2 xl:col-span-4">
+              <Selecao rotulo="Da WBS de execução (IWP) — opcional: preenche área, atividade, texto complementar (CWP) e quantidade" value={form.wbs_no_id} onChange={(e) => {
+                const w = iwps.find((x) => String(x.id) === e.target.value);
+                setForm(w ? { ...form, wbs_no_id: String(w.id), area_id: String(w.area_id), grupo_id: String(w.grupo_id), tipo_id: String(w.tipo_id), item_pq: '', complemento: w.complemento, qtd_projeto: w.quantidade != null ? String(w.quantidade) : '', id_crono: '' }
+                  : { ...form, wbs_no_id: '' });
+              }}>
+                <option value="">{iwps.length ? 'Sem WBS (escolher área e atividade abaixo)' : 'Nenhum IWP na WBS de execução'}</option>
+                {iwps.map((w) => <option key={w.id} value={w.id}>{w.codigo} · {w.caminho}</option>)}
+              </Selecao>
+            </div>
+            <Selecao rotulo="Área (frente)" required disabled={!!form.wbs_no_id} value={form.area_id} onChange={(e) => setForm({ ...form, area_id: e.target.value, id_crono: '' })}>
               <option value="">Escolha…</option>
               {frentes.data?.map((l) => (
                 <optgroup key={l.id} label={`${l.codigo} · ${l.descricao}`}>
@@ -218,11 +244,11 @@ export default function MontarPage() {
                 </optgroup>
               ))}
             </Selecao>
-            <Selecao rotulo="Grupo" required value={form.grupo_id} onChange={(e) => setForm({ ...form, grupo_id: e.target.value, tipo_id: '', item_pq: '' })}>
+            <Selecao rotulo="Grupo" required disabled={!!form.wbs_no_id} value={form.grupo_id} onChange={(e) => setForm({ ...form, grupo_id: e.target.value, tipo_id: '', item_pq: '' })}>
               <option value="">Escolha…</option>
               {catalogo.data?.filter((g) => g.ativo).map((g) => <option key={g.id} value={g.id}>{g.codigo} · {g.descricao}</option>)}
             </Selecao>
-            <Selecao rotulo="Atividade (item da PQ)" required value={form.tipo_id} onChange={(e) => setForm({ ...form, tipo_id: e.target.value, item_pq: '' })}>
+            <Selecao rotulo="Atividade (item da PQ)" required disabled={!!form.wbs_no_id} value={form.tipo_id} onChange={(e) => setForm({ ...form, tipo_id: e.target.value, item_pq: '' })}>
               <option value="">{grupo ? 'Escolha…' : 'Escolha o grupo antes'}</option>
               {grupo?.tipos.filter((t) => t.ativo).map((t) => <option key={t.id} value={t.id}>{t.codigo} · {t.item_pq ? `${t.item_pq} · ` : ''}{t.descricao.slice(0, 90)}</option>)}
             </Selecao>
@@ -324,7 +350,7 @@ export default function MontarPage() {
                           <td className="px-2 py-2 text-m-text-muted">{li + 1}.{ai + 1}.{i + 1}</td>
                           <td className="min-w-[240px] px-2 py-2">
                             <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{ln.descricao}</span>
-                            <div className="text-xs text-m-text-muted">{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
+                            <div className="text-xs text-m-text-muted">{ln.wbs_codigo && <span title={ln.wbs_caminho ?? ''} className="mr-1 rounded-[5px] bg-m-info-subtle px-1.5 py-px font-semibold text-m-info">WBS {ln.wbs_codigo}</span>}{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
                             <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}{comoLista(ln.ssma?.pto).length ? ` · PTO ${comoLista(ln.ssma?.pto).join(', ')}` : ''}</div>
                             <Calculo ln={ln} pid={id} />
                           </td>

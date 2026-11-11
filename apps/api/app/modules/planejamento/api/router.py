@@ -48,8 +48,9 @@ class ResumoOut(BaseModel):
 
 
 class LinhaIn(BaseModel):
-    area_id: int
-    tipo_id: int
+    area_id: int | None = None  # com wbs_no_id, vêm do IWP
+    tipo_id: int | None = None
+    wbs_no_id: int | None = None  # IWP da WBS de execução: define área, tipo, item da PQ, complemento (CWP) e qtd
     complemento: str | None = None
     item_pq: str | None = None
     id_crono: str | None = None
@@ -123,7 +124,7 @@ def nova(d: NovaIn, s: Session = Depends(get_session), c: ContextoObra = Depends
     if d.copiar_de:
         origem = sv.obter(s, c.obra_id, d.copiar_de)
         p.linhas = [LinhaProgramacaoModel(area_id=x.area_id, tipo_id=x.tipo_id, item_simova_id=x.item_simova_id,
-                                          item_pq=x.item_pq, id_crono=x.id_crono, equipe_id=x.equipe_id,
+                                          item_pq=x.item_pq, wbs_no_id=x.wbs_no_id, id_crono=x.id_crono, equipe_id=x.equipe_id,
                                           qtd_projeto=x.qtd_projeto, observacao=x.observacao, ordem=x.ordem,
                                           natureza=x.natureza, responsavel=x.responsavel,
                                           **{f"ssma_{k}": getattr(x, f"ssma_{k}") for k in SSMA_CAMPOS})
@@ -148,6 +149,15 @@ def excluir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depen
 
 
 def _validar_linha(s: Session, c: ContextoObra, d: LinhaIn) -> tuple[TipoAtividadeModel, int | None, str | None]:
+    if d.wbs_no_id:  # a linha nasce do IWP da WBS de execução
+        from app.modules.wbs.infra.gateway import iwp_para_linha
+
+        iwp = iwp_para_linha(s, c.obra_id, d.wbs_no_id)
+        d.area_id, d.tipo_id, d.complemento = iwp.area_id, iwp.tipo_id, iwp.complemento
+        if d.qtd_projeto is None and iwp.quantidade is not None:
+            d.qtd_projeto = iwp.quantidade
+    if not d.area_id or not d.tipo_id:
+        raise DomainError("escolha a área e o tipo, ou um IWP da WBS", "area_id")
     a = s.get(AreaFrenteModel, d.area_id)
     if a is None or a.obra_id != c.obra_id:
         raise NotFoundError("Área", d.area_id)
@@ -187,6 +197,7 @@ def nova_linha(pid: int, d: LinhaIn, s: Session = Depends(get_session), c: Conte
     sv.exigir_rascunho(p)
     _, item_id, aviso = _validar_linha(s, c, d)
     ln = LinhaProgramacaoModel(area_id=d.area_id, tipo_id=d.tipo_id, item_simova_id=item_id, item_pq=d.item_pq or None,
+                               wbs_no_id=d.wbs_no_id or None,
                                id_crono=d.id_crono or None, equipe_id=d.equipe_id, qtd_projeto=d.qtd_projeto,
                                qtd_periodo=d.qtd_periodo, natureza=d.natureza, responsavel=(d.responsavel or None),
                                ssma_pto=_pto(s, c, d.pto, None),
@@ -206,6 +217,7 @@ def editar_linha(pid: int, lid: int, d: LinhaIn, s: Session = Depends(get_sessio
     _, item_id, aviso = _validar_linha(s, c, d)
     ln.area_id, ln.tipo_id, ln.item_simova_id = d.area_id, d.tipo_id, item_id
     ln.item_pq, ln.id_crono, ln.equipe_id = d.item_pq or None, d.id_crono or None, d.equipe_id
+    ln.wbs_no_id = d.wbs_no_id or None
     ln.qtd_projeto, ln.observacao = d.qtd_projeto, d.observacao
     ln.qtd_periodo, ln.natureza, ln.responsavel = d.qtd_periodo, d.natureza, (d.responsavel or None)
     ln.ssma_pto = _pto(s, c, d.pto, ln.ssma_pto)
