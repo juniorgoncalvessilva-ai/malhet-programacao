@@ -9,6 +9,7 @@ import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { ComposicaoEquipe, Equipe, PessoaEfetivoEquipe } from '@/lib/api/types';
 import { ROTULO_SITUACAO, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
+import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 
@@ -100,7 +101,7 @@ export default function EquipesPage() {
   };
   const mod = recursos.data?.filter((r) => r.tipo === 'MOD') ?? [];
   const equ = recursos.data?.filter((r) => r.tipo === 'EQU') ?? [];
-  const usaFuncoes = !!form?.membros.some((m) => m.funcao);
+  const usaFuncoes = !!form?.membros.some((m) => m.funcao || m.efetivo?.funcao_cpu);
 
   return (
     <>
@@ -149,16 +150,20 @@ export default function EquipesPage() {
               <Campo rotulo="Frente" value={form.frente_codigo ?? ''} onChange={(e) => setForm({ ...form, frente_codigo: e.target.value || null })} />
 
               <div className="md:col-span-6">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Funcionários ({form.membros.length}) · informe a função para a capacidade sair pela CPU</div>
-                <datalist id="funcoes-cpu">{mod.map((r) => <option key={r.recurso} value={r.recurso} />)}</datalist>
-                <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Funcionários ({form.membros.length}) · a função da composição vem do <Link href="/app/efetivo/funcoes" className="text-m-accent underline">de-para de funções</Link>; troque só se a pessoa trabalha em outra função nesta equipe</div>
+                <div className="grid gap-1.5 lg:grid-cols-2">
                   {form.membros.map((m, i) => (
                     <div key={`${m.cracha}-${i}`} className="flex items-center gap-2 rounded-m-md border border-m-stroke-subtle px-2 py-1">
                       <span className="w-[64px] shrink-0 text-xs text-m-text-muted">{semNumero(m.cracha) ? '—' : m.cracha}</span>
                       <span className="min-w-0 flex-1 truncate text-[13px] text-m-text-primary" title={[m.nome, m.efetivo?.funcao].filter(Boolean).join(' · ')}>{m.nome}{m.efetivo?.funcao && <span className="block truncate text-[11px] text-m-text-muted">{m.efetivo.funcao}</span>}</span>
-                      <input aria-label={`Função de ${m.nome}`} list="funcoes-cpu" placeholder="função" value={m.funcao ?? ''}
-                        onChange={(e) => { const ms = [...form.membros]; ms[i] = { ...m, funcao: e.target.value || null }; setForm({ ...form, membros: ms }); }}
-                        className="h-8 w-[130px] rounded-[8px] border border-m-stroke bg-m-surface-field px-2 text-[13px]" />
+                      <select aria-label={`Função de ${m.nome} na composição`} value={m.funcao ?? ''}
+                        title={m.funcao ? 'Função escolhida nesta equipe (no lugar do de-para)' : m.efetivo?.funcao_cpu ? 'Função do de-para' : 'Função do efetivo sem de-para'}
+                        onChange={(e) => { const v = e.target.value || null; const ms = [...form.membros]; ms[i] = { ...m, funcao: v === m.efetivo?.funcao_cpu ? null : v }; setForm({ ...form, membros: ms }); }}
+                        className={`h-8 w-[170px] rounded-[8px] border bg-m-surface-field px-1.5 text-[13px] ${m.funcao ? 'border-m-accent font-semibold text-m-text-primary' : m.efetivo?.funcao_cpu ? 'border-m-stroke text-m-text-primary' : 'border-m-warning text-m-text-muted'}`}>
+                        <option value="">{m.efetivo?.funcao_cpu ? `${m.efetivo.funcao_cpu} (de-para)` : m.efetivo?.funcao ? 'sem de-para' : 'escolha a função'}</option>
+                        {m.funcao && !mod.some((r) => r.recurso === m.funcao) && <option value={m.funcao}>{m.funcao}</option>}
+                        {mod.map((r) => <option key={r.recurso} value={r.recurso}>{r.recurso}</option>)}
+                      </select>
                       <button type="button" aria-label={`Tirar ${m.nome} da equipe`} className="p-1 text-m-text-muted hover:text-m-danger" onClick={() => setForm({ ...form, membros: form.membros.filter((_, j) => j !== i) })}><Trash2 size={14} /></button>
                     </div>
                   ))}
