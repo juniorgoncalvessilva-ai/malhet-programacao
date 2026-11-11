@@ -49,6 +49,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Setores da obra (`setor_obra`, responsável do efetivo, cor) e `organograma_config` (responsável geral + cores por
   nível); `equipe.setor_id`. Spec 018. Disciplinas (`subsetor_obra`, `equipe.subsetor_id`): Organograma =
   Obra → Setor → Disciplina → Equipe → Função; responsáveis só na própria caixa. Spec 019.
+- Frentes: lista da obra `CWA | Ativo | DESCRICAO CWA | Local` (`interpretar_lista_cwa`); Local pelo nome com código
+  L1, L2…; `area_frente.ativo_codigo` → TAG do take-off. Formato antigo CODIGO | DESCRICAO ainda aceito. Spec 020.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,

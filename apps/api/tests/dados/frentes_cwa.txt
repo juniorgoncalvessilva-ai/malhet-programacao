@@ -1,0 +1,69 @@
+CWA	Ativo	DESCRICAO CWA	Local
+1	-	OBRA GERAL	Geral
+S2	-	PLATÔ S2	S2
+5	-	MIRANTE DA MINA AUTÔNOMA	MIRANTE DA MINA AUTÔNOMA
+6	-	MANUTENÇÃO E ADEQUAÇÕES DE ACESSOS	Geral
+004.02	ED-1800AA-04	Prédio administrativo	Novo CMD
+004.03	EW-1800AA-01	Biodigestor com sumidouro	Novo CMD
+004.04	ED-1800AA-02	Galpão de resíduos classe I	Novo CMD
+004.05	ED-1800AA-01	Galpão de resíduos classe II	Novo CMD
+004.09	ED-1800AA-03	Pátio de caçambas	Novo CMD
+004.09	ED-1800AA-07	DIR	Novo CMD
+004.09	ED-1800AA-00	Baia de residuos descoberta	Novo CMD
+004.11	BL-1870AA-01	Balança	Novo CMD
+004.12	ED-1800AA-06	Skid de Bombas (SPCI)/Reservatório de água de combate a incêndio	Novo CMD
+005.03	ED-1485AA-22 	Skid de bombas (SPCI)	TR/ Pilha Feijão 
+005.04	SE-1485AA-10	Subestação	TR/ Pilha Feijão 
+005.05	ED-1485AA-12	Prédio de apoio	TR/ Pilha Feijão 
+006.01	TR-1485AA-20	TR-1485AA-20	TR/ Pilha Feijão 
+006.02	ED-1485AA-16 	CT-TR-1485AA-19	TR/ Pilha Feijão 
+006.03	TR-1485AA-19 	TR-1485AA-19	TR/ Pilha Feijão 
+006.04	CT-1485AA-18	CT-TR-1485AA-18	TR/ Pilha Feijão 
+006.05	ED-1485AA-13	ED-1485AA-13	TR/ Pilha Feijão 
+006.05	TR-1485AA-18 	TR-1485AA-18 	TR/ Pilha Feijão 
+006.07	ED-1485AA-15	ED-1485AA-15	TR/ Pilha Feijão 
+006.08	TR-1485AA-21	TR-1485AA-21	TR/ Pilha Feijão 
+006.09	ED-1485AA-14	ED-1485AA-14 	TR/ Pilha Feijão 
+039.00	-	Comum/Geral Pilha Feijão Sist. de Amostragem	TR/ Pilha Feijão 
+007.00	RD-1810AA-01	Acesso 03 e Portaria	Acesso 03 e Portaria
+009.01	EW-1850AA-01	ETE 2 - Portaria Principal	ETE 2 - Portaria Principal
+011.02	ED-1600AA-02	Galpão do Ármazem de Preparação de Materiais	Nova Oficina
+011.03	ST-1850AA-01	Estação Elevatória de Esgoto	Nova Oficina
+011.04	ED-1600AA-103 	Galpão de Subconjunto (Classe II existente)	Nova Oficina
+011.04	 ED-1600AA-104	Galpão de Produtos Químicos (Existente)	Nova Oficina
+011.05	SE-1600AA-03 	Subestação	Nova Oficina
+011.06	ED-1600AA-101	Estocagem de Motores	Nova Oficina
+011.10	ED-1600AA-101	Armazém de Preparação de Materiais existente	Nova Oficina
+012.00	-	Comum/ Geral - Manutenção	Nova Oficina
+012.02	ED-1620AA-02	Estoque de lubrificantes	Nova Oficina
+012.03	ED-1600AA-110	Restaurante das Oficinas (existente)	Nova Oficina
+012.04	ED-1630AA-05	Baia de insulflamento	Nova Oficina
+012.05	ED-1610AA-05	Manutenção/Ferramentaria	Nova Oficina
+012.06	ED-1630AA-01	Oficina de Manutenção de Pneus existente	Nova Oficina
+012.07	ED-1610AA-03	Casa de compressores das oficinas 	Nova Oficina
+012.08	ED-1600AA-111	Sala de lubrificantes da oficina (existente)	Nova Oficina
+012.09	ED-1630AA-100	Sala de apoio da Oficina de Manutenção de Pneus (existente)	Nova Oficina
+012.10	ED-1610AA-01	Galpão de Grande Porte (GP)	Nova Oficina
+012.11	ED-1610AA-02	Galpão de Pequeno Porte (PP)	Nova Oficina
+013.01	YY-1600AA-00	Sump/ baias	Nova Oficina
+013.02	ST-1620AA-02	Lavador de Básculas	Nova Oficina
+013.03	ED-1630AA-02 	Estoque de Pneus	Nova Oficina
+014.01	ST-1600AA-01	ETEO	Nova Oficina
+014.02	ED-1620AA-01	Lavador de veículos (Novo)	Nova Oficina
+014.03	ED-1620AA-04	Lavador de veículos (existente)	Nova Oficina
+014.04	ED-1620AA-03	Predio de Apoio da ETEO/ Lavador de Veículos	Nova Oficina
+015.01	ED-1670AA-01	Oficina de Caldeiraria	Nova Oficina
+015.02	ED-1600AA-100 	Tenda de Motores Elétricos (Existente)	Nova Oficina
+016.00	-	Comum Geral - Abastecimento 	Nova Oficina
+016.04	ST-1640AA	Ampliação do abastecimento	Nova Oficina
+016.06	TQ-1640AA-01 	Abastecimento óleo diesel	Nova Oficina
+016.07	TQ-1640AA-02	Sistema Arla 32	Nova Oficina
+016.08	ED-1640AA-01	Ampliação do Prédio Administrativo do Abastecimento	Nova Oficina
+017.01	ED-1610AA-04	D.I.R	Nova Oficina
+018.01	ED-1600AA-01	Prédio Administrativo	Nova Oficina
+019.03	-	Estacionamento de Veículos Leves	Nova Oficina
+020.01	-	Comum Geral - Platô da Oficina 	Nova Oficina
+021.01	ED-1790AA-01	Restaurante Central Brucutu	Restaurante Principal de Brucutu
+021.02	SE-1790AA-01	Subestação do Restaurante Central	Restaurante Principal de Brucutu
+022.00	-	Canteiro Central - Empresa Civil - Canteiro Principal	Comum/Geral 
+024.00	-	Canteiro Central - Vale/ Gerenciadora	Comum/Geral

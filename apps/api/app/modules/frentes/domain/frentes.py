@@ -1,7 +1,11 @@
-"""Frentes em dois níveis: Local (1, 2, S2…) → Área (CWA 004.00 + TAG na descrição).
+"""Frentes em dois níveis: Local (Novo CMD, Nova Oficina…) → Área (CWA + Ativo/TAG + descrição).
+
+Dois formatos de lista (colada do Excel):
+- CWA | Ativo | DESCRICAO CWA | Local (padrão da obra): cada linha é uma área; o Local é o agrupamento, criado pelo
+  nome; o Ativo (ED-1800AA-04, "-" = sem ativo) é a TAG;
+- CODIGO | DESCRICAO (antigo): código sem ponto = Local; com ponto (CWA) = Área do último Local lido.
 
 Regras:
-- código sem ponto = Local; código com ponto (CWA) = Área do último Local lido;
 - CWA repetido na obra recebe sufixo .1, .2… (o Simova exige código único de FRENTE);
 - a TAG da descrição é normalizada para o formato do take-off (1800AA-ED-01) para casar quantidades.
 """
@@ -39,6 +43,7 @@ class AreaLida:
     descricao: str
     codigo: str = ""
     tag: str | None = None
+    ativo: str | None = None  # código do ativo como veio (ED-1800AA-04)
 
 
 @dataclass
@@ -48,8 +53,59 @@ class LocalLido:
     areas: list[AreaLida] = field(default_factory=list)
 
 
+_SEM_ATIVO = {"", "-", "–", "—", "N/A", "NA"}
+
+
+def _celulas(bruta: str) -> list[str]:
+    return [" ".join(c.split()) for c in re.split(r"\t|;", bruta)]
+
+
+def eh_formato_cwa(texto: str) -> bool:
+    """Lista com 4 colunas (CWA, Ativo, Descrição, Local)."""
+    linhas = [ln for ln in texto.splitlines() if ln.strip()]
+    com4 = sum(1 for ln in linhas if len([c for c in _celulas(ln)[:4]]) >= 4 and _celulas(ln)[3])
+    return bool(linhas) and com4 >= max(1, len(linhas) // 2)
+
+
+def interpretar_lista_cwa(texto: str) -> list[LocalLido]:
+    """CWA | Ativo | DESCRICAO CWA | Local. Locais na ordem em que aparecem; áreas na ordem da lista."""
+    locais: dict[str, LocalLido] = {}
+    for n, bruta in enumerate(texto.splitlines(), start=1):
+        if not bruta.strip():
+            continue
+        c = _celulas(bruta) + ["", "", "", ""]
+        cwa, ativo, descricao, local = c[0], c[1], c[2], c[3]
+        if cwa.upper() == "CWA":
+            continue  # cabeçalho
+        if not cwa or not local:
+            raise DomainError(f"linha {n}: falta CWA ou Local: {bruta.strip()!r}")
+        ativo_ok = None if ativo.upper() in _SEM_ATIVO else ativo.upper().replace(" ", "")
+        descricao = descricao or ativo_ok or cwa
+        chave = local.lower()
+        loc = locais.get(chave)
+        if loc is None:
+            loc = locais[chave] = LocalLido(codigo="", descricao=local)
+        loc.areas.append(AreaLida(cwa=validar_codigo(cwa), descricao=descricao, ativo=ativo_ok,
+                                  tag=normalizar_tag(ativo_ok) or normalizar_tag(descricao)))
+    if not locais:
+        raise DomainError("nenhuma frente encontrada no texto")
+    lista = list(locais.values())
+    atribuir_codigos([a for loc in lista for a in loc.areas])
+    return lista
+
+
+def codigo_de_local(usados: set[str]) -> str:
+    """Código Simova para um Local criado pelo nome: L1, L2… (não colide com os CWAs das áreas)."""
+    n = 1
+    while f"L{n}" in usados:
+        n += 1
+    return f"L{n}"
+
+
 def interpretar_lista(texto: str) -> list[LocalLido]:
-    """Lê linhas `CODIGO<tab ou ;>DESCRICAO` (colado do Excel). Cabeçalho é ignorado."""
+    """Lê `CODIGO<tab ou ;>DESCRICAO` (antigo) ou `CWA | Ativo | DESCRICAO CWA | Local`. Cabeçalho é ignorado."""
+    if eh_formato_cwa(texto):
+        return interpretar_lista_cwa(texto)
     locais: list[LocalLido] = []
     for bruta in texto.splitlines():
         if not bruta.strip():

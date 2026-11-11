@@ -25,6 +25,7 @@ class AreaFrenteModel(Base):
     cwa: Mapped[str] = mapped_column(String(20))
     codigo: Mapped[str] = mapped_column(String(20))  # código Simova (CWA ou CWA.sufixo)
     descricao: Mapped[str] = mapped_column(String(250))
+    ativo_codigo: Mapped[str | None] = mapped_column(String(40))  # Ativo da lista da obra: ED-1800AA-04
     tag: Mapped[str | None] = mapped_column(String(40), index=True)  # formato do take-off: 1800AA-ED-01
     ordem: Mapped[int] = mapped_column(Integer, default=0)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
