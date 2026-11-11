@@ -23,3 +23,12 @@ código do Local opcional (automático).
 
 ## Testes
 `tests/test_frentes_cwa.py` com a lista da obra (`tests/dados/frentes_cwa.txt`, só ativos, sem dados pessoais).
+
+## Ajuste (pedido seguinte)
+- **CWA é o código**: o campo/coluna "Código Simova" saiu da tela; o código da área é sempre o CWA (código enviado é
+  ignorado; mudar o CWA muda o código). Só CWA repetido na obra sai com sufixo (.1, .2) no Simova, porque o FRENTE
+  exige código único — a tela mostra "no Simova: 004.09.2" apenas nessas linhas.
+- **Excluir todas** (`DELETE /frentes`, admin, com confirmação): apaga áreas e locais; área usada em programação fica
+  (com o local dela) e a resposta informa quantas ficaram.
+- **TAG só quando casa com o take-off**: `AreaOut.no_takeoff` (TAG do Ativo existe na aba MC da PQ vigente,
+  `pq_gateway.tags_do_takeoff`). A coluna TAG saiu; aparece "take-off · TAG" sob o Ativo só quando casa.

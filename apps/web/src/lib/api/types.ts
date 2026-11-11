@@ -86,7 +86,7 @@ export interface ContaAdmin {
 }
 
 // ---- programação simplificada (spec 008)
-export interface Area { id: number; local_id: number; cwa: string; codigo: string; descricao: string; ativo_codigo: string | null; tag: string | null; ordem: number; ativo: boolean }
+export interface Area { id: number; local_id: number; cwa: string; codigo: string; descricao: string; ativo_codigo: string | null; tag: string | null; no_takeoff?: boolean; ordem: number; ativo: boolean }
 export interface Local { id: number; codigo: string; descricao: string; ordem: number; ativo: boolean; areas: Area[] }
 export interface ItemCatalogo { id: number; tipo_id: number; numero: number; codigo: string; complemento: string; descricao: string; item_pq: string | null; ativo: boolean }
 /** Tipo = item da PQ vinculado ao grupo (descrição e unidade vêm da PQ vigente). */

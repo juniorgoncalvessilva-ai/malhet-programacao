@@ -15,7 +15,7 @@ const MODELO = `CWA\tAtivo\tDESCRICAO CWA\tLocal
 004.09\tED-1800AA-03\tPátio de caçambas\tNovo CMD
 011.02\tED-1600AA-02\tGalpão do Armazém de Preparação de Materiais\tNova Oficina`;
 
-type AreaForm = { id?: number; local_id: string; cwa: string; codigo: string; ativo_codigo: string; descricao: string; ativo: boolean };
+type AreaForm = { id?: number; local_id: string; cwa: string; ativo_codigo: string; descricao: string; ativo: boolean };
 
 export default function FrentesPage() {
   const confirmar = useConfirmar();
@@ -30,15 +30,16 @@ export default function FrentesPage() {
   const salvarLocal = useAcao((a, d: NonNullable<typeof local>) =>
     d.id ? a.put(`/frentes/locais/${d.id}`, d) : a.post('/frentes/locais', d), inv);
   const salvarArea = useAcao((a, d: AreaForm) => {
-    const corpo = { local_id: Number(d.local_id), cwa: d.cwa, codigo: d.codigo || null, ativo_codigo: d.ativo_codigo || null, descricao: d.descricao, ativo: d.ativo };
+    const corpo = { local_id: Number(d.local_id), cwa: d.cwa, ativo_codigo: d.ativo_codigo || null, descricao: d.descricao, ativo: d.ativo };
     return d.id ? a.put(`/frentes/areas/${d.id}`, corpo) : a.post('/frentes/areas', corpo);
   }, inv);
   const excluirArea = useAcao((a, id: number) => a.del(`/frentes/areas/${id}`), inv);
   const excluirLocal = useAcao((a, id: number) => a.del(`/frentes/locais/${id}`), inv);
+  const excluirTodas = useAcao((a) => a.del<{ areas_excluidas: number; locais_excluidos: number; areas_mantidas: number }>('/frentes'), inv);
 
   const lista = frentes.data ?? [];
   const nAreas = lista.reduce((s, l) => s + l.areas.length, 0);
-  const editarArea = (a: Area) => setArea({ id: a.id, local_id: String(a.local_id), cwa: a.cwa, codigo: a.codigo, ativo_codigo: a.ativo_codigo ?? '', descricao: a.descricao, ativo: a.ativo });
+  const editarArea = (a: Area) => setArea({ id: a.id, local_id: String(a.local_id), cwa: a.cwa, ativo_codigo: a.ativo_codigo ?? '', descricao: a.descricao, ativo: a.ativo });
 
   return (
     <>
@@ -46,7 +47,7 @@ export default function FrentesPage() {
         eyebrow="Cadastros · frentes"
         cor="var(--m-proc-medir)"
         titulo={lista.length ? `${lista.length} locais e ${nAreas} áreas` : 'Nenhuma frente cadastrada'}
-        descricao="Dois níveis, como na lista da obra: Local (Novo CMD, Nova Oficina…) → Área (CWA, Ativo e descrição). O Ativo vira a TAG que casa as quantidades do take-off. CWA repetido ganha sufixo (.1, .2) para o Simova diferenciar. Mudou aqui, muda em todas as programações abertas e na exportação para o Simova."
+        descricao="Dois níveis, como na lista da obra: Local (Novo CMD, Nova Oficina…) → Área (CWA, Ativo e descrição). O CWA é o código da frente no Simova (CWA repetido sai com sufixo .1, .2 só na exportação, porque o Simova exige código único). Quando o Ativo é encontrado no take-off, aparece a TAG que casa as quantidades. Mudou aqui, muda em todas as programações abertas e na exportação para o Simova."
       />
 
       {pode('admin') && (
@@ -73,17 +74,16 @@ export default function FrentesPage() {
             </form>
           )}
           {area && (
-            <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_110px_150px_150px_2fr]" onSubmit={(e) => { e.preventDefault(); salvarArea.mutate(area, { onSuccess: () => { toast.success('Área salva'); setArea(null); } }); }}>
+            <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_130px_170px_2fr]" onSubmit={(e) => { e.preventDefault(); salvarArea.mutate(area, { onSuccess: () => { toast.success('Área salva'); setArea(null); } }); }}>
               <Selecao rotulo="Local" required value={area.local_id} onChange={(e) => setArea({ ...area, local_id: e.target.value })}>
                 <option value="">Escolha…</option>
                 {lista.map((l) => <option key={l.id} value={l.id}>{l.descricao} ({l.codigo})</option>)}
               </Selecao>
-              <Campo rotulo="CWA" required placeholder="004.00" value={area.cwa} onChange={(e) => setArea({ ...area, cwa: e.target.value })} />
-              <Campo rotulo="Código Simova" placeholder="automático" value={area.codigo} onChange={(e) => setArea({ ...area, codigo: e.target.value })} />
+              <Campo rotulo="CWA (código no Simova)" required placeholder="004.00" value={area.cwa} onChange={(e) => setArea({ ...area, cwa: e.target.value })} />
               <Campo rotulo="Ativo" placeholder="ED-1800AA-01 (ou vazio)" value={area.ativo_codigo} onChange={(e) => setArea({ ...area, ativo_codigo: e.target.value })} />
               <Campo rotulo="Descrição CWA" required placeholder="Galpão de resíduos classe II" value={area.descricao} onChange={(e) => setArea({ ...area, descricao: e.target.value })} />
               <label className="flex items-center gap-2 text-[13px] text-m-text-secondary"><input type="checkbox" checked={area.ativo} onChange={(e) => setArea({ ...area, ativo: e.target.checked })} /> Ativa</label>
-              <div className="flex items-end gap-2 xl:col-span-4"><Botao type="submit">Salvar</Botao><Botao type="button" variante="secundario" onClick={() => setArea(null)}>Cancelar</Botao><Erro erro={salvarArea.error} /></div>
+              <div className="flex items-end gap-2 xl:col-span-3"><Botao type="submit">Salvar</Botao><Botao type="button" variante="secundario" onClick={() => setArea(null)}>Cancelar</Botao><Erro erro={salvarArea.error} /></div>
             </form>
           )}
         </Painel>
@@ -92,15 +92,23 @@ export default function FrentesPage() {
       <Painel
         titulo="Quais frentes a obra tem?"
         acoes={pode('planejador') && <>
+          {pode('admin') && !!nAreas && <Botao variante="excluir" disabled={excluirTodas.isPending} onClick={async () => {
+            if (!(await confirmar({ titulo: `Excluir todas as frentes (${lista.length} locais e ${nAreas} áreas)?`,
+              mensagem: <>Use para importar a lista da obra do zero. Áreas já usadas em programação não são excluídas (as programações apontam para elas): ficam com o local delas.</>, acao: 'Excluir todas' }))) return;
+            excluirTodas.mutate(undefined, {
+              onSuccess: (r) => toast.success(`${r.areas_excluidas} área(s) e ${r.locais_excluidos} local(is) excluídos${r.areas_mantidas ? ` · ${r.areas_mantidas} área(s) usadas em programação ficaram` : ''}`),
+              onError: (e) => toast.error(e.message),
+            });
+          }}><Trash2 size={16} /> Excluir todas</Botao>}
           <Botao variante="secundario" onClick={() => { setArea(null); setLocal({ codigo: '', descricao: '', ativo: true }); }}><Plus size={16} /> Local</Botao>
-          <Botao onClick={() => { setLocal(null); setArea({ local_id: lista[0] ? String(lista[0].id) : '', cwa: '', codigo: '', ativo_codigo: '', descricao: '', ativo: true }); }}><Plus size={16} /> Área</Botao>
+          <Botao onClick={() => { setLocal(null); setArea({ local_id: lista[0] ? String(lista[0].id) : '', cwa: '', ativo_codigo: '', descricao: '', ativo: true }); }}><Plus size={16} /> Área</Botao>
         </>}
       >
-        <Tabela cabecalho={['Código Simova', 'CWA', 'Ativo', 'Descrição CWA', 'TAG (take-off)', 'Situação', '']} vazio={!lista.length && (frentes.isLoading ? 'Carregando…' : 'Cole a lista acima ou crie o primeiro local.')}>
+        <Tabela cabecalho={['CWA', 'Ativo', 'Descrição CWA', 'Situação', '']} vazio={!lista.length && (frentes.isLoading ? 'Carregando…' : 'Cole a lista acima ou crie o primeiro local.')}>
           {lista.map((l) => (
             <Fragment key={`l${l.id}`}>
               <tr>
-                <td colSpan={7} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-on-accent">
+                <td colSpan={5} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-on-accent">
                   {l.descricao} <span className="font-semibold opacity-75">· {l.codigo} · {l.areas.length} área(s)</span>
                   {pode('planejador') && <>
                     <button type="button" aria-label={`Editar local ${l.codigo}`} className="ml-3 align-middle opacity-80 hover:opacity-100" onClick={() => { setArea(null); setLocal({ id: l.id, codigo: l.codigo, descricao: l.descricao, ativo: l.ativo }); }}><Pencil size={13} /></button>
@@ -110,11 +118,11 @@ export default function FrentesPage() {
               </tr>
               {l.areas.map((a) => (
                 <tr key={a.id} className={a.ativo ? '' : 'opacity-50'}>
-                  <td className={td}><b className="text-m-text-primary">{a.codigo}</b></td>
-                  <td className={td}>{a.cwa}</td>
-                  <td className={`${td} whitespace-nowrap`}>{a.ativo_codigo ?? <span className="text-m-text-muted">—</span>}</td>
+                  <td className={td}><b className="text-m-text-primary">{a.cwa}</b>
+                    {a.codigo !== a.cwa && <div className="text-[11px] text-m-text-muted" title="O Simova exige código único: CWA repetido sai com sufixo na exportação">no Simova: {a.codigo}</div>}</td>
+                  <td className={`${td} whitespace-nowrap`}>{a.ativo_codigo ?? <span className="text-m-text-muted">—</span>}
+                    {a.no_takeoff && a.tag && <div className="mt-0.5"><Pilula tom="info" ponto={false}>take-off · {a.tag}</Pilula></div>}</td>
                   <td className={td}>{a.descricao}</td>
-                  <td className={td}>{a.tag ?? <span className="text-m-text-muted">—</span>}</td>
                   <td className={td}><Pilula tom={a.ativo ? 'sucesso' : 'neutro'}>{a.ativo ? 'Ativa' : 'Inativa'}</Pilula></td>
                   <td className={`${td} whitespace-nowrap text-right`}>
                     {pode('planejador') && <>

@@ -29,6 +29,7 @@ class AreaOut(BaseModel):
     descricao: str
     ativo_codigo: str | None = None
     tag: str | None
+    no_takeoff: bool = False  # a TAG do Ativo tem quantidade no take-off da PQ vigente
     ordem: int
     ativo: bool
 
@@ -54,7 +55,7 @@ class AreaIn(BaseModel):
     local_id: int
     cwa: str
     descricao: str
-    codigo: str | None = None  # vazio = automático (CWA ou CWA.sufixo)
+    codigo: str | None = None  # ignorado: o código é o CWA (CWA repetido ganha sufixo só na exportação do Simova)
     ativo_codigo: str | None = None  # Ativo (ED-1800AA-04); a TAG do take-off sai dele ou da descrição
     ordem: int | None = None
     ativo: bool = True
@@ -105,9 +106,14 @@ def arvore(s: Session, obra_id: int) -> list[LocalOut]:
                        .order_by(LocalFrenteModel.ordem, LocalFrenteModel.id)).all()
     areas = s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == obra_id)
                       .order_by(AreaFrenteModel.ordem, AreaFrenteModel.id)).all()
+    from app.modules.referencias.infra.pq_gateway import tags_do_takeoff
+
+    tags = tags_do_takeoff(s, obra_id)
     por_local: dict[int, list[AreaOut]] = {}
     for a in areas:
-        por_local.setdefault(a.local_id, []).append(AreaOut.model_validate(a))
+        o = AreaOut.model_validate(a)
+        o.no_takeoff = bool(a.tag and a.tag in tags)
+        por_local.setdefault(a.local_id, []).append(o)
     return [LocalOut(**LocalOut.model_validate(loc).model_dump(exclude={"areas"}), areas=por_local.get(loc.id, []))
             for loc in locais]
 
@@ -151,7 +157,7 @@ def criar_area(d: AreaIn, s: Session = Depends(get_session), c: ContextoObra = D
     ordem = d.ordem if d.ordem is not None else (s.scalar(select(func.max(AreaFrenteModel.ordem))
                                                           .where(AreaFrenteModel.local_id == d.local_id)) or 0) + 1
     a = AreaFrenteModel(obra_id=c.obra_id, local_id=d.local_id, cwa=validar_codigo(d.cwa),
-                        codigo=_codigo_area(s, c.obra_id, d.cwa, d.codigo), descricao=" ".join(d.descricao.split()),
+                        codigo=_codigo_area(s, c.obra_id, d.cwa, None), descricao=" ".join(d.descricao.split()),
                         ativo_codigo=_ativo(d.ativo_codigo),
                         tag=normalizar_tag(_ativo(d.ativo_codigo)) or normalizar_tag(d.descricao), ordem=ordem, ativo=d.ativo)
     s.add(a)
@@ -165,8 +171,10 @@ def editar_area(area_id: int, d: AreaIn, s: Session = Depends(get_session), c: C
     if a is None or a.obra_id != c.obra_id:
         raise NotFoundError("Área", area_id)
     _local(s, c, d.local_id)
-    a.local_id, a.cwa = d.local_id, validar_codigo(d.cwa)
-    a.codigo = _codigo_area(s, c.obra_id, d.cwa, d.codigo or a.codigo, exceto=area_id)
+    cwa = validar_codigo(d.cwa)
+    if cwa != a.cwa:  # mudou o CWA: o código acompanha (com sufixo só se repetir)
+        a.codigo = _codigo_area(s, c.obra_id, cwa, None, exceto=area_id)
+    a.local_id, a.cwa = d.local_id, cwa
     a.descricao, a.ativo = " ".join(d.descricao.split()), d.ativo
     a.ativo_codigo = _ativo(d.ativo_codigo)
     a.tag = normalizar_tag(a.ativo_codigo) or normalizar_tag(d.descricao)
@@ -186,6 +194,32 @@ def excluir_area(area_id: int, s: Session = Depends(get_session), c: ContextoObr
     if s.scalar(select(func.count()).select_from(LinhaProgramacaoModel).where(LinhaProgramacaoModel.area_id == area_id)):
         raise DomainError("área usada em programação: desative em vez de excluir")
     s.delete(a)
+
+
+@router.delete("")
+def excluir_todas(s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    """Exclui todas as frentes da obra. Área já usada em programação fica (as programações apontam para ela),
+    e o local dela também."""
+    from app.modules.planejamento.infra.models import LinhaProgramacaoModel
+
+    usadas = set(s.scalars(select(LinhaProgramacaoModel.area_id).join(AreaFrenteModel,
+                                                                         AreaFrenteModel.id == LinhaProgramacaoModel.area_id)
+                           .where(AreaFrenteModel.obra_id == c.obra_id)))
+    areas = list(s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == c.obra_id)))
+    n_areas = 0
+    for a in areas:
+        if a.id not in usadas:
+            s.delete(a)
+            n_areas += 1
+    s.flush()
+    com_area = set(s.scalars(select(AreaFrenteModel.local_id).where(AreaFrenteModel.obra_id == c.obra_id)))
+    n_locais = 0
+    for loc in s.scalars(select(LocalFrenteModel).where(LocalFrenteModel.obra_id == c.obra_id)):
+        if loc.id not in com_area:
+            s.delete(loc)
+            n_locais += 1
+    s.flush()
+    return {"areas_excluidas": n_areas, "locais_excluidos": n_locais, "areas_mantidas": len(usadas)}
 
 
 @router.delete("/locais/{local_id}", status_code=204)

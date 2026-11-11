@@ -127,3 +127,11 @@ def test_nome_simplificado_e_item_unico_no_grupo(client):
     assert t["descricao"] == t["descricao_pq"] and t["nome_simplificado"] is None
     assert client.put("/api/catalogo/itens-pq/1.8.3.1.3/grupo", json={"grupo_id": None}).json()["codigo"] is None
     assert next(x for x in client.get("/api/pq/estrutura").json()["linhas"] if x["item"] == "1.8.3.1.3")["tipo"] is None
+
+
+def test_frente_mostra_tag_so_quando_o_ativo_esta_no_takeoff(client):
+    client.post("/api/importar/takeoff", data={"rotulo": "PQ"}, files={"arquivo": ("pq.xlsx", pq_contrato())})
+    texto = "CWA\tAtivo\tDESCRICAO CWA\tLocal\n004.05\tED-1800AA-01\tGalpão classe II\tNovo CMD\n004.02\tED-1800AA-04\tPrédio adm\tNovo CMD"
+    areas = {a["cwa"]: a for a in client.post("/api/frentes/importar", json={"texto": texto}).json()[0]["areas"]}
+    assert areas["004.05"]["no_takeoff"] is True and areas["004.05"]["tag"] == "1800AA-ED-01"
+    assert areas["004.02"]["no_takeoff"] is False

@@ -58,3 +58,13 @@ def salvar_nome_simplificado(s: Session, obra_id: int, item: str, nome: str | No
         s.add(NomeSimplificadoPqModel(obra_id=obra_id, item=item, nome=nome))
     else:
         m.nome = nome
+
+
+def tags_do_takeoff(s: Session, obra_id: int) -> set[str]:
+    """TAGs que têm quantidade no take-off (aba MC) da PQ vigente."""
+    from app.modules.referencias.infra.models import PqQuantidadeTagModel
+
+    vid = versao_pq_vigente(s, obra_id)
+    if vid is None:
+        return set()
+    return set(s.scalars(select(PqQuantidadeTagModel.tag).where(PqQuantidadeTagModel.versao_id == vid).distinct()))

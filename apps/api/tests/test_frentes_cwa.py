@@ -61,3 +61,20 @@ def test_lista_cwa_substitui_locais_antigos(client):
     pa = next(a for a in por_desc["Novo CMD"]["areas"] if a["cwa"] == "004.02")
     assert pa["ativo_codigo"] == "ED-1800AA-04" and pa["descricao"] == "Prédio administrativo"  # mesma área, casada pela TAG
     assert sum(1 for loc in arv for a in loc["areas"] if a["cwa"] == "004.02") == 1
+
+
+def test_cwa_e_o_codigo_tag_so_com_takeoff_e_excluir_todas(client):
+    arv = client.post("/api/frentes/importar", json={"texto": LISTA}).json()
+    cmd = next(loc for loc in arv if loc["descricao"] == "Novo CMD")
+    pa = next(a for a in cmd["areas"] if a["cwa"] == "004.02")
+    assert pa["codigo"] == "004.02" and pa["no_takeoff"] is False  # sem take-off importado: só o Ativo
+    # código pedido é ignorado: o código é o CWA
+    r = client.post("/api/frentes/areas", json={"local_id": cmd["id"], "cwa": "004.20", "codigo": "XYZ",
+                                                "descricao": "Guarita", "ativo_codigo": "ED-1800AA-20"})
+    assert r.json()["codigo"] == "004.20"
+    r = client.put(f"/api/frentes/areas/{r.json()['id']}", json={"local_id": cmd["id"], "cwa": "004.21", "descricao": "Guarita"})
+    assert r.json()["codigo"] == "004.21"
+    # excluir todas
+    r = client.delete("/api/frentes").json()
+    assert r["areas_excluidas"] == 69 and r["areas_mantidas"] == 0 and r["locais_excluidos"] == 10
+    assert client.get("/api/frentes").json() == []

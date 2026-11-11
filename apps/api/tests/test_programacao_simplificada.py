@@ -143,12 +143,13 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     assert ln["qtd_takeoff"] == 50.0 and ln["total_previsto"] == 37 and ln["unidade"] == "m³"
 
     # editar frente e catálogo propaga para a programação
-    client.put(f"/api/frentes/areas/{galpao['id']}", json={"local_id": galpao["local_id"], "cwa": "004.05",
-                                                           "codigo": "004.05.9", "descricao": galpao["descricao"]})
+    # o código da frente é o CWA: mudar o CWA muda o código em todas as programações abertas
+    client.put(f"/api/frentes/areas/{galpao['id']}", json={"local_id": galpao["local_id"], "cwa": "004.95",
+                                                           "descricao": galpao["descricao"]})
     client.put(f"/api/catalogo/grupos/{g['id']}", json={"descricao": "Concretagem", "numero": 7})
     v = client.get(f"/api/programacoes/{p['id']}").json()
     ln = v["locais"][0]["areas"][0]["linhas"][0]
-    assert v["locais"][0]["areas"][0]["codigo"] == "004.05.9" and ln["codigo_simova"] == "7.2.1"
+    assert v["locais"][0]["areas"][0]["codigo"] == "004.95" and ln["codigo_simova"] == "7.2.1"
     assert ln["grupo"]["descricao"] == "Concretagem"
 
     # emitir congela; previsto travado, realizado liberado; reabrir gera nova revisão
@@ -158,9 +159,9 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     assert client.put(f"/api/programacoes/{p['id']}/linhas/{lid}/valores",
                       json={"campo": "realizado", "valores": [{"data": "2026-11-06", "valor": 4}]}).status_code == 204
     client.put(f"/api/frentes/areas/{galpao['id']}", json={"local_id": galpao["local_id"], "cwa": "004.05",
-                                                           "codigo": "004.05", "descricao": galpao["descricao"]})
+                                                           "descricao": galpao["descricao"]})
     foto = client.get(f"/api/programacoes/{p['id']}/emissoes/0").json()
-    assert foto["locais"][0]["areas"][0]["codigo"] == "004.05.9"  # emitida não muda
+    assert foto["locais"][0]["areas"][0]["codigo"] == "004.95"  # emitida não muda
     assert client.post(f"/api/programacoes/{p['id']}/reabrir").status_code == 204
     assert client.post(f"/api/programacoes/{p['id']}/emitir").json() == {"revisao": 1}
 
