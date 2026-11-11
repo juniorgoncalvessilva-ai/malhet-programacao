@@ -16,6 +16,6 @@ atividades apareciam no .xer e numerava a WBS por conta própria (e quebrava nom
   Excel, FT) seguem a ordem do P6; linhas sem atividade do cronograma vão para o fim, na ordem de inclusão.
 
 ## Evidência (11/11/2026)
-- `pytest -q`: 45 passed (`test_ordem_p6.py`: seq_num manda mesmo com a O.S. 2 antes no arquivo, códigos do P6,
+- `pytest -q`: 42 passed (`test_ordem_p6.py`: seq_num manda mesmo com a O.S. 2 antes no arquivo, códigos do P6,
   nome com " / ", ID natural, busca e linhas da programação na ordem do P6; XER real: O.S. 1 (5) antes da O.S. 2 (7)).
 - Navegador com o XER real: 5 O.S. 1 → 5.1 Mobilização / Marcos / … → 5.1.1, 5.1.11, 5.1.2, 5.1.10… (seq do P6).
