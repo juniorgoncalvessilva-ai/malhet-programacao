@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileCheck2, FileSpreadsheet, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Download, FileCheck2, FileSpreadsheet, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { Calculado } from '@/components/Obra/Calculado';
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -53,7 +53,8 @@ export default function MontarPage() {
 
   const v = prog.data;
   const rascunho = v?.status === 'rascunho';
-  const podeEditarValor = modo === 'realizado' ? pode('encarregado') : rascunho && pode('encarregado');
+  const concluida = v?.status === 'concluida';
+  const podeEditarValor = concluida ? false : modo === 'realizado' ? pode('encarregado') : rascunho && pode('encarregado');
   const chave = [[...k.programacao(id)], [...k.programacoes], [...k.catalogo]];
 
   const salvarLinha = useAcao((a, d: FormLinha) => {
@@ -71,6 +72,9 @@ export default function MontarPage() {
   const excluir = useAcao((a, lid: number) => a.del(`/programacoes/${id}/linhas/${lid}`), chave);
   const emitir = useAcao((a) => a.post<{ revisao: number }>(`/programacoes/${id}/emitir`), chave);
   const reabrir = useAcao((a) => a.post(`/programacoes/${id}/reabrir`), chave);
+  const concluir = useAcao((a) => a.post<{ conclusao: number }>(`/programacoes/${id}/concluir`), chave);
+  const revisar = useAcao((a, motivo: string) => a.post(`/programacoes/${id}/revisar`, { motivo }), chave);
+  const [motivo, setMotivo] = useState<string | null>(null);
   const salvarTudo = useAcao((a, p: Pendentes) => {
     const por: Record<number, { id: number; qtd_periodo?: number | null; mudar_qtd_periodo?: boolean; previsto: { data: string; valor: number | null }[]; realizado: { data: string; valor: number | null }[] }> = {};
     for (const [chave, val] of Object.entries(p)) {
@@ -151,18 +155,50 @@ export default function MontarPage() {
       <Cabecalho
         eyebrow={`Programação ${v.tipo === 'SEMANAL' ? 'semanal' : 'mensal'} · montar`}
         titulo={`${v.titulo}: ${v.linhas} linha${v.linhas === 1 ? '' : 's'}`}
-        descricao={<>Local → Área → atividade (grupo, tipo e texto complementar, que gera o ID do Simova) → item da PQ. {rascunho ? 'Previsto aberto para edição.' : 'Emitida: o previsto está travado; o realizado continua aberto.'}</>}
+        descricao={<>Local → Área → atividade (grupo, tipo e texto complementar, que gera o ID do Simova) → item da PQ. {concluida ? 'Concluída: nada pode ser alterado; para corrigir, abra uma revisão com o motivo.' : rascunho ? 'Previsto aberto para edição.' : 'Emitida: o previsto está travado; o realizado continua aberto até concluir.'}</>}
         acoes={<>
-          <Pilula tom={rascunho ? 'neutro' : 'acento'}>{rascunho ? (v.revisao ? `Reaberta · rev. ${v.revisao}` : 'Rascunho') : `Emitida · rev. ${v.revisao - 1}`}</Pilula>
+          <Pilula tom={concluida ? 'sucesso' : rascunho ? 'neutro' : 'acento'}>{concluida ? `Concluída${(v.conclusoes?.length ?? 0) > 1 ? ` · revisão ${(v.conclusoes?.length ?? 1) - 1}` : ''}` : rascunho ? (v.revisao ? `Reaberta · rev. ${v.revisao}` : 'Rascunho') : `Emitida · rev. ${v.revisao - 1}`}</Pilula>
           {nPend > 0 && <Botao onClick={salvar} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação ({nPend})</Botao>}
           <Link href={`/app/programacoes/${id}/imprimir`}><Botao variante="secundario"><Printer size={16} /> Imprimir</Botao></Link>
           <Botao variante="secundario" onClick={() => baixarExcel()}><FileSpreadsheet size={16} /> Excel do cliente</Botao>
           {pode('admin') && <Botao variante="secundario" onClick={baixarFt}><Download size={16} /> FT Simova</Botao>}
-          {pode('planejador') && (rascunho
-            ? <Botao disabled={nPend > 0} title={nPend ? 'Salve as alterações antes de emitir' : undefined} onClick={() => emitir.mutate(undefined, { onSuccess: (r) => toast.success(`Emitida · revisão ${r.revisao}`), onError: (e) => toast.error(e.message) })}><FileCheck2 size={16} /> Emitir</Botao>
-            : <Botao variante="secundario" onClick={() => reabrir.mutate(undefined)}><RotateCcw size={16} /> Reabrir</Botao>)}
+          {pode('planejador') && (concluida
+            ? <Botao variante="secundario" onClick={() => setMotivo('')}><RotateCcw size={16} /> Revisar</Botao>
+            : rascunho
+              ? <Botao disabled={nPend > 0} title={nPend ? 'Salve as alterações antes de emitir' : undefined} onClick={() => emitir.mutate(undefined, { onSuccess: (r) => toast.success(`Emitida · revisão ${r.revisao}`), onError: (e) => toast.error(e.message) })}><FileCheck2 size={16} /> Emitir</Botao>
+              : <>
+                <Botao variante="secundario" onClick={() => reabrir.mutate(undefined)}><RotateCcw size={16} /> Reabrir</Botao>
+                <Botao disabled={nPend > 0} title={nPend ? 'Salve as alterações antes de concluir' : 'Fecha a programação: depois só por revisão'} onClick={async () => {
+                  if (!(await confirmar({ titulo: 'Concluir a programação?', perigo: false, acao: 'Concluir',
+                    mensagem: 'Depois de concluída, nada pode ser alterado (previsto, realizado, linhas, SSMA/PTO). Para corrigir será preciso abrir uma revisão com o motivo; o que estava concluído fica guardado no histórico.' }))) return;
+                  concluir.mutate(undefined, { onSuccess: () => toast.success('Programação concluída'), onError: (e) => toast.error(e.message) });
+                }}><Lock size={16} /> Concluir</Botao>
+              </>)}
         </>}
       />
+
+      {motivo !== null && (
+        <Painel titulo="Abrir revisão da programação concluída" subtitulo="A revisão reabre a programação (como emitida) para corrigir. O motivo e a foto do que estava concluído ficam no histórico; ao terminar, conclua de novo.">
+          <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); revisar.mutate(motivo, { onSuccess: () => { toast.success('Revisão aberta'); setMotivo(null); } }); }}>
+            <Campo rotulo="Motivo da revisão" required minLength={5} maxLength={500} placeholder="Ex.: realizado de sábado lançado errado" value={motivo} onChange={(e) => setMotivo(e.target.value)} className="w-[520px] max-w-full" />
+            <Botao type="submit" disabled={revisar.isPending}>Abrir revisão</Botao>
+            <Botao type="button" variante="secundario" onClick={() => setMotivo(null)}>Cancelar</Botao>
+            <Erro erro={revisar.error} />
+          </form>
+        </Painel>
+      )}
+      {!!v.conclusoes?.length && (
+        <Painel titulo="Histórico de conclusões e revisões">
+          <ul className="flex flex-col gap-1 text-[13px] text-m-text-secondary">
+            {v.conclusoes.map((k) => (
+              <li key={k.numero}>
+                <b className="text-m-text-primary">{k.numero === 1 ? 'Conclusão' : `Conclusão após revisão ${k.numero - 1}`}</b> em {k.concluida_em ? new Date(k.concluida_em).toLocaleString('pt-BR') : '—'}
+                {k.motivo_revisao && <> · revisada em {k.revisada_em ? new Date(k.revisada_em).toLocaleString('pt-BR') : '—'}: <i>{k.motivo_revisao}</i></>}
+              </li>
+            ))}
+          </ul>
+        </Painel>
+      )}
 
       {aberto && (
         <Painel titulo={editando ? 'Editar linha' : 'Nova linha'} subtitulo="O ID do Simova sai do tipo; com texto complementar vira um item novo (ex.: 2.3.1 Concreto 20 MPa - (Fundo canaleta 2A))."

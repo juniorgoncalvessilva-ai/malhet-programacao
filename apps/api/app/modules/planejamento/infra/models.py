@@ -20,10 +20,11 @@ class ProgramacaoModel(Base):
     inicio: Mapped[date] = mapped_column(Date)
     fim: Mapped[date] = mapped_column(Date)
     titulo: Mapped[str] = mapped_column(String(120))
-    status: Mapped[str] = mapped_column(String(12), default="rascunho")  # rascunho | emitida
+    status: Mapped[str] = mapped_column(String(12), default="rascunho")  # rascunho | emitida | concluida
     revisao: Mapped[int] = mapped_column(Integer, default=0)  # nº de emissões feitas
     criado_por: Mapped[str] = mapped_column(String(80))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    conclusoes: Mapped[list["ConclusaoModel"]] = relationship(cascade="all, delete-orphan", order_by="ConclusaoModel.numero")
     linhas: Mapped[list["LinhaProgramacaoModel"]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by="LinhaProgramacaoModel.ordem")
 
@@ -77,3 +78,19 @@ class EmissaoModel(Base):
     emitida_por: Mapped[str] = mapped_column(String(80))
     emitida_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     foto: Mapped[dict] = mapped_column(JSONB)
+
+
+class ConclusaoModel(Base):
+    """Cada conclusão da programação congela o estado final; mudar depois só por revisão (com motivo)."""
+
+    __tablename__ = "programacao_conclusao"
+    __table_args__ = (UniqueConstraint("programacao_id", "numero", name="uq_conclusao_numero"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    programacao_id: Mapped[int] = mapped_column(ForeignKey("programacao.id", ondelete="CASCADE"), index=True)
+    numero: Mapped[int] = mapped_column(Integer)  # 1 = conclusão original; 2, 3… depois de cada revisão
+    concluida_por: Mapped[str] = mapped_column(String(80))
+    concluida_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    foto: Mapped[dict] = mapped_column(JSONB)
+    revisada_por: Mapped[str | None] = mapped_column(String(80))
+    revisada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    motivo_revisao: Mapped[str | None] = mapped_column(String(500))

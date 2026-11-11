@@ -101,7 +101,8 @@ export interface LinhaPq {
   tipo: { id: number; codigo: string; grupo: string; grupo_id: number } | null; nome_simplificado: string | null;
 }
 export interface GrupoCatalogo { id: number; numero: number; codigo: string; descricao: string; ativo: boolean; tipos: TipoCatalogo[] }
-export interface ProgramacaoResumo { id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: 'rascunho' | 'emitida'; revisao: number; linhas: number }
+export type StatusProgramacao = 'rascunho' | 'emitida' | 'concluida';
+export interface ProgramacaoResumo { id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: StatusProgramacao; revisao: number; linhas: number }
 export interface LinhaVisao {
   id: number; n: number; area_id: number; tipo_id: number; item_simova_id: number | null;
   grupo: { codigo: string; descricao: string }; codigo_simova: string; descricao: string; complemento: string | null;
@@ -139,7 +140,8 @@ export interface CpuDoItem {
   coef_governa: number | null; jornada: number; indice_un_dia: number | null; recursos: RecursoCpuItem[];
 }
 export interface ProgramacaoVisao {
-  id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: 'rascunho' | 'emitida'; revisao: number;
+  id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: StatusProgramacao; revisao: number;
+  conclusoes?: { numero: number; concluida_por: string; concluida_em: string | null; revisada_por: string | null; motivo_revisao: string | null; revisada_em: string | null }[];
   dias: { data: string; dia: string }[]; linhas: number;
   hh_previsto_dia?: number[]; total_hh_previsto?: number; total_hh_realizado?: number;
   locais: { id: number; codigo: string; descricao: string; areas: { id: number; codigo: string; cwa: string; descricao: string; tag: string | null; linhas: LinhaVisao[] }[] }[];

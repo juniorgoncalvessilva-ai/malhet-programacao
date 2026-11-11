@@ -141,6 +141,7 @@ def ver(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(l
 @router.delete("/programacoes/{pid}", status_code=204)
 def excluir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     p = sv.obter(s, c.obra_id, pid)
+    sv.exigir_aberta(p)
     if p.revisao > 0:
         raise DomainError("programação já emitida não pode ser excluída")
     s.delete(p)
@@ -235,6 +236,33 @@ def valores(pid: int, lid: int, d: ValoresIn, s: Session = Depends(get_session),
 def emitir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     e = sv.emitir(s, sv.obter(s, c.obra_id, pid), c.usuario.id)
     return {"revisao": e.revisao}
+
+
+@router.post("/programacoes/{pid}/concluir")
+def concluir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Fecha a programação emitida: depois disso nada muda, só revisão com motivo."""
+    k = sv.concluir(s, sv.obter(s, c.obra_id, pid), c.usuario.id)
+    return {"conclusao": k.numero}
+
+
+class RevisarIn(BaseModel):
+    motivo: str
+
+
+@router.post("/programacoes/{pid}/revisar")
+def revisar(pid: int, d: RevisarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Reabre uma programação concluída para correção, com motivo; a foto concluída fica no histórico."""
+    k = sv.revisar(s, sv.obter(s, c.obra_id, pid), c.usuario.id, d.motivo)
+    return {"conclusao_revisada": k.numero}
+
+
+@router.get("/programacoes/{pid}/conclusoes/{numero}")
+def foto_conclusao(pid: int, numero: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    p = sv.obter(s, c.obra_id, pid)
+    k = next((x for x in p.conclusoes if x.numero == numero), None)
+    if k is None:
+        raise NotFoundError("Conclusão", numero)
+    return k.foto
 
 
 @router.post("/programacoes/{pid}/reabrir", status_code=204)
@@ -414,6 +442,7 @@ def recursos_da_cpu(s: Session = Depends(get_session), c: ContextoObra = Depends
 def salvar(pid: int, d: SalvarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
     """Salva de uma vez as alterações da tela: quantidade do período e valores do dia (previsto/realizado)."""
     p = sv.obter(s, c.obra_id, pid)
+    sv.exigir_aberta(p)
     n = 0
     for ln_in in d.linhas:
         ln = next((x for x in p.linhas if x.id == ln_in.id), None)
@@ -439,6 +468,7 @@ def salvar(pid: int, d: SalvarIn, s: Session = Depends(get_session), c: Contexto
 def salvar_ssma(pid: int, d: SsmaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(ssma)):
     """Itens de SSMA por linha (técnico, RAC, PTS, ART, ATA), escolhidos nos cadastros. Vale com a programação emitida."""
     p = sv.obter(s, c.obra_id, pid)
+    sv.exigir_aberta(p)
     gw = CadastroSsmaGateway(s, c.obra_id)
     for x in d.linhas:
         ln = next((y for y in p.linhas if y.id == x.id), None)

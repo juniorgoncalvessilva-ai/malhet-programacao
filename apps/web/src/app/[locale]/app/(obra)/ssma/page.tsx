@@ -25,7 +25,7 @@ type Edicao = Record<number, { tecnico?: string } & Partial<Record<CampoLista, s
 
 export default function SsmaPage() {
   const api = useApi();
-  const { editaSsma } = useObra();
+  const { editaSsma: podeSsma } = useObra();
   const lista = useProgramacoes();
   const [pid, setPid] = useState<number | null>(null);
   useEffect(() => { if (pid == null && lista.data?.length) setPid(lista.data[0].id); }, [lista.data, pid]);
@@ -33,6 +33,7 @@ export default function SsmaPage() {
   const [ed, setEd] = useState<Edicao>({});
   useEffect(() => setEd({}), [pid]);
   const v = prog.data;
+  const editaSsma = podeSsma && v?.status !== 'concluida';  // concluída: só leitura (mudança só por revisão)
   const linhas = useMemo(() => v?.locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)) ?? [], [v]);
   const cadastros = useCadastrosSsma();
   const opcoes = (tipo: TipoCadastroSsma, atual: string[]) => {
@@ -64,10 +65,10 @@ export default function SsmaPage() {
         eyebrow="Segurança · SSMA da programação"
         cor="var(--m-proc-administrar)"
         titulo={v ? `${v.titulo}: ${pendentes ? `${pendentes} linha(s) sem SSMA completo` : 'SSMA completo'}` : 'SSMA da programação'}
-        descricao="Para cada atividade programada, escolha nas listas: técnico de segurança responsável e um ou mais RAC, PTS, ART e ATA (Autorização de Trabalho Ambiental); o clipe baixa o arquivo do documento. As listas vêm dos Cadastros de SSMA; use N/A quando não se aplica. O PTO é do Planejamento e aparece só para consulta. Vale também depois de emitida; vai para a coluna SSMA do Excel do cliente."
+        descricao="Para cada atividade programada, escolha nas listas: técnico de segurança responsável e um ou mais RAC, PTS, ART e ATA (Autorização de Trabalho Ambiental); o clipe baixa o arquivo do documento. As listas vêm dos Cadastros de SSMA; use N/A quando não se aplica. O PTO é do Planejamento e aparece só para consulta. Vale também depois de emitida; depois de concluída fica só para consulta (mudança só por revisão). Vai para a coluna SSMA do Excel do cliente."
         acoes={<div className="flex items-end gap-2">
           <Selecao rotulo="Programação" value={pid ?? ''} onChange={(e) => setPid(Number(e.target.value))} className="min-w-[300px]">
-            {lista.data?.map((p) => <option key={p.id} value={p.id}>{p.titulo} · {p.status === 'emitida' ? 'emitida' : 'rascunho'}</option>)}
+            {lista.data?.map((p) => <option key={p.id} value={p.id}>{p.titulo} · {p.status === 'concluida' ? 'concluída' : p.status === 'emitida' ? 'emitida' : 'rascunho'}</option>)}
           </Selecao>
           {editaSsma && <Botao disabled={!n || salvar.isPending} onClick={() => salvar.mutate(ed, { onSuccess: (r) => { toast.success(`SSMA salvo em ${r.linhas} linha(s)`); setEd({}); } })}><Save size={16} /> Salvar SSMA{n ? ` (${n})` : ''}</Botao>}
         </div>}

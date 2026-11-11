@@ -66,7 +66,7 @@ export default function ProgramacoesPage() {
               <td className={td}>{dataBR(p.inicio)} a {dataBR(p.fim)}</td>
               <td className={td}>{p.linhas}</td>
               <td className={td}>
-                <Pilula tom={p.status === 'emitida' ? 'acento' : 'neutro'}>{p.status === 'emitida' ? `Emitida · rev. ${p.revisao - 1}` : p.revisao ? `Reaberta · rev. ${p.revisao}` : 'Rascunho'}</Pilula>
+                <Pilula tom={p.status === 'concluida' ? 'sucesso' : p.status === 'emitida' ? 'acento' : 'neutro'}>{p.status === 'concluida' ? 'Concluída' : p.status === 'emitida' ? `Emitida · rev. ${p.revisao - 1}` : p.revisao ? `Reaberta · rev. ${p.revisao}` : 'Rascunho'}</Pilula>
               </td>
               <td className={`${td} whitespace-nowrap text-right`}>
                 <Link href={`/app/programacoes/${p.id}`} className="mr-4 font-semibold text-m-accent">Montar</Link>

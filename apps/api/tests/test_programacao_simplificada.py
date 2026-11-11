@@ -185,6 +185,27 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     # área usada em programação não pode ser excluída
     assert client.delete(f"/api/frentes/areas/{galpao['id']}").status_code == 422
 
+    # concluir: nada muda (previsto, realizado, linha, SSMA, excluir, reabrir); só revisão com motivo
+    pid = p["id"]
+    assert client.post(f"/api/programacoes/{pid}/concluir").json() == {"conclusao": 1}
+    real = {"campo": "realizado", "valores": [{"data": "2026-11-07", "valor": 1}]}
+    assert client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json=real).status_code == 422
+    assert client.put(f"/api/programacoes/{pid}/salvar", json={"linhas": [{"id": lid, "realizado": real["valores"]}]}).status_code == 422
+    assert client.put(f"/api/programacoes/{pid}/ssma", json={"linhas": [{"id": lid, "tecnico": None}]}).status_code == 422
+    assert client.delete(f"/api/programacoes/{pid}/linhas/{lid}").status_code == 422
+    assert client.post(f"/api/programacoes/{pid}/reabrir").status_code == 422
+    assert client.delete(f"/api/programacoes/{pid}").status_code == 422
+    assert client.post(f"/api/programacoes/{pid}/concluir").status_code == 422
+    assert client.post(f"/api/programacoes/{pid}/revisar", json={"motivo": ""}).status_code == 422
+    assert client.post(f"/api/programacoes/{pid}/revisar", json={"motivo": "Realizado do sábado lançado errado"}).json() == {"conclusao_revisada": 1}
+    assert client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json=real).status_code == 204
+    assert client.post(f"/api/programacoes/{pid}/concluir").json() == {"conclusao": 2}
+    v = client.get(f"/api/programacoes/{pid}").json()
+    assert v["status"] == "concluida" and [k["numero"] for k in v["conclusoes"]] == [1, 2]
+    assert v["conclusoes"][0]["motivo_revisao"] == "Realizado do sábado lançado errado"
+    foto1 = client.get(f"/api/programacoes/{pid}/conclusoes/1").json()
+    assert foto1["status"] == "concluida" and foto1["locais"][0]["areas"][0]["linhas"][0]["realizado"][1] is None
+
 
 @pytest.mark.parametrize("arquivo", ["608486db-Cronograma_Corrente_-_RSA_S31.xer"])
 def test_xer_real_quando_disponivel(client, arquivo):

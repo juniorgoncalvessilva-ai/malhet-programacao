@@ -18,7 +18,13 @@ from app.modules.equipes.infra.models import EquipeModel
 from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
 from app.modules.integracao_simova.domain import layout
 from app.modules.planejamento.domain.periodo import DIAS, dias, janelas_ft
-from app.modules.planejamento.infra.models import EmissaoModel, LinhaProgramacaoModel, ProgramacaoModel, ValorDiaModel
+from app.modules.planejamento.infra.models import (
+    ConclusaoModel,
+    EmissaoModel,
+    LinhaProgramacaoModel,
+    ProgramacaoModel,
+    ValorDiaModel,
+)
 from app.modules.referencias.infra.models import (
     AtividadeCronogramaModel,
     ItemPqModel,
@@ -210,19 +216,32 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
     hh_dia = [round(sum(ln["calc"]["hh_previsto"][i] or 0 for ln in todas), 2) for i in range(len(datas))]
     return {"id": p.id, "tipo": p.tipo, "titulo": p.titulo, "inicio": p.inicio.isoformat(), "fim": p.fim.isoformat(),
             "status": p.status, "revisao": p.revisao, "hh_previsto_dia": hh_dia,
+            "conclusoes": [{"numero": c.numero, "concluida_por": c.concluida_por,
+                            "concluida_em": c.concluida_em.isoformat() if c.concluida_em else None,
+                            "revisada_por": c.revisada_por, "motivo_revisao": c.motivo_revisao,
+                            "revisada_em": c.revisada_em.isoformat() if c.revisada_em else None}
+                           for c in sorted(p.conclusoes, key=lambda x: x.numero)],
             "total_hh_previsto": round(sum(hh_dia), 2),
             "total_hh_realizado": round(sum(ln["calc"]["total_hh_realizado"] for ln in todas), 2),
             "dias": [{"data": d.isoformat(), "dia": DIAS[d.weekday()]} for d in datas],
             "locais": saida_locais, "linhas": sum(len(v) for v in por_area.values())}
 
 
+def exigir_aberta(p: ProgramacaoModel) -> None:
+    """Programação concluída não muda: só por revisão (com motivo), que guarda a foto do que estava concluído."""
+    if p.status == "concluida":
+        raise DomainError("programação concluída: não pode ser alterada — abra uma revisão (com o motivo) para corrigir")
+
+
 def exigir_rascunho(p: ProgramacaoModel) -> None:
+    exigir_aberta(p)
     if p.status != "rascunho":
         raise DomainError("programação emitida: reabra para alterar o previsto")
 
 
 def salvar_valores(s: Session, p: ProgramacaoModel, linha_id: int, valores: list[dict], campo: str) -> None:
-    """campo = previsto (só em rascunho) | realizado (a qualquer momento)."""
+    """campo = previsto (só em rascunho) | realizado (até concluir)."""
+    exigir_aberta(p)
     if campo == "previsto":
         exigir_rascunho(p)
     ln = next((x for x in p.linhas if x.id == linha_id), None)
@@ -261,9 +280,42 @@ def emitir(s: Session, p: ProgramacaoModel, usuario: str) -> EmissaoModel:
 
 
 def reabrir(p: ProgramacaoModel) -> None:
+    exigir_aberta(p)
     if p.status != "emitida":
         raise DomainError("só programação emitida pode ser reaberta")
     p.status = "rascunho"
+
+
+def concluir(s: Session, p: ProgramacaoModel, usuario: str) -> ConclusaoModel:
+    """Fecha a programação (depois de emitida e do realizado lançado): congela a foto; dali em diante só revisão."""
+    if p.status != "emitida":
+        raise DomainError("só programação emitida pode ser concluída" if p.status == "rascunho"
+                          else "programação já concluída")
+    n = len(p.conclusoes) + 1
+    foto = visao(s, p)
+    foto["status"] = "concluida"
+    c = ConclusaoModel(programacao_id=p.id, numero=n, concluida_por=usuario, foto=foto)
+    p.conclusoes.append(c)
+    p.status = "concluida"
+    s.flush()
+    return c
+
+
+def revisar(s: Session, p: ProgramacaoModel, usuario: str, motivo: str) -> ConclusaoModel:
+    """Única forma de mudar uma programação concluída: registra o motivo e volta para emitida (o que estava concluído
+    fica guardado na conclusão anterior). Para fechar de novo, conclua outra vez."""
+    from datetime import datetime, timezone
+
+    if p.status != "concluida":
+        raise DomainError("só programação concluída é revisada; esta ainda está aberta")
+    motivo = " ".join((motivo or "").split())
+    if len(motivo) < 5:
+        raise DomainError("informe o motivo da revisão", "motivo")
+    ult = max(p.conclusoes, key=lambda x: x.numero)
+    ult.revisada_por, ult.revisada_em, ult.motivo_revisao = usuario, datetime.now(timezone.utc), motivo[:500]
+    p.status = "emitida"
+    s.flush()
+    return ult
 
 
 def _fmt_ft(q: float) -> str:
