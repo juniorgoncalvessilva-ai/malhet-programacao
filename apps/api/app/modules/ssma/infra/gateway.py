@@ -2,7 +2,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.modules.ssma.domain.cadastro import TIPO_DO_CAMPO, valor_da_linha
+from app.modules.ssma.domain.cadastro import TIPO_DO_CAMPO, lista_da_linha, valor_da_linha
 from app.modules.ssma.infra.models import CadastroSsmaModel
 
 
@@ -25,3 +25,8 @@ class CadastroSsmaGateway:
         if v is not None and v == atual:
             return v
         return valor_da_linha(v, self.validos(tipo.value), tipo)
+
+    def conferir_lista(self, campo: str, valores, atuais=None) -> list[str] | None:
+        """Vários itens na mesma atividade (RAC, PTS, ART, ATA, PTO)."""
+        tipo = TIPO_DO_CAMPO[campo]
+        return lista_da_linha(valores, self.validos(tipo.value), tipo, atuais)

@@ -34,6 +34,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `item_pq` (`folha`, `nivel`, `ordem`), lida por `referencias/infra/pq_gateway.py`. Spec 011.
 - SSMA: listas suspensas vêm de `ssma/` (`cadastro_ssma`, gateway `CadastroSsmaGateway.conferir`). Técnico/RAC/PTS/
   ART/ATA = segurança; PTO = Planejamento (linha da programação). Spec 012.
+- SSMA/PTO: RAC/PTS/ART/ATA/PTO são listas na linha (JSONB, `lista_da_linha`) e aceitam arquivos (`anexo_ssma`,
+  `validar_anexo`). Spec 014.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
@@ -48,6 +50,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (montar → emitir → imprimir → FT). Hooks em `src/hooks/programacao/planejamento.ts`.
 - Obra corrente: `useObra()` (`src/lib/obra/ObraProvider.tsx`): obras, papel, `pode('planejador')`, superadmin.
   `useApi()` já manda o `X-Obra-Id`; trocar de obra remonta as telas. Esconda ações que o papel não permite.
+- Exclusão/remoção sempre pede confirmação com `useConfirmar()` (`components/Obra/Confirmar.tsx`); nunca
+  `window.confirm`. Vários valores de lista: `components/Obra/MultiSelecao.tsx`.
 - Sessão: `useSessao()` (`src/lib/auth/AuthProvider.tsx`). Código antigo do kit usa o shim `src/lib/auth/compat.ts`.
 - API só via `useApi()` + TanStack Query (`queries.ts`), sempre por `/backend/api` (rewrite do Next). Tipos em
   `src/lib/api/types.ts`.

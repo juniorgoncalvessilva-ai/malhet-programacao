@@ -10,6 +10,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { GrupoCatalogo, ItemCatalogo, LinhaPq, TipoCatalogo } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { useConfirmar } from '@/components/Obra/Confirmar';
 
 type GrupoForm = { id?: number; descricao: string; numero: string; ativo: boolean };
 type TipoForm = { id: number; grupo_id: string; numero: string; ativo: boolean; codigo: string };
@@ -27,6 +28,7 @@ const NIVEL: Record<number, string> = {
 };
 
 export default function CatalogoPage() {
+  const confirmar = useConfirmar();
   const cat = useCatalogo();
   const api = useApi();
   const { pode } = useObra();
@@ -149,7 +151,7 @@ export default function CatalogoPage() {
                       {editar && <span className="ml-3 inline-flex items-center gap-1 align-middle">
                         <button type="button" aria-label={`Editar grupo ${g.codigo}`} className="rounded p-1 text-m-text-muted hover:text-m-accent" onClick={() => abrirGrupo(g)}><Pencil size={13} /></button>
                         <button type="button" className="rounded px-1.5 py-0.5 text-[11px] font-semibold normal-case text-m-accent hover:underline" onClick={() => { setDestino(String(g.id)); document.getElementById('aba-pq')?.scrollIntoView({ behavior: 'smooth' }); }}><Link2 size={12} className="mr-1 inline" />vincular itens da PQ</button>
-                        {!g.tipos.length && <button type="button" aria-label={`Excluir grupo ${g.codigo}`} className="rounded p-1 text-m-text-muted hover:text-m-danger" onClick={() => excluirGrupo.mutate(g.id, { onSuccess: () => toast.success('Grupo excluído'), onError: (e) => toast.error(e.message) })}><Trash2 size={13} /></button>}
+                        {!g.tipos.length && <button type="button" aria-label={`Excluir grupo ${g.codigo}`} className="rounded p-1 text-m-text-muted hover:text-m-danger" onClick={async () => (await confirmar({ titulo: `Excluir o grupo ${g.codigo} · ${g.descricao}?`, mensagem: 'O grupo está vazio (sem itens da PQ).' })) && excluirGrupo.mutate(g.id, { onSuccess: () => toast.success('Grupo excluído'), onError: (e) => toast.error(e.message) })}><Trash2 size={13} /></button>}
                       </span>}
                     </td>
                   </tr>
@@ -167,7 +169,7 @@ export default function CatalogoPage() {
                           {editar && <>
                             <button type="button" aria-label={`Novo complemento em ${t.codigo}`} title="Texto complementar (novo ID)" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t)}><Plus size={15} /></button>
                             <button type="button" aria-label={`Mover ${t.codigo}`} title="Mover de grupo / renumerar / inativar" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirTipo(t)}><Pencil size={15} /></button>
-                            <button type="button" aria-label={`Desvincular ${t.codigo}`} title="Desvincular do grupo" className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={() => desvincular.mutate(t.id, { onSuccess: () => toast.success(`${t.codigo} desvinculado`), onError: (e) => toast.error(e.message) })}><Unlink size={15} /></button>
+                            <button type="button" aria-label={`Desvincular ${t.codigo}`} title="Desvincular do grupo" className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={async () => (await confirmar({ titulo: `Desvincular ${t.codigo} (${t.item_pq ?? ''}) do grupo?`, mensagem: <>{t.descricao}<br />Os itens complementares deste tipo também saem. Tipo usado em programação não pode ser desvinculado: inative-o.</>, acao: 'Desvincular' })) && desvincular.mutate(t.id, { onSuccess: () => toast.success(`${t.codigo} desvinculado`), onError: (e) => toast.error(e.message) })}><Unlink size={15} /></button>
                           </>}
                         </td>
                       </tr>

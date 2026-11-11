@@ -9,6 +9,7 @@ import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { ComposicaoEquipe, Equipe } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { useConfirmar } from '@/components/Obra/Confirmar';
 
 type Form = Omit<Equipe, 'id' | 'hh_disponivel_dia' | 'composicao_efetiva'> & { id?: number };
 const NOVA: Form = {
@@ -18,6 +19,7 @@ const NOVA: Form = {
 const TURNOS = ['Diurno', 'Noturno', 'Administrativo', 'Turno A', 'Turno B', 'Turno C'];
 
 export default function EquipesPage() {
+  const confirmar = useConfirmar();
   const { pode } = useObra();
   const equipes = useEquipes();
   const api = useApi();
@@ -31,7 +33,10 @@ export default function EquipesPage() {
   const [marcadas, setMarcadas] = useState<Set<number>>(new Set());
   const excluir = async (ids: number[]) => {
     const nomes = equipes.data?.filter((e) => ids.includes(e.id)).map((e) => e.nome) ?? [];
-    if (!ids.length || !window.confirm(`Excluir ${ids.length === 1 ? `a equipe ${nomes[0]}` : `${ids.length} equipes`}? As linhas de programação que usam a equipe ficam sem equipe (as emissões não mudam).`)) return;
+    if (!ids.length || !(await confirmar({
+      titulo: ids.length === 1 ? `Excluir a equipe ${nomes[0]}?` : `Excluir ${ids.length} equipes?`,
+      mensagem: <>As linhas de programação que usam {ids.length === 1 ? 'a equipe' : 'estas equipes'} ficam sem equipe. As programações já emitidas não mudam.{ids.length > 1 && <><br /><span className="text-m-text-muted">{nomes.slice(0, 6).join(', ')}{nomes.length > 6 ? '…' : ''}</span></>}</>,
+    }))) return;
     let ok = 0;
     for (const id of ids) {
       try { await api.del(`/equipes/${id}`); ok++; } catch (er) { toast.error((er as Error).message); }

@@ -9,11 +9,13 @@ import {
 } from '@/hooks/programacao/queries';
 import { useObra } from '@/lib/obra/ObraProvider';
 import type { TipoReferencia, VinculoIn } from '@/lib/api/types';
+import { useConfirmar } from '@/components/Obra/Confirmar';
 
 const TIPOS: TipoReferencia[] = ['CRONOGRAMA', 'PQ', 'CPU', 'INDICES', 'SIMOVA'];
 const vazio: VinculoIn = { simova_grupo_codigo: '', simova_oper_codigo: '', id_crono: '', item_pq: '', indice_codigo: '', frente_codigo: '' };
 
 export default function ReferenciasPage() {
+  const confirmar = useConfirmar();
   const { pode } = useObra();
   const versoes = useVersoes();
   const ativar = useAtivarVersao();
@@ -181,7 +183,7 @@ export default function ReferenciasPage() {
                 <td className={`${td} whitespace-nowrap`}>
                   <button className="mr-3 text-m-accent" onClick={() => resolver.mutate(v.id)}>Resolver</button>
                   <button className="mr-3 text-m-accent" onClick={() => { setEditando(v.id); setForm({ ...v }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar</button>
-                  <button className="text-m-danger" onClick={() => excluir.mutate(v.id)}>Excluir</button>
+                  <button className="text-m-danger" onClick={async () => (await confirmar({ titulo: 'Excluir este vínculo?' })) && excluir.mutate(v.id)}>Excluir</button>
                 </td>
               </tr>
             ))}

@@ -7,6 +7,7 @@ import { Botao, Cabecalho, Campo, Erro, Painel, Pilula, Selecao, Tabela, td } fr
 import { k, useAcao, useFrentes2 } from '@/hooks/programacao/planejamento';
 import type { Area, Local } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { useConfirmar } from '@/components/Obra/Confirmar';
 
 const MODELO = `CODIGO\tDESCRICAO
 1\tOBRA GERAL
@@ -17,6 +18,7 @@ const MODELO = `CODIGO\tDESCRICAO
 type AreaForm = { id?: number; local_id: string; cwa: string; codigo: string; descricao: string; ativo: boolean };
 
 export default function FrentesPage() {
+  const confirmar = useConfirmar();
   const frentes = useFrentes2();
   const { pode } = useObra();
   const inv = [[...k.frentes], ['programacao']];
@@ -101,7 +103,7 @@ export default function FrentesPage() {
                   {l.codigo} · {l.descricao}
                   {pode('planejador') && <>
                     <button type="button" aria-label={`Editar local ${l.codigo}`} className="ml-3 align-middle opacity-80 hover:opacity-100" onClick={() => { setArea(null); setLocal({ id: l.id, codigo: l.codigo, descricao: l.descricao, ativo: l.ativo }); }}><Pencil size={13} /></button>
-                    {!l.areas.length && <button type="button" aria-label={`Excluir local ${l.codigo}`} className="ml-2 align-middle opacity-80 hover:opacity-100" onClick={() => excluirLocal.mutate(l.id, { onError: (e) => toast.error(e.message) })}><Trash2 size={13} /></button>}
+                    {!l.areas.length && <button type="button" aria-label={`Excluir local ${l.codigo}`} className="ml-2 align-middle opacity-80 hover:opacity-100" onClick={async () => (await confirmar({ titulo: `Excluir o local ${l.codigo} · ${l.descricao}?`, mensagem: 'O local está vazio (sem áreas).' })) && excluirLocal.mutate(l.id, { onError: (e) => toast.error(e.message) })}><Trash2 size={13} /></button>}
                   </>}
                 </td>
               </tr>
@@ -115,7 +117,7 @@ export default function FrentesPage() {
                   <td className={`${td} whitespace-nowrap text-right`}>
                     {pode('planejador') && <>
                       <button type="button" aria-label={`Editar área ${a.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => { setLocal(null); editarArea(a); }}><Pencil size={15} /></button>
-                      <button type="button" aria-label={`Excluir área ${a.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={() => excluirArea.mutate(a.id, { onError: (e) => toast.error(e.message) })}><Trash2 size={15} /></button>
+                      <button type="button" aria-label={`Excluir área ${a.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={async () => (await confirmar({ titulo: `Excluir a área ${a.codigo}?`, mensagem: <>{a.descricao}<br />Área usada em programação não pode ser excluída: inative-a.</> })) && excluirArea.mutate(a.id, { onError: (e) => toast.error(e.message) })}><Trash2 size={15} /></button>
                     </>}
                   </td>
                 </tr>

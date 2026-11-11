@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -8,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.core.auth import ContextoObra, ler, negar
 from app.core.db import get_session
 from app.modules.obras.domain.obra import PapelObra
-from app.modules.ssma.domain.cadastro import ItemCadastro, TipoCadastro
-from app.modules.ssma.infra.models import CadastroSsmaModel
+from app.modules.ssma.domain.cadastro import TIPOS_COM_ANEXO, ItemCadastro, TipoCadastro, validar_anexo
+from app.modules.ssma.infra.models import AnexoSsmaModel, CadastroSsmaModel
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(prefix="/ssma", tags=["SSMA: cadastros das listas suspensas"])
@@ -23,6 +24,16 @@ class CadastroIn(BaseModel):
     ativo: bool = True
 
 
+class AnexoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nome: str
+    content_type: str
+    tamanho: int
+    enviado_por: str
+    enviado_em: datetime
+
+
 class CadastroOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -32,6 +43,8 @@ class CadastroOut(BaseModel):
     validade: date | None
     ativo: bool
     em_uso: int = 0
+    aceita_anexo: bool = False
+    anexos: list[AnexoOut] = []
 
 
 def _pode_editar(c: ContextoObra, tipo: TipoCadastro) -> None:
@@ -45,10 +58,19 @@ def _pode_editar(c: ContextoObra, tipo: TipoCadastro) -> None:
 def _uso(s: Session, obra_id: int, m: CadastroSsmaModel) -> int:
     from app.modules.planejamento.infra.models import LinhaProgramacaoModel, ProgramacaoModel
 
-    coluna = getattr(LinhaProgramacaoModel, TipoCadastro(m.tipo).campo_linha)
+    tipo = TipoCadastro(m.tipo)
+    coluna = getattr(LinhaProgramacaoModel, tipo.campo_linha)
+    cond = coluna == m.codigo if tipo is TipoCadastro.TECNICO else coluna.contains([m.codigo])  # lista (JSONB)
     return s.scalar(select(func.count()).select_from(LinhaProgramacaoModel)
                     .join(ProgramacaoModel, ProgramacaoModel.id == LinhaProgramacaoModel.programacao_id)
-                    .where(ProgramacaoModel.obra_id == obra_id, coluna == m.codigo)) or 0
+                    .where(ProgramacaoModel.obra_id == obra_id, cond)) or 0
+
+
+def _out(s: Session, obra_id: int, m: CadastroSsmaModel) -> CadastroOut:
+    o = CadastroOut.model_validate(m)
+    o.em_uso = _uso(s, obra_id, m)
+    o.aceita_anexo = TipoCadastro(m.tipo) in TIPOS_COM_ANEXO
+    return o
 
 
 def _obter(s: Session, c: ContextoObra, cid: int) -> CadastroSsmaModel:
@@ -68,9 +90,7 @@ def listar(tipo: TipoCadastro | None = None, q: str | None = None, s: Session = 
         stmt = stmt.where(or_(CadastroSsmaModel.codigo.ilike(f"%{q}%"), CadastroSsmaModel.descricao.ilike(f"%{q}%")))
     out = []
     for m in s.scalars(stmt.order_by(CadastroSsmaModel.tipo, CadastroSsmaModel.codigo)):
-        o = CadastroOut.model_validate(m)
-        o.em_uso = _uso(s, c.obra_id, m)
-        out.append(o)
+        out.append(_out(s, c.obra_id, m))
     return out
 
 
@@ -92,7 +112,7 @@ def criar(d: CadastroIn, s: Session = Depends(get_session), c: ContextoObra = De
                           validade=it.validade, ativo=d.ativo)
     s.add(m)
     s.flush()
-    return CadastroOut.model_validate(m)
+    return _out(s, c.obra_id, m)
 
 
 @router.put("/cadastros/{cid}", response_model=CadastroOut)
@@ -107,16 +127,17 @@ def editar(cid: int, d: CadastroIn, s: Session = Depends(get_session), c: Contex
     it = ItemCadastro(d.tipo, d.codigo, d.descricao, d.validade)
     _duplicado(s, c.obra_id, m.tipo, it.codigo, m.id)
     if it.codigo != m.codigo:
-        coluna = TipoCadastro(m.tipo).campo_linha
+        tipo = TipoCadastro(m.tipo)
+        attr = getattr(LinhaProgramacaoModel, tipo.campo_linha)
         ids = select(ProgramacaoModel.id).where(ProgramacaoModel.obra_id == c.obra_id, ProgramacaoModel.status == "rascunho")
-        for ln in s.scalars(select(LinhaProgramacaoModel).where(LinhaProgramacaoModel.programacao_id.in_(ids),
-                                                                getattr(LinhaProgramacaoModel, coluna) == m.codigo)):
-            setattr(ln, coluna, it.codigo)
+        cond = attr == m.codigo if tipo is TipoCadastro.TECNICO else attr.contains([m.codigo])
+        for ln in s.scalars(select(LinhaProgramacaoModel).where(LinhaProgramacaoModel.programacao_id.in_(ids), cond)):
+            atual = getattr(ln, tipo.campo_linha)
+            novo = it.codigo if tipo is TipoCadastro.TECNICO else [it.codigo if x == m.codigo else x for x in atual]
+            setattr(ln, tipo.campo_linha, novo)
     m.codigo, m.descricao, m.validade, m.ativo = it.codigo, it.descricao, it.validade, d.ativo
     s.flush()
-    o = CadastroOut.model_validate(m)
-    o.em_uso = _uso(s, c.obra_id, m)
-    return o
+    return _out(s, c.obra_id, m)
 
 
 @router.delete("/cadastros/{cid}", status_code=204)
@@ -126,3 +147,48 @@ def excluir(cid: int, s: Session = Depends(get_session), c: ContextoObra = Depen
     if _uso(s, c.obra_id, m):
         raise DomainError("item usado em programações: inative-o em vez de excluir")
     s.delete(m)
+
+
+# ---- anexos (Excel, Word, PDF) --------------------------------------------------------------------------
+@router.post("/cadastros/{cid}/anexos", response_model=AnexoOut, status_code=201)
+async def anexar(cid: int, arquivo: UploadFile = File(...), s: Session = Depends(get_session),
+                 c: ContextoObra = Depends(ler)):
+    """Arquivo do documento (opcional, vários por item): RAC, PTS, ART, ATA e PTO."""
+    m = _obter(s, c, cid)
+    tipo = TipoCadastro(m.tipo)
+    _pode_editar(c, tipo)
+    from app.modules.ssma.domain.cadastro import LIMITE_ANEXO
+
+    conteudo = await arquivo.read(LIMITE_ANEXO + 1)
+    nome, ctype = validar_anexo(tipo, arquivo.filename or "", conteudo)
+    a = AnexoSsmaModel(obra_id=c.obra_id, cadastro_id=m.id, nome=nome, content_type=ctype, tamanho=len(conteudo),
+                       conteudo=conteudo, enviado_por=c.usuario.id)
+    s.add(a)
+    s.flush()
+    s.refresh(a)
+    return AnexoOut.model_validate(a)
+
+
+def _anexo(s: Session, c: ContextoObra, aid: int) -> AnexoSsmaModel:
+    a = s.get(AnexoSsmaModel, aid)
+    if a is None or a.obra_id != c.obra_id:
+        raise NotFoundError("Anexo", aid)
+    return a
+
+
+@router.get("/anexos/{aid}")
+def baixar_anexo(aid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    from urllib.parse import quote
+
+    a = _anexo(s, c, aid)
+    ascii_ = a.nome.encode("ascii", "ignore").decode() or "arquivo"
+    disp = f"attachment; filename=\"{ascii_}\"; filename*=UTF-8''{quote(a.nome)}"
+    return Response(a.conteudo, media_type=a.content_type, headers={"Content-Disposition": disp})
+
+
+@router.delete("/anexos/{aid}", status_code=204)
+def excluir_anexo(aid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    a = _anexo(s, c, aid)
+    m = s.get(CadastroSsmaModel, a.cadastro_id)
+    _pode_editar(c, TipoCadastro(m.tipo))
+    s.delete(a)

@@ -8,6 +8,7 @@ import { Botao, Campo, Erro, Painel, Pilula, Selecao, Tabela, dataBR, td } from 
 import { useApi } from '@/hooks/programacao/useApi';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import type { Acesso, PapelObra } from '@/lib/api/types';
+import { useConfirmar } from '@/components/Obra/Confirmar';
 
 export const PAPEIS: { valor: PapelObra; rotulo: string; descricao: string }[] = [
   { valor: 'admin', rotulo: 'Admin da obra', descricao: 'carrega versões, importa do Simova, envia a FT e dá acesso' },
@@ -23,6 +24,7 @@ const vazio = { email: '', papel: 'planejador' as PapelObra, cracha: '', senha_i
 
 /** Quem acessa uma obra e com qual papel. Usado pelo admin da obra e pelo Super Admin. */
 export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: string }) {
+  const confirmar = useConfirmar();
   const api = useApi();
   const qc = useQueryClient();
   const { usuario } = useSessao();
@@ -60,7 +62,7 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
             <td className={`${td} whitespace-nowrap text-right`}>
               <Botao variante="fantasma" className="h-8 px-3" onClick={() => setForm({ email: a.email, papel: a.papel, cracha: a.cracha ?? '', senha_inicial: '' })}>Alterar</Botao>
               {a.usuario_id !== usuario?.id && (
-                <Botao variante="fantasma" className="h-8 px-3 text-m-danger hover:bg-m-danger-subtle" onClick={() => revogar.mutate(a.id)}>Remover</Botao>
+                <Botao variante="fantasma" className="h-8 px-3 text-m-danger hover:bg-m-danger-subtle" onClick={async () => (await confirmar({ titulo: `Remover o acesso de ${a.email} a ${obraNome}?`, mensagem: 'A pessoa deixa de ver esta obra. A conta continua existindo.', acao: 'Remover acesso' })) && revogar.mutate(a.id)}>Remover</Botao>
               )}
             </td>
           </tr>

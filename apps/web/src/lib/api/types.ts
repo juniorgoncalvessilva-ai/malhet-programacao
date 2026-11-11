@@ -108,7 +108,10 @@ export interface LinhaVisao {
   jornada: number | null; equipe_codigo: string | null; status_crono: string | null;
   realizado_anterior: number | null; restante: number | null; ssma: Ssma;
 }
-export interface Ssma { tecnico: string | null; rac: string | null; pts: string | null; art: string | null; pto: string | null; ata: string | null }
+/** Técnico é um só; RAC, PTS, ART, ATA e PTO aceitam vários itens (emissões antigas podem trazer texto). */
+export interface Ssma { tecnico: string | null; rac: ItensSsma; pts: ItensSsma; art: ItensSsma; pto: ItensSsma; ata: ItensSsma }
+export type ItensSsma = string[] | string | null;
+export const comoLista = (v: ItensSsma | undefined): string[] => (v == null ? [] : Array.isArray(v) ? v : [v]).filter(Boolean);
 export interface AtividadeArvore {
   id_crono: string; atividade: string; caminho: string[]; inicio: string | null; fim: string | null;
   duracao_h: number | null; status: string | null; pct: number | null; programada_em: { id: number; titulo: string }[];
@@ -141,4 +144,8 @@ export interface AtividadeBusca { id_crono: string; atividade: string; inicio: s
 
 /** Cadastros que alimentam as listas suspensas de SSMA (segurança) e o PTO (planejamento). */
 export type TipoCadastroSsma = 'TECNICO' | 'RAC' | 'PTS' | 'ART' | 'ATA' | 'PTO';
-export interface CadastroSsma { id: number; tipo: TipoCadastroSsma; codigo: string; descricao: string | null; validade: string | null; ativo: boolean; em_uso: number }
+export interface AnexoSsma { id: number; nome: string; content_type: string; tamanho: number; enviado_por: string; enviado_em: string }
+export interface CadastroSsma {
+  id: number; tipo: TipoCadastroSsma; codigo: string; descricao: string | null; validade: string | null; ativo: boolean; em_uso: number;
+  aceita_anexo: boolean; anexos: AnexoSsma[];
+}

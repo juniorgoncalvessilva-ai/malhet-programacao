@@ -81,13 +81,14 @@ export function Selecao({ rotulo, className, children, ...p }: SelectHTMLAttribu
 }
 
 export function Botao({ variante = 'primario', className, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variante?: 'primario' | 'secundario' | 'fantasma' | 'perigo';
+  variante?: 'primario' | 'secundario' | 'fantasma' | 'perigo' | 'excluir';
 }) {
   const v = {
     primario: 'bg-m-accent-strong text-m-on-accent hover:opacity-90',
     secundario: 'border border-m-stroke bg-m-surface-raised text-m-text-primary hover:bg-m-surface-hover',
     fantasma: 'text-m-accent hover:bg-m-accent-subtle',
     perigo: 'border border-m-stroke text-m-danger hover:bg-m-danger-subtle',
+    excluir: 'bg-m-danger text-white hover:opacity-90',
   }[variante];
   return (
     <button

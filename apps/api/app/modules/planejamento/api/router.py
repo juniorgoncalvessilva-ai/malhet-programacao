@@ -58,7 +58,7 @@ class LinhaIn(BaseModel):
     qtd_periodo: float | None = None
     natureza: str = "P"  # P programada | O oportunidade | E emergencial
     responsavel: str | None = None
-    pto: str | None = None  # Plano de Trabalho de Obra (cadastro do Planejamento)
+    pto: list[str] | str | None = None  # Planos de Trabalho de Obra (cadastro do Planejamento), um ou mais
     observacao: str | None = None
 
 
@@ -87,10 +87,11 @@ class SalvarIn(BaseModel):
 class SsmaLinhaIn(BaseModel):
     id: int
     tecnico: str | None = None
-    rac: str | None = None
-    pts: str | None = None
-    art: str | None = None
-    ata: str | None = None  # PTO é do Planejamento: vai na linha (montar), não aqui
+    # vários itens por atividade (aceita texto, de telas antigas)
+    rac: list[str] | str | None = None
+    pts: list[str] | str | None = None
+    art: list[str] | str | None = None
+    ata: list[str] | str | None = None  # PTO é do Planejamento: vai na linha (montar), não aqui
 
 
 class SsmaIn(BaseModel):
@@ -171,9 +172,9 @@ def _validar_linha(s: Session, c: ContextoObra, d: LinhaIn) -> tuple[TipoAtivida
     return t, item_id, aviso
 
 
-def _pto(s: Session, c: ContextoObra, valor: str | None, atual: str | None) -> str | None:
-    """PTO da linha: do cadastro do Planejamento; só o planejador muda."""
-    novo = CadastroSsmaGateway(s, c.obra_id).conferir("pto", valor, atual)
+def _pto(s: Session, c: ContextoObra, valor, atual) -> list[str] | None:
+    """PTOs da linha: do cadastro do Planejamento; só o planejador muda."""
+    novo = CadastroSsmaGateway(s, c.obra_id).conferir_lista("pto", valor, atual)
     if novo != atual and not c.papel.pode(PapelObra.PLANEJADOR):
         raise negar("o PTO é escolhido pelo Planejamento")
     return novo
@@ -412,8 +413,10 @@ def salvar_ssma(pid: int, d: SsmaIn, s: Session = Depends(get_session), c: Conte
         ln = next((y for y in p.linhas if y.id == x.id), None)
         if ln is None:
             raise NotFoundError("Linha", x.id)
+        ln.ssma_tecnico = gw.conferir("tecnico", x.tecnico, ln.ssma_tecnico)
         for k in CAMPOS_SEGURANCA:
-            setattr(ln, f"ssma_{k}", gw.conferir(k, getattr(x, k), getattr(ln, f"ssma_{k}")))
+            if k != "tecnico":
+                setattr(ln, f"ssma_{k}", gw.conferir_lista(k, getattr(x, k), getattr(ln, f"ssma_{k}")))
     s.flush()
     return {"linhas": len(d.linhas)}
 

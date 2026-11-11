@@ -13,6 +13,7 @@ from openpyxl.utils import get_column_letter as L
 
 from app.modules.planejamento.domain.periodo import DIAS, numero_semana
 from app.modules.referencias.domain.cpu_obra import eh_apoio
+from app.modules.ssma.domain.cadastro import texto_da_lista
 
 AZUL, VERMELHO, BRANCO, VERDE_PR = "FF173761", "FFFF0000", "FFFFFFFF", "FF2B665E"
 FINO, MEDIO = Side(style="thin"), Side(style="medium")
@@ -185,8 +186,9 @@ def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, f
                 fixos = {
                     "G": f"{n_area}.{i}", "H": ln.get("id_crono") or "-", "I": ln.get("natureza") or "P",
                     "J": f"{ln['codigo_simova']} - {ln['descricao']}", "K": ln["grupo"]["descricao"], "L": local,
-                    "M": a.get("cwa") or "-", "N": ss.get("tecnico"), "O": ss.get("rac"), "P": ss.get("pts"),
-                    "Q": ss.get("art"), "R": ss.get("pto"), "S": ss.get("ata"), "T": ln.get("responsavel"),
+                    "M": a.get("cwa") or "-", "N": ss.get("tecnico"), "O": texto_da_lista(ss.get("rac")),
+                    "P": texto_da_lista(ss.get("pts")), "Q": texto_da_lista(ss.get("art")),
+                    "R": texto_da_lista(ss.get("pto")), "S": texto_da_lista(ss.get("ata")), "T": ln.get("responsavel"),
                     "U": ln.get("encarregado") or ln.get("equipe"), "V": ln.get("unidade"),
                     "W": ln.get("qtd_projeto"), "X": ln.get("realizado_anterior"), "Y": ln.get("restante"),
                     "Z": None, "AA": ln.get("status_crono"),

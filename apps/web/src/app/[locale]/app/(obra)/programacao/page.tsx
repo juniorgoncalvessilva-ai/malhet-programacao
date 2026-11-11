@@ -11,6 +11,7 @@ import { useAcaoItem, useCriarItem, useEquipes, useFrentes, useGrupos, useItens,
 import { qs } from '@/lib/api/client';
 import { useObra } from '@/lib/obra/ObraProvider';
 import type { CriarItemOut, DiaPlano, ItemProgramacao } from '@/lib/api/types';
+import { useConfirmar } from '@/components/Obra/Confirmar';
 
 const DIAS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -27,6 +28,7 @@ const STATUS: Record<ItemProgramacao['status'], { rotulo: string; tom: 'neutro' 
 const ORIGEM: Record<ItemProgramacao['origem'], string> = { cronograma: 'Cronograma', pq: 'Só PQ', padrao: 'OPER padrão' };
 
 export default function ProgramacaoPage() {
+  const confirmar = useConfirmar();
   const { pode } = useObra();
   const [inicio, setInicio] = useState(proximaSegunda());
   const fim = somar(inicio, 6);
@@ -173,7 +175,7 @@ export default function ProgramacaoPage() {
                 <td className={td}><Pilula tom={STATUS[i.status].tom}>{STATUS[i.status].rotulo}</Pilula></td>
                 <td className={`${td} whitespace-nowrap text-right`}>
                   {i.status === 'rascunho' && pode('planejador') && <Botao variante="fantasma" className="h-8 px-3" onClick={() => acao.mutate({ id: i.id, acao: 'aprovar' })}>Aprovar</Botao>}
-                  {i.status !== 'exportado' && pode('encarregado') && <Botao variante="fantasma" className="h-8 px-3 text-m-danger hover:bg-m-danger-subtle" onClick={() => acao.mutate({ id: i.id, acao: 'excluir' })}>Excluir</Botao>}
+                  {i.status !== 'exportado' && pode('encarregado') && <Botao variante="fantasma" className="h-8 px-3 text-m-danger hover:bg-m-danger-subtle" onClick={async () => (await confirmar({ titulo: 'Excluir este item da programação?' })) && acao.mutate({ id: i.id, acao: 'excluir' })}>Excluir</Botao>}
                 </td>
               </tr>
             ))}

@@ -117,8 +117,36 @@ def test_equipes_programacao_ssma_e_excel(client, monkeypatch):
          "ata": "N/A"}]})
     assert r.status_code == 200, r.text
     ln = client.get(f"/api/programacoes/{p['id']}", headers=seg).json()["locais"][0]["areas"][0]["linhas"][0]
-    assert ln["ssma"] == {"tecnico": "Técnica Beltrana", "rac": "N/A", "pts": "N/A", "art": "ART/11/53", "pto": None,
-                          "ata": "N/A"}  # PTO não vem pela tela de SSMA
+    assert ln["ssma"] == {"tecnico": "Técnica Beltrana", "rac": ["N/A"], "pts": ["N/A"], "art": ["ART/11/53"], "pto": None,
+                          "ata": ["N/A"]}  # PTO não vem pela tela de SSMA; texto vira lista
+    # vários itens por atividade: duas ARTs; N/A junto com item sai; repetido não duplica
+    assert cad(seg, "ART", "ART/12/07").status_code == 201
+    r = client.put(f"/api/programacoes/{p['id']}/ssma", headers=seg, json={"linhas": [
+        {"id": lid, "tecnico": "Técnica Beltrana", "art": ["ART/11/53", "N/A", "ART/12/07", "ART/11/53"], "rac": ["N/A"]}]})
+    assert r.status_code == 200, r.text
+    ln = client.get(f"/api/programacoes/{p['id']}", headers=seg).json()["locais"][0]["areas"][0]["linhas"][0]
+    assert ln["ssma"]["art"] == ["ART/11/53", "ART/12/07"] and ln["ssma"]["rac"] == ["N/A"]
+    # anexos (Excel, Word, PDF) no item do cadastro; opcional e mais de um
+    art = next(x for x in client.get("/api/ssma/cadastros", headers=seg, params={"tipo": "ART"}).json() if x["codigo"] == "ART/11/53")
+    assert art["aceita_anexo"] and art["anexos"] == [] and art["em_uso"] == 1
+    pdf = b"%PDF-1.4 teste"
+    r = client.post(f"/api/ssma/cadastros/{art['id']}/anexos", headers=seg, files={"arquivo": ("ART 11-53 ção.pdf", pdf)})
+    assert r.status_code == 201, r.text
+    aid = r.json()["id"]
+    assert client.post(f"/api/ssma/cadastros/{art['id']}/anexos", headers=seg,
+                       files={"arquivo": ("planilha.xlsx", b"PK\x03\x04xx")}).status_code == 201
+    assert client.post(f"/api/ssma/cadastros/{art['id']}/anexos", headers=seg,
+                       files={"arquivo": ("falso.pdf", b"nao sou pdf")}).status_code == 422
+    assert client.post(f"/api/ssma/cadastros/{art['id']}/anexos", headers=seg,
+                       files={"arquivo": ("foto.png", b"\x89PNG")}).status_code == 422
+    tec = next(x for x in client.get("/api/ssma/cadastros", headers=seg, params={"tipo": "TECNICO"}).json())
+    assert not tec["aceita_anexo"] and client.post(f"/api/ssma/cadastros/{tec['id']}/anexos", headers=seg,
+                                                   files={"arquivo": ("a.pdf", pdf)}).status_code == 422
+    d = client.get(f"/api/ssma/anexos/{aid}", headers=seg)
+    assert d.status_code == 200 and d.content == pdf and d.headers["content-type"] == "application/pdf"
+    assert "filename*=UTF-8''ART%2011-53%20%C3%A7%C3%A3o.pdf" in d.headers["content-disposition"]
+    assert len(client.get("/api/ssma/cadastros", headers=seg, params={"tipo": "ART"}).json()[0]["anexos"]) == 2
+    assert client.delete(f"/api/ssma/anexos/{aid}", headers=seg).status_code == 204
     # PTO na linha (planejamento) e renomear no cadastro propaga para o rascunho
     lid2 = client.get(f"/api/programacoes/{p2['id']}", headers=hsa).json()["locais"][0]["areas"][0]["linhas"][0]["id"]
     linha2 = {"area_id": area["id"], "tipo_id": t["id"], "equipe_id": eq2["id"], "pto": "PTO-001"}
@@ -128,7 +156,13 @@ def test_equipes_programacao_ssma_e_excel(client, monkeypatch):
     assert pto["em_uso"] == 1 and client.delete(f"/api/ssma/cadastros/{pto['id']}", headers=hsa).status_code == 422
     client.put(f"/api/ssma/cadastros/{pto['id']}", headers=hsa, json={"tipo": "PTO", "codigo": "PTO-001/R1"})
     ln2 = client.get(f"/api/programacoes/{p2['id']}", headers=hsa).json()["locais"][0]["areas"][0]["linhas"][0]
-    assert ln2["ssma"]["pto"] == "PTO-001/R1"
+    assert ln2["ssma"]["pto"] == ["PTO-001/R1"]
+    # PTO: mais de um por atividade, só pelo planejamento
+    assert cad(hsa, "PTO", "PTO-002").status_code == 201
+    r = client.put(f"/api/programacoes/{p2['id']}/linhas/{lid2}", headers=hsa, json={**linha2, "pto": ["PTO-001/R1", "PTO-002"]})
+    assert r.status_code == 200, r.text
+    ln2 = client.get(f"/api/programacoes/{p2['id']}", headers=hsa).json()["locais"][0]["areas"][0]["linhas"][0]
+    assert ln2["ssma"]["pto"] == ["PTO-001/R1", "PTO-002"]
     assert client.post(f"/api/programacoes/{p2['id']}/linhas", headers=seg, json={
         "area_id": area["id"], "tipo_id": t["id"]}).status_code == 403
     assert client.put(f"/api/programacoes/{p['id']}/salvar", headers=seg, json={"linhas": []}).status_code == 403
@@ -150,7 +184,7 @@ def test_equipes_programacao_ssma_e_excel(client, monkeypatch):
     assert ws["AU14"].value == "=SUM(AL14:AT14)" and (ws["AO14"].value, ws["AP14"].value, ws["AO15"].value) == (10, 20, 8)
     assert (ws["AC14"].value, ws["AD14"].value) == (2, 2)  # oficiais e serventes pelas funções dos membros
     atual = load_workbook(BytesIO(client.get(f"/api/programacoes/{p['id']}/excel", headers=h).content)).active
-    assert (atual["N14"].value, atual["Q14"].value, atual["T14"].value) == ("Técnica Beltrana", "ART/11/53", "Eng. Fulano")
+    assert (atual["N14"].value, atual["Q14"].value, atual["T14"].value) == ("Técnica Beltrana", "ART/11/53 / ART/12/07", "Eng. Fulano")  # vários itens: " / "
     assert atual["BE10"].value == "ITEM PQ" and atual["BN10"].value == "% REAL"
 
 
@@ -175,3 +209,20 @@ def test_dominio_do_cadastro_ssma():
     with pytest.raises(DomainError):
         valor_da_linha("RAC 11", {"RAC 10"}, TipoCadastro.RAC)
     assert TipoCadastro.PTO.do_planejamento and not TipoCadastro.ATA.do_planejamento
+
+
+def test_dominio_varios_itens_e_anexo():
+    from app.modules.ssma.domain.cadastro import TipoCadastro, lista_da_linha, texto_da_lista, validar_anexo
+    from app.shared.errors import DomainError
+
+    v = {"A", "B"}
+    assert lista_da_linha(["A", "N/A", "B", "A"], v, TipoCadastro.RAC) == ["A", "B"]
+    assert lista_da_linha("na", v, TipoCadastro.RAC) == ["N/A"] and lista_da_linha([], v, TipoCadastro.RAC) is None
+    assert lista_da_linha(["Antigo"], v, TipoCadastro.RAC, atuais="Antigo") == ["Antigo"]  # valor já gravado vale
+    with pytest.raises(DomainError):
+        lista_da_linha(["C"], v, TipoCadastro.RAC)
+    assert texto_da_lista(["A", "B"]) == "A / B" and texto_da_lista("A") == "A" and texto_da_lista(None) is None
+    assert validar_anexo(TipoCadastro.PTO, "C:\\docs\\PTO 1.docx", b"PK\x03\x04..")[0] == "PTO 1.docx"
+    assert validar_anexo(TipoCadastro.RAC, "r.xls", b"\xd0\xcf\x11\xe0..")[1] == "application/vnd.ms-excel"
+    with pytest.raises(DomainError):
+        validar_anexo(TipoCadastro.TECNICO, "a.pdf", b"%PDF")

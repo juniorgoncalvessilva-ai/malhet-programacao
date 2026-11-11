@@ -1,11 +1,14 @@
 'use client';
 
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { FileText, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Campo, Chip, Erro, Painel, Pilula, Tabela, dataBR, td } from '@/components/Obra/ui';
 import { k, useAcao, useCadastrosSsma } from '@/hooks/programacao/planejamento';
+import { useApi } from '@/hooks/programacao/useApi';
 import type { CadastroSsma, TipoCadastroSsma } from '@/lib/api/types';
+import { useConfirmar } from '@/components/Obra/Confirmar';
 
 export const ROTULO_SSMA: Record<TipoCadastroSsma, { curto: string; longo: string; campo: string; exemplo: string }> = {
   TECNICO: { curto: 'Técnicos', longo: 'Técnico de segurança responsável', campo: 'Nome do técnico', exemplo: 'Ana Lima' },
@@ -29,6 +32,7 @@ type Form = { id?: number; tipo: TipoCadastroSsma; codigo: string; descricao: st
 
 /** Lista editável dos cadastros de SSMA/PTO (uma aba por tipo). */
 export function CadastrosSsma({ tipos, podeEditar, titulo, subtitulo }: { tipos: TipoCadastroSsma[]; podeEditar: boolean; titulo: string; subtitulo: string }) {
+  const confirmar = useConfirmar();
   const lista = useCadastrosSsma();
   const [tipo, setTipo] = useState<TipoCadastroSsma>(tipos[0]);
   const [form, setForm] = useState<Form | null>(null);
@@ -38,6 +42,29 @@ export function CadastrosSsma({ tipos, podeEditar, titulo, subtitulo }: { tipos:
     return d.id ? a.put(`/ssma/cadastros/${d.id}`, corpo) : a.post('/ssma/cadastros', corpo);
   }, inv);
   const excluir = useAcao((a, id: number) => a.del(`/ssma/cadastros/${id}`), inv);
+  const api = useApi();
+  const qc = useQueryClient();
+  const [enviando, setEnviando] = useState<number | null>(null);
+  const anexar = async (c: CadastroSsma, arquivos: FileList | null) => {
+    if (!arquivos?.length) return;
+    setEnviando(c.id);
+    let ok = 0;
+    for (const f of Array.from(arquivos)) {
+      const fd = new FormData();
+      fd.append('arquivo', f);
+      try { await api.post(`/ssma/cadastros/${c.id}/anexos`, fd); ok++; } catch (e) { toast.error(`${f.name}: ${(e as Error).message}`); }
+    }
+    setEnviando(null);
+    if (ok) toast.success(`${ok} arquivo(s) anexado(s) a ${c.codigo}`);
+    qc.invalidateQueries({ queryKey: k.cadastrosSsma });
+  };
+  const tiraAnexo = async (c: CadastroSsma, a: { id: number; nome: string }) => {
+    await confirmar({
+      titulo: `Excluir o arquivo ${a.nome}?`, mensagem: `Sai de ${ROTULO_SSMA[c.tipo].longo} ${c.codigo}. O item continua cadastrado.`,
+      executar: async () => { await api.del(`/ssma/anexos/${a.id}`); toast.success('Arquivo excluído'); qc.invalidateQueries({ queryKey: k.cadastrosSsma }); },
+    });
+  };
+  const tamanho = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
   const itens = (lista.data ?? []).filter((c) => c.tipo === tipo);
   const r = ROTULO_SSMA[tipo];
   const novo = () => setForm({ tipo, codigo: '', descricao: '', validade: '', ativo: true });
@@ -63,7 +90,7 @@ export function CadastrosSsma({ tipos, podeEditar, titulo, subtitulo }: { tipos:
           <div className="md:col-span-5"><Erro erro={salvar.error} /></div>
         </form>
       )}
-      <Tabela cabecalho={[r.campo, 'Descrição', 'Validade', 'Em uso', 'Situação', '']} vazio={!itens.length && (lista.isLoading ? 'Carregando…' : `Nenhum ${r.longo} cadastrado. "N/A" já está em toda lista.`)}>
+      <Tabela cabecalho={[r.campo, 'Descrição', 'Validade', ...(tipo === 'TECNICO' ? [] : ['Arquivos (Excel, Word, PDF)']), 'Em uso', 'Situação', '']} vazio={!itens.length && (lista.isLoading ? 'Carregando…' : `Nenhum ${r.longo} cadastrado. "N/A" já está em toda lista.`)}>
         {itens.map((c) => {
           const v = validade(c);
           return (
@@ -71,13 +98,36 @@ export function CadastrosSsma({ tipos, podeEditar, titulo, subtitulo }: { tipos:
               <td className={td}><b className="text-m-text-primary">{c.codigo}</b></td>
               <td className={td}>{c.descricao ?? '—'}</td>
               <td className={td}>{v ? <Pilula tom={v.tom}>{v.texto}</Pilula> : '—'}</td>
+              {c.aceita_anexo && (
+                <td className={`${td} min-w-[220px]`}>
+                  <div className="flex flex-col gap-1">
+                    {c.anexos.map((a) => (
+                      <span key={a.id} className="inline-flex items-center gap-1.5 text-[12.5px]">
+                        <FileText size={14} className="shrink-0 text-m-text-muted" />
+                        <button type="button" className="truncate text-left font-medium text-m-accent hover:underline" title={`Baixar ${a.nome}`}
+                          onClick={() => api.download(`/ssma/anexos/${a.id}`, a.nome).catch((e) => toast.error(e.message))}>{a.nome}</button>
+                        <span className="shrink-0 text-[11px] text-m-text-muted">{tamanho(a.tamanho)}</span>
+                        {podeEditar && <button type="button" aria-label={`Excluir o arquivo ${a.nome}`} className="shrink-0 p-0.5 text-m-text-muted hover:text-m-danger" onClick={() => tiraAnexo(c, a)}><X size={13} /></button>}
+                      </span>
+                    ))}
+                    {podeEditar && (
+                      <label className={`inline-flex w-fit cursor-pointer items-center gap-1 text-[12px] font-semibold text-m-accent hover:underline ${enviando === c.id ? 'pointer-events-none opacity-60' : ''}`}>
+                        <Paperclip size={13} />{enviando === c.id ? 'Enviando…' : c.anexos.length ? 'Anexar mais' : 'Anexar arquivo'}
+                        <input type="file" multiple className="sr-only" accept=".pdf,.xls,.xlsx,.xlsm,.doc,.docx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={(e) => { anexar(c, e.target.files); e.target.value = ''; }} />
+                      </label>
+                    )}
+                    {!podeEditar && !c.anexos.length && <span className="text-m-text-muted">—</span>}
+                  </div>
+                </td>
+              )}
               <td className={td}>{c.em_uso ? `${c.em_uso} linha(s)` : '—'}</td>
               <td className={td}><Pilula tom={c.ativo ? 'sucesso' : 'neutro'}>{c.ativo ? 'Ativo' : 'Inativo'}</Pilula></td>
               <td className={`${td} whitespace-nowrap text-right`}>
                 {podeEditar && <>
                   <button type="button" aria-label={`Editar ${c.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => setForm({ id: c.id, tipo: c.tipo, codigo: c.codigo, descricao: c.descricao ?? '', validade: c.validade ?? '', ativo: c.ativo })}><Pencil size={15} /></button>
                   <button type="button" aria-label={`Excluir ${c.codigo}`} title={c.em_uso ? 'Em uso: inative em vez de excluir' : 'Excluir'} className="p-1.5 text-m-text-muted hover:text-m-danger disabled:opacity-40" disabled={!!c.em_uso}
-                    onClick={() => excluir.mutate(c.id, { onSuccess: () => toast.success('Excluído'), onError: (e) => toast.error(e.message) })}><Trash2 size={15} /></button>
+                    onClick={async () => (await confirmar({ titulo: `Excluir ${ROTULO_SSMA[c.tipo].longo} ${c.codigo}?`, mensagem: c.anexos?.length ? `Os ${c.anexos.length} arquivo(s) anexado(s) também serão excluídos.` : undefined })) && excluir.mutate(c.id, { onSuccess: () => toast.success('Excluído'), onError: (e) => toast.error(e.message) })}><Trash2 size={15} /></button>
                 </>}
               </td>
             </tr>

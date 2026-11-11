@@ -7,20 +7,24 @@ import { Botao, Cabecalho, Erro, Painel, Pilula, Selecao, dataBR } from '@/compo
 import { k, useAcao, useCadastrosSsma, useProgramacao, useProgramacoes } from '@/hooks/programacao/planejamento';
 import { validade } from '@/components/Obra/CadastroSsma';
 import { Link } from '@/i18n/navigation';
-import type { CadastroSsma, LinhaVisao, Ssma, TipoCadastroSsma } from '@/lib/api/types';
+import { comoLista, type CadastroSsma, type LinhaVisao, type Ssma, type TipoCadastroSsma } from '@/lib/api/types';
+import { MultiSelecao } from '@/components/Obra/MultiSelecao';
+import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
 
 // PTO saiu daqui: é do Planejamento (montar a programação)
 const CAMPOS: { k: Exclude<keyof Ssma, 'pto'>; tipo: TipoCadastroSsma; rotulo: string; largura: string }[] = [
   { k: 'tecnico', tipo: 'TECNICO', rotulo: 'Técnico de segurança responsável', largura: 'w-[210px]' },
-  { k: 'rac', tipo: 'RAC', rotulo: 'RAC', largura: 'w-[130px]' },
-  { k: 'pts', tipo: 'PTS', rotulo: 'PTS', largura: 'w-[130px]' },
-  { k: 'art', tipo: 'ART', rotulo: 'ART', largura: 'w-[140px]' },
-  { k: 'ata', tipo: 'ATA', rotulo: 'ATA (Autorização de Trabalho Ambiental)', largura: 'w-[140px]' },
+  { k: 'rac', tipo: 'RAC', rotulo: 'RAC', largura: 'w-[150px]' },
+  { k: 'pts', tipo: 'PTS', rotulo: 'PTS', largura: 'w-[150px]' },
+  { k: 'art', tipo: 'ART', rotulo: 'ART', largura: 'w-[160px]' },
+  { k: 'ata', tipo: 'ATA', rotulo: 'ATA (Autorização de Trabalho Ambiental)', largura: 'w-[160px]' },
 ];
-type Edicao = Record<number, Partial<Ssma>>;
+type CampoLista = 'rac' | 'pts' | 'art' | 'ata';
+type Edicao = Record<number, { tecnico?: string } & Partial<Record<CampoLista, string[]>>>;
 
 export default function SsmaPage() {
+  const api = useApi();
   const { editaSsma } = useObra();
   const lista = useProgramacoes();
   const [pid, setPid] = useState<number | null>(null);
@@ -31,8 +35,8 @@ export default function SsmaPage() {
   const v = prog.data;
   const linhas = useMemo(() => v?.locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)) ?? [], [v]);
   const cadastros = useCadastrosSsma();
-  const opcoes = (tipo: TipoCadastroSsma, atual: string) => {
-    const l = (cadastros.data ?? []).filter((c) => c.tipo === tipo && (c.ativo || c.codigo === atual));
+  const opcoes = (tipo: TipoCadastroSsma, atual: string[]) => {
+    const l = (cadastros.data ?? []).filter((c) => c.tipo === tipo && (c.ativo || atual.includes(c.codigo)));
     return l.sort((a, b) => a.codigo.localeCompare(b.codigo, 'pt-BR', { numeric: true }));
   };
   const rotuloOp = (c: CadastroSsma) => { const v = validade(c); return `${c.codigo}${c.descricao ? ` · ${c.descricao.slice(0, 40)}` : ''}${v && v.tom !== 'sucesso' ? ` (${v.texto})` : ''}${c.ativo ? '' : ' (inativo)'}`; };
@@ -42,12 +46,16 @@ export default function SsmaPage() {
   const salvar = useAcao((api, e: Edicao) => api.put<{ linhas: number }>(`/programacoes/${pid}/ssma`, {
     linhas: Object.entries(e).map(([id, x]) => {
       const ln = linhas.find((l) => l.id === Number(id));
-      return { id: Number(id), ...ln?.ssma, ...x };
+      const ss = ln?.ssma;
+      return { id: Number(id), tecnico: ss?.tecnico ?? null, rac: comoLista(ss?.rac), pts: comoLista(ss?.pts), art: comoLista(ss?.art), ata: comoLista(ss?.ata), ...x };
     }),
   }), [[...k.programacoes], ['programacao']]);
-  const val = (ln: LinhaVisao, c: keyof Ssma) => (ed[ln.id]?.[c] ?? ln.ssma?.[c] ?? '') as string;
-  const set = (ln: LinhaVisao, c: keyof Ssma, x: string) => setEd((e) => ({ ...e, [ln.id]: { ...e[ln.id], [c]: x } }));
-  const completo = (ln: LinhaVisao) => CAMPOS.every((c) => val(ln, c.k).trim());
+  const tec = (ln: LinhaVisao) => ed[ln.id]?.tecnico ?? ln.ssma?.tecnico ?? '';
+  const itens = (ln: LinhaVisao, c: CampoLista) => ed[ln.id]?.[c] ?? comoLista(ln.ssma?.[c]);
+  const setTec = (ln: LinhaVisao, x: string) => setEd((e) => ({ ...e, [ln.id]: { ...e[ln.id], tecnico: x } }));
+  const setItens = (ln: LinhaVisao, c: CampoLista, x: string[]) => setEd((e) => ({ ...e, [ln.id]: { ...e[ln.id], [c]: x } }));
+  const completo = (ln: LinhaVisao) => !!tec(ln).trim() && CAMPOS.slice(1).every((c) => itens(ln, c.k as CampoLista).length > 0);
+  const baixar = (aid: number, nome: string) => api.download(`/ssma/anexos/${aid}`, nome).catch((er) => toast.error(er.message));
   const pendentes = linhas.filter((l) => !completo(l)).length;
 
   return (
@@ -56,7 +64,7 @@ export default function SsmaPage() {
         eyebrow="Segurança · SSMA da programação"
         cor="var(--m-proc-administrar)"
         titulo={v ? `${v.titulo}: ${pendentes ? `${pendentes} linha(s) sem SSMA completo` : 'SSMA completo'}` : 'SSMA da programação'}
-        descricao="Para cada atividade programada, escolha nas listas: técnico de segurança responsável, RAC, PTS, ART e ATA (Autorização de Trabalho Ambiental). As listas vêm dos Cadastros de SSMA; use N/A quando não se aplica. O PTO é do Planejamento e aparece só para consulta. Vale também depois de emitida; vai para a coluna SSMA do Excel do cliente."
+        descricao="Para cada atividade programada, escolha nas listas: técnico de segurança responsável e um ou mais RAC, PTS, ART e ATA (Autorização de Trabalho Ambiental); o clipe baixa o arquivo do documento. As listas vêm dos Cadastros de SSMA; use N/A quando não se aplica. O PTO é do Planejamento e aparece só para consulta. Vale também depois de emitida; vai para a coluna SSMA do Excel do cliente."
         acoes={<div className="flex items-end gap-2">
           <Selecao rotulo="Programação" value={pid ?? ''} onChange={(e) => setPid(Number(e.target.value))} className="min-w-[300px]">
             {lista.data?.map((p) => <option key={p.id} value={p.id}>{p.titulo} · {p.status === 'emitida' ? 'emitida' : 'rascunho'}</option>)}
@@ -88,8 +96,8 @@ export default function SsmaPage() {
                       <tr><td colSpan={10} className="bg-m-surface-active px-3 py-1.5 text-xs font-semibold text-m-accent">
                         CWA {a.cwa} · {a.descricao}
                         {editaSsma && a.linhas.length > 1 && <button type="button" className="ml-3 underline" onClick={() => {
-                          const t = val(a.linhas[0], 'tecnico');
-                          if (t) a.linhas.slice(1).forEach((ln) => set(ln, 'tecnico', t));
+                          const t = tec(a.linhas[0]);
+                          if (t) a.linhas.slice(1).forEach((ln) => setTec(ln, t));
                         }}>repetir o técnico da 1ª linha na área</button>}
                       </td></tr>
                       {a.linhas.map((ln) => (
@@ -97,25 +105,38 @@ export default function SsmaPage() {
                           <td className="min-w-[240px] px-2 py-2"><b className="text-m-text-primary">{ln.codigo_simova}</b> {ln.descricao}
                             <div className="text-[11px] text-m-text-muted">{ln.id_crono ?? ''}{ln.total_previsto ? ` · prev. ${ln.total_previsto} ${ln.unidade ?? ''}` : ''}</div></td>
                           <td className="px-2 py-2">{ln.encarregado ?? ln.equipe ?? '—'}</td>
-                          {CAMPOS.map((c) => {
-                            const atual = val(ln, c.k);
-                            const ops = opcoes(c.tipo, atual);
-                            return (
-                              <td key={c.k} className="px-1 py-1.5">
-                                <select aria-label={`${c.rotulo} · ${ln.codigo_simova}`} disabled={!editaSsma} value={atual} onChange={(e) => set(ln, c.k, e.target.value)}
-                                  className={`h-8 ${c.largura} rounded-[8px] border bg-m-surface-field px-1.5 text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${ed[ln.id]?.[c.k] !== undefined ? 'border-m-accent bg-m-accent-subtle' : atual ? 'border-m-stroke' : 'border-m-warning'}`}>
+                          <td className="px-1 py-1.5">
+                            {(() => {
+                              const atual = tec(ln);
+                              const ops = opcoes('TECNICO', [atual]);
+                              return (
+                                <select aria-label={`Técnico de segurança responsável · ${ln.codigo_simova}`} disabled={!editaSsma} value={atual} onChange={(e) => setTec(ln, e.target.value)}
+                                  className={`h-8 w-[200px] rounded-[8px] border bg-m-surface-field px-1.5 text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${ed[ln.id]?.tecnico !== undefined ? 'border-m-accent bg-m-accent-subtle' : atual ? 'border-m-stroke' : 'border-m-warning'}`}>
                                   <option value="">—</option>
                                   <option value="N/A">N/A</option>
                                   {ops.map((o) => <option key={o.id} value={o.codigo}>{rotuloOp(o)}</option>)}
                                   {atual && atual !== 'N/A' && !ops.some((o) => o.codigo === atual) && <option value={atual}>{atual} (fora do cadastro)</option>}
                                 </select>
+                              );
+                            })()}
+                          </td>
+                          {CAMPOS.slice(1).map((c) => {
+                            const k2 = c.k as CampoLista;
+                            const atual = itens(ln, k2);
+                            const ops = opcoes(c.tipo, atual);
+                            const fora = atual.filter((x) => x !== 'N/A' && !ops.some((o) => o.codigo === x));
+                            return (
+                              <td key={c.k} className={`px-1 py-1.5 ${ed[ln.id]?.[k2] !== undefined ? 'bg-m-accent-subtle/50' : ''}`}>
+                                <MultiSelecao rotulo={`${c.rotulo.split(' (')[0]} · ${ln.codigo_simova}`} largura={c.largura} disabled={!editaSsma} valor={atual}
+                                  onChange={(x) => setItens(ln, k2, x)} onBaixar={baixar}
+                                  opcoes={[...ops.map((o) => ({ valor: o.codigo, rotulo: rotuloOp(o), anexos: o.anexos })), ...fora.map((x) => ({ valor: x, rotulo: `${x} (fora do cadastro)` }))]} />
                               </td>
                             );
                           })}
-                          <td className="px-1 py-2 text-[12px] text-m-text-secondary">{ln.ssma?.pto ?? '—'}</td>
+                          <td className="px-1 py-2 text-[12px] text-m-text-secondary">{comoLista(ln.ssma?.pto).join(', ') || '—'}</td>
                           <td className="whitespace-nowrap px-2 py-2">
                             {completo(ln) ? <Pilula tom="sucesso">ok</Pilula> : editaSsma
-                              ? <button type="button" className="text-xs font-semibold text-m-accent underline" onClick={() => CAMPOS.slice(1).forEach((c) => !val(ln, c.k) && set(ln, c.k, 'N/A'))}>N/A no vazio</button>
+                              ? <button type="button" className="text-xs font-semibold text-m-accent underline" onClick={() => { if (!tec(ln)) setTec(ln, 'N/A'); CAMPOS.slice(1).forEach((c) => !itens(ln, c.k as CampoLista).length && setItens(ln, c.k as CampoLista, ['N/A'])); }}>N/A no vazio</button>
                               : <Pilula tom="atencao">pendente</Pilula>}
                           </td>
                         </tr>
