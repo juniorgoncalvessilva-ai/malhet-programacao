@@ -38,6 +38,9 @@ def efetivo(semana: int) -> bytes:
         linhas.pop(6)  # previsto saiu da planilha
     for ln in linhas:
         ws.append(ln)
+    # quadro de totais no fim da aba: FUNÇÃO é a contagem — não é gente
+    ws.append(_l("", "", "", "", "DEMITIDOS", 155))
+    ws.append(_l("", "", "", "", "MOD", 174.0))
     t = wb.create_sheet("Locmaster")
     t.append(CAB_TERC)
     t.append([995758794, "SIM", "SIM", 14, "MOTORISTA TERCEIRO", "MOTORISTA DE CAMINHÃO", 45769, None, 34719, "1"])

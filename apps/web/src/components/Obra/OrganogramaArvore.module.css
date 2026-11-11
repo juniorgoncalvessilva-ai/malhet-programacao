@@ -1,7 +1,22 @@
 /* Organograma em árvore horizontal — trazido do Malhet (components/shared/organograma-arvore), nos tokens m-*. */
-.moldura {
-  overflow-x: auto;
-  padding-bottom: 1rem;
+.janela {
+  overflow: auto;
+  border: 1px solid var(--m-stroke-subtle);
+  border-radius: 0.75rem;
+  background: var(--m-surface-base);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.janela:active {
+  cursor: grabbing;
+}
+
+.conteudo {
+  display: inline-block;
+  padding: 1rem;
+  transform-origin: top left;
 }
 
 .arvore,
@@ -18,7 +33,7 @@
   flex-direction: column;
   align-items: center;
   position: relative;
-  padding: 0.75rem 0.375rem 0;
+  padding: 0.75rem 0.25rem 0;
 }
 
 .arvore > .no {
@@ -72,17 +87,47 @@
 
 .haste {
   width: 1px;
-  height: 0.75rem;
+  height: 1.1rem;
   background: var(--m-stroke);
 }
 
 .card {
-  width: 11rem;
+  position: relative;
+  width: 9.5rem;
   border: 1px solid var(--m-stroke);
-  border-radius: 0.75rem;
-  background: var(--m-surface);
-  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  background: var(--m-surface-raised);
+  padding: 0.375rem 0.5rem 0.5rem;
   text-align: center;
+  cursor: default;
+}
+
+.card[data-tipo='funcao'] {
+  width: 8rem;
+}
+
+.alternar {
+  position: absolute;
+  left: 50%;
+  bottom: -0.6rem;
+  transform: translateX(-50%);
+  min-width: 1.5rem;
+  height: 1.2rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--m-stroke);
+  border-radius: 999px;
+  background: var(--m-surface-raised);
+  color: var(--m-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.alternar:hover {
+  border-color: var(--m-accent);
+  color: var(--m-accent);
 }
 
 .card[data-tipo='setor'] {
@@ -115,4 +160,24 @@
   max-height: 10rem;
   overflow-y: auto;
   text-align: left;
+}
+
+/* folhas (funções) empilhadas sob o pai, ligadas por uma haste vertical */
+.no > ul.coluna {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.coluna > li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.coluna > li + li::before {
+  content: "";
+  width: 1px;
+  height: 0.4rem;
+  background: var(--m-stroke);
 }

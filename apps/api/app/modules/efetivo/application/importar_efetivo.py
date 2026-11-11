@@ -100,13 +100,23 @@ def importar_efetivo(s: Session, obra_id: int, arquivo: BinaryIO, *, nome_arquiv
             _aplicar(m, c)
             atualizados += 1
         vistos.add(m.id)
+    # limpa linhas do quadro de totais que versões antigas da leitura gravaram como pessoa
+    from app.modules.efetivo.domain.efetivo import e_quadro_de_totais
+
+    removidos = 0
+    for k, m in list(existentes.items()):
+        if m.id not in vistos and m.origem == "efetivo" and (e_quadro_de_totais(m.funcao, m.matricula) or
+                                                            not (m.matricula or m.funcao or m.cracha)):
+            s.delete(m)
+            del existentes[k]
+            removidos += 1
     fora = 0
     for m in existentes.values():
         if m.id not in vistos and m.origem == "efetivo" and m.no_ultimo_arquivo:
             m.no_ultimo_arquivo = False
             mov(m, "FORA_DO_ARQUIVO", None, nome_arquivo[:150])
             fora += 1
-    imp.resumo = {"lidos": len(lidos), "novos": novos, "atualizados": atualizados, "fora_do_arquivo": fora,
+    imp.resumo = {"lidos": len(lidos), "novos": novos, "atualizados": atualizados, "fora_do_arquivo": fora, "linhas_de_total_removidas": removidos,
                   "sem_matricula": sum(1 for c in lidos if not c.matricula), "mudancas_situacao": mudancas}
     s.flush()
     return {"importacao_id": imp.id, **imp.resumo}

@@ -49,6 +49,12 @@ def chave_texto(t: str | None) -> str:
     return " ".join(s.upper().split())
 
 
+def e_quadro_de_totais(funcao, matricula) -> bool:
+    """Linha do quadro-resumo da planilha: FUNÇÃO é um número (contagem) e não há matrícula."""
+    f = str(funcao if funcao is not None else "").strip().replace(",", ".")
+    return bool(f) and f.replace(".", "", 1).isdigit() and not normalizar_matricula(matricula)
+
+
 def normalizar_matricula(v) -> str | None:
     """'115.011' → '115011'; 1441.0 → '1441'; texto (DESISTIU 09/11, não atende) → None."""
     if v is None:
@@ -169,6 +175,8 @@ def interpretar_aba(nome_aba: str, linhas: list[list], principal: bool) -> list[
         nome = " ".join(str(cel("nome") or "").split())
         if not nome or nome.replace(".", "").isdigit():
             continue
+        if e_quadro_de_totais(cel("funcao"), cel("matricula")):
+            continue  # quadro de totais no fim da aba (DEMITIDOS 155, MOD 174, MOI 152…), não é pessoa
         mat_bruta = cel("matricula")
         mat = normalizar_matricula(mat_bruta)
         situacao, prevista = situacao_da_linha(cel("status"), cel("tipo_mo"), cel("demissao"), mat_bruta,

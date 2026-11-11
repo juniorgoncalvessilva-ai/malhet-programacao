@@ -21,7 +21,7 @@ export default function OrganogramaPage() {
       <Cabecalho
         eyebrow="Efetivo · organograma"
         titulo="Organograma da obra"
-        descricao="Montado a partir das equipes e do efetivo (modelo do Malhet): setor, supervisor/responsável, encarregado (equipe) e função; clique numa função para ver as pessoas. O setor é a frente da equipe ou o DP do encarregado. Mobilizados sem equipe e quem está em mobilização aparecem em ramos próprios."
+        descricao="Montado a partir das equipes e do efetivo (modelo do Malhet): setor, supervisor/responsável, encarregado (equipe) e função. Abra ou recolha os ramos (+/−), escolha até que nível mostrar e use o zoom; clique numa função para ver as pessoas. O setor é a frente da equipe ou o DP do encarregado. Mobilizados sem equipe e quem está em mobilização aparecem em ramos próprios."
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Indicador rotulo="Efetivo no organograma" valor={org.data?.total ?? '—'} />
@@ -33,7 +33,7 @@ export default function OrganogramaPage() {
         <Campo rotulo="Buscar no organograma" placeholder="Setor, supervisor, equipe, função, nome ou matrícula" value={busca} onChange={(e) => setBusca(e.target.value)} className="max-w-md" />
         {org.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
         {!org.isLoading && !raiz && <p className="text-sm text-m-text-muted">Ninguém no organograma para essa busca.</p>}
-        {raiz && <OrganogramaArvore raiz={raiz} ariaLabel="Organograma da obra" />}
+        {raiz && <OrganogramaArvore raiz={raiz} ariaLabel="Organograma da obra" expandirTudo={!!q} />}
       </Painel>
     </>
   );
