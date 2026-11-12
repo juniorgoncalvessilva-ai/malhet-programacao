@@ -70,7 +70,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (IWP define área, tipo, item, qtd e o texto complementar = CWP). Programação concluída só muda por revisão
   (`exigir_aberta`, `programacao_conclusao`). Specs 023–024. Programação mostra Local → Área → CWP → linhas
   (`linha.cwp`, `porCwp`) e o nome "Reduzido + complemento" (padrão) ou "Descritivo da PQ" (`BotaoNomes`,
-  `descricao_reduzida`/`descricao_completa`, Excel `?nomes=`). Spec 046.
+  `descricao_reduzida`/`descricao_completa`, Excel `?nomes=`). Spec 046. Aba "Resumo por frente e responsável"
+  (`ResumoProgramacao`): somas por unidade de medida, frente → área e responsável → encarregado, com memória. Spec 053.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

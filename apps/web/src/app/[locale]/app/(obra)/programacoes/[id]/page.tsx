@@ -3,6 +3,8 @@
 import { BotaoNomes, nomeLinha, porCwp, useModoNomes } from '@/lib/programacao/nomes';
 import { encarregadosDe, filtrarEncarregado } from '@/lib/programacao/encarregado';
 import { FiltroEncarregado } from '@/components/Obra/FiltroEncarregado';
+import { Abas } from '@/components/Obra/Abas';
+import { ResumoProgramacao } from '@/components/Obra/ResumoProgramacao';
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -62,6 +64,7 @@ export default function MontarPage() {
   const ptos = (cadastros.data ?? []).filter((c) => c.tipo === 'PTO' && (c.ativo || form.pto.includes(c.codigo)));
   const [modo, setModo] = useState<'previsto' | 'realizado'>('previsto');
   const [nomes] = useModoNomes();
+  const [abaProg, setAbaProg] = useState<'montar' | 'resumo'>('montar');
   const [enc, setEnc] = useState('');
   const [form, setForm] = useState<FormLinha>(VAZIO);
   const [editando, setEditando] = useState<number | null>(null);
@@ -229,6 +232,10 @@ export default function MontarPage() {
               </>)}
         </>}
       />
+      <Abas rotulo="Seções da programação" ativa={abaProg} onTrocar={setAbaProg}
+        abas={[{ chave: 'montar', titulo: 'Programação' }, { chave: 'resumo', titulo: 'Resumo por frente e responsável' }]} />
+      {abaProg === 'resumo' && <ResumoProgramacao v={v} nomes={nomes} />}
+      <div className={abaProg === 'resumo' ? 'hidden' : 'contents'}>
 
       {motivo !== null && (
         <Painel titulo="Abrir revisão da programação concluída">
@@ -490,6 +497,7 @@ export default function MontarPage() {
         )}
         <Erro erro={salvarTudo.error ?? emitir.error ?? excluir.error} />
       </Painel>
+      </div>
     </>
   );
 }
