@@ -1,13 +1,14 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Calculado, nbr, type MemoriaCalculo } from '@/components/Obra/Calculado';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Botao, Cabecalho, Campo, Erro, Painel, Pilula, Selecao, fmt } from '@/components/Obra/ui';
-import { useCatalogo, useFrentes2, useWbs } from '@/hooks/programacao/planejamento';
+import { useCatalogo, useFrentes2, useProgramacoes, useWbs } from '@/hooks/programacao/planejamento';
+import { useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { NoWbs, SincronizacaoWbs, TipoNoWbs } from '@/lib/api/types';
@@ -58,6 +59,36 @@ export default function WbsPage() {
   const naWbs = new Set(arvore.map((n) => n.area_id));
   const grupos = cat.data ?? [];
   const atualizar = () => { qc.invalidateQueries({ queryKey: ['wbs'] }); qc.invalidateQueries({ queryKey: ['programacao'] }); };
+  // enviar para a programação: marca IWPs ou nós acima (vão todos os IWPs abaixo)
+  const programar = pode('encarregado');
+  const programacoes = useProgramacoes();
+  const equipes = useEquipes();
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [destino, setDestino] = useState('');
+  const [envio, setEnvio] = useState<{ equipe_id: string; natureza: string; qtd: Record<number, string> } | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const porId = useMemo(() => { const m = new Map<number, NoWbs>(); const ir = (n: NoWbs) => { m.set(n.id, n); n.filhos.forEach(ir); }; arvore.forEach(ir); return m; }, [arvore]);
+  const iwpsSel = useMemo(() => {
+    const out = new Map<number, NoWbs>();
+    const ir = (n: NoWbs) => { if (n.tipo === 'iwp') { if (n.ativo) out.set(n.id, n); } else n.filhos.forEach(ir); };
+    sel.forEach((id) => { const n = porId.get(id); if (n) ir(n); });
+    return [...out.values()].sort((a, b) => a.codigo.localeCompare(b.codigo, 'pt-BR', { numeric: true }));
+  }, [sel, porId]);
+  const prog = programacoes.data?.find((p) => String(p.id) === destino);
+  const marcar = (id: number) => setSel((x) => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const enviar = async () => {
+    if (!envio || !prog) return;
+    setEnviando(true);
+    try {
+      const qtd = Object.fromEntries(Object.entries(envio.qtd).filter(([, v]) => v.trim() !== '').map(([k2, v]) => [k2, Number(v.replace(',', '.'))]));
+      const r = await api.post<{ criadas: number; ja_estavam: number; nos_sem_iwp: number[]; avisos: string[] }>(`/programacoes/${prog.id}/linhas/da-wbs`, {
+        nos: [...sel], equipe_id: envio.equipe_id ? Number(envio.equipe_id) : null, natureza: envio.natureza, qtd_periodo: qtd,
+      });
+      toast.success(`${r.criadas} linha(s) enviada(s) para ${prog.titulo}${r.ja_estavam ? ` · ${r.ja_estavam} já estavam lá` : ''}`);
+      r.avisos.slice(0, 3).forEach((a) => toast.warning(a));
+      setEnvio(null); setSel(new Set()); atualizar();
+    } catch (e) { toast.error((e as Error).message); } finally { setEnviando(false); }
+  };
   const conta = useMemo(() => {
     const c = { cwp: 0, grupo: 0, iwp: 0 } as Record<string, number>;
     const ir = (n: NoWbs) => { if (n.tipo !== 'area') c[n.tipo]++; n.filhos.forEach(ir); };
@@ -104,6 +135,7 @@ export default function WbsPage() {
       const eu = [n.codigo, n.titulo, n.detalhe, n.id_crono ?? '', n.atividade_p6 ?? '', n.item_pq ?? ''].join(' ').toLowerCase().includes(termo);
       const algum = n.filhos.map((f) => ir(f, [...pais, n.id])).some(Boolean);
       if (eu || algum) { vis.add(n.id); pais.forEach((p) => vis.add(p)); }
+      if (eu) { const desce = (x: NoWbs) => { vis.add(x.id); x.filhos.forEach(desce); }; desce(n); }  // o que casa mostra tudo abaixo
       return eu || algum;
     };
     arvore.forEach((n) => ir(n, []));
@@ -158,6 +190,7 @@ export default function WbsPage() {
       <Fragment key={n.id}>
         <tr className={`text-[12.5px] ${ESTILO[n.tipo]} ${n.ativo ? '' : 'opacity-50'}`}>
           <td className={`${td} whitespace-nowrap`} style={{ paddingLeft: 8 + nivel * 16 }}>
+            {programar && <input type="checkbox" className="mr-1.5 align-middle" aria-label={`Selecionar ${n.codigo}`} checked={sel.has(n.id)} onChange={() => marcar(n.id)} />}
             {n.filhos.length > 0
               ? <button type="button" className="mr-1 inline-flex align-middle" aria-label={`${aberto ? 'Recolher' : 'Abrir'} ${n.codigo}`} onClick={() => alternar(n.id)}>{aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
               : <span className="mr-1 inline-block w-[14px]" />}
@@ -213,8 +246,48 @@ export default function WbsPage() {
         </Painel>
       )}
       {form && form.tipo === 'area' && form.modo === 'novo' && <Painel titulo="Nova área na WBS">{formInline(form)}</Painel>}
-      <Painel titulo="Estrutura" subtitulo="Clique em + para descer um nível. Nó usado em programação não pode ser excluído (inative). P6 = veio da WBS do cronograma."
+      {envio && prog && (
+        <Painel titulo={`Enviar ${iwpsSel.length} IWP(s) para ${prog.titulo}`} subtitulo="Cada IWP vira uma linha: área, item da PQ, quantidade e o CWP como texto complementar do Simova vêm da WBS. IWP que já está na programação não duplica.">
+          <div className="flex flex-wrap items-end gap-3">
+            <Selecao rotulo="Equipe" value={envio.equipe_id} onChange={(e) => setEnvio({ ...envio, equipe_id: e.target.value })} className="min-w-[320px]">
+              <option value="">— escolher depois —</option>
+              {equipes.data?.filter((e) => e.ativo).map((e) => <option key={e.id} value={e.id}>{e.codigo_simova ? `${e.codigo_simova} · ` : ''}{e.nome} · {e.encarregado_nome ?? ''}</option>)}
+            </Selecao>
+            <Selecao rotulo="Natureza" value={envio.natureza} onChange={(e) => setEnvio({ ...envio, natureza: e.target.value })}>
+              <option value="P">P · Programada</option><option value="O">O · Oportunidade</option><option value="E">E · Emergencial</option>
+            </Selecao>
+          </div>
+          <table className="w-full text-[13px]">
+            <thead><tr className="text-left text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted"><th className="px-2 py-1">IWP</th><th className="px-2 py-1">Caminho</th><th className="px-2 py-1 text-right">Quantidade</th><th className="px-2 py-1 text-right">Prev. no período</th></tr></thead>
+            <tbody>
+              {iwpsSel.map((n) => (
+                <tr key={n.id} className="border-t border-m-stroke-subtle">
+                  <td className="whitespace-nowrap px-2 py-1.5 font-semibold text-m-text-primary">{n.codigo}</td>
+                  <td className="px-2 py-1.5 text-m-text-secondary">{n.caminho.split(' › ').slice(1).join(' › ')}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-right">{n.quantidade_efetiva != null ? `${fmt(n.quantidade_efetiva)} ${n.unid ?? ''}` : '—'}</td>
+                  <td className="px-2 py-1.5 text-right"><input aria-label={`Previsto no período de ${n.codigo}`} type="number" min="0" step="any" value={envio.qtd[n.id] ?? ''} onChange={(e) => setEnvio({ ...envio, qtd: { ...envio.qtd, [n.id]: e.target.value } })}
+                    className="h-8 w-[100px] rounded-[8px] border border-m-stroke bg-m-surface-field px-2 text-right" /></td>
+                </tr>
+              ))}
+              {!iwpsSel.length && <tr><td colSpan={4} className="py-3 text-center text-m-warning">Nenhum IWP ativo abaixo do que foi marcado: inclua o grupo e o item da PQ no CWP.</td></tr>}
+            </tbody>
+          </table>
+          <div className="flex flex-wrap items-center gap-2">
+            <Botao disabled={!iwpsSel.length || enviando} onClick={enviar}><Send size={16} /> {enviando ? 'Enviando…' : 'Confirmar envio'}</Botao>
+            <Botao variante="secundario" onClick={() => setEnvio(null)}>Cancelar</Botao>
+            <Link href={`/app/programacoes/${prog.id}`} className="text-sm font-semibold text-m-accent">Abrir a programação</Link>
+          </div>
+        </Painel>
+      )}
+      <Painel titulo="Estrutura" subtitulo="Clique em + para descer um nível. Marque IWPs (ou um CWP/grupo/área inteiro) e envie para a programação. Nó usado em programação não pode ser excluído (inative). P6 = veio da WBS do cronograma."
         acoes={<div className="flex flex-wrap items-end gap-2">
+          {programar && <>
+            <Selecao rotulo="Enviar para" value={destino} onChange={(e) => setDestino(e.target.value)} className="min-w-[260px]">
+              <option value="">Escolha a programação…</option>
+              {programacoes.data?.filter((p) => p.status === 'rascunho').map((p) => <option key={p.id} value={p.id}>{p.titulo}</option>)}
+            </Selecao>
+            <Botao disabled={!sel.size || !prog} title={!prog ? 'Escolha a programação (em rascunho)' : undefined} onClick={() => setEnvio({ equipe_id: '', natureza: 'P', qtd: {} })}><Send size={16} /> Enviar{iwpsSel.length ? ` ${iwpsSel.length} IWP` : ''}</Botao>
+          </>}
           <Campo rotulo="Buscar" placeholder="código, CWP, item da PQ, atividade do P6" value={busca} onChange={(e) => setBusca(e.target.value)} className="w-[300px]" />
           <Botao variante="secundario" onClick={() => setAbertos(new Set(todosIds))}>Abrir tudo</Botao>
           <Botao variante="secundario" onClick={() => setAbertos(new Set())}>Recolher</Botao>

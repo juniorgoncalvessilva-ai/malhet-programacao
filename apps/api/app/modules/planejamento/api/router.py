@@ -209,6 +209,36 @@ def nova_linha(pid: int, d: LinhaIn, s: Session = Depends(get_session), c: Conte
     return {"id": ln.id, "aviso": aviso}
 
 
+class DaWbsIn(BaseModel):
+    nos: list[int]  # IWPs, ou área/CWP/grupo (vão todos os IWPs abaixo)
+    equipe_id: int | None = None
+    natureza: str = "P"
+    qtd_periodo: dict[int, float] = {}  # IWP → previsto no período
+
+
+@router.post("/programacoes/{pid}/linhas/da-wbs")
+def linhas_da_wbs(pid: int, d: DaWbsIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Envia itens da WBS de execução para a programação: cada IWP vira uma linha (área, item da PQ, quantidade,
+    texto complementar = CWP e atividade do cronograma vêm do IWP). IWP que já está na programação não duplica."""
+    from app.modules.wbs.infra.gateway import iwps_abaixo
+
+    p = sv.obter(s, c.obra_id, pid)
+    sv.exigir_rascunho(p)
+    iwps, vazios = iwps_abaixo(s, c.obra_id, d.nos)
+    ja = {ln.wbs_no_id for ln in p.linhas if ln.wbs_no_id}
+    criadas, avisos = [], []
+    for i in iwps:
+        if i in ja:
+            continue
+        r = nova_linha(pid, LinhaIn(wbs_no_id=i, equipe_id=d.equipe_id, natureza=d.natureza,
+                                    qtd_periodo=d.qtd_periodo.get(i)), s, c)
+        criadas.append(r["id"])
+        if r.get("aviso"):
+            avisos.append(r["aviso"])
+    return {"criadas": len(criadas), "ja_estavam": len([i for i in iwps if i in ja]), "nos_sem_iwp": vazios,
+            "avisos": avisos[:20]}
+
+
 @router.put("/programacoes/{pid}/linhas/{lid}")
 def editar_linha(pid: int, lid: int, d: LinhaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
     p = sv.obter(s, c.obra_id, pid)

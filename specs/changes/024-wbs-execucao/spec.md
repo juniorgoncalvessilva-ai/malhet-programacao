@@ -49,3 +49,10 @@ grupo e atividade; a linha mostra o selo "WBS 004.05-01-1-01".
 - Linha da programação a partir de IWP do P6 já recebe o `id_crono` da atividade. Migração `0018_wbs_p6`.
 - Resultado informa: novos/atualizados/fora do cronograma, atividades fora do ramo de construção, sem item da PQ,
   com item sem grupo no Catálogo (vincular e atualizar de novo) e CWA sem área nas Frentes.
+
+## Etapa 1c — Enviar da WBS para a programação
+- WBS de execução: caixa de seleção em cada nó; marcar área/CWP/grupo leva todos os IWPs ativos abaixo.
+  "Enviar para" (programações em rascunho) → painel com equipe, natureza e previsto no período por IWP.
+- `POST /programacoes/{id}/linhas/da-wbs {nos, equipe_id, natureza, qtd_periodo{iwp: q}}` (programar, só rascunho):
+  cada IWP vira linha (mesma regra de `wbs_no_id`); IWP que já está na programação não duplica; informa
+  `criadas`, `ja_estavam` e `nos_sem_iwp`.

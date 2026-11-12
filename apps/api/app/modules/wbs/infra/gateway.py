@@ -69,3 +69,32 @@ def iwp_para_linha(s: Session, obra_id: int, no_id: int) -> IwpParaLinha:
     area = todos[cwp.pai_id]
     return IwpParaLinha(n.id, codigos(s, obra_id, todos)[n.id].codigo, area.area_id, n.tipo_atividade_id, n.item_pq,
                         dom.texto_cwp(cwp.elemento, cwp.complemento), n.quantidade, n.id_crono)
+
+
+def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], list[int]]:
+    """IWPs ativos dos nós escolhidos (o próprio IWP ou todos abaixo de área/CWP/grupo), na ordem do código.
+    Devolve (iwps, nós escolhidos sem nenhum IWP abaixo)."""
+    todos = nos(s, obra_id)
+    filhos: dict[int, list[WbsNoModel]] = {}
+    for n in todos.values():
+        if n.pai_id:
+            filhos.setdefault(n.pai_id, []).append(n)
+    cods = codigos(s, obra_id, todos)
+    achados: dict[int, None] = {}
+    vazios = []
+    for i in ids:
+        n = todos.get(i)
+        if n is None:
+            raise NotFoundError("Nó da WBS", i)
+        antes = len(achados)
+        pilha = [n]
+        while pilha:
+            x = pilha.pop()
+            if x.tipo == "iwp":
+                if x.ativo:
+                    achados[x.id] = None
+            else:
+                pilha.extend(filhos.get(x.id, []))
+        if len(achados) == antes:
+            vazios.append(i)
+    return sorted(achados, key=lambda k: [int(p) if p.isdigit() else p for p in cods[k].codigo.replace(".", "-").split("-")]), vazios
