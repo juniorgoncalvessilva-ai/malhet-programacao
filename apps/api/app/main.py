@@ -56,14 +56,26 @@ async def lifespan(app: FastAPI):
     yield
 
 
+from app.core.mudancas import MudancasMiddleware, marca as marca_mudancas  # noqa: E402
+from app.core.auth import UsuarioAtual, usuario_atual  # noqa: E402
+from fastapi import Depends  # noqa: E402
+
 app = FastAPI(title="Malhet · Programação × Simova", version="0.4.0", lifespan=lifespan)
 app.state.auth = build_auth()
+app.add_middleware(MudancasMiddleware)
 app.add_middleware(
     CORSMiddleware, allow_origins=get_settings().cors_list, allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept-Language", "X-CSRF-Token"],
     expose_headers=["Content-Disposition", "X-Itens"],
 )
+
+
+@app.get("/api/mudancas", tags=["tempo real"])
+async def mudancas(request: Request, _: UsuarioAtual = Depends(usuario_atual)):
+    """Marca das mudanças da obra (X-Obra-Id): mudou → a tela recarrega os dados abertos."""
+    bruto = request.headers.get("x-obra-id")
+    return {"marca": marca_mudancas(int(bruto) if bruto and bruto.isdigit() else None)}
 
 
 @app.exception_handler(DomainError)

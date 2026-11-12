@@ -1,6 +1,7 @@
 'use client';
 
 import { TituloAba } from '@/components/Obra/LogosObra';
+import { SincronizarDados } from '@/lib/tempo-real';
 
 import { AlertTriangle, ClipboardCheck, Eye, Fish, House, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -27,6 +28,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
         <main className="flex flex-1 flex-col gap-3.5 px-4 pb-28 pt-[max(env(safe-area-inset-top),16px)]">
           <OfertaInstalar />
           <TituloAba />
+          <SincronizarDados />
           {obra ? children : <p className="pt-10 text-center text-sm text-m-text-muted">{carregando ? 'Carregando obra…' : 'Sem acesso a nenhuma obra.'}</p>}
         </main>
         <nav aria-label="Navegação do campo" className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-6 border-t border-m-stroke-subtle bg-m-surface-raised pb-[max(env(safe-area-inset-bottom),10px)] pt-2">

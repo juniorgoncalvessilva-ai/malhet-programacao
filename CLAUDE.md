@@ -112,6 +112,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Sessão: `useSessao()` (`src/lib/auth/AuthProvider.tsx`). Código antigo do kit usa o shim `src/lib/auth/compat.ts`.
 - API só via `useApi()` + TanStack Query (`queries.ts`), sempre por `/backend/api` (rewrite do Next). Tipos em
   `src/lib/api/types.ts`.
+- Tempo real: `useApi` recarrega as consultas abertas depois de cada post/put/del; `SincronizarDados`
+  (`src/lib/tempo-real`) confere `GET /api/mudancas` (middleware `app/core/mudancas.py`) a cada 3 s e recarrega quando
+  outro usuário alterou a obra; versão do build (`/api/versao`) recarrega a página depois de deploy. POST só de
+  consulta termina em `/previa` (não conta como mudança). Spec 045.
 
 ## Comandos
 - API: `cd apps/api && .venv/bin/pytest -q` · `.venv/bin/alembic revision --autogenerate -m "..."` · `.venv/bin/alembic upgrade head`
