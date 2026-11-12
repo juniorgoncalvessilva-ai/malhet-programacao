@@ -30,7 +30,7 @@ from app.modules.referencias.infra.models import (
     ItemPqModel,
     PqQuantidadeTagModel,
 )
-from app.modules.programacao.domain.gargalo import capacidade_da_equipe
+from app.modules.programacao.domain.gargalo import capacidade_da_equipe, capacidade_pelo_governa, capacidade_por_funcao
 from app.modules.referencias.domain.cpu_obra import nome_recurso
 from app.modules.referencias.infra.cpu_gateway import CpuGateway, ParametrosCpu
 from app.modules.referencias.application.importar_xer import status_pt
@@ -57,19 +57,22 @@ def _chave(nome: str) -> str:
 
 
 def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previsto: list, realizado: list,
-                  funcao_de: dict[str, str] | None = None) -> dict:
+                  funcao_de: dict[str, str] | None = None, base: str = "equipe") -> dict:
     """Produção da linha a partir da CPU da obra: HH/un, recurso que governa, índice e capacidade da equipe.
 
     HH do dia            = quantidade × HH/un (soma da mão de obra da composição, auxiliares incluídas)
     índice (un/dia)      = jornada ÷ h/un do recurso que governa  → por oficial
     oficiais do dia      = quantidade ÷ índice
     capacidade da equipe = jornada ÷ max(h/un da função ÷ quantas a equipe tem)   (gargalo)
+                         = menor(pessoas da função × jornada ÷ h/un)
+    pelo recurso que governa = pessoas que governam × jornada ÷ h/un   (base "governa": apoio vira aviso)
     """
     jornada = float(equipe.jornada_horas) if equipe and equipe.jornada_horas else JORNADA_REFERENCIA
     alertas: list[str] = []
     if par is None:
         return {"composicao": None, "hh_un": None, "recurso_governa": None, "indice_un_dia": None,
                 "jornada": jornada, "capacidade_un_dia": None, "gargalo": None, "apoio_externo": [],
+                "capacidade_equipe": None, "capacidade_governa": None, "base_capacidade": base, "producao_por_funcao": {},
                 "custo_unitario": None, "hh_previsto": [None] * len(previsto), "oficiais": [None] * len(previsto),
                 "acima_capacidade": [False] * len(previsto), "total_hh_previsto": 0.0, "total_hh_realizado": 0.0,
                 "alertas": ["sem item de PQ: sem HH nem índice"]}
@@ -79,17 +82,26 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
         alertas.append(f"composição {par.composicao} sem mão de obra nem equipamento (subempreitado?)")
     hh_un = par.hh_por_unidade
     indice = par.indice_un_dia(jornada)
-    cap = gargalo = None
+    cap = gargalo = cap_equipe = cap_gov = None
     apoio: list[str] = []
+    por_funcao: dict[str, float] = {}
     if equipe is not None and (equipe.composicao or any(m.funcao or (funcao_de or {}).get(m.cracha) for m in equipe.membros)) and par.recursos:
         tem = {}
         for rec, _t, q in composicao_efetiva(equipe, funcao_de):
             tem[_chave(rec)] = tem.get(_chave(rec), 0.0) + q
         comp = {r.recurso: tem.get(_chave(r.recurso), 0.0) for r in par.recursos}
         ce = capacidade_da_equipe(par.coefs, comp, jornada, par.recurso_governa)
-        cap, gargalo, apoio = round(ce.capacidade_un_dia, 4), ce.gargalo, list(ce.apoio_externo)
+        cap_equipe, gargalo, apoio = round(ce.capacidade_un_dia, 4), ce.gargalo, list(ce.apoio_externo)
+        cap_gov = round(capacidade_pelo_governa(par.coefs, comp, jornada, par.recurso_governa), 4)
+        por_funcao = {f: round(v, 4) for f, v in capacidade_por_funcao(par.coefs, comp, jornada).items()}
+        cap = cap_gov if base == "governa" else cap_equipe
         if ce.falta_governante:
             alertas.append(f"a equipe não tem {par.recurso_governa}: capacidade zero")
+        elif base == "governa":  # apoio que não acompanha o ritmo de quem governa: aviso, não limita
+            for f, v in sorted(por_funcao.items(), key=lambda kv: kv[1]):
+                if f != par.recurso_governa and v < cap_gov - 1e-9:
+                    alertas.append(f"com {comp[f]:g} {f} a equipe faz {v:.2f}/dia (abaixo dos {cap_gov:.2f} de quem governa)"
+                                   .replace(".", ","))
     hh_prev = [round(q * hh_un, 2) if q and hh_un else None for q in previsto]
     oficiais = [round(q / indice, 1) if q and indice else None for q in previsto]
     acima = [bool(q and cap is not None and q > cap + 1e-9) for q in previsto]
@@ -99,6 +111,8 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
             "hh_un": hh_un, "recurso_governa": par.recurso_governa, "coef_governa": par.coef_governa,
             "indice_un_dia": round(indice, 4) if indice else None, "jornada": jornada,
             "capacidade_un_dia": cap, "gargalo": gargalo, "apoio_externo": apoio,
+            "capacidade_equipe": cap_equipe, "capacidade_governa": cap_gov, "base_capacidade": base,
+            "producao_por_funcao": por_funcao,
             "custo_unitario": par.custo_unitario, "hh_previsto": hh_prev, "oficiais": oficiais,
             "acima_capacidade": acima,
             "total_hh_previsto": round(sum(x or 0 for x in hh_prev), 2),
@@ -200,7 +214,8 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "realizado_anterior": anterior.get(_chave_linha(ln)),
             "ssma": {k: getattr(ln, f"ssma_{k}") for k in ("tecnico", "rac", "pts", "art", "pto", "ata")},
             "total_previsto": round(sum(_num(x) for x in prev), 4), "total_realizado": round(sum(_num(x) for x in real), 4),
-            "calc": calculo_linha(cpu.get(ln.item_pq) if ln.item_pq else None, eq, prev, real, funcao_de),
+            "calc": calculo_linha(cpu.get(ln.item_pq) if ln.item_pq else None, eq, prev, real, funcao_de,
+                                  p.base_capacidade or "equipe"),
         })
         reg = por_area[a.id][-1]
         feito = (reg["realizado_anterior"] or 0) + reg["total_realizado"]
@@ -223,6 +238,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
     hh_dia = [round(sum(ln["calc"]["hh_previsto"][i] or 0 for ln in todas), 2) for i in range(len(datas))]
     return {"id": p.id, "tipo": p.tipo, "titulo": p.titulo, "inicio": p.inicio.isoformat(), "fim": p.fim.isoformat(),
             "status": p.status, "revisao": p.revisao, "hh_previsto_dia": hh_dia,
+            "base_capacidade": p.base_capacidade or "equipe",
             "conclusoes": [{"numero": c.numero, "concluida_por": c.concluida_por,
                             "concluida_em": c.concluida_em.isoformat() if c.concluida_em else None,
                             "revisada_por": c.revisada_por, "motivo_revisao": c.motivo_revisao,

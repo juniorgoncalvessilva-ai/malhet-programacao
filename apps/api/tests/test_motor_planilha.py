@@ -106,3 +106,18 @@ def test_recurso_que_governa_ignora_apoio():
     assert ind.recurso_que_governa(so_apoio).recurso == "Servente"
     so_equip = [ind.RecursoCpu("Escavadeira Hidráulica CAT 320", "EQU", 0.0222)]
     assert ind.recurso_que_governa(so_equip).recurso == "Escavadeira Hidráulica CAT 320"
+
+
+def test_capacidade_pela_equipe_e_pelo_recurso_que_governa():
+    """Equipe 6 pedreiros + 2 serventes + 1 marteleteiro; CPU 1,3 / 2,8 / 0,2 h/m³; 9 h.
+    Por função: pessoas × jornada ÷ h/un. Equipe completa = a menor (gargalo); pelo governa = só o Pedreiro."""
+    from app.modules.programacao.domain.gargalo import capacidade_da_equipe, capacidade_por_funcao, capacidade_pelo_governa
+
+    coefs = {"Pedreiro": 1.3, "Servente": 2.8, "Marteleteiro": 0.2, "Encarregado de pedreiro": 0.3583}
+    comp = {"Pedreiro": 6, "Servente": 2, "Marteleteiro": 1}
+    por = capacidade_por_funcao(coefs, comp, 9)
+    assert por["Servente"] == pytest.approx(2 * 9 / 2.8) and por["Pedreiro"] == pytest.approx(6 * 9 / 1.3)
+    assert "Encarregado de pedreiro" not in por  # a equipe não tem: apoio externo
+    assert capacidade_da_equipe(coefs, comp, 9, "Pedreiro").capacidade_un_dia == pytest.approx(min(por.values()))
+    assert capacidade_pelo_governa(coefs, comp, 9, "Pedreiro") == pytest.approx(6 * 9 / 1.3)
+    assert capacidade_pelo_governa(coefs, {"Servente": 2}, 9, "Pedreiro") == 0.0  # sem quem governa

@@ -130,6 +130,7 @@ export interface AtividadeArvore {
 export interface CalculoLinha {
   composicao: string | null; descricao_composicao?: string | null; hh_un: number | null; recurso_governa: string | null;
   coef_governa?: number | null; indice_un_dia: number | null; jornada: number; capacidade_un_dia: number | null;
+  capacidade_equipe?: number | null; capacidade_governa?: number | null; base_capacidade?: 'equipe' | 'governa';
   gargalo: string | null; apoio_externo: string[]; custo_unitario: number | null;
   hh_previsto: (number | null)[]; oficiais: (number | null)[]; acima_capacidade: boolean[];
   total_hh_previsto: number; total_hh_realizado: number; alertas: string[];
@@ -142,6 +143,7 @@ export interface CpuDoItem {
 }
 export interface ProgramacaoVisao {
   id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: StatusProgramacao; revisao: number;
+  base_capacidade?: 'equipe' | 'governa';
   conclusoes?: { numero: number; concluida_por: string; concluida_em: string | null; revisada_por: string | null; motivo_revisao: string | null; revisada_em: string | null }[];
   dias: { data: string; dia: string }[]; linhas: number;
   hh_previsto_dia?: number[]; total_hh_previsto?: number; total_hh_realizado?: number;

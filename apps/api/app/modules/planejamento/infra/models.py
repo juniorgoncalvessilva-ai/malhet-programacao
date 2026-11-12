@@ -21,6 +21,8 @@ class ProgramacaoModel(Base):
     fim: Mapped[date] = mapped_column(Date)
     titulo: Mapped[str] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(12), default="rascunho")  # rascunho | emitida | concluida
+    # capacidade da linha: "equipe" = equipe completa (gargalo) | "governa" = só o recurso que governa (apoio vira aviso)
+    base_capacidade: Mapped[str] = mapped_column(String(8), default="equipe", server_default="equipe")
     revisao: Mapped[int] = mapped_column(Integer, default=0)  # nº de emissões feitas
     criado_por: Mapped[str] = mapped_column(String(80))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -128,9 +128,22 @@ def test_fluxo_cpu_calcula_hh_indice_capacidade_e_ft(client):
     assert "linha 2: Serviço da Planilha 1.08.03.01.02" in locais and "linha 3: Composição: ESP.1" in locais
     assert m["indice"]["passos"][0]["conta"] == "9 h ÷ 1,3 HH/m³" and m["indice"]["valor"] == "6,92 m³/dia"
     assert m["indice"]["fontes"][0]["origem"] == "Equipe EQ" and "linha 13 (ESP.9)" in m["indice"]["fontes"][1]["local"]
-    gar = [x for x in m["capacidade"]["passos"] if x["destaque"]]
-    assert gar[0]["descricao"].startswith("Servente") and gar[0]["conta"] == "2,8 ÷ 3"
-    assert gar[-1]["conta"] == "9 h ÷ 0,9333 h/m³" and m["capacidade"]["valor"] == "9,64 m³/dia"
+    # produção por função = pessoas × jornada ÷ h/un; equipe completa = a menor (Servente 3 × 9 ÷ 2,8 = 9,64)
+    cap = {x["descricao"].split(":")[0]: x for x in m["capacidade"]["passos"]}
+    assert cap["Servente"]["conta"] == "3 × 9 h ÷ 2,8" and cap["Servente"]["destaque"]
+    assert cap["Pedreiro (governa)"]["conta"] == "2 × 9 h ÷ 1,3" and cap["Pedreiro (governa)"]["resultado"] == "13,85 m³/dia"
+    assert m["capacidade"]["valor"] == "9,64 m³/dia"
+    assert calc["capacidade_equipe"] == pytest.approx(9 / (2.8 / 3), rel=1e-3)
+    assert calc["capacidade_governa"] == pytest.approx(2 * 9 / 1.3, rel=1e-3) and calc["base_capacidade"] == "equipe"
+    # base "recurso que governa": capacidade = 13,85; Servente vira aviso; acima da capacidade muda junto
+    assert client.put(f"/api/programacoes/{p['id']}/base-capacidade", json={"base": "governa"}).json() == {"base": "governa"}
+    assert client.put(f"/api/programacoes/{p['id']}/base-capacidade", json={"base": "x"}).status_code == 422
+    c2 = client.get(f"/api/programacoes/{p['id']}").json()["locais"][0]["areas"][0]["linhas"][0]["calc"]
+    assert c2["capacidade_un_dia"] == pytest.approx(2 * 9 / 1.3, rel=1e-3) and c2["acima_capacidade"][3] is False
+    assert any(a.startswith("com 3 Servente a equipe faz 9,64/dia") for a in c2["alertas"])
+    m2 = client.get(f"/api/programacoes/{p['id']}/linhas/{lid}/memoria").json()["memorias"]
+    assert m2["capacidade"]["valor"] == "13,85 m³/dia" and "recurso que governa" in m2["capacidade"]["notas"][0]
+    client.put(f"/api/programacoes/{p['id']}/base-capacidade", json={"base": "equipe"})
     assert m["hh_dia:3"]["passos"][0]["conta"] == "10 m³ × 4,4583 HH/m³"
     assert m["governa"]["valor"] == "Pedreiro" and "apoio" in m["governa"]["passos"][0]["descricao"]
     tot = client.get(f"/api/programacoes/{p['id']}/memoria").json()["memorias"]

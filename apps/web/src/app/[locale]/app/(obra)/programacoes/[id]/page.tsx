@@ -88,6 +88,7 @@ export default function MontarPage() {
   const excluir = useAcao((a, lid: number) => a.del(`/programacoes/${id}/linhas/${lid}`), chave);
   const emitir = useAcao((a) => a.post<{ revisao: number }>(`/programacoes/${id}/emitir`), chave);
   const reabrir = useAcao((a) => a.post(`/programacoes/${id}/reabrir`), chave);
+  const baseCap = useAcao((a, base: string) => a.put(`/programacoes/${id}/base-capacidade`, { base }), chave);
   const concluir = useAcao((a) => a.post<{ conclusao: number }>(`/programacoes/${id}/concluir`), chave);
   const revisar = useAcao((a, motivo: string) => a.post(`/programacoes/${id}/revisar`, { motivo }), chave);
   const [motivo, setMotivo] = useState<string | null>(null);
@@ -175,6 +176,16 @@ export default function MontarPage() {
         acoes={<>
           <Pilula tom={concluida ? 'sucesso' : rascunho ? 'neutro' : 'acento'}>{concluida ? `Concluída${(v.conclusoes?.length ?? 0) > 1 ? ` · revisão ${(v.conclusoes?.length ?? 1) - 1}` : ''}` : rascunho ? (v.revisao ? `Reaberta · rev. ${v.revisao}` : 'Rascunho') : `Emitida · rev. ${v.revisao - 1}`}</Pilula>
           {nPend > 0 && <Botao onClick={salvar} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação ({nPend})</Botao>}
+          {pode('planejador') && !concluida && (
+            <label className="flex items-center gap-1.5 text-[12px] text-m-text-secondary" title="Qual capacidade a programação usa para o aviso de acima da capacidade; a outra aparece de referência em cada linha">
+              Capacidade por
+              <select aria-label="Capacidade por" value={v.base_capacidade ?? 'equipe'} onChange={(e) => { const b = e.target.value; baseCap.mutate(b, { onSuccess: () => toast.success(b === 'governa' ? 'Capacidade pelo recurso que governa' : 'Capacidade pela equipe completa'), onError: (er) => toast.error(er.message) }); }}
+                className="h-9 rounded-full border border-m-stroke bg-m-surface-field px-3 text-[12.5px] text-m-text-primary">
+                <option value="equipe">equipe completa (gargalo)</option>
+                <option value="governa">recurso que governa</option>
+              </select>
+            </label>
+          )}
           <Link href={`/app/programacoes/${id}/imprimir`}><Botao variante="secundario"><Printer size={16} /> Imprimir</Botao></Link>
           <Botao variante="secundario" onClick={() => baixarExcel()}><FileSpreadsheet size={16} /> Excel do cliente</Botao>
           {pode('admin') && <Botao variante="secundario" onClick={baixarFt}><Download size={16} /> FT Simova</Botao>}
@@ -462,7 +473,11 @@ function Calculo({ ln, pid }: { ln: LinhaVisao; pid: number }) {
         {' · '}<Calculado rota={rota} chave="hh_un">{`${fmt(c.hh_un, 3)} HH/${un}`}</Calculado>
         {c.recurso_governa && c.indice_un_dia ? <> · governa <Calculado rota={rota} chave="governa" className="font-semibold">{c.recurso_governa}</Calculado>{' '}
           (<Calculado rota={rota} chave="indice">{`${fmt(c.indice_un_dia)} ${un}/dia por pessoa`}</Calculado>)</> : null}
-        {c.capacidade_un_dia != null && <> · equipe <Calculado rota={rota} chave="capacidade" className="font-semibold">{`${fmt(c.capacidade_un_dia)} ${un}/dia`}</Calculado>{c.gargalo ? ` (gargalo ${c.gargalo})` : ''}</>}
+        {c.capacidade_un_dia != null && (() => {
+          const gov = c.base_capacidade === 'governa';
+          return <> · equipe completa <Calculado rota={rota} chave="capacidade" className={gov ? '' : 'font-semibold text-m-text-primary'}>{`${fmt(c.capacidade_equipe ?? c.capacidade_un_dia)} ${un}/dia`}</Calculado>{c.gargalo ? ` (gargalo ${c.gargalo})` : ''}
+            {c.capacidade_governa != null && <> · pelo governa <Calculado rota={rota} chave="capacidade" className={gov ? 'font-semibold text-m-text-primary' : ''}>{`${fmt(c.capacidade_governa)} ${un}/dia`}</Calculado></>}</>;
+        })()}
       </> : c.composicao ? <><Calculado rota={rota} chave="hh_un">{c.composicao}</Calculado> · sem mão de obra na CPU</> : null}
       {c.alertas.map((a) => <div key={a} className="text-m-warning">{a.includes('capacidade zero') ? <Calculado rota={rota} chave="capacidade">{a}</Calculado> : a}</div>)}
     </div>

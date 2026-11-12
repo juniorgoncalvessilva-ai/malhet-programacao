@@ -4,6 +4,8 @@ razão_f   = coef_f (h/un) ÷ quantidade_f na equipe   (função que a equipe n�
 rmax      = max(razão_f)
 capacidade (un/dia de referência) = jornada ÷ rmax    (0 se a equipe não tem o recurso que governa)
 gargalo   = função de maior razão
+Mesma conta, lida por função: produção da função = pessoas × jornada ÷ h/un; equipe completa = a menor delas.
+Base "recurso que governa" (escolha da programação): a produção sai só de quem governa; as demais viram aviso.
 """
 import math
 from dataclasses import dataclass
@@ -28,6 +30,20 @@ def capacidade_da_equipe(
         return CapacidadeEquipe(0.0, None, False, apoio)
     gargalo, rmax = max(razoes.items(), key=lambda kv: kv[1])
     return CapacidadeEquipe(jornada / rmax, gargalo, False, apoio)
+
+
+def capacidade_por_funcao(coefs: dict[str, float], composicao: dict[str, float], jornada: float) -> dict[str, float]:
+    """Quanto cada função da equipe produz por dia: pessoas × jornada ÷ h/un (só as funções que a equipe tem).
+    A menor é a capacidade da equipe completa (mesmo número de `capacidade_da_equipe`)."""
+    return {f: composicao[f] * jornada / c for f, c in coefs.items() if c > 0 and composicao.get(f)}
+
+
+def capacidade_pelo_governa(coefs: dict[str, float], composicao: dict[str, float], jornada: float,
+                            recurso_governa: str | None) -> float:
+    """Base "recurso que governa": a produção sai só de quem governa (pessoas × jornada ÷ h/un); 0 se a equipe não tem."""
+    c = coefs.get(recurso_governa or "", 0)
+    n = composicao.get(recurso_governa or "", 0)
+    return n * jornada / c if c > 0 and n else 0.0
 
 
 def equipe_para_prazo(restante: float, indice_usado: float, dias_ref_disponiveis: float) -> int | None:

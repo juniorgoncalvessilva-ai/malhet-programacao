@@ -282,6 +282,22 @@ def emitir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depend
     return {"revisao": e.revisao}
 
 
+class BaseCapacidadeIn(BaseModel):
+    base: str  # equipe | governa
+
+
+@router.put("/programacoes/{pid}/base-capacidade")
+def base_capacidade(pid: int, d: BaseCapacidadeIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Capacidade das linhas: equipe completa (gargalo) ou recurso que governa (apoio só avisa)."""
+    if d.base not in ("equipe", "governa"):
+        raise DomainError("base: equipe ou governa", "base")
+    p = sv.obter(s, c.obra_id, pid)
+    sv.exigir_aberta(p)
+    p.base_capacidade = d.base
+    s.flush()
+    return {"base": p.base_capacidade}
+
+
 @router.post("/programacoes/{pid}/concluir")
 def concluir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Fecha a programação emitida: depois disso nada muda, só revisão com motivo."""

@@ -92,7 +92,9 @@ def _linha_visao(s: Session, p: ProgramacaoModel, linha_id: int) -> dict:
 
 
 def _capacidade(o: OrigemCpu, eq: EquipeModel, jornada: float, funcao_de: dict, un: str,
-                cap_mostrada: float | None) -> Memoria:
+                cap_mostrada: float | None, base: str = "equipe") -> Memoria:
+    from app.modules.programacao.domain.gargalo import capacidade_pelo_governa, capacidade_por_funcao
+
     tem: dict[str, float] = {}
     for rec, _t, q in composicao_efetiva(eq, funcao_de):
         tem[servico._chave(rec)] = tem.get(servico._chave(rec), 0.0) + q
@@ -101,28 +103,36 @@ def _capacidade(o: OrigemCpu, eq: EquipeModel, jornada: float, funcao_de: dict, 
         coefs[r] = coefs.get(r, 0.0) + cf
     comp = {r: tem.get(servico._chave(r), 0.0) for r in coefs}
     ce = capacidade_da_equipe(coefs, comp, jornada, o.recurso_governa)
+    por = capacidade_por_funcao(coefs, comp, jornada)
+    cap_gov = capacidade_pelo_governa(coefs, comp, jornada, o.recurso_governa)
     passos = []
-    for r, cf in sorted(coefs.items(), key=lambda kv: -kv[1]):
+    for r, cf in sorted(coefs.items(), key=lambda kv: (kv[0] != o.recurso_governa, -kv[1])):
         n = comp.get(r, 0.0)
+        papel = " (governa)" if r == o.recurso_governa else ""
         if n:
-            passos.append(Passo(f"{r}: h/un ÷ pessoas na equipe", f"{num(cf, 4)} ÷ {num(n, 0)}", f"{num(cf / n, 4)} h/{un}",
-                                r == ce.gargalo))
+            passos.append(Passo(f"{r}{papel}: pessoas × jornada ÷ h/un", f"{num(n, 0)} × {num(jornada)} h ÷ {num(cf, 4)}",
+                                f"{num(por[r])} {un}/dia", r == ce.gargalo or (base == "governa" and r == o.recurso_governa)))
         elif r == o.recurso_governa:
-            passos.append(Passo(f"{r} (governa): a equipe não tem", f"{num(cf, 4)} ÷ 0", "sem quem governe → 0", True))
+            passos.append(Passo(f"{r} (governa): a equipe não tem", f"0 × {num(jornada)} h ÷ {num(cf, 4)}", f"0 {un}/dia", True))
         else:
             passos.append(Passo(f"{r}: a equipe não tem", "apoio externo", "não limita a equipe"))
-    if not ce.falta_governante and ce.gargalo:
-        rmax = coefs[ce.gargalo] / comp[ce.gargalo]
-        passos.append(Passo(f"Capacidade (gargalo {ce.gargalo})", f"{num(jornada)} h ÷ {num(rmax, 4)} h/{un}",
-                            f"{num(ce.capacidade_un_dia)} {un}/dia", True))
+    passos.append(Passo("Equipe completa = a menor produção" + (f" (gargalo {ce.gargalo})" if ce.gargalo else ""),
+                        "menor(" + "; ".join(num(v) for v in por.values()) + ")" if por else "—",
+                        f"{num(ce.capacidade_un_dia)} {un}/dia", base == "equipe"))
+    passos.append(Passo(f"Pelo recurso que governa ({o.recurso_governa})", "produção de quem governa",
+                        f"{num(cap_gov)} {un}/dia", base == "governa"))
     fontes = [fonte_jornada(eq), Fonte("Composição da equipe",
                                        " · ".join(f"{num(q, 0)} {r}" for r, q in comp.items() if q) or "nenhuma função da CPU",
                                        f"Equipe {eq.nome}", "pessoas por função (abra a composição da equipe)"),
               *fontes_base(o)]
+    usada = "equipe completa (gargalo)" if base == "equipe" else "recurso que governa"
+    notas = [f"Esta programação usa a capacidade pela {usada}; a outra fica de referência (troque em \"Capacidade por\" no topo da programação)."]
+    if base == "governa":
+        notas.append("Pelo recurso que governa, função de apoio que não acompanha o ritmo vira aviso na linha, sem reduzir a capacidade.")
+    notas.append("Função da composição que a equipe não tem é apoio externo e não limita, exceto o recurso que governa.")
     return Memoria("capacidade", "Capacidade da equipe", f"{num(cap_mostrada)} {un}/dia",
-                   "capacidade = jornada ÷ maior(h/un da função ÷ pessoas da equipe com a função)  — a maior razão é o gargalo",
-                   tuple(passos), tuple(fontes),
-                   ("Função da composição que a equipe não tem é apoio externo e não limita, exceto o recurso que governa.",))
+                   "produção da função = pessoas × jornada ÷ h/un · equipe completa = a menor · recurso que governa = a de quem governa",
+                   tuple(passos), tuple(fontes), tuple(notas))
 
 
 def realizado_anterior_detalhe(s: Session, p: ProgramacaoModel, chave: tuple) -> list[tuple[str, str, float]]:
@@ -156,7 +166,8 @@ def memorias_linha(s: Session, p: ProgramacaoModel, linha_id: int) -> dict:
     if o is not None and (o.recursos or o.composicao):
         mems += memorias_cpu(o, jornada, fj, un)
     if o is not None and eq is not None and c["capacidade_un_dia"] is not None:
-        mems.append(_capacidade(o, eq, jornada, funcoes_por_cracha(s, p.obra_id), un, c["capacidade_un_dia"]))
+        mems.append(_capacidade(o, eq, jornada, funcoes_por_cracha(s, p.obra_id), un, c["capacidade_un_dia"],
+                                p.base_capacidade or "equipe"))
     if eq is not None:
         mems.append(memoria_composicao_equipe(s, p.obra_id, eq))
     # por dia: HH e oficiais
