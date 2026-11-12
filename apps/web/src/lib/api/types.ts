@@ -277,3 +277,16 @@ export interface Ishikawa {
   memorias: Record<string, import('@/components/Obra/Calculado').MemoriaCalculo>;
 }
 export interface GrupoGrafico { rotulo: string; valores: Record<string, { n: number; chave: string }> }
+
+/** Campo (mobile): o dia do encarregado. Spec 035. */
+export interface LinhaCampo {
+  id: number; n: number; codigo_simova: string; descricao: string; grupo: string; unidade: string | null; area: string;
+  equipe: string | null; encarregado: string | null;
+}
+export interface DiaCampo {
+  data: string; hoje: string; dia_semana?: string; anterior?: string; seguinte?: string; so_minha_equipe: boolean;
+  programacao: { id: number; titulo: string; status: string; tipo: string; editavel: boolean; inicio: string; fim: string } | null;
+  linhas: (LinhaCampo & { previsto: number | null; realizado: number | null; capacidade: number | null; previsto_periodo: number;
+    realizado_periodo: number; desvios: { id: number; causa: string | null; descricao: string }[] })[];
+  pendentes: (LinhaCampo & { data: string; dia: string; previsto: number })[];
+}

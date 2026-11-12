@@ -182,6 +182,13 @@ def test_fluxo_cpu_calcula_hh_indice_capacidade_e_ft(client):
     assert client.post(f"/api/programacoes/{pid}/emitir").status_code == 200
     client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json={"campo": "realizado", "valores": [
         {"data": "2026-11-09", "valor": 9.64}, {"data": "2026-11-10", "valor": 5}]})
+    # campo (mobile): o dia 10/11 mostra a linha com previsto e realizado; segunda 09/11 sem pendência
+    dia = client.get("/api/campo/dia", params={"data": "2026-11-11"}).json()
+    assert dia["programacao"]["editavel"] and dia["dia_semana"] == "QUA"
+    ln_dia = dia["linhas"][0]
+    assert ln_dia["id"] == lid and ln_dia["previsto"] == 0.72 and ln_dia["realizado"] is None
+    assert [(x["data"], x["previsto"]) for x in dia["pendentes"]] == []  # 09 e 10 já lançados
+    assert client.get("/api/campo/dia", params={"data": "2027-01-10"}).json()["programacao"] is None
     causa = client.get("/api/desvios/causas").json()[0]
     client.post("/api/desvios", json={"data": "2026-11-10", "causa_id": causa["id"], "descricao": "Faltou concreto",
                                       "programacao_id": pid, "linha_id": lid})
