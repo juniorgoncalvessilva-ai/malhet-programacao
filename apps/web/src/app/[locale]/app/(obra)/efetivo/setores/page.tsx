@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { GitFork, Layers, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import { Crown, GitFork, Layers, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
@@ -32,6 +32,7 @@ export default function SetoresPage() {
   const [geral, setGeral] = useState<PessoaRef | null>(null);
   const [cores, setCores] = useState<Partial<CoresOrganograma>>({});
   const [salvandoCfg, setSalvandoCfg] = useState(false);
+  const [master, setMaster] = useState(false);
   const d = dados.data;
   useEffect(() => {
     if (!d) return;
@@ -41,10 +42,12 @@ export default function SetoresPage() {
   const atualizar = () => { qc.invalidateQueries({ queryKey: k.efetivo }); qc.invalidateQueries({ queryKey: chaves.equipes }); };
 
   const salvarConfig = async () => {
+    if (!geral && d?.responsavel_geral) { toast.error('O setor master não fica sem dono: escolha o novo responsável geral.'); return; }
     setSalvandoCfg(true);
     try {
       await api.put('/efetivo/organograma/config', { responsavel_id: geral?.id ?? null, cores });
-      toast.success('Responsável geral e cores salvos');
+      toast.success('Setor master salvo (responsável geral e cores)');
+      setMaster(false);
       atualizar();
     } catch (e) { toast.error((e as Error).message); } finally { setSalvandoCfg(false); }
   };
@@ -70,7 +73,7 @@ export default function SetoresPage() {
     try { await api.del(`/efetivo/disciplinas/${dc.id}`); toast.success('Disciplina excluída'); if (form?.tipo === 'disciplina' && form.id === dc.id) setForm(null); atualizar(); }
     catch (e) { toast.error((e as Error).message); }
   };
-  const abrir = (f: FormSetor) => { setErro(null); setForm(f); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const abrir = (f: FormSetor) => { setErro(null); setMaster(false); setForm(f); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const novo = () => abrir({ tipo: 'setor', nome: '', cor: null, ordem: (d?.setores.length ?? 0) + 1, responsavel: null, equipes: [] });
   const novaDisciplina = (st: SetorObra) => abrir({ tipo: 'disciplina', setorId: st.id, nome: '', cor: null, ordem: st.disciplinas.length + 1, responsavel: null, equipes: [] });
   const nomeSetor = new Map(d?.setores.map((st) => [st.id, st.nome]) ?? []);
@@ -90,18 +93,21 @@ export default function SetoresPage() {
         </div>}
       />
       <div className="flex flex-col gap-4">
-        <Painel titulo={`Obra ${obra?.nome ?? ''}`}>
-          <div className="grid gap-4 lg:grid-cols-[minmax(280px,420px)_1fr]">
-            <SeletorPessoa rotulo="Responsável geral da obra" valor={geral} onChange={setGeral} disabled={!editar} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              {NIVEIS.map((n) => (
-                <SeletorCor key={n.v} rotulo={`Cor · ${n.rotulo}`} valor={cores[n.v] ?? null} padrao={d?.cores_padrao[n.v]} disabled={!editar}
-                  onChange={(c) => setCores((x) => { const y = { ...x }; if (c) y[n.v] = c; else delete y[n.v]; return y; })} />
-              ))}
+        {master && editar && (
+          <Painel titulo={<span className="inline-flex items-center gap-2"><Crown size={17} className="text-m-accent" />Setor master · {obra?.nome ?? 'Obra'}</span>}
+            acoes={<Botao variante="fantasma" onClick={() => { setMaster(false); if (d) { setGeral(d.responsavel_geral); } }}>Cancelar</Botao>}>
+            <div className="grid gap-4 lg:grid-cols-[minmax(280px,420px)_1fr]">
+              <SeletorPessoa rotulo="Responsável geral da obra (dono do setor master)" valor={geral} onChange={setGeral} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {NIVEIS.map((n) => (
+                  <SeletorCor key={n.v} rotulo={`Cor · ${n.rotulo}`} valor={cores[n.v] ?? null} padrao={d?.cores_padrao[n.v]}
+                    onChange={(c) => setCores((x) => { const y = { ...x }; if (c) y[n.v] = c; else delete y[n.v]; return y; })} />
+                ))}
+              </div>
             </div>
-          </div>
-          {editar && <div><Botao disabled={salvandoCfg || !d} onClick={salvarConfig}><Save size={16} /> {salvandoCfg ? 'Salvando…' : 'Salvar responsável e cores'}</Botao></div>}
-        </Painel>
+            <div><Botao disabled={salvandoCfg || !d} onClick={salvarConfig}><Save size={16} /> {salvandoCfg ? 'Salvando…' : 'Salvar setor master'}</Botao></div>
+          </Painel>
+        )}
 
         {form && (
           <Painel titulo={form.tipo === 'disciplina' ? `${form.id ? `Editar disciplina ${form.nome}` : 'Nova disciplina'} · setor ${setorDoForm?.nome ?? ''}` : form.id ? `Editar setor ${form.nome}` : 'Novo setor'}
@@ -139,6 +145,23 @@ export default function SetoresPage() {
         <Painel titulo={`Setores (${d?.setores.length ?? 0})`} subtitulo={d && d.equipes.length ? `${d.equipes.filter((e) => !e.setor_id).length} de ${d.equipes.length} equipe(s) sem setor` : undefined}>
           {!d?.setores.length && <p className="text-[13px] text-m-text-muted">{dados.isLoading ? 'Carregando…' : 'Nenhum setor ainda. Enquanto não houver setores, o organograma agrupa as equipes pela frente ou pelo DP do encarregado.'}</p>}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {d && (
+              <div className="flex flex-col gap-2 rounded-[14px] border border-m-stroke bg-m-surface-raised p-4" style={{ borderTop: `4px solid ${d.cores.obra}` }}>
+                <div className="flex items-start gap-2">
+                  <Crown size={16} className="mt-0.5 shrink-0" style={{ color: d.cores.obra }} aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-m-text-primary">{obra?.nome ?? 'Obra'}<span className="rounded-full bg-m-accent-subtle px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.4px] text-m-accent">Setor master</span></div>
+                    <div className="text-[12.5px] text-m-text-secondary">{d.responsavel_geral ? <>Responsável geral: <b className="font-medium text-m-text-primary">{d.responsavel_geral.nome}</b>{d.responsavel_geral.funcao && ` · ${d.responsavel_geral.funcao}`}</> : <span className="text-m-warning">sem responsável geral</span>}</div>
+                  </div>
+                  {editar && <button type="button" aria-label="Trocar o responsável geral e as cores" title="Trocar o dono e as cores (o setor master não é excluído)" className="p-1 text-m-text-muted hover:text-m-accent" onClick={() => { setForm(null); setMaster(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Pencil size={15} /></button>}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-m-text-muted">
+                  Cores do organograma:
+                  {NIVEIS.map((n) => <span key={n.v} title={n.rotulo} className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-full" style={{ background: d.cores[n.v] }} />{n.rotulo}</span>)}
+                </div>
+                <div className="text-[11.5px] text-m-text-muted">{d.setores.length} setor(es) abaixo · não pode ser excluído, só trocar o dono.</div>
+              </div>
+            )}
             {d?.setores.map((st) => {
               const cor = st.cor ?? d.cores.setor;
               return (

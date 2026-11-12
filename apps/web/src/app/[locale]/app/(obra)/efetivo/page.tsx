@@ -5,6 +5,7 @@ import { ArrowRightLeft, History, Plus, Upload, UserMinus, Users } from 'lucide-
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { Abas } from '@/components/Obra/Abas';
 import { Botao, Cabecalho, Campo, Chip, Erro, Indicador, Painel, Pilula, Selecao, UploadForm, dataBR } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { k, useEfetivo, useMovimentosEfetivo, useResumoEfetivo } from '@/hooks/programacao/planejamento';
@@ -87,6 +88,7 @@ export default function EfetivoPage() {
     try { await api.put(`/efetivo/colaboradores/${c.id}/cracha`, { cracha: crachaEd.valor }); toast.success('Crachá salvo'); setCrachaEd(null); atualizar(); }
     catch (e) { toast.error((e as Error).message); }
   };
+  const [aba, setAba] = useState<'efetivo' | 'importar'>('efetivo');
   const marcarTodos = () => setSel(sel.size ? new Set() : new Set(filtrados.slice(0, LIMITE).map((c) => c.id)));
 
   return (
@@ -97,11 +99,31 @@ export default function EfetivoPage() {
         acoes={<Link href="/app/efetivo/organograma"><Botao variante="secundario"><Users size={16} /> Organograma</Botao></Link>}
       />
 
+      <Abas rotulo="Seções do efetivo" ativa={aba} onTrocar={setAba}
+        abas={[{ chave: 'efetivo', titulo: 'Efetivo' }, { chave: 'importar', titulo: 'Importar e histórico' }]} />
+
+      {aba === 'importar' && <>
       {planejar && (
         <Painel titulo={<span className="inline-flex items-center gap-2"><Upload size={18} className="text-m-accent" />Importar a planilha de efetivo</span>}>
           <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Planilha de efetivo (.xls ou .xlsx)' }]} accept=".xls,.xlsx,.xlsm" rotulo="Importar" pendente={importando} onEnviar={importar} />
         </Painel>
       )}
+      <Painel titulo={<span className="inline-flex items-center gap-2"><History size={18} className="text-m-accent" />O que mudou no efetivo?</span>}>
+        <div className="max-h-[320px] overflow-auto text-[13px]">
+          {(movimentos.data ?? []).map((m) => (
+            <div key={m.id} className="flex flex-wrap gap-x-2 border-b border-m-row py-1.5">
+              <span className="w-[130px] shrink-0 text-m-text-muted">{new Date(m.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+              <b className="text-m-text-primary">{m.nome}</b>
+              <span className="text-m-text-secondary">{({ ENTRADA: 'entrou no efetivo', SITUACAO: 'situação', FUNCAO: 'função', EQUIPE: 'equipe', FORA_DO_ARQUIVO: 'não veio no arquivo' } as Record<string, string>)[m.tipo] ?? m.tipo}</span>
+              {(m.de || m.para) && m.tipo !== 'FORA_DO_ARQUIVO' && <span>{m.de ?? '—'} → <b>{m.para ?? 'sem equipe'}</b></span>}
+            </div>
+          ))}
+          {!movimentos.data?.length && <p className="text-m-text-muted">Nada ainda.</p>}
+        </div>
+      </Painel>
+      </>}
+
+      {aba === 'efetivo' && <>
 
       {r && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -214,19 +236,7 @@ export default function EfetivoPage() {
         </div>
       </Painel>
 
-      <Painel titulo={<span className="inline-flex items-center gap-2"><History size={18} className="text-m-accent" />O que mudou no efetivo?</span>}>
-        <div className="max-h-[320px] overflow-auto text-[13px]">
-          {(movimentos.data ?? []).map((m) => (
-            <div key={m.id} className="flex flex-wrap gap-x-2 border-b border-m-row py-1.5">
-              <span className="w-[130px] shrink-0 text-m-text-muted">{new Date(m.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-              <b className="text-m-text-primary">{m.nome}</b>
-              <span className="text-m-text-secondary">{({ ENTRADA: 'entrou no efetivo', SITUACAO: 'situação', FUNCAO: 'função', EQUIPE: 'equipe', FORA_DO_ARQUIVO: 'não veio no arquivo' } as Record<string, string>)[m.tipo] ?? m.tipo}</span>
-              {(m.de || m.para) && m.tipo !== 'FORA_DO_ARQUIVO' && <span>{m.de ?? '—'} → <b>{m.para ?? 'sem equipe'}</b></span>}
-            </div>
-          ))}
-          {!movimentos.data?.length && <p className="text-m-text-muted">Nada ainda.</p>}
-        </div>
-      </Painel>
+      </>}
     </>
   );
 }

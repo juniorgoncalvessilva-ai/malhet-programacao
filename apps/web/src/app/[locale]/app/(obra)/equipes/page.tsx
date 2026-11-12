@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, Download, Link2, Plus, Trash2, UserPlus } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { toast } from 'sonner';
+import { Abas } from '@/components/Obra/Abas';
 import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Selecao, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { k as kEfetivo, useSetores } from '@/hooks/programacao/planejamento';
@@ -33,6 +34,7 @@ export default function EquipesPage() {
   const api = useApi();
   const qc = useQueryClient();
   const recursos = useQuery({ queryKey: ['cpu-recursos'], queryFn: () => api.get<{ recurso: string; tipo: 'MOD' | 'EQU'; composicoes: number }[]>('/cpu/recursos') });
+  const [aba, setAba] = useState<'equipes' | 'importar'>('equipes');
   const [form, setForm] = useState<Form | null>(null);
   const [nova, setNova] = useState<ComposicaoEquipe>({ recurso: '', tipo: 'EQU', quantidade: 1 });
   const [erro, setErro] = useState<unknown>(null);
@@ -114,15 +116,17 @@ export default function EquipesPage() {
         acoes={<div className="flex flex-wrap gap-2">
           {pode('planejador') && <Botao variante="secundario" disabled={vinculando} onClick={vincular}><Link2 size={16} /> {vinculando ? 'Vinculando…' : 'Vincular ao efetivo'}</Botao>}
           <Botao variante="secundario" onClick={() => api.download('/equipes/simova.xlsx', 'Equipe_Simova.xlsx').then(() => toast.success('Arquivo no padrão do Simova gerado (equipes ativas)')).catch((e) => toast.error(e.message))}><Download size={16} /> Exportar para o Simova</Botao>
-          {pode('planejador') && <Botao variante="secundario" onClick={() => { setErro(null); setForm({ ...NOVA, composicao: [], membros: [] }); }}><Plus size={16} /> Nova equipe</Botao>}
+          {pode('planejador') && <Botao variante="secundario" onClick={() => { setAba('equipes'); setErro(null); setForm({ ...NOVA, composicao: [], membros: [] }); }}><Plus size={16} /> Nova equipe</Botao>}
         </div>}
       />
-      <div className="flex flex-col gap-4">
-        {pode('planejador') && (
-          <Painel titulo="Importar equipes do Simova">
-            <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Equipe.xlsx' }]} rotulo="Importar" pendente={importando} onEnviar={importarSimova} />
-          </Painel>
-        )}
+      <Abas rotulo="Seções das equipes" ativa={aba} onTrocar={setAba}
+        abas={[{ chave: 'equipes', titulo: `Equipes (${equipes.data?.length ?? 0})` }, { chave: 'importar', titulo: 'Importar', visivel: pode('planejador') }]} />
+      {aba === 'importar' && pode('planejador') && (
+        <Painel titulo="Importar equipes do Simova">
+          <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Equipe.xlsx' }]} rotulo="Importar" pendente={importando} onEnviar={async (fd) => { await importarSimova(fd); setAba('equipes'); }} />
+        </Painel>
+      )}
+      {aba === 'equipes' && <div className="flex flex-col gap-4">
         {vinculo && (
           <Painel titulo={`Vínculo com o efetivo: ${vinculo.vinculados} pessoa(s) ligada(s) pela matrícula`}
             subtitulo={vinculo.nao_encontrados.length || vinculo.sem_numero.length ? 'Confira abaixo quem não foi achado. Importe o efetivo atualizado ou corrija o número na equipe.' : 'Todas as pessoas das equipes estão no efetivo.'}
@@ -272,7 +276,7 @@ export default function EquipesPage() {
             ))}
           </Tabela>
         </Painel>
-      </div>
+      </div>}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Abas } from '@/components/Obra/Abas';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { STATUS_DESVIO, useCausas } from '@/components/Obra/DesviosProgramacao';
 import { Botao, Cabecalho, Campo, Erro, Painel, Pilula, Selecao, Tabela, UploadForm, dataBR, td, tdNum } from '@/components/Obra/ui';
@@ -41,6 +42,7 @@ export default function DesviosPage() {
   const novaCausa = useAcao((a, descricao: string) => a.post('/desvios/causas', { descricao }), [['desvios']]);
   const editarCausa = useAcao((a, c: { id: number; descricao: string; ativo: boolean }) => a.put(`/desvios/causas/${c.id}`, c), [['desvios']]);
   const [form, setForm] = useState<Form | null>(null);
+  const [aba, setAba] = useState<'ocorrencias' | 'classificacoes' | 'importar'>('ocorrencias');
   const [causa, setCausa] = useState('');
   const [renomear, setRenomear] = useState<{ id: number; texto: string; ativo: boolean } | null>(null);
   const editar = (d: Desvio) => setForm({ id: d.id, data: d.data, causa_id: String(d.causa_id), descricao: d.descricao, referencia: d.referencia ?? '', frente: d.frente ?? '',
@@ -51,20 +53,24 @@ export default function DesviosPage() {
       <Cabecalho eyebrow="Programar · desvios" titulo={`Desvios (Pareto): ${lista.data?.length ?? 0}`}
         acoes={<>
           <Botao variante="secundario" onClick={() => api.download(`/desvios/excel${qs({ de: filtro.de || undefined, ate: filtro.ate || undefined })}`, 'Pareto_desvios.xlsx').catch((e) => toast.error(e.message))}><Download size={16} /> Exportar Pareto</Botao>
-          {pode('encarregado') && <Botao onClick={() => setForm({ ...VAZIO, data: new Date().toISOString().slice(0, 10) })}><Plus size={16} /> Novo desvio</Botao>}
+          {pode('encarregado') && <Botao onClick={() => { setAba('ocorrencias'); setForm({ ...VAZIO, data: new Date().toISOString().slice(0, 10) }); }}><Plus size={16} /> Novo desvio</Botao>}
         </>} />
 
-      {pode('planejador') && (
+      <Abas rotulo="Seções dos desvios" ativa={aba} onTrocar={setAba}
+        abas={[{ chave: 'ocorrencias', titulo: `Ocorrências (${lista.data?.length ?? 0})` }, { chave: 'classificacoes', titulo: 'Classificações' },
+          { chave: 'importar', titulo: 'Importar', visivel: pode('planejador') }]} />
+
+      {aba === 'importar' && pode('planejador') && (
         <Painel titulo="Importar o Pareto semanal">
           <UploadForm campos={[{ nome: 'arquivo', rotulo: 'PARETO SEMANAL.xlsx' }]} rotulo="Importar" pendente={importar.isPending}
             onEnviar={(fd) => importar.mutate(fd, {
-              onSuccess: (r) => { toast.success(`${r.importados} desvio(s) importado(s)${r.repetidos ? ` · ${r.repetidos} já existiam` : ''}${r.causas_novas ? ` · ${r.causas_novas} causa(s) nova(s)` : ''}`); r.avisos.slice(0, 5).forEach((a) => toast.warning(a)); },
+              onSuccess: (r) => { setAba('ocorrencias'); toast.success(`${r.importados} desvio(s) importado(s)${r.repetidos ? ` · ${r.repetidos} já existiam` : ''}${r.causas_novas ? ` · ${r.causas_novas} causa(s) nova(s)` : ''}`); r.avisos.slice(0, 5).forEach((a) => toast.warning(a)); },
               onError: (e) => toast.error(e.message),
             })} />
         </Painel>
       )}
 
-      {form && (
+      {aba === 'ocorrencias' && form && (
         <Painel titulo={form.id ? 'Editar desvio' : 'Novo desvio'} acoes={<Botao variante="fantasma" onClick={() => setForm(null)}><X size={16} /> Fechar</Botao>}>
           <form className="grid gap-3 md:grid-cols-3 xl:grid-cols-6" onSubmit={(e) => { e.preventDefault(); salvar.mutate(form, { onSuccess: () => { toast.success('Desvio salvo'); setForm(null); } }); }}>
             <Campo rotulo="Dia" type="date" required value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} />
@@ -87,7 +93,7 @@ export default function DesviosPage() {
         </Painel>
       )}
 
-      <Painel titulo="Ocorrências" acoes={<div className="flex flex-wrap items-end gap-2">
+      {aba === 'ocorrencias' && <Painel titulo="Ocorrências" acoes={<div className="flex flex-wrap items-end gap-2">
         <Campo rotulo="De" type="date" value={filtro.de} onChange={(e) => setFiltro({ ...filtro, de: e.target.value })} />
         <Campo rotulo="Até" type="date" value={filtro.ate} onChange={(e) => setFiltro({ ...filtro, ate: e.target.value })} />
         <Selecao rotulo="Classificação" value={filtro.causa_id} onChange={(e) => setFiltro({ ...filtro, causa_id: e.target.value })}>
@@ -115,9 +121,9 @@ export default function DesviosPage() {
             </tr>
           ))}
         </Tabela>
-      </Painel>
+      </Painel>}
 
-      <Painel titulo={`Classificações da obra (${causas.data?.length ?? 0})`}>
+      {aba === 'classificacoes' && <Painel titulo={`Classificações da obra (${causas.data?.length ?? 0})`}>
         {pode('planejador') && (
           <form className="mb-3 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); novaCausa.mutate(causa, { onSuccess: () => { setCausa(''); toast.success('Classificação incluída'); }, onError: (er) => toast.error(er.message) }); }}>
             <Campo rotulo="Nova classificação" required minLength={3} value={causa} onChange={(e) => setCausa(e.target.value)} className="w-[360px] max-w-full" />
@@ -142,7 +148,7 @@ export default function DesviosPage() {
             </li>
           ))}
         </ul>
-      </Painel>
+      </Painel>}
     </>
   );
 }
