@@ -33,29 +33,29 @@ export function Cartao({ titulo, children, legenda }: { titulo: string; children
 }
 
 /** Rosca do status das restrições (todas as ações por STATUS 2). */
-export function Rosca({ grupos, mem }: { grupos: GrupoGrafico[]; mem: Mem }) {
+export function Rosca({ grupos, mem, cores = COR_STATUS, rotulo = 'ações' }: { grupos: GrupoGrafico[]; mem: Mem; cores?: Record<string, string>; rotulo?: string }) {
   const total = grupos.reduce((s, g) => s + g.valores.total.n, 0) || 1;
   let acc = 0;
   const R = 52;
   const C = 2 * Math.PI * R;
   return (
     <div className="flex flex-wrap items-center gap-5">
-      <svg viewBox="0 0 140 140" className="h-[150px] w-[150px] shrink-0" role="img" aria-label="Status das restrições">
+      <svg viewBox="0 0 140 140" className="h-[150px] w-[150px] shrink-0" role="img" aria-label={`Distribuição: ${rotulo}`}>
         {grupos.map((g) => {
           const frac = g.valores.total.n / total;
-          const el = <circle key={g.rotulo} cx="70" cy="70" r={R} fill="none" stroke={COR_STATUS[g.rotulo] ?? '#999'} strokeWidth="24"
+          const el = <circle key={g.rotulo} cx="70" cy="70" r={R} fill="none" stroke={cores[g.rotulo] ?? '#999'} strokeWidth="24"
             strokeDasharray={`${Math.max(0, frac * C - 1.5)} ${C}`} strokeDashoffset={-acc * C} transform="rotate(-90 70 70)"><title>{`${g.rotulo}: ${g.valores.total.n}`}</title></circle>;
           acc += frac;
           return el;
         })}
         <text x="70" y="66" textAnchor="middle" className="fill-[var(--m-text-primary)] text-[22px] font-semibold">{total}</text>
-        <text x="70" y="84" textAnchor="middle" className="fill-[var(--m-text-muted)] text-[10px]">ações</text>
+        <text x="70" y="84" textAnchor="middle" className="fill-[var(--m-text-muted)] text-[10px]">{rotulo}</text>
       </svg>
       <ul className="flex flex-col gap-1.5 text-[12.5px]">
         {grupos.map((g) => (
           <li key={g.rotulo} className="flex items-center gap-2 text-m-text-secondary">
-            <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: COR_STATUS[g.rotulo] ?? '#999' }} />
-            <span className="w-[100px]">{g.rotulo}</span>
+            <span className="inline-block h-3 w-3 rounded-[3px]" style={{ background: cores[g.rotulo] ?? '#999' }} />
+            <span className="w-[130px] truncate" title={g.rotulo}>{g.rotulo}</span>
             <b className="text-m-text-primary">{valor(mem, g.valores.total.chave, g.valores.total.n)}</b>
             <span className="text-m-text-muted">{Math.round((g.valores.total.n / total) * 100)}%</span>
           </li>

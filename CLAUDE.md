@@ -47,7 +47,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   situação de mobilização, movimentos, sem dados pessoais sensíveis. De-para função do efetivo → recurso da CPU
   (`de_para_funcao`, gateway `funcoes_por_cracha` usado em `composicao_efetiva`). Equipes a partir do efetivo e
   exportação no layout Simova (`equipes/domain/simova_equipe.py::linha_simova`). Organograma em
-  `efetivo/domain/organograma.py`. Spec 015.
+  `efetivo/domain/organograma.py`. Spec 015. Aba "Resumo por função" (`ResumoEfetivo`, `src/lib/efetivo/resumo.ts`):
+  contagens e gráficos agrupados do efetivo, cada número com memória. Spec 051.
 - Equipes × efetivo: o número antes do nome ("115532 :: JOSÉ") é a matrícula — `separar_cracha` +
   `LocalizadorEfetivo` + `equipes/application/vincular_efetivo.py` (ao salvar/importar e `POST /equipes/vincular-efetivo`).
   Spec 016.

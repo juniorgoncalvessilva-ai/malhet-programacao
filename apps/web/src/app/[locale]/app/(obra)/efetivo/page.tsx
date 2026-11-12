@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Abas } from '@/components/Obra/Abas';
+import { ResumoEfetivo } from '@/components/Obra/ResumoEfetivo';
 import { Botao, Cabecalho, Campo, Chip, Erro, Indicador, Painel, Pilula, Selecao, UploadForm, dataBR } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { k, useEfetivo, useMovimentosEfetivo, useResumoEfetivo } from '@/hooks/programacao/planejamento';
@@ -88,7 +89,7 @@ export default function EfetivoPage() {
     try { await api.put(`/efetivo/colaboradores/${c.id}/cracha`, { cracha: crachaEd.valor }); toast.success('Crachá salvo'); setCrachaEd(null); atualizar(); }
     catch (e) { toast.error((e as Error).message); }
   };
-  const [aba, setAba] = useState<'efetivo' | 'importar'>('efetivo');
+  const [aba, setAba] = useState<'efetivo' | 'resumo' | 'importar'>('efetivo');
   const marcarTodos = () => setSel(sel.size ? new Set() : new Set(filtrados.slice(0, LIMITE).map((c) => c.id)));
 
   return (
@@ -100,7 +101,9 @@ export default function EfetivoPage() {
       />
 
       <Abas rotulo="Seções do efetivo" ativa={aba} onTrocar={setAba}
-        abas={[{ chave: 'efetivo', titulo: 'Efetivo' }, { chave: 'importar', titulo: 'Importar e histórico' }]} />
+        abas={[{ chave: 'efetivo', titulo: 'Efetivo' }, { chave: 'resumo', titulo: 'Resumo por função' }, { chave: 'importar', titulo: 'Importar e histórico' }]} />
+
+      {aba === 'resumo' && (lista.data ? <ResumoEfetivo efetivo={lista.data} /> : <p className="text-sm text-m-text-muted">Carregando…</p>)}
 
       {aba === 'importar' && <>
       {planejar && (
