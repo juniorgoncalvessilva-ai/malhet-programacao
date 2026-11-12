@@ -1,5 +1,6 @@
 'use client';
 
+import { nomeLinha, useModoNomes } from '@/lib/programacao/nomes';
 import { HardHat, Save } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -25,6 +26,7 @@ type Edicao = Record<number, { tecnico?: string } & Partial<Record<CampoLista, s
 
 export default function SsmaPage() {
   const api = useApi();
+  const [nomes] = useModoNomes();
   const { editaSsma: podeSsma } = useObra();
   const lista = useProgramacoes();
   const [pid, setPid] = useState<number | null>(null);
@@ -102,7 +104,7 @@ export default function SsmaPage() {
                       </td></tr>
                       {a.linhas.map((ln) => (
                         <tr key={ln.id} className="border-b border-m-row align-top">
-                          <td className="min-w-[240px] px-2 py-2"><b className="text-m-text-primary">{ln.codigo_simova}</b> {ln.descricao}
+                          <td className="min-w-[240px] px-2 py-2"><b className="text-m-text-primary">{ln.codigo_simova}</b> {nomeLinha(ln, nomes)}
                             <div className="text-[11px] text-m-text-muted">{ln.id_crono ?? ''}{ln.total_previsto ? ` · prev. ${ln.total_previsto} ${ln.unidade ?? ''}` : ''}</div></td>
                           <td className="px-2 py-2">{ln.encarregado ?? ln.equipe ?? '—'}</td>
                           <td className="px-1 py-1.5">

@@ -180,6 +180,37 @@ def realizado_anterior(s: Session, p: ProgramacaoModel) -> dict[tuple, float]:
     return tot
 
 
+def cwps_dos_iwps(s: Session, obra_id: int, iwps: set[int]) -> dict[int, dict]:
+    """IWP → CWP da WBS de execução ({id, codigo, texto})."""
+    from app.modules.wbs.domain.wbs import texto_cwp
+    from app.modules.wbs.infra.gateway import codigos, nos
+
+    if not iwps:
+        return {}
+    todos = nos(s, obra_id)
+    cods = codigos(s, obra_id, todos)
+    out = {}
+    for nid in iwps:
+        n = todos.get(nid)
+        while n is not None and n.tipo != "cwp":
+            n = todos.get(n.pai_id) if n.pai_id else None
+        if n is not None:
+            out[nid] = {"id": n.id, "codigo": cods[n.id].codigo, "texto": texto_cwp(n.elemento, n.complemento)}
+    return out
+
+
+def completar_foto(s: Session, obra_id: int, foto: dict) -> dict:
+    """Emissão anterior à spec 046 não tem o CWP das linhas: completa pela WBS atual (o resto fica como emitido)."""
+    linhas = [ln for loc in foto.get("locais", []) for a in loc.get("areas", []) for ln in a.get("linhas", [])]
+    faltam = {ln["wbs_no_id"] for ln in linhas if "cwp" not in ln and ln.get("wbs_no_id")}
+    cwp = cwps_dos_iwps(s, obra_id, faltam)
+    for ln in linhas:
+        if "cwp" not in ln:
+            c = (ln.get("complemento") or "").strip("() ")
+            ln["cwp"] = cwp.get(ln.get("wbs_no_id")) or ({"id": None, "codigo": None, "texto": c} if c else None)
+    return foto
+
+
 def visao(s: Session, p: ProgramacaoModel) -> dict:
     """Programação resolvida para tela/impressão: locais → áreas → linhas, com totais."""
     vig = ResolvedorReferencias(s, p.obra_id).versoes_vigentes()
@@ -210,10 +241,15 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
     anterior = realizado_anterior(s, p)
     fatores = fatores_do_periodo(datas, semanal=p.tipo == "SEMANAL")
     wbs_cod = {}
+    cwp_de: dict[int, dict] = {}  # IWP → CWP (código, texto): nível da programação entre a área e as linhas
     if any(ln.wbs_no_id for ln in p.linhas):
         from app.modules.wbs.infra.gateway import codigos
 
         wbs_cod = codigos(s, p.obra_id)
+        cwp_de = cwps_dos_iwps(s, p.obra_id, {ln.wbs_no_id for ln in p.linhas if ln.wbs_no_id})
+    from app.modules.referencias.infra.pq_gateway import itens_pq
+
+    nomes_pq = {k: x.nome_simplificado for k, x in itens_pq(s, p.obra_id, cods_pq).items()} if cods_pq else {}
     por_area: dict[int, list[dict]] = {}
     for n, ln in enumerate(p.linhas, start=1):
         a, t = areas[ln.area_id], tipos[ln.tipo_id]
@@ -232,6 +268,12 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "codigo_simova": cat.codigo_item(g.numero, t.numero, it.numero if it else None),
             "descricao": cat.descricao_item(t.descricao, it.complemento if it else None),
             "complemento": it.complemento if it else None,
+            # nome reduzido (nome simplificado da PQ, senão o do tipo) + complemento: o padrão das telas
+            "descricao_reduzida": cat.descricao_item(nomes_pq.get(ln.item_pq) or t.descricao, it.complemento if it else None),
+            # descritivo completo da PQ + complemento (opção das telas)
+            "descricao_completa": cat.descricao_item(ipq.descricao if ipq else t.descricao, it.complemento if it else None),
+            "cwp": cwp_de.get(ln.wbs_no_id) or ({"id": None, "codigo": None, "texto": it.complemento.strip("() ")}
+                                                 if it and it.complemento and it.complemento.strip("() ") else None),
             "unidade": t.unidade or (ipq.unid if ipq else None),
             "item_pq": ln.item_pq, "descricao_pq": ipq.descricao if ipq else None,
             "pu": ipq.pu if ipq else None,

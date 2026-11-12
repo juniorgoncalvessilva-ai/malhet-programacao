@@ -1,6 +1,7 @@
 'use client';
 
 import { LogosObra } from '@/components/Obra/LogosObra';
+import { BotaoNomes, nomeLinha, porCwp, useModoNomes } from '@/lib/programacao/nomes';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileSpreadsheet, Printer } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,6 +22,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
     queryFn: () => api.get<{ revisao: number; emitida_em: string; emitida_por: string }[]>(`/programacoes/${id}/emissoes`),
   });
   const [escolha, setEscolha] = useState<string>('ultima');
+  const [nomes] = useModoNomes();
   const rev = escolha === 'viva' ? null : escolha === 'ultima' ? (emissoes.data?.[0]?.revisao ?? null) : Number(escolha);
   const prog = useProgramacao(id, emissoes.isLoading ? undefined : rev);
   const v = prog.data;
@@ -36,12 +38,13 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         {vigente ? <span /> : <Link href={`/app/programacoes/${id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-m-accent"><ArrowLeft size={16} /> Voltar para montar</Link>}
         <div className="flex flex-wrap items-end gap-2">
+          <BotaoNomes className="mb-1" />
           <Selecao rotulo="Versão" value={escolha} onChange={(e) => setEscolha(e.target.value)} className="w-[260px]">
             <option value="ultima">Última emissão{emissoes.data?.[0] ? ` (rev. ${emissoes.data[0].revisao})` : ' (nenhuma: rascunho)'}</option>
             {emissoes.data?.map((e) => <option key={e.revisao} value={e.revisao}>Rev. {e.revisao} · {new Date(e.emitida_em).toLocaleString('pt-BR')}</option>)}
             {!vigente && <option value="viva">Rascunho atual (não emitido)</option>}
           </Selecao>
-          <Botao variante="secundario" onClick={() => api.download(`/programacoes/${id}/excel${rev != null ? `?revisao=${rev}` : ''}`, `${v.titulo.split(' · ')[0]}${rev != null ? ` rev${rev}` : ''}.xlsx`).catch((e) => toast.error(e.message))}><FileSpreadsheet size={16} /> {vigente ? 'Excel' : 'Excel do cliente'}</Botao>
+          <Botao variante="secundario" onClick={() => api.download(`/programacoes/${id}/excel?nomes=${nomes}${rev != null ? `&revisao=${rev}` : ''}`, `${v.titulo.split(' · ')[0]}${rev != null ? ` rev${rev}` : ''}.xlsx`).catch((e) => toast.error(e.message))}><FileSpreadsheet size={16} /> {vigente ? 'Excel' : 'Excel do cliente'}</Botao>
           <Botao onClick={() => window.print()}><Printer size={16} /> Imprimir / PDF</Botao>
         </div>
       </div>
@@ -77,12 +80,13 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
                 {l.areas.map((a, ai) => (
                   <Fragment key={`a${a.id}`}>
                     <tr className="break-inside-avoid"><td colSpan={11 + v.dias.length} className={`${cel} bg-[#173761] font-semibold text-white`}>{a.codigo} · {a.descricao}</td></tr>
-                    {a.linhas.map((ln, i) => (
+                    {porCwp(a.linhas).map(({ ln, cwp, inicio }, i) => (
                       <Fragment key={ln.id}>
+                        {inicio && cwp && <tr className="break-inside-avoid"><td colSpan={11 + v.dias.length} className={`${cel} bg-[#DCE6F1] pl-4 font-semibold text-[#173761]`}>CWP {cwp.codigo ? `${cwp.codigo} · ` : ''}{cwp.texto}</td></tr>}
                         <tr className="break-inside-avoid">
                           <td rowSpan={2} className={`${cel} align-middle`}>{li + 1}.{ai + 1}.{i + 1}</td>
                           <td rowSpan={2} className={`${cel} align-middle font-semibold`}>{ln.codigo_simova}</td>
-                          <td rowSpan={2} className={`${cel} align-middle`}>{ln.descricao}{ln.id_crono && <div className="text-[9px] text-black/60">{ln.id_crono}</div>}</td>
+                          <td rowSpan={2} className={`${cel} align-middle`}>{nomeLinha(ln, nomes)}{ln.id_crono && <div className="text-[9px] text-black/60">{ln.id_crono}</div>}</td>
                           <td rowSpan={2} className={`${cel} align-middle`}>{ln.item_pq ?? '—'}</td>
                           <td rowSpan={2} className={`${cel} text-center align-middle`}>{ln.unidade ?? ''}</td>
                           <td rowSpan={2} className={`${cel} text-right align-middle`}>{ln.qtd_projeto != null ? fmt(ln.qtd_projeto) : ''}</td>

@@ -1,3 +1,4 @@
+import copy
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -391,7 +392,7 @@ def emissao(pid: int, rev: int, s: Session = Depends(get_session), c: ContextoOb
     e = s.scalar(select(EmissaoModel).where(EmissaoModel.programacao_id == pid, EmissaoModel.revisao == rev))
     if e is None:
         raise NotFoundError("Emissão", rev)
-    return {**e.foto, "emitida_em": e.emitida_em.isoformat(), "emitida_por": e.emitida_por}
+    return {**sv.completar_foto(s, c.obra_id, copy.deepcopy(e.foto)), "emitida_em": e.emitida_em.isoformat(), "emitida_por": e.emitida_por}
 
 
 @router.get("/programacoes/{pid}/ft")
@@ -611,9 +612,10 @@ def cronograma_arvore(s: Session = Depends(get_session), c: ContextoObra = Depen
 
 
 @router.get("/programacoes/{pid}/excel")
-def exportar_excel(pid: int, revisao: int | None = None, s: Session = Depends(get_session),
+def exportar_excel(pid: int, revisao: int | None = None, nomes: str = "reduzido", s: Session = Depends(get_session),
                    c: ContextoObra = Depends(ler)):
-    """Programação no Excel do cliente (layout da aba "Programação Semanal - S32"). Sem revisão = rascunho atual."""
+    """Programação no Excel do cliente (layout da aba "Programação Semanal - S32"). Sem revisão = rascunho atual.
+    nomes=reduzido (padrão): nome reduzido + complemento; nomes=pq: descritivo da PQ."""
     from app.modules.equipes.infra.composicao import composicao_efetiva
     from app.modules.obras.infra.models import ObraModel
     from app.modules.planejamento.application.exportar_cliente import gerar
@@ -623,7 +625,7 @@ def exportar_excel(pid: int, revisao: int | None = None, s: Session = Depends(ge
         e = s.scalar(select(EmissaoModel).where(EmissaoModel.programacao_id == pid, EmissaoModel.revisao == revisao))
         if e is None:
             raise NotFoundError("Emissão", revisao)
-        v = {**e.foto, "emitida_em": e.emitida_em.isoformat()}
+        v = {**sv.completar_foto(s, c.obra_id, copy.deepcopy(e.foto)), "emitida_em": e.emitida_em.isoformat()}
     else:
         v = sv.visao(s, p)
     obra = s.get(ObraModel, c.obra_id)
@@ -634,6 +636,10 @@ def exportar_excel(pid: int, revisao: int | None = None, s: Session = Depends(ge
     comps = {eq.id: composicao_efetiva(eq, fd) for eq in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id))}
     from app.shared.marca import marca_da_obra
 
+    # emissões antigas não têm os dois textos: fica o que foi emitido
+    campo = "descricao_completa" if nomes == "pq" else "descricao_reduzida"
+    v = {**v, "locais": [{**loc, "areas": [{**a, "linhas": [{**ln, "descricao": ln.get(campo) or ln["descricao"]}
+                                                             for ln in a["linhas"]]} for a in loc["areas"]]} for loc in v["locais"]]}
     dados = gerar(v, nome, comps, marca_da_obra(s, c.obra_id))
     import unicodedata
 

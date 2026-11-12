@@ -108,6 +108,8 @@ export interface ProgramacaoResumo { id: number; tipo: 'SEMANAL' | 'MENSAL'; tit
 export interface LinhaVisao {
   id: number; n: number; area_id: number; tipo_id: number; item_simova_id: number | null;
   wbs_no_id?: number | null; wbs_codigo?: string | null; wbs_caminho?: string | null;
+  /** Spec 046: CWP da linha (nível entre a área e as linhas) e os dois textos da atividade. */
+  cwp?: { id: number | null; codigo: string | null; texto: string } | null; descricao_reduzida?: string; descricao_completa?: string;
   grupo: { codigo: string; descricao: string }; codigo_simova: string; descricao: string; complemento: string | null;
   unidade: string | null; item_pq: string | null; descricao_pq: string | null; pu: number | null;
   qtd_takeoff: number | null; qtd_projeto: number | null; id_crono: string | null; atividade_crono: string | null;

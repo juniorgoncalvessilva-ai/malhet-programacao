@@ -1,5 +1,6 @@
 'use client';
 
+import { BotaoNomes, nomeLinha, porCwp, useModoNomes } from '@/lib/programacao/nomes';
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -58,6 +59,7 @@ export default function MontarPage() {
   const cadastros = useCadastrosSsma();
   const ptos = (cadastros.data ?? []).filter((c) => c.tipo === 'PTO' && (c.ativo || form.pto.includes(c.codigo)));
   const [modo, setModo] = useState<'previsto' | 'realizado'>('previsto');
+  const [nomes] = useModoNomes();
   const [form, setForm] = useState<FormLinha>(VAZIO);
   const [editando, setEditando] = useState<number | null>(null);
   const [aberto, setAberto] = useState(false);
@@ -344,6 +346,7 @@ export default function MontarPage() {
         titulo="O que cada frente faz no período?"
         subtitulo={`${dataBR(v.inicio)} a ${dataBR(v.fim)} · digite a quantidade do período e de cada dia e clique em Salvar programação.`}
         acoes={<>
+          <BotaoNomes />
           <Chip ativo={modo === 'previsto'} onClick={() => setModo('previsto')}>P · Previsto</Chip>
           <Chip ativo={modo === 'realizado'} onClick={() => setModo('realizado')}>R · Realizado</Chip>
           {modo === 'previsto' && rascunho && pode('encarregado') && v.linhas > 0 && <>
@@ -381,11 +384,17 @@ export default function MontarPage() {
                           {rascunho && pode('encarregado') && <button type="button" className="ml-3 font-semibold underline" onClick={() => abrirNova(a.id)}>+ linha</button>}
                         </td>
                       </tr>
-                      {a.linhas.map((ln, i) => (
-                        <tr key={ln.id} className="border-b border-m-row align-top">
+                      {porCwp(a.linhas).map(({ ln, cwp, inicio }, i) => (
+                        <Fragment key={ln.id}>
+                        {inicio && cwp && (
+                          <tr><td colSpan={v.dias.length + 8} className="border-b border-m-stroke-subtle bg-m-info-subtle px-5 py-1 text-[11.5px] font-semibold text-m-info">
+                            CWP {cwp.codigo ? `${cwp.codigo} · ` : ''}{cwp.texto}
+                          </td></tr>
+                        )}
+                        <tr className="border-b border-m-row align-top">
                           <td className="px-2 py-2 text-m-text-muted">{li + 1}.{ai + 1}.{i + 1}</td>
                           <td className="min-w-[240px] px-2 py-2">
-                            <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{ln.descricao}</span>
+                            <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{nomeLinha(ln, nomes)}</span>
                             <div className="text-xs text-m-text-muted">{ln.wbs_codigo && <span title={ln.wbs_caminho ?? ''} className="mr-1 rounded-[5px] bg-m-info-subtle px-1.5 py-px font-semibold text-m-info">WBS {ln.wbs_codigo}</span>}{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
                             <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}{comoLista(ln.ssma?.pto).length ? ` · PTO ${comoLista(ln.ssma?.pto).join(', ')}` : ''}</div>
                             <Calculo ln={ln} pid={id} />
@@ -440,6 +449,7 @@ export default function MontarPage() {
                             </>}
                           </td>
                         </tr>
+                        </Fragment>
                       ))}
                     </Fragment>
                   ))}

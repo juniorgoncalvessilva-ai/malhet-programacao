@@ -1,5 +1,6 @@
 'use client';
 
+import { nomeLinha, useModoNomes } from '@/lib/programacao/nomes';
 import { useQuery } from '@tanstack/react-query';
 import { FileSpreadsheet } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,6 +13,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 /** Programação vigente no celular: a última emissão, dia a dia (previsto × realizado). Aberta para todo mundo da obra. */
 export default function VigenteCampoPage() {
   const api = useApi();
+  const [nomes] = useModoNomes();
   const vig = useQuery({ queryKey: ['programacao', 'vigente'], queryFn: () => api.get<{ id: number | null; revisao: number | null; titulo: string | null }>('/programacoes/vigente') });
   const id = vig.data?.id ?? 0;
   const emissoes = useQuery({ queryKey: ['emissoes', id], enabled: !!id,
@@ -60,7 +62,8 @@ export default function VigenteCampoPage() {
               return (
                 <div key={ln.id} className="flex items-start justify-between gap-3 border-t border-m-stroke-subtle pt-3">
                   <div className="min-w-0">
-                    <div className="text-[14px] font-medium leading-5">{ln.descricao}</div>
+                    <div className="text-[14px] font-medium leading-5">{nomeLinha(ln, nomes)}</div>
+                    {ln.cwp && <div className="text-[11.5px] font-semibold text-m-info">CWP {ln.cwp.texto}</div>}
                     <div className="text-[12px] text-m-text-muted">{ln.codigo_simova}{ln.encarregado || ln.equipe ? ` · ${ln.encarregado ?? ln.equipe}` : ''}</div>
                   </div>
                   <div className="shrink-0 text-right text-[13px]">

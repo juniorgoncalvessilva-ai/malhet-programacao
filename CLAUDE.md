@@ -59,7 +59,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   L1, L2…; `area_frente.ativo_codigo` → TAG do take-off. Formato antigo CODIGO | DESCRICAO ainda aceito. Spec 020.
 - WBS de execução (`wbs/`): Área → CWP (elemento + complemento) → Grupo → IWP (item da PQ); `programacao_linha.wbs_no_id`
   (IWP define área, tipo, item, qtd e o texto complementar = CWP). Programação concluída só muda por revisão
-  (`exigir_aberta`, `programacao_conclusao`). Specs 023–024.
+  (`exigir_aberta`, `programacao_conclusao`). Specs 023–024. Programação mostra Local → Área → CWP → linhas
+  (`linha.cwp`, `porCwp`) e o nome "Reduzido + complemento" (padrão) ou "Descritivo da PQ" (`BotaoNomes`,
+  `descricao_reduzida`/`descricao_completa`, Excel `?nomes=`). Spec 046.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),
