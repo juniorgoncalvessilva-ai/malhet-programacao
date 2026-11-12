@@ -4,7 +4,10 @@ responsável) → Equipe → Função → pessoas. Equipe sem disciplina fica di
 Os setores são cadastrados na obra, cada um com responsável e cor; a equipe aponta para o seu setor. Sem nenhum
 setor cadastrado, o setor da equipe é a frente ou o DP do encarregado (como antes). Quem está mobilizado e sem equipe
 vai para o ramo "Sem equipe"; quem ainda está em mobilização (crachá, exame, previsto), para "Em mobilização".
-Desmobilizados e desistências não entram. Responsáveis (obra, setor, disciplina) aparecem só na própria caixa: não
+Desmobilizados e desistências não entram.
+
+Vista por frente (spec 042): Obra (gerente) → Setor (dono) → Frente (local) → Área → Equipe → Função. A frente da
+equipe é a escolhida no cadastro da equipe ou, sem ela, a área onde a equipe está na programação mais recente. Responsáveis (obra, setor, disciplina) aparecem só na própria caixa: não
 entram nas listas de funções nem na contagem.
 """
 import re
@@ -13,9 +16,10 @@ from dataclasses import dataclass, field
 from app.shared.errors import DomainError
 
 SEM_SETOR, SEM_EQUIPE, EM_MOBILIZACAO, SEM_FUNCAO = ("Sem setor", "Sem equipe", "Em mobilização", "Sem função")
-NIVEIS_COR = ("obra", "setor", "disciplina", "equipe", "funcao")
-CORES_PADRAO = {"obra": "#1F3A3A", "setor": "#0F766E", "disciplina": "#0891B2", "equipe": "#2563EB",
-                "funcao": "#64748B"}
+SEM_FRENTE = "Sem frente"
+NIVEIS_COR = ("obra", "setor", "disciplina", "frente", "area", "equipe", "funcao")
+CORES_PADRAO = {"obra": "#1F3A3A", "setor": "#0F766E", "disciplina": "#0891B2", "frente": "#B45309", "area": "#D97706",
+                "equipe": "#2563EB", "funcao": "#64748B"}
 _COR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
@@ -49,6 +53,8 @@ class PessoaOrg:
     encarregado: str | None = None
     setor: str | None = None
     disciplina: str | None = None
+    frente: str | None = None  # "L4 · Novo CMD"
+    area: str | None = None  # "004.05 · Galpão"
 
 
 @dataclass(frozen=True)
@@ -71,7 +77,7 @@ class SetorOrg:
 @dataclass
 class No:
     id: str
-    tipo: str  # obra | setor | disciplina | equipe | funcao
+    tipo: str  # obra | setor | disciplina | frente | area | equipe | funcao
     titulo: str
     detalhe: str
     qtd: int = 0
@@ -106,28 +112,34 @@ def _contar(n: No) -> int:
 
 
 def _ordenar(n: No) -> None:
-    fim = {SEM_SETOR: 1, SEM_EQUIPE: 2, EM_MOBILIZACAO: 3}
-    tipo = {"disciplina": 0, "equipe": 1}
-    n.filhos.sort(key=lambda f: (fim.get(f.titulo, 0) if f.tipo == "setor" else 0, tipo.get(f.tipo, 0), f.ordem, f.titulo))
+    fim = {SEM_SETOR: 1, SEM_EQUIPE: 2, EM_MOBILIZACAO: 3, SEM_FRENTE: 1}
+    tipo = {"disciplina": 0, "frente": 0, "area": 0, "equipe": 1}
+    n.filhos.sort(key=lambda f: (fim.get(f.titulo, 0) if f.tipo in ("setor", "frente") else 0, tipo.get(f.tipo, 0), f.ordem,
+                                 [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f.titulo)]))
     n.pessoas.sort(key=lambda p: p.nome)
     for f in n.filhos:
         _ordenar(f)
 
 
 def montar_organograma(obra: str, pessoas: list[PessoaOrg], setores: list[SetorOrg] | tuple = (),
-                       responsavel_geral: str | None = None) -> No:
+                       responsavel_geral: str | None = None, por_frente: bool = False) -> No:
     raiz = No("obra", "obra", obra, f"Resp.: {responsavel_geral}" if responsavel_geral else "Obra",
               responsavel=responsavel_geral)
     for st in setores:  # setores cadastrados aparecem mesmo vazios, na ordem escolhida
         n = _filho(raiz, "setor", st.nome, f"Resp.: {st.responsavel}" if st.responsavel else "Setor")
         n.cor, n.responsavel, n.ordem = st.cor, st.responsavel, st.ordem
-        for dc in st.disciplinas:
+        for dc in (() if por_frente else st.disciplinas):
             d = _filho(n, "disciplina", dc.nome, f"Resp.: {dc.responsavel}" if dc.responsavel else "Disciplina")
             d.cor, d.responsavel, d.ordem = dc.cor, dc.responsavel, dc.ordem
     for p in pessoas:
         if p.situacao == "equipe":
             setor = _filho(raiz, "setor", p.setor or SEM_SETOR, "Setor")
-            pai = _filho(setor, "disciplina", p.disciplina, "Disciplina") if p.disciplina and p.setor else setor
+            if por_frente:  # setor (dono) → frente → área → equipe
+                pai = _filho(setor, "frente", p.frente or SEM_FRENTE, "Frente de trabalho" if p.frente else "Equipe sem frente")
+                if p.area:
+                    pai = _filho(pai, "area", p.area, "Área")
+            else:
+                pai = _filho(setor, "disciplina", p.disciplina, "Disciplina") if p.disciplina and p.setor else setor
             equipe = _filho(pai, "equipe", p.equipe or SEM_EQUIPE, f"Enc.: {p.encarregado or '—'}")
             _por_funcao(equipe, p)
         elif p.situacao == "sem-equipe":

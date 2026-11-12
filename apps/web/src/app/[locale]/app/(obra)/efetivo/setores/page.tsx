@@ -17,7 +17,7 @@ import { useObra } from '@/lib/obra/ObraProvider';
 
 type FormSetor = { tipo: 'setor' | 'disciplina'; id?: number; setorId?: number; nome: string; cor: string | null; ordem: number; responsavel: PessoaRef | null; equipes: number[] };
 const NIVEIS: { v: NivelCor; rotulo: string }[] = [
-  { v: 'obra', rotulo: 'Obra' }, { v: 'setor', rotulo: 'Setores' }, { v: 'disciplina', rotulo: 'Disciplinas' }, { v: 'equipe', rotulo: 'Equipes' }, { v: 'funcao', rotulo: 'Funções' },
+  { v: 'obra', rotulo: 'Obra' }, { v: 'setor', rotulo: 'Setores' }, { v: 'disciplina', rotulo: 'Disciplinas' }, { v: 'frente', rotulo: 'Frentes' }, { v: 'area', rotulo: 'Áreas' }, { v: 'equipe', rotulo: 'Equipes' }, { v: 'funcao', rotulo: 'Funções' },
 ];
 
 export default function SetoresPage() {

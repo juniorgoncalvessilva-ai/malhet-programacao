@@ -170,6 +170,24 @@ def test_efetivo_equipes_simova_depara_organograma(client):
     nomes = {p["nome"] for f in equipe["filhos"] for p in f["pessoas"]}
     assert equipe["titulo"] == "EQUIPE.1_FORMA" and "ENCARREGADO TESTE UM" not in nomes and "PEDREIRO TESTE DOIS" in nomes
     assert "ENCARREGADO DE FORMAS" not in {f["titulo"] for f in equipe["filhos"]}
+    # vista por frente (spec 042): Obra → Setor (dono) → Frente → Área → Equipe; sem frente → "Sem frente"
+    civil = next(f for f in client.get("/api/efetivo/organograma?vista=frente").json()["raiz"]["filhos"] if f["titulo"] == "Civil")
+    assert [f["titulo"] for f in civil["filhos"]] == ["Sem frente"] and civil["filhos"][0]["filhos"][0]["titulo"] == "EQUIPE.1_FORMA"
+    client.post("/api/frentes/importar", json={"texto": "CWA\tAtivo\tDESCRICAO CWA\tLocal\n004.05\tED-1800AA-01\tGalpão\tNovo CMD"})
+    from app.modules.equipes.infra.models import EquipeModel
+
+    with SessionLocal() as s:
+        s.get(EquipeModel, eq).frente_codigo = "004.05"
+        s.commit()
+    raiz = client.get("/api/efetivo/organograma?vista=frente").json()["raiz"]
+    civil = next(f for f in raiz["filhos"] if f["titulo"] == "Civil")
+    frente = civil["filhos"][0]
+    assert (frente["tipo"], frente["titulo"]) == ("frente", "L1 · Novo CMD") and civil["responsavel"] == "MOTORISTA TERCEIRO"
+    area = frente["filhos"][0]
+    assert (area["tipo"], area["titulo"], area["filhos"][0]["titulo"]) == ("area", "004.05 · Galpão", "EQUIPE.1_FORMA")
+    assert area["qtd"] == formas["qtd"]  # mesmas pessoas, outra arrumação
+    # a vista por setor continua com a disciplina
+    assert next(f for f in client.get("/api/efetivo/organograma").json()["raiz"]["filhos"] if f["titulo"] == "Civil")["filhos"][0]["tipo"] == "disciplina"
     # equipe salva com a disciplina leva o setor junto; excluir a disciplina mantém a equipe no setor
     e1 = next(e for e in client.get("/api/equipes").json() if e["id"] == eq)
     assert (e1["setor_id"], e1["subsetor_id"]) == (sid, did)

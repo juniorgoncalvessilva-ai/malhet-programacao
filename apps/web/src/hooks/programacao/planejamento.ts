@@ -41,9 +41,9 @@ export function useSetores() {
   return useQuery({ queryKey: [...k.efetivo, 'setores'], queryFn: () => api.get<SetoresObra>('/efetivo/setores') });
 }
 
-export function useOrganograma(q: string) {
+export function useOrganograma(q: string, vista: 'setor' | 'frente' = 'setor') {
   const api = useApi();
-  return useQuery({ queryKey: [...k.efetivo, 'organograma', q], queryFn: () => api.get<{ raiz: NoOrganograma | null; total: number; cores: CoresOrganograma }>(`/efetivo/organograma${q ? `?q=${encodeURIComponent(q)}` : ''}`) });
+  return useQuery({ queryKey: [...k.efetivo, 'organograma', q, vista], queryFn: () => api.get<{ raiz: NoOrganograma | null; total: number; cores: CoresOrganograma }>(`/efetivo/organograma?vista=${vista}${q ? `&q=${encodeURIComponent(q)}` : ''}`) });
 }
 
 /** Todos os cadastros de SSMA/PTO da obra (as telas filtram por tipo). */

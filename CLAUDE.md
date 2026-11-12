@@ -51,7 +51,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017.
 - Setores da obra (`setor_obra`, responsável do efetivo, cor) e `organograma_config` (responsável geral + cores por
-  nível); `equipe.setor_id`. Spec 018. Disciplinas (`subsetor_obra`, `equipe.subsetor_id`): Organograma =
+  nível); `equipe.setor_id`. Spec 018. Vista por frente (`?vista=frente`): Obra → Setor (dono) → Frente (local) → Área →
+  Equipe; frente da equipe = `equipe.frente_codigo` (área/local) ou a área da programação mais recente
+  (`frentes_das_equipes`). Spec 042. Disciplinas (`subsetor_obra`, `equipe.subsetor_id`): Organograma =
   Obra → Setor → Disciplina → Equipe → Função; responsáveis só na própria caixa. Spec 019.
 - Frentes: lista da obra `CWA | Ativo | DESCRICAO CWA | Local` (`interpretar_lista_cwa`); Local pelo nome com código
   L1, L2…; `area_frente.ativo_codigo` → TAG do take-off. Formato antigo CODIGO | DESCRICAO ainda aceito. Spec 020.

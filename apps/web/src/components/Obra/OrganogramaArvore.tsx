@@ -9,14 +9,21 @@ import styles from './OrganogramaArvore.module.css';
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 1.6;
 const LISTA_LONGA = 12;
-const NIVEIS = [
+const NIVEIS_SETOR = [
   { n: 1, rotulo: 'Setores' },
   { n: 2, rotulo: 'Disciplinas' },
   { n: 3, rotulo: 'Equipes' },
   { n: 99, rotulo: 'Funções' },
 ];
-const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', disciplina: '#0891B2', equipe: '#2563EB', funcao: '#64748B' };
-const NIVEL_PADRAO = 3; // até as equipes
+// vista por frente: Obra → Setor (dono) → Frente → Área → Equipe → Função
+const NIVEIS_FRENTE = [
+  { n: 1, rotulo: 'Setores' },
+  { n: 2, rotulo: 'Frentes' },
+  { n: 3, rotulo: 'Áreas' },
+  { n: 4, rotulo: 'Equipes' },
+  { n: 99, rotulo: 'Funções' },
+];
+const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', disciplina: '#0891B2', frente: '#B45309', area: '#D97706', equipe: '#2563EB', funcao: '#64748B' };
 const RAMOS_ESPECIAIS = new Set(['Sem equipe', 'Em mobilização', 'Sem setor']);
 
 /** ids dos nós que, até a profundidade `nivel`, ficam abertos (mostram os filhos). */
@@ -37,9 +44,13 @@ function abertosAte(raiz: NoOrganograma, nivel: number): Set<string> {
  * Árvore do organograma (modelo do Malhet) com ramos recolhíveis, zoom (botões, Ctrl + rolagem, ajustar à tela),
  * arrastar para navegar e tela cheia. Clique numa função para ver as pessoas.
  */
-export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores = CORES_PADRAO, acoes }: {
-  raiz: NoOrganograma; ariaLabel: string; expandirTudo?: boolean; cores?: CoresOrganograma; acoes?: React.ReactNode;
+export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores: coresIn, acoes, porFrente = false }: {
+  raiz: NoOrganograma; ariaLabel: string; expandirTudo?: boolean; cores?: CoresOrganograma; acoes?: React.ReactNode; porFrente?: boolean;
 }) {
+  const cores = { ...CORES_PADRAO, ...coresIn };
+  const NIVEIS = porFrente ? NIVEIS_FRENTE : NIVEIS_SETOR;
+  const NIVEL_PADRAO = porFrente ? 4 : 3; // até as equipes
+  const legenda = porFrente ? (['obra', 'setor', 'frente', 'area', 'equipe', 'funcao'] as const) : (['obra', 'setor', 'disciplina', 'equipe', 'funcao'] as const);
   const [nivel, setNivel] = useState(expandirTudo ? 99 : NIVEL_PADRAO);
   const [abertos, setAbertos] = useState<Set<string>>(() => abertosAte(raiz, expandirTudo ? 99 : NIVEL_PADRAO));
   const [pessoas, setPessoas] = useState<Set<string>>(new Set());
@@ -135,7 +146,7 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
         <button type="button" className={botao} onClick={() => escolherNivel(1)}><ChevronsDownUp size={14} /> Recolher tudo</button>
         <span className="text-[12px] text-m-text-muted">{visiveis} caixas visíveis</span>
         <span className="flex items-center gap-2.5 text-[11.5px] text-m-text-secondary" aria-label="Cores dos níveis">
-          {(['obra', 'setor', 'disciplina', 'equipe', 'funcao'] as const).map((n) => (
+          {legenda.map((n) => (
             <span key={n} className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: cores[n] }} aria-hidden="true" />{ROTULO_TIPO[n]}</span>
           ))}
         </span>
@@ -246,7 +257,7 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
   );
 }
 
-const ROTULO_TIPO: Record<NoOrganograma['tipo'], string> = { obra: 'Obra', setor: 'Setor', disciplina: 'Disciplina', equipe: 'Equipe', funcao: 'Função' };
+const ROTULO_TIPO: Record<NoOrganograma['tipo'], string> = { obra: 'Obra', setor: 'Setor', disciplina: 'Disciplina', frente: 'Frente', area: 'Área', equipe: 'Equipe', funcao: 'Função' };
 
 function Cartao({ no }: { no: NoOrganograma }) {
   const tipo = RAMOS_ESPECIAIS.has(no.titulo) && no.tipo === 'setor' ? 'Grupo' : ROTULO_TIPO[no.tipo];

@@ -359,6 +359,44 @@ def aplicar_sugestoes(s: Session = Depends(get_session), c: ContextoObra = Depen
 
 
 # ---- organograma ---------------------------------------------------------------------------------------
+def frentes_das_equipes(s: Session, obra_id: int) -> dict[int, tuple[str | None, str | None]]:
+    """equipe → (frente, área) para o organograma por frente. Vale a frente escolhida na equipe (código da área ou
+    do local, em `frente_codigo`); sem ela, a área onde a equipe mais aparece na programação mais recente dela."""
+    from collections import Counter
+
+    from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
+    from app.modules.planejamento.infra.models import LinhaProgramacaoModel, ProgramacaoModel
+
+    locais = {x.id: x for x in s.scalars(select(LocalFrenteModel).where(LocalFrenteModel.obra_id == obra_id))}
+    areas = {x.id: x for x in s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == obra_id))}
+    area_cod = {a.codigo: a for a in areas.values()}
+    local_cod = {x.codigo: x for x in locais.values()}
+    rot_local = lambda x: f"{x.codigo} · {x.descricao}"  # noqa: E731
+    rot_area = lambda a: f"{a.codigo} · {a.descricao}"  # noqa: E731
+    # programação mais recente de cada equipe → área mais frequente nela
+    ultima: dict[int, int] = {}
+    contagem: dict[int, Counter] = {}
+    for eq, area_id, pid in s.execute(select(LinhaProgramacaoModel.equipe_id, LinhaProgramacaoModel.area_id, ProgramacaoModel.id)
+                                      .join(ProgramacaoModel, ProgramacaoModel.id == LinhaProgramacaoModel.programacao_id)
+                                      .where(ProgramacaoModel.obra_id == obra_id, LinhaProgramacaoModel.equipe_id.is_not(None))
+                                      .order_by(ProgramacaoModel.inicio.desc(), ProgramacaoModel.id.desc())):
+        if ultima.setdefault(eq, pid) != pid or area_id not in areas:
+            continue
+        contagem.setdefault(eq, Counter())[area_id] += 1
+    out: dict[int, tuple[str | None, str | None]] = {}
+    for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == obra_id)):
+        cod = (e.frente_codigo or "").strip()
+        if cod in area_cod:
+            a = area_cod[cod]
+            out[e.id] = (rot_local(locais[a.local_id]) if a.local_id in locais else None, rot_area(a))
+        elif cod in local_cod:
+            out[e.id] = (rot_local(local_cod[cod]), None)
+        elif e.id in contagem:
+            a = areas[contagem[e.id].most_common(1)[0][0]]
+            out[e.id] = (rot_local(locais[a.local_id]) if a.local_id in locais else None, rot_area(a))
+    return out
+
+
 def _config(s: Session, obra_id: int) -> OrganogramaConfigModel:
     cfg = s.scalar(select(OrganogramaConfigModel).where(OrganogramaConfigModel.obra_id == obra_id))
     if cfg is None:
@@ -373,7 +411,8 @@ def _cores(cfg: OrganogramaConfigModel | None) -> dict:
 
 
 @router.get("/organograma")
-def organograma(q: str | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+def organograma(q: str | None = None, vista: str = "setor", s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """vista=setor: Obra → Setor → Disciplina → Equipe → Função; vista=frente: Obra → Setor → Frente → Área → Equipe."""
     from app.modules.obras.infra.models import ObraModel
 
     obra = s.get(ObraModel, c.obra_id)
@@ -390,6 +429,8 @@ def organograma(q: str | None = None, s: Session = Depends(get_session), c: Cont
     responsaveis = {m.id for m in [geral, *(por_id.get(x.responsavel_id) for x in [*setores_m, *disc_m])] if m is not None}
     pessoas: list[PessoaOrg] = []
     na_equipe: set[str] = set()
+    por_frente = vista == "frente"
+    frente_de = frentes_das_equipes(s, c.obra_id) if por_frente else {}
     for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.ativo.is_(True))):
         enc = cs.get(e.encarregado_cracha or "")
         disciplina = None
@@ -402,6 +443,8 @@ def organograma(q: str | None = None, s: Session = Depends(get_session), c: Cont
             setor = e.frente_codigo or (enc.dp if enc else None)
         base = {"equipe": e.nome, "encarregado": enc.nome if enc else e.encarregado_nome, "setor": setor,
                 "disciplina": disciplina, "turno": e.turno or ""}
+        if por_frente:
+            base["frente"], base["area"] = frente_de.get(e.id, (None, None))
         for mb in e.membros:
             m = cs.get(mb.cracha)
             if m is not None and (not Situacao(m.situacao).ativo or m.id in responsaveis):
@@ -426,7 +469,7 @@ def organograma(q: str | None = None, s: Session = Depends(get_session), c: Cont
                         tuple(DisciplinaOrg(d.nome, nome_de(d.responsavel_id), d.cor, d.ordem)
                               for d in disc_m if d.setor_id == st.id))
                for st in setores_m]
-    raiz = montar_organograma(obra.nome if obra else "Obra", pessoas, setores, geral.nome if geral else None)
+    raiz = montar_organograma(obra.nome if obra else "Obra", pessoas, setores, geral.nome if geral else None, por_frente)
     vis = filtrar(raiz, q or "")
     return {"raiz": vis.como_dict() if vis else None, "total": raiz.qtd, "cores": _cores(cfg)}
 

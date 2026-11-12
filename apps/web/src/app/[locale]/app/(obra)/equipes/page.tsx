@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Abas } from '@/components/Obra/Abas';
 import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Selecao, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
-import { k as kEfetivo, useSetores } from '@/hooks/programacao/planejamento';
+import { k as kEfetivo, useFrentes2, useSetores } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { ComposicaoEquipe, Equipe, PessoaEfetivoEquipe } from '@/lib/api/types';
 import { ROTULO_SITUACAO, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
@@ -31,6 +31,7 @@ export default function EquipesPage() {
   const { pode } = useObra();
   const equipes = useEquipes();
   const setores = useSetores();
+  const frentes = useFrentes2();
   const api = useApi();
   const qc = useQueryClient();
   const recursos = useQuery({ queryKey: ['cpu-recursos'], queryFn: () => api.get<{ recurso: string; tipo: 'MOD' | 'EQU'; composicoes: number }[]>('/cpu/recursos') });
@@ -166,7 +167,17 @@ export default function EquipesPage() {
                 <option value="">{form.setor_id ? '— sem disciplina —' : 'escolha o setor'}</option>
                 {setores.data?.setores.find((x) => x.id === form.setor_id)?.disciplinas.map((dc) => <option key={dc.id} value={dc.id}>{dc.nome}</option>)}
               </Selecao>
-              <Campo rotulo="Frente" value={form.frente_codigo ?? ''} onChange={(e) => setForm({ ...form, frente_codigo: e.target.value || null })} />
+              <Selecao rotulo="Frente de trabalho" value={form.frente_codigo ?? ''} title="Onde a equipe trabalha: vira o ramo da equipe no organograma por frente"
+                onChange={(e) => setForm({ ...form, frente_codigo: e.target.value || null })}>
+                <option value="">— pela programação —</option>
+                {form.frente_codigo && !frentes.data?.some((l) => l.codigo === form.frente_codigo || l.areas.some((a) => a.codigo === form.frente_codigo)) && <option value={form.frente_codigo}>{form.frente_codigo}</option>}
+                {frentes.data?.filter((l) => l.ativo).map((l) => (
+                  <optgroup key={l.id} label={`${l.codigo} · ${l.descricao}`}>
+                    <option value={l.codigo}>{l.codigo} · {l.descricao} (frente inteira)</option>
+                    {l.areas.filter((a) => a.ativo).map((a) => <option key={a.id} value={a.codigo}>{a.codigo} · {a.descricao}</option>)}
+                  </optgroup>
+                ))}
+              </Selecao>
 
               <div className="md:col-span-6">
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Funcionários ({form.membros.length}) · a função da composição vem do <Link href="/app/efetivo/funcoes" className="text-m-accent underline">de-para de funções</Link>; troque só se a pessoa trabalha em outra função nesta equipe</div>
