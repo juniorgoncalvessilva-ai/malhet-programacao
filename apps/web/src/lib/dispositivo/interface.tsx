@@ -35,7 +35,8 @@ export function interfaceDoAparelho(): Interface {
 export function rotaDoCampo(pathname: string): string {
   if (pathname.startsWith('/app/restricoes')) return '/m/restricoes';
   if (pathname.startsWith('/app/desvios')) return '/m/ocorrencias';
-  if (pathname.startsWith('/app/programacoes') || pathname.startsWith('/app/vigente')) return '/m/lancar';
+  if (pathname.startsWith('/app/vigente')) return '/m/vigente';
+  if (pathname.startsWith('/app/programacoes')) return '/m/lancar';
   return '/m';
 }
 
