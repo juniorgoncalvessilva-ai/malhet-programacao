@@ -29,7 +29,7 @@ class AcaoRestricaoModel(Base):
     conclusao: Mapped[date | None] = mapped_column(Date)
     status1: Mapped[str] = mapped_column(String(10), default="Pendente")
     seis_m: Mapped[str | None] = mapped_column(String(3))
-    observacoes: Mapped[str | None] = mapped_column(String(600))
+    observacoes: Mapped[str | None] = mapped_column(String(4000))  # histórico: "dd/mm: texto", a mais nova no topo
     # vínculo com o que a restrição trava (opcional)
     linha_id: Mapped[int | None] = mapped_column(ForeignKey("programacao_linha.id", ondelete="SET NULL"), index=True)
     equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))

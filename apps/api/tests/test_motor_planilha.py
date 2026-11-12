@@ -167,3 +167,32 @@ def test_farol_e_status_da_acao_como_na_planilha_6wla():
     assert situacao("Pendente", D(2026, 11, 12), None, hoje).status2 == "Atrasado"  # planilha: hoje ≥ término
     assert situacao("Pendente", D(2026, 11, 5), D(2026, 11, 19), hoje).status2 == "Reprogramado"
     assert situacao("Pendente", D(2026, 11, 5), D(2026, 11, 10), hoje).farol == 1
+
+
+def test_observacao_da_restricao_entra_com_a_data_no_topo():
+    from datetime import date as D
+
+    from app.modules.restricoes.domain.acao import anotar
+
+    o = anotar(None, "  Vale informa  entrega ", D(2026, 10, 28))
+    assert o == "28/10: Vale informa entrega"
+    assert anotar(o, "Material chegou", D(2026, 11, 12)) == "12/11: Material chegou\n28/10: Vale informa entrega"
+    assert anotar(o, "   ", D(2026, 11, 12)) == o
+
+
+def test_painel_das_restricoes_conta_como_o_painel_acao():
+    from app.modules.restricoes.domain.painel import LinhaPainel, painel
+
+    L = [LinhaPainel(1, "Pendente", "Atrasado", "Ana", "CMD", "CLIENTE", "MAT", 32),
+         LinhaPainel(2, "Pendente", "No Prazo", "Ana", "CMD", "CONTRATADA", None, 33),
+         LinhaPainel(3, "Concluído", "Concluído", "Bia", "CMD", "CLIENTE", "MDO", 30),
+         LinhaPainel(4, "Pendente", "Reprogramado", "Bia", "Oficina", "CLIENTE", "MAT", 32)]
+    p = painel(L)
+    assert [(g.rotulo, g.n("total")) for g in p["status"]] == [("Concluído", 1), ("No Prazo", 1), ("Reprogramado", 1), ("Atrasado", 1)]
+    ana = p["responsavel"][0]
+    assert ana.rotulo == "Ana" and (ana.n("Atrasado"), ana.n("No Prazo"), ana.n("Reprogramado")) == (1, 1, 0)
+    assert [(g.rotulo, g.n("total")) for g in p["semana"]] == [("S32", 2), ("S33", 1)]
+    cmd = p["areas"][0]
+    assert cmd.rotulo == "CMD" and (cmd.n("Pendente"), cmd.n("Concluído")) == (2, 1)
+    assert [(g.rotulo, g.n("total")) for g in p["seis_m"]] == [("MAT", 2), ("", 1)]  # só pendentes
+    assert [(g.rotulo, g.n("total")) for g in p["gerencia"]] == [("CLIENTE", 3), ("CONTRATADA", 1)]

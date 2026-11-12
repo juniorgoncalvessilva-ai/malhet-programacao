@@ -1,5 +1,4 @@
 """Importa a aba Ações do Plano de Ação 6WLA e gera o Excel no mesmo layout (com farol e status por fórmula)."""
-from collections import Counter
 from datetime import date, datetime
 from io import BytesIO
 
@@ -104,7 +103,7 @@ def importar(s: Session, obra_id: int, conteudo: bytes, usuario: str) -> dict:
             a.reprogramacoes = int(float(v[13] or 0))
         except (TypeError, ValueError):
             a.reprogramacoes = 0
-        a.conclusao, a.status1, a.seis_m, a.observacoes = _d(v[14]), st, m6, _t(v[19], 600)
+        a.conclusao, a.status1, a.seis_m, a.observacoes = _d(v[14]), st, m6, _t(v[19], 4000)
         if a.id is None:
             s.add(a)
             existentes[n] = a
@@ -234,8 +233,14 @@ def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> Non
     faixa(wp, "A1:X2", f"PAINEL AÇÃO | {titulo}", VERDE, 22)
     wp["A3"] = f"HOJE: {hoje:%d/%m/%Y}"
     wp["A3"].font = Font(bold=True)
-    sit = {a.id: dom.situacao(a.status1, a.prazo_termino, a.reprogramado, hoje).status2 for a in acoes}
-    pend = [a for a in acoes if a.status1 == "Pendente"]
+    from app.modules.restricoes.domain.painel import STATUS1, STATUS_PENDENTE, LinhaPainel, painel
+
+    def semana_de(a):
+        d = dom.data_da_semana(a.prazo_termino, a.reprogramado)
+        return numero_semana(d) if d else None
+
+    pn = painel([LinhaPainel(a.id, a.status1, dom.situacao(a.status1, a.prazo_termino, a.reprogramado, hoje).status2,
+                             a.responsavel, a.area_texto, a.gerencia, a.seis_m, semana_de(a)) for a in acoes])
     col0 = 27  # AA: tabelas que alimentam os gráficos
     lin = [1]
 
@@ -259,8 +264,8 @@ def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> Non
         wp.column_dimensions[get_column_letter(col)].width = 18
     wp.column_dimensions[get_column_letter(col0)].width = 36
     # 1. status das restrições (rosca)
-    ordem_st = [s for s in ("Concluído", "No Prazo", "Reprogramado", "Atrasado", "Cancelado") if any(v == s for v in sit.values())]
-    l_st = tabela("STATUS DAS RESTRIÇÕES", ["Status 2", "Contagem de AÇÕES"], [[s, sum(v == s for v in sit.values())] for s in ordem_st])
+    ordem_st = [g.rotulo for g in pn["status"]]
+    l_st = tabela("STATUS DAS RESTRIÇÕES", ["Status 2", "Contagem de AÇÕES"], [[g.rotulo, g.n("total")] for g in pn["status"]])
     rosca = DoughnutChart()
     rosca.title = "STATUS DAS RESTRIÇÕES"
     rosca.add_data(Reference(wp, min_col=col0 + 1, min_row=l_st[0], max_row=l_st[1]), titles_from_data=False)
@@ -274,10 +279,8 @@ def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> Non
     rosca.width, rosca.height = 14, 10
     wp.add_chart(rosca, "A5")
     # 2. pendentes por responsável e status (colunas empilhadas)
-    resp = Counter(a.responsavel or "—" for a in pend).most_common(14)
-    sts = ["Atrasado", "Reprogramado", "No Prazo"]
-    l_rp = tabela("PENDENTES POR RESPONSÁVEL", ["Responsável", *sts],
-                  [[r, *[sum(1 for a in pend if (a.responsavel or "—") == r and sit[a.id] == s) for s in sts]] for r, _q in resp])
+    sts = list(STATUS_PENDENTE)
+    l_rp = tabela("PENDENTES POR RESPONSÁVEL", ["Responsável", *sts], [[g.rotulo, *[g.n(s) for s in sts]] for g in pn["responsavel"]])
     ch = BarChart()
     ch.type, ch.grouping, ch.overlap = "col", "stacked", 100
     ch.title = "STATUS RESTRIÇÕES POR RESPONSÁVEL"
@@ -291,15 +294,12 @@ def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> Non
     ch.width, ch.height = 26, 10
     wp.add_chart(ch, "I5")
     # 3. pendentes por semana do projeto
-    sem = sorted(Counter(numero_semana(d) for a in pend if (d := dom.data_da_semana(a.prazo_termino, a.reprogramado))).items())
-    l_sem = tabela("RESTRIÇÕES (PENDENTES) POR SEMANA", ["Semana", "Contagem de AÇÕES"], [[f"S{s}", q] for s, q in sem])
+    l_sem = tabela("RESTRIÇÕES (PENDENTES) POR SEMANA", ["Semana", "Contagem de AÇÕES"], [[g.rotulo, g.n("total")] for g in pn["semana"]])
     wp.add_chart(barras("RESTRIÇÕES POR SEMANA DO PROJETO", wp, col0, col0 + 1, l_sem[0], l_sem[1], "008282",
                         horizontal=False, largura=18, altura=10), "A26")
     # 4. por área: pendente × concluído × cancelado
-    areas = Counter(a.area_texto or "—" for a in acoes).most_common(15)
-    s1 = ["Pendente", "Concluído", "Cancelado"]
-    l_ar = tabela("RESTRIÇÕES POR ÁREAS / ATIVOS", ["Área", *s1],
-                  [[ar, *[sum(1 for a in acoes if (a.area_texto or "—") == ar and a.status1 == s) for s in s1]] for ar, _q in areas])
+    s1 = list(STATUS1)
+    l_ar = tabela("RESTRIÇÕES POR ÁREAS / ATIVOS", ["Área", *s1], [[g.rotulo, *[g.n(s) for s in s1]] for g in pn["areas"]])
     ch = BarChart()
     ch.type, ch.grouping = "col", "clustered"
     ch.title = "RESTRIÇÕES POR ÁREAS / ATIVOS"
@@ -313,12 +313,10 @@ def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> Non
     ch.width, ch.height = 26, 10
     wp.add_chart(ch, "K26")
     # 5. 6M das pendentes  6. por gerência
-    m6 = [[dom.SEIS_M.get(k, "Não classificado") if k else "Não classificado", q]
-          for k, q in Counter(a.seis_m for a in pend).most_common()]
+    m6 = [[dom.SEIS_M.get(g.rotulo, "Não classificado"), g.n("total")] for g in pn["seis_m"]]
     l_6m = tabela("6M´S (PENDENTES)", ["6M", "Contagem de AÇÕES"], m6)
     wp.add_chart(barras("6M´S", wp, col0, col0 + 1, l_6m[0], l_6m[1], "008282", largura=18, altura=10), "A47")
-    ger = Counter(a.gerencia or "—" for a in acoes).most_common()
-    l_ge = tabela("RESTRIÇÃO POR GERÊNCIA", ["Gerência", "Contagem de AÇÕES"], [[g, q] for g, q in ger])
+    l_ge = tabela("RESTRIÇÃO POR GERÊNCIA", ["Gerência", "Contagem de AÇÕES"], [[g.rotulo, g.n("total")] for g in pn["gerencia"]])
     wp.add_chart(barras("RESTRIÇÃO POR GERÊNCIA", wp, col0, col0 + 1, l_ge[0], l_ge[1], "007680", horizontal=False,
                         largura=18, altura=10), "K47")
 

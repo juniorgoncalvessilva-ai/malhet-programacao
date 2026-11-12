@@ -38,7 +38,8 @@ class AcaoIn(BaseModel):
     status1: str = "Pendente"
     conclusao: date | None = None
     seis_m: str | None = None
-    observacoes: str | None = None
+    observacoes: str | None = None  # None = mantém o histórico; texto = corrige o histórico inteiro
+    nova_observacao: str | None = None  # entra no topo com a data de hoje ("dd/mm: texto")
     linha_id: int | None = None
     equipe_id: int | None = None
 
@@ -85,7 +86,10 @@ def _preencher(s: Session, c: ContextoObra, a: AcaoRestricaoModel, d: AcaoIn) ->
     a.referencia, a.reuniao = _t(d.referencia, 80), _t(d.reuniao, 20) or "6WLA"
     a.responsavel, a.gerencia = _t(d.responsavel, 150), _t(d.gerencia, 80)
     a.prazo_inicio, a.prazo_termino = d.prazo_inicio, d.prazo_termino
-    a.status1, a.seis_m, a.observacoes = dom.validar_status1(d.status1), dom.validar_6m(d.seis_m), _t(d.observacoes, 600)
+    a.status1, a.seis_m = dom.validar_status1(d.status1), dom.validar_6m(d.seis_m)
+    if d.observacoes is not None:
+        a.observacoes = (d.observacoes or "").strip()[:4000] or None
+    a.observacoes = dom.anotar(a.observacoes, d.nova_observacao, date.today())
     a.conclusao = (d.conclusao or a.conclusao or date.today()) if a.status1 == "Concluído" else None
 
 
@@ -123,8 +127,8 @@ def reprogramar(aid: int, d: ReprogramarIn, s: Session = Depends(get_session), c
     if a.prazo_termino and d.data < a.prazo_termino:
         raise DomainError("a reprogramação é depois do término do prazo", "data")
     a.reprogramado, a.reprogramacoes = d.data, (a.reprogramacoes or 0) + 1
-    if d.observacao:
-        a.observacoes = _t(f"{d.data:%d/%m}: {d.observacao}" + (f" | {a.observacoes}" if a.observacoes else ""), 600)
+    a.observacoes = dom.anotar(a.observacoes, f"reprogramada para {d.data:%d/%m/%Y}" + (f" — {d.observacao}" if d.observacao else ""),
+                               date.today())
     s.flush()
     return planilha.saida(a, date.today())
 
@@ -186,7 +190,27 @@ def ishikawa(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
                         "pendentes no prazo ÷ pendentes",
                         (Passo("Conta", f"{no_prazo} ÷ {len(abertas)}", f"{num(100 * no_prazo / len(abertas), 1)} %" if abertas else "—", True),),
                         fonte, ("Reprogramadas e atrasadas contam como fora do prazo.",)))
-    return {"total": len(todas), "pendentes": len(pend), "impeditivas": sum(bool(a["impeditivo"]) for a in pend),
+    # gráficos do PAINEL AÇÃO (mesma conta do Excel): cada valor com a lista das ações que o compõem
+    from app.modules.restricoes.domain.painel import LinhaPainel, painel
+
+    por_id = {a["id"]: a for a in todas}
+    pn = painel([LinhaPainel(a["id"], a["status1"], a["status2"], a["responsavel"], a["area_texto"], a["gerencia"], a["seis_m"],
+                             a["semana"]) for a in todas])
+    graficos = {}
+    for nome, grupos in pn.items():
+        saida_g = []
+        for i, g in enumerate(grupos):
+            valores = {}
+            for serie, ids in g.ids.items():
+                chave = f"{nome}:{i}:{serie}"
+                valores[serie] = {"n": len(ids), "chave": chave}
+                rot = (dom.SEIS_M.get(g.rotulo, "Não classificado") if nome == "seis_m" else g.rotulo) or "Não classificado"
+                mems.append(mem(chave, f"{rot}{'' if serie == 'total' else ' · ' + serie}", [por_id[x] for x in ids],
+                                f"{rot}{'' if serie == 'total' else ' com status ' + serie}"))
+            rot = (f"{g.rotulo} · {dom.SEIS_M[g.rotulo]}" if g.rotulo in dom.SEIS_M else "Não classificado") if nome == "seis_m" else g.rotulo
+            saida_g.append({"rotulo": rot, "valores": valores})
+        graficos[nome] = saida_g
+    return {"graficos": graficos, "total": len(todas), "pendentes": len(pend), "impeditivas": sum(bool(a["impeditivo"]) for a in pend),
             "no_prazo": (no_prazo / len(abertas)) if abertas else None, "status": dict(farol), "espinhas": espinhas,
             "gerencia": por("gerencia", pend), "area": por("area_texto", pend)[:15], "responsavel": por("responsavel", pend)[:15],
             "semana": sorted(Counter(a["semana"] for a in pend if a["semana"]).items()), **pacote(*mems)}

@@ -272,5 +272,8 @@ export interface Ishikawa {
   total: number; pendentes: number; impeditivas: number; no_prazo: number | null; status: Record<string, number>;
   espinhas: { codigo: string | null; nome: string; pendentes: number; atrasadas: number; itens: { id: number; numero: number; acao: string; status2: string }[] }[];
   gerencia: [string, number][]; area: [string, number][]; responsavel: [string, number][]; semana: [number, number][];
+  /** Gráficos do PAINEL AÇÃO (mesma conta do Excel): cada valor com a chave da memória (lista das ações). */
+  graficos: Record<'status' | 'responsavel' | 'semana' | 'areas' | 'seis_m' | 'gerencia', GrupoGrafico[]>;
   memorias: Record<string, import('@/components/Obra/Calculado').MemoriaCalculo>;
 }
+export interface GrupoGrafico { rotulo: string; valores: Record<string, { n: number; chave: string }> }

@@ -72,7 +72,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   do Plano de Ação (farol/status das fórmulas da planilha em `domain/acao.py`), Ishikawa 6M, importar/exportar Excel;
   restrição pendente marca o cartão do look-ahead. Spec 030. Excel do Pareto (Gráfico/Detalhamento/Dados, status com
   ícones 1 ✖ 2 ! 3 ✔) e do Plano de Ação (Ações com farol de semáforos + PAINEL AÇÃO) no layout da obra para a
-  fiscalização: `indicadores/application/excel_pareto.py`, `restricoes/application/planilha.py`, `app/shared/excel.py`. Spec 031.
+  fiscalização: `indicadores/application/excel_pareto.py`, `restricoes/application/planilha.py`, `app/shared/excel.py`. Spec 031. Tela de Restrições em abas (Ações | Painel | Importar), gráficos do PAINEL AÇÃO
+  pela mesma conta do Excel (`restricoes/domain/painel.py`), edição na linha e observação datada (`anotar`). Spec 032.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

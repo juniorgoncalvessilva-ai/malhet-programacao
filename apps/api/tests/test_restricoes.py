@@ -36,13 +36,22 @@ def test_plano_de_acao_importa_ishikawa_e_exporta(client):
     nova = (date.today() + timedelta(days=5)).isoformat()
     r = client.post(f"/api/restricoes/{a1['id']}/reprogramar", json={"data": nova, "observacao": "aguardando topografia"}).json()
     assert (r["reprogramacoes"], r["status2"], r["semana"] is not None) == (1, "Reprogramado", True)
-    assert "aguardando topografia" in r["observacoes"]
+    assert "aguardando topografia" in r["observacoes"] and r["observacoes"].startswith(f"{date.today():%d/%m}: reprogramada para")
     corpo = {"acao": "Treinar armadores", "seis_m": "MDO", "prazo_inicio": "2026-11-10", "prazo_termino": "2026-11-05"}
     assert client.post("/api/restricoes", json=corpo).status_code == 422  # término antes do início
     n3 = client.post("/api/restricoes", json={**corpo, "prazo_termino": nova}).json()
     assert n3["numero"] == 3 and n3["status2"] == "No Prazo"
     assert client.post("/api/restricoes", json={**corpo, "seis_m": "XYZ", "prazo_termino": nova}).status_code == 422
+    # observação nova entra no topo com a data de hoje; sem nova_observacao o histórico fica
+    r = client.put(f"/api/restricoes/{n3['id']}", json={**corpo, "prazo_termino": nova, "nova_observacao": "Turma escalada"}).json()
+    assert r["observacoes"] == f"{date.today():%d/%m}: Turma escalada"
+    r = client.put(f"/api/restricoes/{n3['id']}", json={**corpo, "prazo_termino": nova, "status1": "Pendente"}).json()
+    assert r["observacoes"] == f"{date.today():%d/%m}: Turma escalada"
     ish = client.get("/api/restricoes/ishikawa").json()
+    g = ish["graficos"]
+    assert {x["rotulo"] for x in g["status"]} >= {"Concluído", "No Prazo"} and g["seis_m"][0]["valores"]["total"]["n"] >= 1
+    chave = g["areas"][0]["valores"]["Pendente"]["chave"]
+    assert chave in ish["memorias"] and ish["memorias"][chave]["valor"] == str(g["areas"][0]["valores"]["Pendente"]["n"])
     esp = {e["codigo"]: e for e in ish["espinhas"]}
     assert ish["pendentes"] == 2 and esp["MDO"]["pendentes"] == 1 and esp[None]["pendentes"] == 1
     assert ish["memorias"]["6m:MDO"]["valor"] == "1" and "status:Concluído" in ish["memorias"]

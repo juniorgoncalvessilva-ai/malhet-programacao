@@ -74,3 +74,12 @@ def ler_sim_nao(v) -> bool | None:
     if t in ("não", "nao", "n", "false", "0"):
         return False
     return None
+
+
+def anotar(atual: str | None, texto: str | None, hoje: date, limite: int = 4000) -> str | None:
+    """Observação nova entra no topo com a data em que foi digitada ("dd/mm: texto"), como na planilha; as anteriores
+    ficam abaixo (histórico)."""
+    novo = " ".join((texto or "").split())
+    if not novo:
+        return atual
+    return (f"{hoje:%d/%m}: {novo}" + (f"\n{atual}" if atual else ""))[:limite]
