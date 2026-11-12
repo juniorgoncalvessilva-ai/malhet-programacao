@@ -53,6 +53,8 @@ class PessoaOrg:
     encarregado: str | None = None
     setor: str | None = None
     disciplina: str | None = None
+    equipe_id: int | None = None  # para mexer na equipe pelo organograma (spec 049)
+    papel: str | None = None  # membro | encarregado
     frente: str | None = None  # "L4 · Novo CMD"
     area: str | None = None  # "004.05 · Galpão"
 
@@ -81,6 +83,7 @@ class No:
     titulo: str
     detalhe: str
     qtd: int = 0
+    ref: int | None = None  # equipe: id da equipe (spec 049)
     cor: str | None = None  # cor própria (setor); os filhos herdam na tela
     responsavel: str | None = None
     ordem: int = 0
@@ -89,7 +92,7 @@ class No:
 
     def como_dict(self) -> dict:
         return {"id": self.id, "tipo": self.tipo, "titulo": self.titulo, "detalhe": self.detalhe, "qtd": self.qtd,
-                "cor": self.cor, "responsavel": self.responsavel,
+                "cor": self.cor, "responsavel": self.responsavel, "ref": self.ref,
                 "pessoas": [p.__dict__ for p in self.pessoas], "filhos": [f.como_dict() for f in self.filhos]}
 
 
@@ -141,6 +144,7 @@ def montar_organograma(obra: str, pessoas: list[PessoaOrg], setores: list[SetorO
             else:
                 pai = _filho(setor, "disciplina", p.disciplina, "Disciplina") if p.disciplina and p.setor else setor
             equipe = _filho(pai, "equipe", p.equipe or SEM_EQUIPE, f"Enc.: {p.encarregado or '—'}")
+            equipe.ref = equipe.ref or p.equipe_id
             _por_funcao(equipe, p)
         elif p.situacao == "sem-equipe":
             _por_funcao(_filho(raiz, "setor", SEM_EQUIPE, "Mobilizados sem equipe"), p)
@@ -162,7 +166,7 @@ def filtrar(no: No, termo: str) -> No | None:
     filhos = [f for f in (filtrar(x, termo) for x in no.filhos) if f is not None]
     if not pessoas and not filhos:
         return None
-    novo = No(no.id, no.tipo, no.titulo, no.detalhe, cor=no.cor, responsavel=no.responsavel, ordem=no.ordem,
+    novo = No(no.id, no.tipo, no.titulo, no.detalhe, cor=no.cor, responsavel=no.responsavel, ordem=no.ordem, ref=no.ref,
               pessoas=pessoas, filhos=filhos)
     _contar(novo)
     return novo

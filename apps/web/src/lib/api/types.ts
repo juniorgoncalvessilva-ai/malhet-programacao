@@ -192,8 +192,8 @@ export interface ResumoEfetivo {
 export interface FuncaoDePara { funcao_chave: string; funcao: string; total: number; ativos: number; recurso: string | null; ignorar: boolean; definido: boolean; sugestao: string | null }
 export interface NoOrganograma {
   id: string; tipo: 'obra' | 'setor' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao'; titulo: string; detalhe: string; qtd: number;
-  cor: string | null; responsavel: string | null;
-  pessoas: { matricula: string; nome: string; funcao: string; situacao: string; turno: string }[]; filhos: NoOrganograma[];
+  cor: string | null; responsavel: string | null; ref?: number | null;
+  pessoas: { matricula: string; nome: string; funcao: string; situacao: string; turno: string; equipe_id?: number | null; papel?: 'membro' | 'encarregado' | null }[]; filhos: NoOrganograma[];
 }
 export type NivelCor = 'obra' | 'setor' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao';
 export type CoresOrganograma = Record<NivelCor, string>;

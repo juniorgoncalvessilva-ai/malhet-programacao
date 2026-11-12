@@ -3,7 +3,8 @@
 import { ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, Minus, Plus, ScanSearch } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { CoresOrganograma, NoOrganograma } from '@/lib/api/types';
+import type { Colaborador, CoresOrganograma, NoOrganograma } from '@/lib/api/types';
+import { BuscaEfetivo } from '@/components/Obra/BuscaEfetivo';
 import styles from './OrganogramaArvore.module.css';
 
 const ZOOM_MIN = 0.3;
@@ -26,6 +27,14 @@ const NIVEIS_FRENTE = [
 const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', disciplina: '#0891B2', frente: '#B45309', area: '#D97706', equipe: '#2563EB', funcao: '#64748B' };
 const RAMOS_ESPECIAIS = new Set(['Sem equipe', 'Em mobilização', 'Sem setor']);
 
+/** Mexer nas equipes pelo organograma (spec 049): incluir, mover e tirar pessoas. */
+export interface EdicaoOrganograma {
+  equipes: { id: number; nome: string }[];
+  efetivo: Colaborador[];
+  incluir: (equipeId: number, cracha: string, deEquipe?: number | null) => Promise<unknown>;
+  tirar: (equipeId: number, cracha: string, nome: string) => Promise<unknown>;
+}
+
 /** ids dos nós que, até a profundidade `nivel`, ficam abertos (mostram os filhos). */
 function abertosAte(raiz: NoOrganograma, nivel: number): Set<string> {
   const out = new Set<string>();
@@ -44,8 +53,9 @@ function abertosAte(raiz: NoOrganograma, nivel: number): Set<string> {
  * Árvore do organograma (modelo do Malhet) com ramos recolhíveis, zoom (botões, Ctrl + rolagem, ajustar à tela),
  * arrastar para navegar e tela cheia. Clique numa função para ver as pessoas.
  */
-export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores: coresIn, acoes, porFrente = false }: {
+export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores: coresIn, acoes, porFrente = false, edicao, chaveBusca = '' }: {
   raiz: NoOrganograma; ariaLabel: string; expandirTudo?: boolean; cores?: CoresOrganograma; acoes?: React.ReactNode; porFrente?: boolean;
+  edicao?: EdicaoOrganograma; chaveBusca?: string; // nova busca reabre a árvore; recarga dos dados (tempo real) mantém o que está aberto
 }) {
   const cores = { ...CORES_PADRAO, ...coresIn };
   const NIVEIS = porFrente ? NIVEIS_FRENTE : NIVEIS_SETOR;
@@ -62,7 +72,7 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
   const arrasto = useRef<{ x: number; y: number; l: number; t: number } | null>(null);
 
   // nova árvore (busca) → reabre no nível escolhido; com busca, abre tudo para mostrar os achados
-  useEffect(() => { const n = expandirTudo ? 99 : nivel; setAbertos(abertosAte(raiz, n)); }, [raiz, expandirTudo]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const n = expandirTudo ? 99 : nivel; setAbertos(abertosAte(raiz, n)); }, [chaveBusca, expandirTudo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
     const el = conteudo.current;
@@ -163,7 +173,7 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
         ref={janela}
         className={cn(styles.janela, cheia ? 'flex-1' : 'h-[68vh]')}
         onPointerDown={(e) => {
-          if ((e.target as HTMLElement).closest('button')) return;
+          if ((e.target as HTMLElement).closest('button, select, input, label, [role=listbox]')) return;
           const j = janela.current!;
           arrasto.current = { x: e.clientX, y: e.clientY, l: j.scrollLeft, t: j.scrollTop };
           j.setPointerCapture(e.pointerId);
@@ -179,7 +189,7 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
         <div style={{ width: Math.max(tam.w * zoom, 1), height: Math.max(tam.h * zoom, 1) }} className="mx-auto">
           <div ref={conteudo} className={styles.conteudo} style={{ transform: `scale(${zoom})` }}>
             <ul className={styles.arvore} aria-label={ariaLabel}>
-              <Ramo no={raiz} abertos={abertos} alternar={alternar} pessoas={pessoas} alternarPessoas={alternarPessoas} cores={cores} corSetor={null} />
+              <Ramo no={raiz} abertos={abertos} alternar={alternar} pessoas={pessoas} alternarPessoas={alternarPessoas} cores={cores} corSetor={null} edicao={edicao} />
             </ul>
           </div>
         </div>
@@ -192,6 +202,7 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
 type PropsRamo = {
   no: NoOrganograma; abertos: Set<string>; alternar: (id: string) => void; pessoas: Set<string>; alternarPessoas: (id: string) => void;
   cores: CoresOrganograma; corSetor: string | null; // cor própria do setor, herdada pelas equipes e funções dele
+  edicao?: EdicaoOrganograma;
 };
 
 function Ramo(props: PropsRamo) {
@@ -224,8 +235,9 @@ function corDaCaixa(no: NoOrganograma, cores: CoresOrganograma, corSetor: string
   return corSetor ?? cores[no.tipo] ?? cores.funcao;
 }
 
-function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSetor }: PropsRamo) {
+function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSetor, edicao }: PropsRamo) {
   const aberto = abertos.has(no.id);
+  const [incluindo, setIncluindo] = useState(false);
   const verPessoas = pessoas.has(no.id);
   const temFilhos = no.filhos.length > 0;
   const temPessoas = no.pessoas.length > 0 && !temFilhos;
@@ -237,12 +249,24 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
           <Cartao no={no} />
         </button>
       ) : <Cartao no={no} />}
+      {edicao && no.tipo === 'equipe' && no.ref && (
+        <div className="mt-1 border-t border-m-stroke-subtle pt-1 text-left">
+          {incluindo
+            ? <div className="w-[300px]">
+                <BuscaEfetivo rotulo={`Incluir em ${no.titulo}`} pessoas={edicao.efetivo} manterAberto
+                  onEscolher={(x) => { edicao.incluir(no.ref!, x.cracha || x.matricula || '').catch(() => undefined); }} />
+                <button type="button" className="mt-1 text-[11px] font-semibold text-m-text-muted underline" onClick={() => setIncluindo(false)}>fechar</button>
+              </div>
+            : <button type="button" className="text-[11px] font-semibold text-m-accent" onClick={() => setIncluindo(true)}>+ pessoa</button>}
+        </div>
+      )}
       {verPessoas && temPessoas && (
         <ul className={styles.pessoas}>
           {no.pessoas.map((p) => (
             <li key={`${p.matricula}-${p.nome}`} className="border-t border-m-stroke-subtle py-1 text-[11px] text-m-text-secondary">
               <span className="block truncate font-medium text-m-text-primary">{p.nome}</span>
-              <span className="block truncate">{[p.matricula, p.turno].filter(Boolean).join(' · ')}</span>
+              <span className="block truncate">{[p.matricula, p.turno, p.papel === 'encarregado' && 'encarregado'].filter(Boolean).join(' · ')}</span>
+              {edicao && p.matricula && <AcoesPessoa p={p} edicao={edicao} />}
             </li>
           ))}
         </ul>
@@ -272,5 +296,29 @@ function Cartao({ no }: { no: NoOrganograma }) {
       <p className={styles.titulo}>{no.titulo}</p>
       {detalhe && <p className={styles.detalhe}>{detalhe}</p>}
     </div>
+  );
+}
+
+/** Mover / tirar (membro de equipe) ou pôr numa equipe (sem equipe, em mobilização). Encarregado muda no cadastro. */
+function AcoesPessoa({ p, edicao }: { p: NoOrganograma['pessoas'][number]; edicao: EdicaoOrganograma }) {
+  const [movendo, setMovendo] = useState(false);
+  if (p.papel === 'encarregado') return null;
+  const naEquipe = p.papel === 'membro' && p.equipe_id;
+  const destinos = edicao.equipes.filter((e) => e.id !== p.equipe_id);
+  const escolher = (id: string) => { if (id) edicao.incluir(Number(id), p.matricula, naEquipe ? p.equipe_id : null).catch(() => undefined); setMovendo(false); };
+  if (movendo || !naEquipe) {
+    return (
+      <select aria-label={`${naEquipe ? 'Mover' : 'Pôr na equipe'} ${p.nome}`} defaultValue="" onChange={(e) => escolher(e.target.value)}
+        className="mt-0.5 w-full rounded-[6px] border border-m-stroke bg-m-surface-field px-1 py-0.5 text-[11px]">
+        <option value="">{naEquipe ? 'mover para…' : 'pôr na equipe…'}</option>
+        {destinos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+      </select>
+    );
+  }
+  return (
+    <span className="mt-0.5 flex gap-2">
+      <button type="button" className="font-semibold text-m-accent" onClick={() => setMovendo(true)}>Mover</button>
+      <button type="button" className="font-semibold text-m-danger" onClick={() => edicao.tirar(p.equipe_id!, p.matricula, p.nome).catch(() => undefined)}>Tirar</button>
+    </span>
   );
 }

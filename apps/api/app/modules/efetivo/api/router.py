@@ -442,7 +442,7 @@ def organograma(q: str | None = None, vista: str = "setor", s: Session = Depends
         else:
             setor = e.frente_codigo or (enc.dp if enc else None)
         base = {"equipe": e.nome, "encarregado": enc.nome if enc else e.encarregado_nome, "setor": setor,
-                "disciplina": disciplina, "turno": e.turno or ""}
+                "disciplina": disciplina, "turno": e.turno or "", "equipe_id": e.id}
         if por_frente:
             base["frente"], base["area"] = frente_de.get(e.id, (None, None))
         for mb in e.membros:
@@ -451,19 +451,19 @@ def organograma(q: str | None = None, vista: str = "setor", s: Session = Depends
                 na_equipe.add(mb.cracha)
                 continue  # desmobilizado (alerta no efetivo) ou responsável (já está na caixa dele)
             pessoas.append(PessoaOrg(mb.cracha, m.nome if m else mb.nome, (m.funcao if m else None) or mb.funcao or "",
-                                     "equipe", **base))
+                                     "equipe", papel="membro", **base))
             na_equipe.add(mb.cracha)
         if enc is not None and enc.id not in responsaveis:
-            pessoas.append(PessoaOrg(enc.cracha, enc.nome, enc.funcao or "Encarregado", "equipe", **base))
+            pessoas.append(PessoaOrg(enc.cracha, enc.nome, enc.funcao or "Encarregado", "equipe", papel="encarregado", **base))
             na_equipe.add(enc.cracha)
     for m in todos:
         sit = Situacao(m.situacao)
         if m.cracha in na_equipe or m.id in responsaveis:
             continue
         if sit.ativo:
-            pessoas.append(PessoaOrg(m.matricula or "", m.nome, m.funcao or "", "sem-equipe"))
+            pessoas.append(PessoaOrg(m.cracha or m.matricula or "", m.nome, m.funcao or "", "sem-equipe"))
         elif sit.em_mobilizacao:
-            pessoas.append(PessoaOrg(m.matricula or "", m.nome, m.funcao or "", "mobilizacao"))
+            pessoas.append(PessoaOrg(m.cracha or m.matricula or "", m.nome, m.funcao or "", "mobilizacao"))
     nome_de = lambda cid: por_id[cid].nome if cid in por_id else None  # noqa: E731
     setores = [SetorOrg(st.nome, nome_de(st.responsavel_id), st.cor, st.ordem,
                         tuple(DisciplinaOrg(d.nome, nome_de(d.responsavel_id), d.cor, d.ordem)

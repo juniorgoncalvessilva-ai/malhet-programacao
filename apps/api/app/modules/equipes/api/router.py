@@ -16,7 +16,7 @@ from app.modules.efetivo.infra.gateway import (
 )
 from app.modules.equipes.application.vincular_efetivo import vincular_equipe, vincular_equipes
 from app.modules.equipes.domain.simova_equipe import separar_cracha
-from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeModel
+from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeMembroModel, EquipeModel
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(prefix="/equipes", tags=["equipes"])
@@ -266,3 +266,59 @@ def exportar_simova(ativas: bool = True, s: Session = Depends(get_session), c: C
     wb.save(buf)
     return Response(buf.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": 'attachment; filename="Equipe_Simova.xlsx"'})
+
+
+# ---- pessoas da equipe pelo organograma (spec 049) ------------------------------------------------------------
+class MembroAcaoIn(BaseModel):
+    cracha: str  # crachá ou matrícula
+    nome: str | None = None  # sem efetivo: o nome digitado
+    de_equipe_id: int | None = None  # mover: sai desta equipe
+
+
+def _equipe(s: Session, obra_id: int, eid: int) -> EquipeModel:
+    e = s.get(EquipeModel, eid)
+    if e is None or e.obra_id != obra_id:
+        raise NotFoundError("Equipe", eid)
+    return e
+
+
+def _tirar(e: EquipeModel, cracha: str) -> None:
+    if e.encarregado_cracha and e.encarregado_cracha == cracha:
+        raise DomainError(f"{cracha} é o encarregado de {e.nome}: troque o encarregado no cadastro da equipe")
+    m = next((x for x in e.membros if x.cracha == cracha), None)
+    if m is None:
+        raise DomainError(f"{cracha} não está na equipe {e.nome}")
+    e.membros.remove(m)
+
+
+@router.post("/{equipe_id}/membros", response_model=EquipeOut)
+def incluir_membro(equipe_id: int, d: MembroAcaoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Inclui a pessoa na equipe (com `de_equipe_id`, move: sai da outra). Nome e função vêm do efetivo."""
+    from app.modules.efetivo.infra.models import ColaboradorModel
+
+    e = _equipe(s, c.obra_id, equipe_id)
+    cod = (d.cracha or "").strip()
+    if not cod:
+        raise DomainError("informe o crachá ou a matrícula", "cracha")
+    pessoa = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.cracha == cod)) or \
+        s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.matricula == cod))
+    cracha = (pessoa.cracha or pessoa.matricula or cod) if pessoa else cod
+    nome = pessoa.nome if pessoa else (d.nome or "").strip()
+    if not nome:
+        raise DomainError("pessoa fora do efetivo: informe o nome", "nome")
+    if d.de_equipe_id is not None and d.de_equipe_id != equipe_id:
+        _tirar(_equipe(s, c.obra_id, d.de_equipe_id), cracha)
+    if any(m.cracha == cracha for m in e.membros) or e.encarregado_cracha == cracha:
+        raise DomainError(f"{nome} já está na equipe {e.nome}")
+    e.membros.append(EquipeMembroModel(cracha=cracha[:20], nome=nome[:150], funcao=None))
+    s.flush()
+    vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
+    s.flush()
+    return _out(e, funcoes_por_cracha(s, c.obra_id), pessoas_por_cracha(s, c.obra_id))
+
+
+@router.delete("/{equipe_id}/membros/{cracha}", status_code=204)
+def tirar_membro(equipe_id: int, cracha: str, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Tira a pessoa da equipe (ela continua no efetivo, em "Sem equipe" se não estiver em outra)."""
+    _tirar(_equipe(s, c.obra_id, equipe_id), cracha)
+    s.flush()
