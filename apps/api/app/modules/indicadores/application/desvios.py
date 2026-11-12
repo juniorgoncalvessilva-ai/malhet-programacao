@@ -108,7 +108,9 @@ def exportar_pareto(s: Session, obra_id: int, desvios: list[DesvioModel], titulo
     linhas = [{"id": d.id, "data": d.data, "semana": d.semana, "referencia": d.referencia, "causa": nomes.get(d.causa_id, "?"),
                "descricao": d.descricao, "frente": d.frente, "acao": d.acao, "responsavel": d.responsavel,
                "gerencia": d.gerencia, "status": d.status, "atividade_impactada": d.atividade_impactada} for d in desvios]
-    return exportar(linhas, [c.descricao for c in lista if c.ativo], titulo_obra or "Obra", date.today())
+    from app.shared.marca import marca_da_obra
+
+    return exportar(linhas, [c.descricao for c in lista if c.ativo], titulo_obra or "Obra", date.today(), marca_da_obra(s, obra_id))
 
 
 def contar(s: Session, obra_id: int) -> int:

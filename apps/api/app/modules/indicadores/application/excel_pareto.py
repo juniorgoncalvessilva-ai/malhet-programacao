@@ -14,6 +14,7 @@ from openpyxl.styles import Alignment, Border, Font
 from openpyxl.utils import get_column_letter
 
 from app.shared.excel import BORDA_HAIR, FINA, HAIR, barras, caber_na_largura, faixa, preencher
+from app.shared.marca import Marca, cor_excel, inserir_logos
 
 VERDE_FAIXA, VERDE_CAB, CINZA_ID, VERMELHO = "007E7A", "006666", "808080", "C00000"
 COLUNAS = (("B", "Dia", 23), ("C", "Semana", 16.6), ("D", "ID", 11), ("E", "Classificação", 36.7), ("F", "Desvio", 64.1),
@@ -21,7 +22,8 @@ COLUNAS = (("B", "Dia", 23), ("C", "Semana", 16.6), ("D", "ID", 11), ("E", "Clas
            ("J", "Responsabilidade - Gerencia", 38), ("K", "Status", 10.6), ("M", "Atividade impactada", 32.4))
 
 
-def _detalhamento(ws, linhas: list[dict], titulo: str) -> None:
+def _detalhamento(ws, linhas: list[dict], titulo: str, marca: Marca | None = None) -> None:
+    VERDE_FAIXA, VERDE_CAB = cor_excel(marca, "007E7A"), cor_excel(marca, "006666")  # cor do cliente, se houver
     ws.sheet_view.showGridLines = False
     ws.sheet_view.zoomScale = 60
     ws.column_dimensions["A"].width = 0.3
@@ -34,6 +36,7 @@ def _detalhamento(ws, linhas: list[dict], titulo: str) -> None:
     ws["B1"].font = Font(name="Calibri", size=26, bold=True, color="000000")
     ws["B1"].alignment = Alignment(horizontal="center", vertical="center")
     faixa(ws, "B2:K2", "Detalhamento", VERDE_FAIXA, 16, altura=37.5)
+    inserir_logos(ws, marca, ["B1", "J1"], altura_px=72)
     ws.row_dimensions[3].height = 17.25
     ws.row_dimensions[4].height = 21
     for col, nome, _w in COLUNAS:
@@ -71,7 +74,7 @@ def _detalhamento(ws, linhas: list[dict], titulo: str) -> None:
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 
-def exportar(desvios: list[dict], causas: list[str], titulo_obra: str, hoje: date) -> bytes:
+def exportar(desvios: list[dict], causas: list[str], titulo_obra: str, hoje: date, marca: Marca | None = None) -> bytes:
     """desvios: dicts com data, semana, referencia, causa, descricao, frente, acao, responsavel, gerencia, status,
     atividade_impactada. causas: a lista de classificações da obra na ordem do cadastro."""
     linhas = sorted(desvios, key=lambda d: (d["data"], d.get("id") or 0))
@@ -80,7 +83,8 @@ def exportar(desvios: list[dict], causas: list[str], titulo_obra: str, hoje: dat
     wg.title = "Gráfico"
     wd_det = wb.create_sheet("Detalhamento")
     wdados = wb.create_sheet("Dados")
-    _detalhamento(wd_det, linhas, f"Pareto de Desvios | {titulo_obra}")
+    VERDE_FAIXA, VERDE_CAB = cor_excel(marca, "007E7A"), cor_excel(marca, "006666")  # cor do cliente, se houver
+    _detalhamento(wd_det, linhas, f"Pareto de Desvios | {titulo_obra}", marca)
 
     # ---- Dados -------------------------------------------------------------------------------------------
     wdados.sheet_view.showGridLines = False
@@ -159,6 +163,7 @@ def exportar(desvios: list[dict], causas: list[str], titulo_obra: str, hoje: dat
     wg["B2"].font = Font(name="Calibri", size=26, bold=True)
     wg["B2"].alignment = Alignment(horizontal="center", vertical="center")
     wg.row_dimensions[2].height = 45
+    inserir_logos(wg, marca, ["C2", "Q2"], altura_px=52)
     wg["U2"] = f"Atualização: {hoje:%d/%m/%Y}"
     secoes = [("B3:T5", "ACUMULADO", f"Acumulado · {len(linhas)} ocorrência(s)", l_acum, VERMELHO, "C7"),
               ("B51:T53", f"SEMANA ATUAL (S{atual})" if atual else "SEMANA ATUAL", f"Semana {atual}" if atual else "Semana atual",

@@ -86,3 +86,31 @@ def test_fotos_de_campo_na_restricao(client):
     assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg" and img.content == jpg
     assert client.delete(f"/api/fotos/{f['id']}").status_code == 204
     assert client.get("/api/fotos", params={"alvo": "restricao", "alvo_id": a["id"]}).json() == []
+
+
+def test_marca_da_obra_logos_e_cor_nos_documentos(client):
+    from io import BytesIO as B
+
+    from openpyxl import load_workbook
+    from PIL import Image
+
+    buf = B()
+    Image.new("RGB", (120, 40), (200, 30, 30)).save(buf, "PNG")
+    png = buf.getvalue()
+    assert client.get("/api/obra/marca").json() == {"cor": None, "contratada": False, "contratante": False, "versao": 0}
+    assert client.put("/api/obra/marca/cor", json={"cor": "verde"}).status_code == 422
+    assert client.put("/api/obra/marca/cor", json={"cor": "#1d4ed8"}).json()["cor"] == "#1D4ED8"
+    assert client.post("/api/obra/marca/logo/contratante", files={"arquivo": ("l.svg", b"<svg/>", "image/svg+xml")}).status_code == 422
+    r = client.post("/api/obra/marca/logo/contratante", files={"arquivo": ("l.png", png, "image/png")}).json()
+    assert r["contratante"] is True and r["contratada"] is False
+    assert client.get("/api/obra/marca/logo/contratante").content == png
+    assert client.get("/api/obra/marca/logo/contratada").status_code == 404
+    assert client.get("/api/obras/minhas").json()[0]["cor"] == "#1D4ED8"
+    client.post("/api/restricoes", json={"acao": "Teste da marca"})
+    wb = load_workbook(B(client.get("/api/restricoes/excel").content))
+    ws = wb["Ações"]
+    assert len(ws._images) == 1 and ws["C3"].fill.fgColor.rgb.endswith("1D4ED8")
+    client.delete("/api/obra/marca/logo/contratante")
+    client.put("/api/obra/marca/cor", json={"cor": None})
+    ws = load_workbook(B(client.get("/api/restricoes/excel").content))["Ações"]
+    assert len(ws._images) == 1 and ws["C3"].fill.fgColor.rgb.endswith("007E7A")  # sem logo da obra: a do Malhet

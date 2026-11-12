@@ -70,6 +70,7 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
       || (obra.papel === 'admin' && url === '/app/acessos') || obra.paginas.includes(url),
   }), [lista.data, lista.isLoading, eu.data, eu.isLoading, obra, escolher]);
 
+  useCorDaObra(obra?.cor ?? null);
   // key: trocar de obra remonta as telas (nenhum estado/consulta da obra anterior sobrevive)
   return <Ctx.Provider value={valor}><Fragment key={obra?.id ?? 'sem-obra'}>{children}</Fragment></Ctx.Provider>;
 }
@@ -82,4 +83,16 @@ export function useObra(): ObraCtx {
 
 export function useObraOpcional(): ObraCtx | null {
   return useContext(Ctx);
+}
+
+/** Cor do cliente (marca da obra) no lugar do verde Malhet: redefine os tokens de acento, no claro e no escuro. */
+function useCorDaObra(cor: string | null) {
+  useEffect(() => {
+    const id = 'malhet-cor-obra';
+    let el = document.getElementById(id) as HTMLStyleElement | null;
+    if (!cor || !/^#[0-9A-Fa-f]{6}$/.test(cor)) { el?.remove(); return; }
+    if (!el) { el = document.createElement('style'); el.id = id; document.head.appendChild(el); }
+    el.textContent = `:root{--m-accent:${cor};--m-accent-strong:${cor};--m-accent-hover:color-mix(in srgb,${cor} 80%,black);--m-accent-subtle:color-mix(in srgb,${cor} 12%,white)}`
+      + `.dark{--m-accent:color-mix(in srgb,${cor} 55%,white);--m-accent-strong:color-mix(in srgb,${cor} 85%,black);--m-accent-hover:color-mix(in srgb,${cor} 40%,white);--m-accent-subtle:color-mix(in srgb,${cor} 25%,#141517)}`;
+  }, [cor]);
 }

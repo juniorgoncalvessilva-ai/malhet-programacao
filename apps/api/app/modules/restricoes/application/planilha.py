@@ -135,14 +135,16 @@ LARGURAS = {"A": 4, "B": 1, "C": 15.7, "D": 22.7, "E": 18.2, "F": 79.7, "G": 21.
 COR_STATUS = {"Concluído": "00D661", "No Prazo": "008282", "Reprogramado": "FFC000", "Atrasado": "FF4747", "Cancelado": "BBBCBC"}
 
 
-def _acoes(ws, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> None:
+def _acoes(ws, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str, marca=None) -> None:
     """Aba Ações no layout do Plano de Ação 6WLA (C..V)."""
     from math import ceil
 
     from openpyxl.formatting.rule import IconSetRule
 
     from app.shared.excel import BORDA_HAIR, preencher
+    from app.shared.marca import cor_excel, inserir_logos
 
+    VERDE = cor_excel(marca, "007E7A")  # cor do cliente, se houver
     branco = Font(name="Calibri", size=16, bold=True, color="FFFFFF")
     ws.sheet_view.showGridLines = False
     ws.sheet_view.zoomScale = 50
@@ -158,6 +160,7 @@ def _acoes(ws, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> None
     ws.merge_cells("C1:T1")
     ws["C1"] = titulo
     ws["C1"].alignment = Alignment(horizontal="left", vertical="center")
+    inserir_logos(ws, marca, ["Q1", "S1"], altura_px=50)
     ws["V1"] = f"Atualização: {hoje:%d/%m/%Y}"
     ws["V1"].font = Font(name="Calibri", size=16, color="FFFFFF")
     ws["V1"].alignment = Alignment(horizontal="center", vertical="center")
@@ -217,13 +220,16 @@ def _acoes(ws, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> None
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 
-def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> None:
+def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str, marca=None) -> None:
     """PAINEL AÇÃO: as tabelas (no lugar das dinâmicas) à direita e os gráficos do painel da obra."""
     from openpyxl.chart import BarChart, DoughnutChart, Reference
     from openpyxl.chart.series import DataPoint
     from openpyxl.chart.shapes import GraphicalProperties
 
     from app.shared.excel import barras, caber_na_largura, faixa, preencher, rotulos_so_valor
+    from app.shared.marca import cor_excel, inserir_logos
+
+    VERDE = cor_excel(marca, "007E7A")
 
     caber_na_largura(wp)
     wp.sheet_view.showGridLines = False
@@ -231,6 +237,7 @@ def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> Non
     for col in range(1, 26):
         wp.column_dimensions[get_column_letter(col)].width = 11
     faixa(wp, "A1:X2", f"PAINEL AÇÃO | {titulo}", VERDE, 22)
+    inserir_logos(wp, marca, ["B1", "U1"], altura_px=40)
     wp["A3"] = f"HOJE: {hoje:%d/%m/%Y}"
     wp["A3"].font = Font(bold=True)
     from app.modules.restricoes.domain.painel import STATUS1, STATUS_PENDENTE, LinhaPainel, painel
@@ -321,14 +328,14 @@ def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> Non
                         largura=18, altura=10), "K47")
 
 
-def exportar(acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> bytes:
+def exportar(acoes: list[AcaoRestricaoModel], hoje: date, titulo: str, marca=None) -> bytes:
     """Plano de Ação 6WLA no layout da obra: aba Ações (farol com semáforos e status por fórmula com HOJE()) e o
     PAINEL AÇÃO com os gráficos de status, responsável, semana, área, 6M e gerência."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Ações"
-    _acoes(ws, acoes, hoje, titulo)
-    _painel(wb.create_sheet("PAINEL AÇÃO"), acoes, hoje, titulo)
+    _acoes(ws, acoes, hoje, titulo, marca)
+    _painel(wb.create_sheet("PAINEL AÇÃO"), acoes, hoje, titulo, marca)
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()

@@ -37,6 +37,7 @@ class ObraOut(BaseModel):
 
 class MinhaObraOut(ObraOut):
     paginas: list[str] | None = None  # páginas liberadas (vazio = todas as do papel)
+    cor: str | None = None  # cor do cliente (marca da obra) no lugar do verde Malhet
     papel: PapelObra
 
 
@@ -77,12 +78,16 @@ def _contas(request: Request) -> ContasAuthKit:
 # ---- quem sou / minhas obras ---------------------------------------------------------------
 @router.get("/obras/minhas", response_model=list[MinhaObraOut])
 def minhas(s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_atual)):
+    from app.modules.obras.infra.models import MarcaObraModel
+
+    cores = dict(s.execute(select(MarcaObraModel.obra_id, MarcaObraModel.cor)).all())
     if u.superadmin:
         obras = s.scalars(select(ObraModel).where(ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
-        return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra.ADMIN) for o in obras]
+        return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra.ADMIN, cor=cores.get(o.id)) for o in obras]
     q = (select(ObraModel, AcessoObraModel.papel, AcessoObraModel.paginas).join(AcessoObraModel, AcessoObraModel.obra_id == ObraModel.id)
          .where(AcessoObraModel.usuario_id == u.id, ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
-    return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra(p), paginas=pg or None) for o, p, pg in s.execute(q)]
+    return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra(p), paginas=pg or None, cor=cores.get(o.id))
+            for o, p, pg in s.execute(q)]
 
 
 @router.get("/eu")

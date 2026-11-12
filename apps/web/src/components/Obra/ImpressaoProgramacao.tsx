@@ -1,5 +1,6 @@
 'use client';
 
+import { LogosObra } from '@/components/Obra/LogosObra';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileSpreadsheet, Printer } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,11 +58,11 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
                     <div className="text-[15px] font-bold">{v.titulo.toUpperCase()}</div>
                     <div>Período {dataBR(v.inicio)} a {dataBR(v.fim)} · {rascunho ? 'RASCUNHO (não emitido)' : `Revisão ${rev}${v.emitida_em ? ` · emitida em ${new Date(v.emitida_em).toLocaleString('pt-BR')}` : ''}`}</div>
                   </div>
-                  <img src="/brand/malhet.svg" alt="Malhet" className="h-6 w-auto" />
+                  <LogosObra altura={36} />
                 </div>
               </td>
             </tr>
-            <tr className="bg-[#284E4F] text-white">
+            <tr className="bg-m-accent-strong text-white">
               {['Item', 'ID Simova', 'Atividade', 'Item PQ', 'Unid.', 'Qtd projeto', 'Encarregado', 'P/R'].map((h) => <th key={h} className={`${cel} text-left font-semibold`}>{h}</th>)}
               {v.dias.map((d) => <th key={d.data} className={`${cel} min-w-[38px] text-center font-semibold ${['SÁB', 'DOM'].includes(d.dia) ? 'bg-[#1F3D3E]' : ''}`}>{d.dia}<br />{d.data.slice(8)}/{d.data.slice(5, 7)}</th>)}
               <th className={`${cel} text-right font-semibold`}>Total</th>

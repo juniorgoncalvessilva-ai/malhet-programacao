@@ -1,8 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, deferred, mapped_column
 
 from app.core.db import Base
 
@@ -34,3 +34,17 @@ class AcessoObraModel(Base):
     paginas: Mapped[list | None] = mapped_column(JSONB)
     concedido_por: Mapped[str] = mapped_column(String(80))
     concedido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MarcaObraModel(Base):
+    """Identidade da obra nos documentos e na tela: logo da contratada, logo do contratante (cliente) e a cor do
+    cliente, que substitui o verde Malhet. Sem logo, os documentos usam a do Malhet."""
+
+    __tablename__ = "marca_obra"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
+    cor: Mapped[str | None] = mapped_column(String(9))  # #RRGGBB
+    logo_contratada: Mapped[bytes | None] = deferred(mapped_column(LargeBinary))
+    tipo_contratada: Mapped[str | None] = mapped_column(String(20))
+    logo_contratante: Mapped[bytes | None] = deferred(mapped_column(LargeBinary))
+    tipo_contratante: Mapped[str | None] = mapped_column(String(20))
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

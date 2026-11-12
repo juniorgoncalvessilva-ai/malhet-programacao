@@ -632,7 +632,9 @@ def exportar_excel(pid: int, revisao: int | None = None, s: Session = Depends(ge
 
     fd = funcoes_por_cracha(s, c.obra_id)
     comps = {eq.id: composicao_efetiva(eq, fd) for eq in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id))}
-    dados = gerar(v, nome, comps)
+    from app.shared.marca import marca_da_obra
+
+    dados = gerar(v, nome, comps, marca_da_obra(s, c.obra_id))
     import unicodedata
 
     base = unicodedata.normalize("NFKD", p.titulo.split(" · ")[0]).encode("ascii", "ignore").decode().replace(" ", "_")

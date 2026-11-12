@@ -154,7 +154,10 @@ def excel(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 
     obra = s.get(ObraModel, c.obra_id)
     acoes = list(s.scalars(select(AcaoRestricaoModel).where(AcaoRestricaoModel.obra_id == c.obra_id)))
-    conteudo = planilha.exportar(acoes, date.today(), f"Plano de Ação 6WLA · {obra.nome if obra else ''}".strip(" ·"))
+    from app.shared.marca import marca_da_obra
+
+    conteudo = planilha.exportar(acoes, date.today(), f"Plano de Ação 6WLA · {obra.nome if obra else ''}".strip(" ·"),
+                                 marca_da_obra(s, c.obra_id))
     return Response(conteudo, media_type=XLSX, headers={"Content-Disposition": 'attachment; filename="Plano_de_Acao_6WLA.xlsx"'})
 
 

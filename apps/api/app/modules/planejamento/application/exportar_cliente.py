@@ -81,7 +81,7 @@ def _recursos(composicao: list[tuple[str, str, float]]) -> dict[str, float]:
     return out
 
 
-def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, float]]]) -> bytes:
+def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, float]]], marca=None) -> bytes:
     """v = visão da programação (servico.visao); composicoes = equipe_id → composição efetiva."""
     datas = [date.fromisoformat(d["data"]) for d in v["dias"]]
     nd = len(datas)
@@ -114,6 +114,10 @@ def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, f
     _cel(ws, "F5", f"{datas[0]:%d/%m/%y} A {datas[-1]:%d/%m/%y}", sz=55, b=True, borda=False)
     for r, h in {4: 51.65, 5: 28.25, 6: 61.25, 7: 73.25, 8: 73.25, 9: 55.25, 10: 58.25, 11: 85.25}.items():
         ws.row_dimensions[r].height = h
+    # logos: contratante e contratada (ou Malhet) no canto do título
+    from app.shared.marca import inserir_logos
+
+    inserir_logos(ws, marca, ["G4", "J4"], altura_px=170)
 
     # cabeçalho (linhas 7 a 11)
     for letra, txt, _ in FIXAS:

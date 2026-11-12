@@ -74,6 +74,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   ícones 1 ✖ 2 ! 3 ✔) e do Plano de Ação (Ações com farol de semáforos + PAINEL AÇÃO) no layout da obra para a
   fiscalização: `indicadores/application/excel_pareto.py`, `restricoes/application/planilha.py`, `app/shared/excel.py`. Spec 031. Tela de Restrições em abas (Ações | Painel | Importar), gráficos do PAINEL AÇÃO
   pela mesma conta do Excel (`restricoes/domain/painel.py`), edição na linha e observação datada (`anotar`). Spec 032.
+- Marca da obra (`marca_obra`, `app/shared/marca.py`): logos do contratante/contratada (ou Malhet) em todo documento
+  (`inserir_logos`, `cor_excel`) e cor do cliente (`/obra/marca`, `MinhaObra.cor` → tokens `--m-accent*`). Documento
+  novo usa `marca_da_obra` e `<LogosObra>`; não fixe a cor do Malhet. Spec 039.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 
