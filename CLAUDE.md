@@ -29,7 +29,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   achatamento das auxiliares) e `referencias/infra/cpu_gateway.py` (item PQ → HH/un, governa, índice). Spec 009.
 - Equipes: cadastro do Simova (`equipes/domain/simova_equipe.py`), composição efetiva pelos membros
   (`equipes/infra/composicao.py`). Papel `seguranca` só edita SSMA (`Depends(ssma)`). Excel do cliente (layout S32)
-  em `planejamento/application/exportar_cliente.py`. Spec 010. Líder da equipe = engenheiro/supervisor do efetivo
+  em `planejamento/application/exportar_cliente.py`. Spec 010. Líder da equipe = qualquer pessoa do efetivo
   (`equipe.responsavel_id` → `responsavel`, que é o Responsável da programação); programação filtra por encarregado
   (`FiltroEncarregado`, `src/lib/programacao/encarregado.ts`). Spec 047. Pessoa do efetivo em formulário = `BuscaEfetivo`
   (dropdown com busca; encarregado e funcionários da equipe). Spec 048.
@@ -58,7 +58,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   nível); `equipe.setor_id`. Spec 018. Vista por frente (`?vista=frente`): Obra → Setor (dono) → Frente (local) → Área →
   Equipe; frente da equipe = `equipe.frente_codigo` (área/local) ou a área da programação mais recente
   (`frentes_das_equipes`). Spec 042. Disciplinas (`subsetor_obra`, `equipe.subsetor_id`): Organograma =
-  Obra → Setor → Disciplina → Equipe → Função; responsáveis só na própria caixa. Spec 019. Responsável (engenheiro do
+  Obra → Setor → Disciplina → Equipe → Função; responsáveis só na própria caixa. Spec 019. Responsável (qualquer pessoa do
   efetivo, `equipe.responsavel_id`) é o nível abaixo do dono do setor: Setor → Responsável → Disciplina/Frente → Equipe.
   Spec 050.
 - Frentes: lista da obra `CWA | Ativo | DESCRICAO CWA | Local` (`interpretar_lista_cwa`); Local pelo nome com código
