@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Download, Link2, Plus, Trash2, UserPlus } fr
 import { Fragment, useState } from 'react';
 import { toast } from 'sonner';
 import { Abas } from '@/components/Obra/Abas';
+import { BuscaEfetivo } from '@/components/Obra/BuscaEfetivo';
 import { Botao, Cabecalho, Campo, Erro, Pilula, Painel, Selecao, Tabela, UploadForm, fmt, td } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { k as kEfetivo, useEfetivo, useFrentes2, useSetores } from '@/hooks/programacao/planejamento';
@@ -56,6 +57,14 @@ export default function EquipesPage() {
       atualizar();
     } catch (er) { toast.error((er as Error).message); } finally { setVinculando(false); }
   };
+  // em que equipe cada pessoa já está (aviso no dropdown do efetivo)
+  const equipeDe = new Map<string, string>();
+  for (const e of equipes.data ?? []) {
+    if (e.id === (form as { id?: number } | null)?.id) continue;
+    for (const m of e.membros) equipeDe.set(m.cracha, e.nome);
+    if (e.encarregado_cracha) equipeDe.set(e.encarregado_cracha, `${e.nome} (encarregado)`);
+  }
+  const ondeEsta = (x: { cracha: string | null; matricula: string | null }) => equipeDe.get(x.cracha ?? '') ?? equipeDe.get(x.matricula ?? '') ?? null;
   const addMembro = () => {
     const t = novoMembro.trim();
     if (!form || !t) return;
@@ -153,8 +162,13 @@ export default function EquipesPage() {
               </Selecao>
               <Campo rotulo="Jornada (h/dia)" type="number" step="0.25" min="1" max="24" value={form.jornada_horas} onChange={(e) => setForm({ ...form, jornada_horas: Number(e.target.value) })} />
               <label className="flex items-end gap-2 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} /> Ativa</label>
+              <div className="md:col-span-3">
+                <BuscaEfetivo rotulo="Encarregado (buscar no efetivo)" pessoas={efetivo.data ?? []} prioridade={/ENCARREG/i} ondeEsta={ondeEsta}
+                  onEscolher={(x) => setForm({ ...form, encarregado_cracha: x.cracha || x.matricula, encarregado_nome: x.nome })} />
+                {(form.encarregado_nome || form.encarregado_cracha) && <p className="mt-1 text-[12.5px] text-m-text-secondary">Atual: <b className="text-m-text-primary">{form.encarregado_nome ?? '—'}</b>{form.encarregado_cracha ? ` · ${form.encarregado_cracha}` : ''}</p>}
+              </div>
               <Campo rotulo="Matrícula / crachá do encarregado" value={form.encarregado_cracha ?? ''} onChange={(e) => setForm({ ...form, encarregado_cracha: e.target.value || null })} />
-              <div className="md:col-span-2"><Campo rotulo="Encarregado" placeholder="nome, ou 115532 - nome" value={form.encarregado_nome ?? ''} onChange={(e) => setForm({ ...form, encarregado_nome: e.target.value || null })} /></div>
+              <div className="md:col-span-2"><Campo rotulo="Encarregado (nome, se não estiver no efetivo)" placeholder="nome, ou 115532 - nome" value={form.encarregado_nome ?? ''} onChange={(e) => setForm({ ...form, encarregado_nome: e.target.value || null })} /></div>
               <div className="flex flex-col gap-1.5 md:col-span-2">
                 <Selecao rotulo="Líder (engenheiro/supervisor do efetivo)" value={form.responsavel_id ?? ''} title="Vira o Responsável da equipe e das linhas da programação"
                   onChange={(e) => {
@@ -214,7 +228,10 @@ export default function EquipesPage() {
                   {!form.membros.length && <span className="text-[13px] text-m-text-muted">Sem funcionários (importe do Simova ou inclua pela matrícula).</span>}
                 </div>
                 <div className="mt-2 flex flex-wrap items-end gap-2">
-                  <Campo rotulo="Incluir pela matrícula" placeholder="115532 ou 115532 - José da Silva" value={novoMembro} className="w-[300px]"
+                  <BuscaEfetivo rotulo="Incluir funcionário (buscar no efetivo)" className="w-full max-w-[460px]" manterAberto pessoas={efetivo.data ?? []} ondeEsta={ondeEsta}
+                    excluir={[...form.membros.map((m) => m.cracha), form.encarregado_cracha ?? '']}
+                    onEscolher={(x) => { setForm({ ...form, membros: [...form.membros, { cracha: (x.cracha || x.matricula || `?${x.nome}`).slice(0, 20), nome: x.nome, funcao: null }] }); toast.success(`${x.nome} incluído(a)`); }} />
+                  <Campo rotulo="ou pela matrícula" placeholder="115532 ou 115532 - José da Silva" value={novoMembro} className="w-[300px]"
                     onChange={(e) => setNovoMembro(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addMembro(); } }} />
                   <Botao type="button" variante="secundario" onClick={addMembro}><UserPlus size={16} /> Incluir</Botao>
                   <span className="pb-2.5 text-[12px] text-m-text-muted">Ao salvar, nome e função vêm do efetivo pela matrícula.</span>
