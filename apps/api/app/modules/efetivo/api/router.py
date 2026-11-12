@@ -427,11 +427,14 @@ def organograma(q: str | None = None, vista: str = "setor", s: Session = Depends
     disc_nome = {d.id: (d.setor_id, d.nome) for d in disc_m}
     # responsáveis (obra, setores, disciplinas) aparecem só na própria caixa: fora das listas de funções e da contagem
     responsaveis = {m.id for m in [geral, *(por_id.get(x.responsavel_id) for x in [*setores_m, *disc_m])] if m is not None}
+    equipes_ativas = list(s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.ativo.is_(True))))
+    # responsáveis (engenheiros) das equipes: caixa própria abaixo do dono do setor, fora das listas de funções
+    responsaveis |= {e.responsavel_id for e in equipes_ativas if e.responsavel_id}
     pessoas: list[PessoaOrg] = []
     na_equipe: set[str] = set()
     por_frente = vista == "frente"
     frente_de = frentes_das_equipes(s, c.obra_id) if por_frente else {}
-    for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.ativo.is_(True))):
+    for e in equipes_ativas:
         enc = cs.get(e.encarregado_cracha or "")
         disciplina = None
         if setores_m:  # com setores cadastrados, vale o setor (e a disciplina) da equipe
@@ -442,7 +445,9 @@ def organograma(q: str | None = None, vista: str = "setor", s: Session = Depends
         else:
             setor = e.frente_codigo or (enc.dp if enc else None)
         base = {"equipe": e.nome, "encarregado": enc.nome if enc else e.encarregado_nome, "setor": setor,
-                "disciplina": disciplina, "turno": e.turno or "", "equipe_id": e.id}
+                "disciplina": disciplina, "turno": e.turno or "", "equipe_id": e.id,
+                "lider": e.lider.nome if e.lider else None,
+                "lider_funcao": e.lider.funcao if e.lider else None}
         if por_frente:
             base["frente"], base["area"] = frente_de.get(e.id, (None, None))
         for mb in e.membros:

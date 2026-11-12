@@ -10,21 +10,24 @@ import styles from './OrganogramaArvore.module.css';
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 1.6;
 const LISTA_LONGA = 12;
+// Obra → Setor (dono) → Responsável (engenheiro) → Disciplina → Equipe → Função (spec 050)
 const NIVEIS_SETOR = [
   { n: 1, rotulo: 'Setores' },
-  { n: 2, rotulo: 'Disciplinas' },
-  { n: 3, rotulo: 'Equipes' },
+  { n: 2, rotulo: 'Responsáveis' },
+  { n: 3, rotulo: 'Disciplinas' },
+  { n: 4, rotulo: 'Equipes' },
   { n: 99, rotulo: 'Funções' },
 ];
 // vista por frente: Obra → Setor (dono) → Frente → Área → Equipe → Função
 const NIVEIS_FRENTE = [
   { n: 1, rotulo: 'Setores' },
-  { n: 2, rotulo: 'Frentes' },
-  { n: 3, rotulo: 'Áreas' },
-  { n: 4, rotulo: 'Equipes' },
+  { n: 2, rotulo: 'Responsáveis' },
+  { n: 3, rotulo: 'Frentes' },
+  { n: 4, rotulo: 'Áreas' },
+  { n: 5, rotulo: 'Equipes' },
   { n: 99, rotulo: 'Funções' },
 ];
-const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', disciplina: '#0891B2', frente: '#B45309', area: '#D97706', equipe: '#2563EB', funcao: '#64748B' };
+const CORES_PADRAO: CoresOrganograma = { obra: '#1F3A3A', setor: '#0F766E', responsavel: '#4F46E5', disciplina: '#0891B2', frente: '#B45309', area: '#D97706', equipe: '#2563EB', funcao: '#64748B' };
 const RAMOS_ESPECIAIS = new Set(['Sem equipe', 'Em mobilização', 'Sem setor']);
 
 /** Mexer nas equipes pelo organograma (spec 049): incluir, mover e tirar pessoas. */
@@ -59,8 +62,8 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
 }) {
   const cores = { ...CORES_PADRAO, ...coresIn };
   const NIVEIS = porFrente ? NIVEIS_FRENTE : NIVEIS_SETOR;
-  const NIVEL_PADRAO = porFrente ? 4 : 3; // até as equipes
-  const legenda = porFrente ? (['obra', 'setor', 'frente', 'area', 'equipe', 'funcao'] as const) : (['obra', 'setor', 'disciplina', 'equipe', 'funcao'] as const);
+  const NIVEL_PADRAO = porFrente ? 5 : 4; // até as equipes
+  const legenda = porFrente ? (['obra', 'setor', 'responsavel', 'frente', 'area', 'equipe', 'funcao'] as const) : (['obra', 'setor', 'responsavel', 'disciplina', 'equipe', 'funcao'] as const);
   const [nivel, setNivel] = useState(expandirTudo ? 99 : NIVEL_PADRAO);
   const [abertos, setAbertos] = useState<Set<string>>(() => abertosAte(raiz, expandirTudo ? 99 : NIVEL_PADRAO));
   const [pessoas, setPessoas] = useState<Set<string>>(new Set());
@@ -232,6 +235,7 @@ function corDaCaixa(no: NoOrganograma, cores: CoresOrganograma, corSetor: string
   if (no.tipo === 'setor') return no.cor ?? (RAMOS_ESPECIAIS.has(no.titulo) ? cores.funcao : cores.setor);
   if (no.tipo === 'obra') return cores.obra;
   if (no.tipo === 'disciplina') return no.cor ?? corSetor ?? cores.disciplina;
+  if (no.tipo === 'responsavel') return cores.responsavel ?? corSetor ?? cores.setor;
   return corSetor ?? cores[no.tipo] ?? cores.funcao;
 }
 
@@ -281,11 +285,11 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
   );
 }
 
-const ROTULO_TIPO: Record<NoOrganograma['tipo'], string> = { obra: 'Obra', setor: 'Setor', disciplina: 'Disciplina', frente: 'Frente', area: 'Área', equipe: 'Equipe', funcao: 'Função' };
+const ROTULO_TIPO: Record<NoOrganograma['tipo'], string> = { obra: 'Obra', setor: 'Setor', responsavel: 'Responsável', disciplina: 'Disciplina', frente: 'Frente', area: 'Área', equipe: 'Equipe', funcao: 'Função' };
 
 function Cartao({ no }: { no: NoOrganograma }) {
   const tipo = RAMOS_ESPECIAIS.has(no.titulo) && no.tipo === 'setor' ? 'Grupo' : ROTULO_TIPO[no.tipo];
-  const detalhe = no.detalhe && !['Setor', 'Função', 'Obra', 'Disciplina'].includes(no.detalhe) ? no.detalhe : '';
+  const detalhe = no.detalhe && !['Setor', 'Função', 'Obra', 'Disciplina', 'Responsável'].includes(no.detalhe) ? no.detalhe : '';
   const dica = [no.titulo, detalhe, `${no.qtd} ${no.qtd === 1 ? 'pessoa' : 'pessoas'}`].filter(Boolean).join('\n');
   return (
     <div className={styles.cartao} title={dica}>

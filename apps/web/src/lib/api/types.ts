@@ -191,11 +191,11 @@ export interface ResumoEfetivo {
 }
 export interface FuncaoDePara { funcao_chave: string; funcao: string; total: number; ativos: number; recurso: string | null; ignorar: boolean; definido: boolean; sugestao: string | null }
 export interface NoOrganograma {
-  id: string; tipo: 'obra' | 'setor' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao'; titulo: string; detalhe: string; qtd: number;
+  id: string; tipo: 'obra' | 'setor' | 'responsavel' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao'; titulo: string; detalhe: string; qtd: number;
   cor: string | null; responsavel: string | null; ref?: number | null;
   pessoas: { matricula: string; nome: string; funcao: string; situacao: string; turno: string; equipe_id?: number | null; papel?: 'membro' | 'encarregado' | null }[]; filhos: NoOrganograma[];
 }
-export type NivelCor = 'obra' | 'setor' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao';
+export type NivelCor = 'obra' | 'setor' | 'responsavel' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao';
 export type CoresOrganograma = Record<NivelCor, string>;
 export interface PessoaRef { id: number; nome: string; matricula: string | null; funcao: string | null; situacao: SituacaoEfetivo }
 export interface DisciplinaObra { id: number; setor_id: number; nome: string; cor: string | null; ordem: number; responsavel: PessoaRef | null; equipes: { id: number; nome: string }[] }

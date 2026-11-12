@@ -17,8 +17,8 @@ from app.shared.errors import DomainError
 
 SEM_SETOR, SEM_EQUIPE, EM_MOBILIZACAO, SEM_FUNCAO = ("Sem setor", "Sem equipe", "Em mobilização", "Sem função")
 SEM_FRENTE = "Sem frente"
-NIVEIS_COR = ("obra", "setor", "disciplina", "frente", "area", "equipe", "funcao")
-CORES_PADRAO = {"obra": "#1F3A3A", "setor": "#0F766E", "disciplina": "#0891B2", "frente": "#B45309", "area": "#D97706",
+NIVEIS_COR = ("obra", "setor", "responsavel", "disciplina", "frente", "area", "equipe", "funcao")
+CORES_PADRAO = {"obra": "#1F3A3A", "setor": "#0F766E", "responsavel": "#4F46E5", "disciplina": "#0891B2", "frente": "#B45309", "area": "#D97706",
                 "equipe": "#2563EB", "funcao": "#64748B"}
 _COR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
@@ -54,6 +54,8 @@ class PessoaOrg:
     setor: str | None = None
     disciplina: str | None = None
     equipe_id: int | None = None  # para mexer na equipe pelo organograma (spec 049)
+    lider: str | None = None  # responsável (engenheiro) da equipe: caixa abaixo do dono do setor (spec 050)
+    lider_funcao: str | None = None
     papel: str | None = None  # membro | encarregado
     frente: str | None = None  # "L4 · Novo CMD"
     area: str | None = None  # "004.05 · Galpão"
@@ -79,7 +81,7 @@ class SetorOrg:
 @dataclass
 class No:
     id: str
-    tipo: str  # obra | setor | disciplina | frente | area | equipe | funcao
+    tipo: str  # obra | setor | responsavel | disciplina | frente | area | equipe | funcao
     titulo: str
     detalhe: str
     qtd: int = 0
@@ -116,7 +118,7 @@ def _contar(n: No) -> int:
 
 def _ordenar(n: No) -> None:
     fim = {SEM_SETOR: 1, SEM_EQUIPE: 2, EM_MOBILIZACAO: 3, SEM_FRENTE: 1}
-    tipo = {"disciplina": 0, "frente": 0, "area": 0, "equipe": 1}
+    tipo = {"responsavel": 0, "disciplina": 0, "frente": 0, "area": 0, "equipe": 1}
     n.filhos.sort(key=lambda f: (fim.get(f.titulo, 0) if f.tipo in ("setor", "frente") else 0, tipo.get(f.tipo, 0), f.ordem,
                                  [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f.titulo)]))
     n.pessoas.sort(key=lambda p: p.nome)
@@ -137,12 +139,17 @@ def montar_organograma(obra: str, pessoas: list[PessoaOrg], setores: list[SetorO
     for p in pessoas:
         if p.situacao == "equipe":
             setor = _filho(raiz, "setor", p.setor or SEM_SETOR, "Setor")
+            if p.lider:  # dono do setor → responsável (engenheiro) → … → equipe
+                setor = _filho(setor, "responsavel", p.lider, p.lider_funcao or "Responsável")
+                setor.responsavel = p.lider
             if por_frente:  # setor (dono) → frente → área → equipe
                 pai = _filho(setor, "frente", p.frente or SEM_FRENTE, "Frente de trabalho" if p.frente else "Equipe sem frente")
                 if p.area:
                     pai = _filho(pai, "area", p.area, "Área")
             else:
                 pai = _filho(setor, "disciplina", p.disciplina, "Disciplina") if p.disciplina and p.setor else setor
+                if pai.tipo == "disciplina" and setor.tipo == "responsavel":
+                    _herdar_disciplina(raiz, p.setor, pai)
             equipe = _filho(pai, "equipe", p.equipe or SEM_EQUIPE, f"Enc.: {p.encarregado or '—'}")
             equipe.ref = equipe.ref or p.equipe_id
             _por_funcao(equipe, p)
@@ -151,8 +158,24 @@ def montar_organograma(obra: str, pessoas: list[PessoaOrg], setores: list[SetorO
         else:
             _por_funcao(_filho(raiz, "setor", EM_MOBILIZACAO, "Crachá, exame ou previsto"), p)
     _contar(raiz)
+    _podar_disciplinas(raiz)
     _ordenar(raiz)
     return raiz
+
+
+def _herdar_disciplina(raiz: No, setor: str | None, d: No) -> None:
+    """Disciplina repetida abaixo do responsável leva a cor/responsável da cadastrada no setor."""
+    st = next((f for f in raiz.filhos if f.tipo == "setor" and f.titulo == setor), None)
+    orig = next((f for f in st.filhos if f.tipo == "disciplina" and f.titulo == d.titulo), None) if st else None
+    if orig and d.cor is None:
+        d.cor, d.responsavel, d.ordem, d.detalhe = orig.cor, orig.responsavel, orig.ordem, orig.detalhe
+
+
+def _podar_disciplinas(raiz: No) -> None:
+    """Disciplina cadastrada que ficou vazia no setor porque as equipes dela estão abaixo de um responsável sai."""
+    for st in raiz.filhos:
+        abaixo = {d.titulo for r in st.filhos if r.tipo == "responsavel" for d in r.filhos if d.tipo == "disciplina"}
+        st.filhos = [f for f in st.filhos if not (f.tipo == "disciplina" and f.qtd == 0 and f.titulo in abaixo)]
 
 
 def filtrar(no: No, termo: str) -> No | None:

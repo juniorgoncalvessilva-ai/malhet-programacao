@@ -28,3 +28,29 @@ def test_lider_do_efetivo_preenche_responsavel(client):
     client.post(f"/api/programacoes/{p['id']}/linhas", json={"area_id": area["id"], "tipo_id": tipo["id"], "equipe_id": eq["id"]})
     ln = client.get(f"/api/programacoes/{p['id']}").json()["locais"][0]["areas"][0]["linhas"][0]
     assert ln["responsavel"] == lider["nome"] and ln["encarregado"]
+
+
+def test_responsavel_abaixo_do_dono_do_setor(client):
+    """Spec 050: Obra → Setor (dono) → Responsável (engenheiro do efetivo) → Disciplina → Equipe."""
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    cs = {c["nome"]: c for c in client.get("/api/efetivo/colaboradores").json()}
+    enc, ped, lider = cs["ENCARREGADO TESTE UM"]["id"], cs["PEDREIRO TESTE DOIS"]["id"], cs["MOTORISTA TERCEIRO"]
+    eq = client.post("/api/efetivo/equipes", json={"nome": "EQ.F", "encarregado_id": enc, "colaboradores": [ped]}).json()
+    st = client.post("/api/efetivo/setores", json={"nome": "Civil", "responsavel_id": cs["CANDIDATO TESTE"]["id"], "equipes": [eq["id"]]}).json()
+    client.post(f"/api/efetivo/setores/{st['id']}/disciplinas", json={"nome": "Formas", "equipes": [eq["id"]], "cor": "#EA580C"})
+    corpo = next(e for e in client.get("/api/equipes").json() if e["id"] == eq["id"])
+    assert client.put(f"/api/equipes/{eq['id']}", json={**corpo, "responsavel_id": lider["id"]}).status_code == 200
+    for vista in ("setor", "frente"):
+        civil = next(f for f in client.get(f"/api/efetivo/organograma?vista={vista}").json()["raiz"]["filhos"] if f["titulo"] == "Civil")
+        resp = civil["filhos"][0]
+        assert (resp["tipo"], resp["titulo"], resp["responsavel"]) == ("responsavel", lider["nome"], lider["nome"])
+        assert len(civil["filhos"]) == 1  # a disciplina vazia do setor não fica duplicada
+        nomes = []
+        def todas(n):
+            nomes.extend(p["nome"] for p in n["pessoas"])
+            for f in n["filhos"]:
+                todas(f)
+        todas(resp)
+        assert lider["nome"] not in nomes and "PEDREIRO TESTE DOIS" in nomes
+    disc = next(f for f in client.get("/api/efetivo/organograma").json()["raiz"]["filhos"] if f["titulo"] == "Civil")["filhos"][0]["filhos"][0]
+    assert (disc["tipo"], disc["titulo"], disc["cor"], disc["filhos"][0]["titulo"]) == ("disciplina", "Formas", "#EA580C", "EQ.F")

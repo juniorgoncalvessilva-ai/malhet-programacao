@@ -58,7 +58,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   nível); `equipe.setor_id`. Spec 018. Vista por frente (`?vista=frente`): Obra → Setor (dono) → Frente (local) → Área →
   Equipe; frente da equipe = `equipe.frente_codigo` (área/local) ou a área da programação mais recente
   (`frentes_das_equipes`). Spec 042. Disciplinas (`subsetor_obra`, `equipe.subsetor_id`): Organograma =
-  Obra → Setor → Disciplina → Equipe → Função; responsáveis só na própria caixa. Spec 019.
+  Obra → Setor → Disciplina → Equipe → Função; responsáveis só na própria caixa. Spec 019. Responsável (engenheiro do
+  efetivo, `equipe.responsavel_id`) é o nível abaixo do dono do setor: Setor → Responsável → Disciplina/Frente → Equipe.
+  Spec 050.
 - Frentes: lista da obra `CWA | Ativo | DESCRICAO CWA | Local` (`interpretar_lista_cwa`); Local pelo nome com código
   L1, L2…; `area_frente.ativo_codigo` → TAG do take-off. Formato antigo CODIGO | DESCRICAO ainda aceito. Spec 020.
 - WBS de execução (`wbs/`): Área → CWP (elemento + complemento) → Grupo → IWP (item da PQ); `programacao_linha.wbs_no_id`

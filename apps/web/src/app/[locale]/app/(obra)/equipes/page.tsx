@@ -170,16 +170,13 @@ export default function EquipesPage() {
               <Campo rotulo="Matrícula / crachá do encarregado" value={form.encarregado_cracha ?? ''} onChange={(e) => setForm({ ...form, encarregado_cracha: e.target.value || null })} />
               <div className="md:col-span-2"><Campo rotulo="Encarregado (nome, se não estiver no efetivo)" placeholder="nome, ou 115532 - nome" value={form.encarregado_nome ?? ''} onChange={(e) => setForm({ ...form, encarregado_nome: e.target.value || null })} /></div>
               <div className="flex flex-col gap-1.5 md:col-span-2">
-                <Selecao rotulo="Líder (engenheiro/supervisor do efetivo)" value={form.responsavel_id ?? ''} title="Vira o Responsável da equipe e das linhas da programação"
-                  onChange={(e) => {
-                    const id = e.target.value ? Number(e.target.value) : null;
-                    const p = efetivo.data?.find((x) => x.id === id);
-                    setForm({ ...form, responsavel_id: id, responsavel: p ? p.nome : form.responsavel });
-                  }}>
-                  <option value="">— digitar o nome —</option>
-                  {lideres(efetivo.data ?? [], todosLideres, form.responsavel_id).map((x) => <option key={x.id} value={x.id}>{x.nome}{x.funcao ? ` · ${x.funcao}` : ''}{x.matricula ? ` · ${x.matricula}` : ''}</option>)}
-                </Selecao>
-                <label className="flex items-center gap-1.5 text-[12px] text-m-text-muted"><input type="checkbox" checked={todosLideres} onChange={(e) => setTodosLideres(e.target.checked)} /> mostrar todo o efetivo (não só engenheiros e supervisores)</label>
+                <BuscaEfetivo rotulo="Responsável (engenheiro/supervisor do efetivo)" pessoas={todosLideres ? (efetivo.data ?? []) : lideres(efetivo.data ?? [], false, form.responsavel_id)}
+                  prioridade={LIDER} onEscolher={(x) => setForm({ ...form, responsavel_id: x.id, responsavel: x.nome })} />
+                {form.responsavel_id
+                  ? <p className="text-[12.5px] text-m-text-secondary">Atual: <b className="text-m-text-primary">{form.responsavel}</b>{(() => { const x = efetivo.data?.find((y) => y.id === form.responsavel_id); return x?.funcao ? ` · ${x.funcao}` : ''; })()} · aparece no organograma abaixo do dono do setor
+                      <button type="button" className="ml-2 font-semibold text-m-danger underline" onClick={() => setForm({ ...form, responsavel_id: null })}>tirar</button></p>
+                  : null}
+                <label className="flex items-center gap-1.5 text-[12px] text-m-text-muted"><input type="checkbox" checked={todosLideres} onChange={(e) => setTodosLideres(e.target.checked)} /> buscar em todo o efetivo (não só engenheiros e supervisores)</label>
                 {!form.responsavel_id && <Campo rotulo="Responsável (fora do efetivo)" value={form.responsavel ?? ''} onChange={(e) => setForm({ ...form, responsavel: e.target.value || null })} />}
               </div>
               <Selecao rotulo="Setor da obra" value={form.setor_id ?? ''} onChange={(e) => {
@@ -351,7 +348,7 @@ function PessoasDaEquipe({ membros }: { membros: Equipe['membros'] }) {
 
 /** Quem pode liderar a equipe: engenheiros, supervisores, coordenadores e gerentes mobilizados (ou todo o efetivo). */
 const LIDER = /ENGENH|SUPERV|COORDEN|GERENTE|L[IÍ]DER|ENCARREGADO GERAL|ENC\.? GERAL|MESTRE/i;
-function lideres(lista: { id: number; nome: string; funcao: string | null; matricula: string | null; situacao: string }[], todos: boolean, atual: number | null | undefined) {
+function lideres<T extends { id: number; nome: string; funcao: string | null; situacao: string }>(lista: T[], todos: boolean, atual: number | null | undefined): T[] {
   return lista
     .filter((x) => x.id === atual || (!['DESMOBILIZADO', 'DESISTENCIA'].includes(x.situacao) && (todos || LIDER.test(x.funcao ?? ''))))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
