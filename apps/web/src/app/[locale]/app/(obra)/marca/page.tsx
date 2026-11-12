@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { LogosObra, useLogo, useMarcaObra } from '@/components/Obra/LogosObra';
 import { SeletorCor } from '@/components/Obra/SeletorCor';
-import { Botao, Cabecalho, Painel } from '@/components/Obra/ui';
+import { Botao, Cabecalho, Campo, Painel } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
 
@@ -24,6 +24,8 @@ export default function MarcaPage() {
   const { obra, pode } = useObra();
   const m = useMarcaObra();
   const [cor, setCor] = useState<string | null>(null);
+  const [nomes, setNomes] = useState({ nome_contratada: '', nome_contratante: '' });
+  useEffect(() => { setNomes({ nome_contratada: m.data?.nome_contratada ?? '', nome_contratante: m.data?.nome_contratante ?? '' }); }, [m.data?.nome_contratada, m.data?.nome_contratante]);
   const [enviando, setEnviando] = useState<string | null>(null);
   useEffect(() => { setCor(m.data?.cor ?? null); }, [m.data?.cor]);
   const atualizar = () => { qc.invalidateQueries({ queryKey: ['marca-obra'] }); qc.invalidateQueries({ queryKey: ['obras-minhas'] }); };
@@ -47,6 +49,14 @@ export default function MarcaPage() {
           <LogosObra altura={40} />
         </div>
         <div className="h-8 rounded-m-sm bg-m-accent-strong px-3 text-[12px] font-semibold leading-8 text-m-on-accent">Cabeçalho das tabelas na cor da obra</div>
+      </Painel>
+      <Painel titulo="Nomes (aba do navegador: Contratada | Obra)">
+        <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); api.put('/obra/marca/nomes', nomes).then(() => { toast.success('Nomes salvos'); atualizar(); }).catch((er) => toast.error(er.message)); }}>
+          <Campo rotulo="Contratada" value={nomes.nome_contratada} maxLength={80} onChange={(e) => setNomes({ ...nomes, nome_contratada: e.target.value })} className="min-w-[260px]" />
+          <Campo rotulo="Contratante (cliente)" value={nomes.nome_contratante} maxLength={80} onChange={(e) => setNomes({ ...nomes, nome_contratante: e.target.value })} className="min-w-[260px]" />
+          <Botao type="submit"><Save size={16} /> Salvar nomes</Botao>
+        </form>
+        <p className="text-[12.5px] text-m-text-muted">A aba mostra “{nomes.nome_contratada || 'Malhet'} | {obra?.nome}” e o ícone da logo da contratada (sem logo, o do Malhet).</p>
       </Painel>
       <div className="grid gap-4 lg:grid-cols-2">
         {QUAIS.map(({ qual, titulo }) => <SlotLogo key={qual} qual={qual} titulo={titulo} existe={!!m.data?.[qual]} versao={m.data?.versao ?? 0} enviando={enviando === qual}

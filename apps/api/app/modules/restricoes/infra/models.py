@@ -33,6 +33,7 @@ class AcaoRestricaoModel(Base):
     # vínculo com o que a restrição trava (opcional)
     linha_id: Mapped[int | None] = mapped_column(ForeignKey("programacao_linha.id", ondelete="SET NULL"), index=True)
     equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
+    plano_item_id: Mapped[int | None] = mapped_column(ForeignKey("plano_item.id", ondelete="SET NULL"), index=True)  # plano de 90 dias
     origem: Mapped[str] = mapped_column(String(10), default="app")  # app | importado
     criado_por: Mapped[str | None] = mapped_column(String(80))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

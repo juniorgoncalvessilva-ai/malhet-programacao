@@ -1,19 +1,24 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useApi } from '@/hooks/programacao/useApi';
+import { useObraOpcional } from '@/lib/obra/ObraProvider';
 import type { MarcaObra } from '@/lib/api/types';
 
 export function useMarcaObra() {
   const api = useApi();
-  return useQuery({ queryKey: ['marca-obra'], queryFn: () => api.get<MarcaObra>('/obra/marca') });
+  const obraId = useObraOpcional()?.obra?.id;
+  return useQuery({ queryKey: ['marca-obra', obraId], enabled: !!obraId, queryFn: () => api.get<MarcaObra>('/obra/marca') });
 }
 
 /** URL (blob) da logo da obra; null quando não há. */
 export function useLogo(qual: 'contratada' | 'contratante', existe: boolean | undefined, versao = 0) {
   const api = useApi();
+  const obraId = useObraOpcional()?.obra?.id;
   return useQuery({
-    queryKey: ['marca-obra', 'logo', qual, versao], enabled: !!existe, staleTime: Infinity,
+    queryKey: ['marca-obra', obraId, 'logo', qual, versao], enabled: !!existe, staleTime: Infinity,
     queryFn: async () => URL.createObjectURL(await api.blob(`/obra/marca/logo/${qual}`)),
   });
 }
@@ -32,4 +37,29 @@ export function LogosObra({ altura = 40, className = '' }: { altura?: number; cl
       {/* eslint-enable @next/next/no-img-element */}
     </div>
   );
+}
+
+/** Aba do navegador: "Contratada | Obra" e o ícone da logo da contratada (sem ela, o do Malhet). */
+export function TituloAba() {
+  const obra = useObraOpcional()?.obra;
+  const pathname = usePathname();
+  const m = useMarcaObra();
+  const logo = useLogo('contratada', m.data?.contratada, m.data?.versao);
+  const titulo = obra ? `${m.data?.nome_contratada || 'Malhet'} | ${obra.nome}` : null;
+  useEffect(() => {
+    if (!titulo) return;
+    const aplicar = () => { if (document.title !== titulo) document.title = titulo; };
+    aplicar();
+    // o Next troca o <title> ao navegar: mantém o da obra
+    const obs = new MutationObserver(aplicar);
+    const el = document.querySelector('title');
+    if (el) obs.observe(el, { childList: true, characterData: true, subtree: true });
+    return () => obs.disconnect();
+  }, [titulo, pathname]);
+  useEffect(() => {
+    const links = [...document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')];
+    if (!links.length) return;
+    links.forEach((l) => { if (!l.dataset.original) l.dataset.original = l.href; l.href = logo.data ?? l.dataset.original; });
+  }, [logo.data, pathname]);
+  return null;
 }

@@ -83,6 +83,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `wbs_no.codigo_p6` = código WBS do P6 (5.4.3.4) é a chave da ida e volta; `POST /wbs/exportar-p6` devolve o .xer
   com a WBS acrescentada (`wbs/domain/xer.py`, bytes do P6 intactos, IWP → atividade EXE-00000); a sincronização casa
   CWP pelo código e IWP pelo Activity ID. Spec 040.
+- Plano de 90 dias (`planos/`): `plano_item` (atividade pensada/marco, IWP ou área+tipo, janela, marco que puxa) com
+  situação derivada (analisar → restrição → liberado → programado); restrição do item = ação do 6WLA
+  (`acao_restricao.plano_item_id`); migra para a programação (`programacao_linha.plano_item_id`; semanal só sem restrição
+  pendente). Abas 90 dias | 6 semanas | Pull planning | Levar à programação em `/app/plano`. Aba do navegador
+  "Contratada | Obra" + favicon da contratada (`TituloAba`, `marca_obra.nome_contratada`). Spec 043.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

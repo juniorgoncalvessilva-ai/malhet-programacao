@@ -41,6 +41,7 @@ class LinhaProgramacaoModel(Base):
     item_pq: Mapped[str | None] = mapped_column(String(40))
     wbs_no_id: Mapped[int | None] = mapped_column(ForeignKey("wbs_no.id", ondelete="SET NULL"), index=True)  # IWP
     id_crono: Mapped[str | None] = mapped_column(String(40))
+    plano_item_id: Mapped[int | None] = mapped_column(ForeignKey("plano_item.id", ondelete="SET NULL"), index=True)  # veio do plano de 90 dias
     equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
     qtd_projeto: Mapped[float | None] = mapped_column(Float)  # manual; vazio = take-off da TAG
     qtd_periodo: Mapped[float | None] = mapped_column(Float)  # quanto se prevê fazer nesta semana/mês

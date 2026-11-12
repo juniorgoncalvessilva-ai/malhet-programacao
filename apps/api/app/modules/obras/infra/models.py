@@ -42,6 +42,8 @@ class MarcaObraModel(Base):
 
     __tablename__ = "marca_obra"
     obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
+    nome_contratada: Mapped[str | None] = mapped_column(String(80))  # aba do navegador: "Contratada | Obra"
+    nome_contratante: Mapped[str | None] = mapped_column(String(80))
     cor: Mapped[str | None] = mapped_column(String(9))  # #RRGGBB
     logo_contratada: Mapped[bytes | None] = deferred(mapped_column(LargeBinary))
     tipo_contratada: Mapped[str | None] = mapped_column(String(20))

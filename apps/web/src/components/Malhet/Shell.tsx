@@ -1,5 +1,7 @@
 'use client';
 
+import { TituloAba } from '@/components/Obra/LogosObra';
+
 import { Check, ChevronsUpDown, LayoutGrid, LogOut, Menu as MenuIcon, Moon, Sun, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
@@ -191,6 +193,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const telaAdmin = pathname?.startsWith('/app/admin');
   return (
     <div className="min-h-screen bg-m-surface-base text-m-text-primary">
+      <TituloAba />
       <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r border-m-stroke-subtle bg-m-surface-raised lg:block print:hidden">
         <Lateral />
       </aside>

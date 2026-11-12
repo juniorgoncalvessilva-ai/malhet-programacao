@@ -97,7 +97,7 @@ def test_marca_da_obra_logos_e_cor_nos_documentos(client):
     buf = B()
     Image.new("RGB", (120, 40), (200, 30, 30)).save(buf, "PNG")
     png = buf.getvalue()
-    assert client.get("/api/obra/marca").json() == {"cor": None, "contratada": False, "contratante": False, "versao": 0}
+    assert client.get("/api/obra/marca").json() == {"cor": None, "nome_contratada": None, "nome_contratante": None, "contratada": False, "contratante": False, "versao": 0}
     assert client.put("/api/obra/marca/cor", json={"cor": "verde"}).status_code == 422
     assert client.put("/api/obra/marca/cor", json={"cor": "#1d4ed8"}).json()["cor"] == "#1D4ED8"
     assert client.post("/api/obra/marca/logo/contratante", files={"arquivo": ("l.svg", b"<svg/>", "image/svg+xml")}).status_code == 422

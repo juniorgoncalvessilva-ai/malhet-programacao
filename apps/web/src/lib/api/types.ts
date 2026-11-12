@@ -75,7 +75,7 @@ export interface Obra {
   id: number; codigo: string; nome: string; contrato: string | null; cliente: string | null; ativa: boolean; criado_em: string;
 }
 export interface MinhaObra extends Obra { papel: PapelObra; paginas?: string[] | null; cor?: string | null }
-export interface MarcaObra { cor: string | null; contratada: boolean; contratante: boolean; versao: number }
+export interface MarcaObra { cor: string | null; nome_contratada: string | null; nome_contratante: string | null; contratada: boolean; contratante: boolean; versao: number }
 export interface ObraAdmin extends Obra { usuarios: number }
 export interface Acesso {
   id: number; obra_id: number; usuario_id: string; email: string; papel: PapelObra; cracha: string | null;
@@ -295,4 +295,21 @@ export interface DiaCampo {
   linhas: (LinhaCampo & { previsto: number | null; realizado: number | null; capacidade: number | null; previsto_periodo: number; fotos: number[];
     realizado_periodo: number; desvios: { id: number; causa: string | null; descricao: string }[] })[];
   pendentes: (LinhaCampo & { data: string; dia: string; previsto: number })[];
+}
+
+/** Plano de 90 dias, 6 semanas e pull planning. Spec 043. */
+export type SituacaoPlano = 'analisar' | 'restricao' | 'liberado' | 'programado';
+export interface RestricaoPlano { id: number; numero: number; acao: string; responsavel: string | null; prazo: string | null; status1: string; impeditivo: boolean | null; seis_m: string | null; farol: string }
+export interface ItemPlano {
+  id: number; numero: number; codigo: string; descricao: string; area_id: number | null; area: string | null; local: string | null;
+  wbs_no_id: number | null; tipo_id: number | null; id_crono: string | null; equipe_id: number | null; equipe: string | null;
+  inicio: string; fim: string; quantidade: number | null; responsavel: string | null; marco: boolean; marco_id: number | null;
+  analisado: boolean; analisado_em: string | null; observacao: string | null; restricoes: RestricaoPlano[]; pendentes: number;
+  impeditivas: number; programacoes: { id: number; titulo: string; tipo: string }[]; situacao: SituacaoPlano;
+}
+export interface PlanoResposta { semanas: { inicio: string; fim: string }[]; itens: ItemPlano[]; resumo: Record<SituacaoPlano, number> }
+export interface PreviaMigracao {
+  programacao: { id: number; titulo: string; tipo: string; status: string; inicio: string; fim: string };
+  itens: (ItemPlano & { unid: string | null; qtd_sugerida: number | null; dias_no_periodo: number; ja_na_programacao: boolean; migravel: boolean })[];
+  memorias: Record<string, import('@/components/Obra/Calculado').MemoriaCalculo>;
 }

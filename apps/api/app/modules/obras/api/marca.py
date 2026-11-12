@@ -26,7 +26,8 @@ def _marca(s: Session, obra_id: int, criar: bool = False) -> MarcaObraModel | No
 
 
 def _out(m: MarcaObraModel | None) -> dict:
-    return {"cor": m.cor if m else None,
+    return {"cor": m.cor if m else None, "nome_contratada": m.nome_contratada if m else None,
+            "nome_contratante": m.nome_contratante if m else None,
             "contratada": bool(m and m.tipo_contratada), "contratante": bool(m and m.tipo_contratante),
             "versao": int(m.atualizado_em.timestamp()) if m and m.atualizado_em else 0}
 
@@ -38,6 +39,25 @@ def ver(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 
 class CorIn(BaseModel):
     cor: str | None = None
+
+
+class NomesIn(BaseModel):
+    nome_contratada: str | None = None
+    nome_contratante: str | None = None
+
+
+def _nome(v: str | None) -> str | None:
+    return " ".join((v or "").split())[:80] or None
+
+
+@router.put("/nomes")
+def nomes(d: NomesIn, s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    """Nomes da contratada e do contratante (aba do navegador: "Contratada | Obra")."""
+    m = _marca(s, c.obra_id, criar=True)
+    m.nome_contratada, m.nome_contratante = _nome(d.nome_contratada), _nome(d.nome_contratante)
+    s.flush()
+    s.refresh(m)
+    return _out(m)
 
 
 @router.put("/cor")
