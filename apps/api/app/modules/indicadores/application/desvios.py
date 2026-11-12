@@ -1,12 +1,12 @@
 """Desvios (Pareto): causas da obra, registro por item não cumprido e importação da planilha do Pareto."""
 from io import BytesIO
 
-from openpyxl import Workbook, load_workbook
+from openpyxl import load_workbook
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.indicadores.domain import causas as dom
-from app.modules.indicadores.domain.pareto import COLUNAS, ler_detalhamento, nao_cumpridas
+from app.modules.indicadores.domain.pareto import ler_detalhamento, nao_cumpridas
 from app.modules.indicadores.infra.models import CausaDesvioModel, DesvioModel
 from app.shared.errors import DomainError
 
@@ -97,29 +97,18 @@ def importar_pareto(s: Session, obra_id: int, conteudo: bytes, usuario: str) -> 
             "causas_novas": len(causas(s, obra_id)) - novas_causas_antes, "avisos": avisos[:50]}
 
 
-def exportar_pareto(s: Session, obra_id: int, desvios: list[DesvioModel]) -> bytes:
-    """Aba Detalhamento no mesmo layout do Pareto semanal, mais a aba Dados (recorrência por causa)."""
-    nomes = {c.id: c.descricao for c in causas(s, obra_id)}
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Detalhamento"
-    ws.append(list(COLUNAS))
-    for d in sorted(desvios, key=lambda x: (x.data, x.id)):
-        ws.append([d.data, d.semana, d.referencia, nomes.get(d.causa_id), d.descricao, d.frente, d.acao, d.responsavel,
-                   d.gerencia, d.status, d.atividade_impactada])
-    for c in ws["A"][1:]:
-        c.number_format = "DD/MM/YYYY"
-    wd = wb.create_sheet("Dados")
-    wd.append(["Problema", "Recorrência"])
-    cont: dict[int, int] = {}
-    for d in desvios:
-        cont[d.causa_id] = cont.get(d.causa_id, 0) + 1
-    for cid, q in sorted(cont.items(), key=lambda kv: -kv[1]):
-        wd.append([nomes.get(cid), q])
-    wd.append(["Total de ocorrências", sum(cont.values())])
-    buf = BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+def exportar_pareto(s: Session, obra_id: int, desvios: list[DesvioModel], titulo_obra: str = "") -> bytes:
+    """Pareto de Desvios no layout da planilha da obra: Gráfico, Detalhamento (status com ícones) e Dados."""
+    from datetime import date
+
+    from app.modules.indicadores.application.excel_pareto import exportar
+
+    lista = causas(s, obra_id)
+    nomes = {c.id: c.descricao for c in lista}
+    linhas = [{"id": d.id, "data": d.data, "semana": d.semana, "referencia": d.referencia, "causa": nomes.get(d.causa_id, "?"),
+               "descricao": d.descricao, "frente": d.frente, "acao": d.acao, "responsavel": d.responsavel,
+               "gerencia": d.gerencia, "status": d.status, "atividade_impactada": d.atividade_impactada} for d in desvios]
+    return exportar(linhas, [c.descricao for c in lista if c.ativo], titulo_obra or "Obra", date.today())
 
 
 def contar(s: Session, obra_id: int) -> int:

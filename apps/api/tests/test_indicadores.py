@@ -81,5 +81,14 @@ def test_importa_pareto_sem_duplicar_e_exporta(client):
     from openpyxl import load_workbook
 
     wb = load_workbook(BytesIO(client.get("/api/desvios/excel").content))
-    assert wb["Detalhamento"]["D1"].value == "Classificação" and wb["Dados"].max_row == 4
+    det = wb["Detalhamento"]
+    assert wb.sheetnames == ["Gráfico", "Detalhamento", "Dados"]
+    assert det["E4"].value == "Classificação" and det["B2"].value == "Detalhamento" and det["B1"].value.startswith("Pareto de Desvios |")
+    assert det["E5"].value == "Condições Meteorológicas (Chuva, Raio)" and det["K5"].value == 3 and det["B5"].number_format == "DD/MM/YYYY"
+    assert det["B4"].fill.fgColor.rgb.endswith("006666") and det["D5"].fill.fgColor.rgb.endswith("808080")
+    regra = det.conditional_formatting._cf_rules[next(iter(det.conditional_formatting._cf_rules))][0]
+    assert regra.iconSet.iconSet == "3Symbols" and regra.iconSet.showValue is False  # 1 ✖ · 2 ! · 3 ✔
+    assert len(wb["Gráfico"]._charts) == 3 and det.auto_filter.ref.startswith("B4:K")
+    dados = [r for r in wb["Dados"].iter_rows(values_only=True)]
+    assert any(r[2] == "Total de ocorrências" and r[3] == 3 for r in dados)
     assert client.post("/api/desvios/causas", json={"descricao": "causa nova da obra"}).status_code == 422

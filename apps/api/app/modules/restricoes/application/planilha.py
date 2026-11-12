@@ -4,7 +4,7 @@ from datetime import date, datetime
 from io import BytesIO
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import func, select
@@ -129,91 +129,208 @@ def saida(a: AcaoRestricaoModel, hoje: date) -> dict:
             "linha_id": a.linha_id, "equipe_id": a.equipe_id, "origem": a.origem}
 
 
-FILL = {1: "F8D7DA", 2: "FFF3CD", 3: "D1E7DD", 4: "CFE2FF"}
+VERDE, LARANJA, VERMELHO, CINZA = "007E7A", "FFC000", "C00000", "D9D9D9"
+LARGURAS = {"A": 4, "B": 1, "C": 15.7, "D": 22.7, "E": 18.2, "F": 79.7, "G": 21.6, "H": 34.6, "I": 13.7, "J": 17.9,
+            "K": 22.9, "L": 15.4, "M": 20.7, "N": 20.7, "O": 17.9, "P": 7.6, "Q": 18.3, "R": 17.9, "S": 10.9, "T": 22.7,
+            "U": 17.4, "V": 55}
+COR_STATUS = {"Concluído": "00D661", "No Prazo": "008282", "Reprogramado": "FFC000", "Atrasado": "FF4747", "Cancelado": "BBBCBC"}
 
 
-def exportar(acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> bytes:
-    """Plano de Ação no layout da aba Ações (C..V); FAROL e STATUS 2 com a fórmula da planilha (mudam com HOJE())."""
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Ações"
-    fino = Side(style="thin", color="BFBFBF")
-    borda = Border(left=fino, right=fino, top=fino, bottom=fino)
-    cab = PatternFill("solid", fgColor="1F3B4D")
+def _acoes(ws, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> None:
+    """Aba Ações no layout do Plano de Ação 6WLA (C..V)."""
+    from math import ceil
+
+    from openpyxl.formatting.rule import IconSetRule
+
+    from app.shared.excel import BORDA_HAIR, preencher
+
+    branco = Font(name="Calibri", size=16, bold=True, color="FFFFFF")
+    ws.sheet_view.showGridLines = False
+    ws.sheet_view.zoomScale = 50
+    for col, w in LARGURAS.items():
+        ws.column_dimensions[col].width = w
+    ws.row_dimensions[1].height = 42
+    ws.row_dimensions[2].height = 21.75
+    ws.row_dimensions[3].height = 35.7
+    for col in "CDEFGHIJKLMNOPQRSTUV":
+        for r in (1, 2, 3):
+            ws[f"{col}{r}"].fill = preencher(VERDE)
+            ws[f"{col}{r}"].font = branco
+    ws.merge_cells("C1:T1")
     ws["C1"] = titulo
-    ws["C1"].font = Font(bold=True, size=13)
+    ws["C1"].alignment = Alignment(horizontal="left", vertical="center")
     ws["V1"] = f"Atualização: {hoje:%d/%m/%Y}"
-    for col, nome in (("G", "SEMANA"), ("M", "PRAZO"), ("O", "REPROGRAMADO"), ("Q", "CONCLUSÃO")):
-        ws[f"{col}2"] = nome
+    ws["V1"].font = Font(name="Calibri", size=16, color="FFFFFF")
+    ws["V1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws["G2"] = "SEMANA"
     ws.merge_cells("M2:N2")
+    ws["M2"] = "PRAZO"
     ws.merge_cells("O2:P2")
+    ws["O2"] = "REPROGRAMADO"
+    ws["Q2"] = "CONCLUSÃO"
+    for c in ("O2", "P2", "O3", "P3"):
+        ws[c].fill = preencher(LARANJA)
+    for c in ("Q2", "Q3"):
+        ws[c].fill = preencher(VERMELHO)
+    for c in ("G2", "M2", "O2", "Q2"):
+        ws[c].alignment = Alignment(horizontal="center", vertical="center")
+    medio = Side(style="medium", color="000000")
     for j, nome in enumerate(COLUNAS):
         c = ws.cell(row=3, column=3 + j, value=nome)
-        c.font, c.fill, c.border = Font(bold=True, color="FFFFFF"), cab, borda
         c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    for col in "GMOQ":
-        ws[f"{col}2"].font = Font(bold=True)
-        ws[f"{col}2"].alignment = Alignment(horizontal="center")
-    for i, a in enumerate(sorted(acoes, key=lambda x: x.numero), start=4):
+        c.border = Border(top=medio, bottom=medio, left=Side(style="thin", color="000000"))
+    fonte = Font(name="Calibri", size=16, color="000000")
+    for r, a in enumerate(sorted(acoes, key=lambda x: x.numero), start=4):
         ds = dom.data_da_semana(a.prazo_termino, a.reprogramado)
-        sit = dom.situacao(a.status1, a.prazo_termino, a.reprogramado, hoje)
         vals = [a.numero, a.atividade, None if a.impeditivo is None else ("SIM" if a.impeditivo else "NÃO"), a.acao,
                 f"S{numero_semana(ds)}" if ds else None, a.area_texto, a.referencia, a.reuniao, a.responsavel, a.gerencia,
                 a.prazo_inicio, a.prazo_termino, a.reprogramado, a.reprogramacoes or None, a.conclusao, a.status1,
                 None, None, a.seis_m, a.observacoes]
         for j, v in enumerate(vals):
-            c = ws.cell(row=i, column=3 + j, value=v)
-            c.border = borda
-            c.alignment = Alignment(vertical="center", wrap_text=j in (3, 19))
+            c = ws.cell(row=r, column=3 + j, value=v)
+            c.font, c.border = fonte, BORDA_HAIR
+            c.alignment = Alignment(horizontal="left" if j in (3, 19) else "center", vertical="center", wrap_text=True)
             if isinstance(v, date):
-                c.number_format = "DD/MM/YYYY"
-        r = i
+                c.number_format = "DD/MM/YY"
         ws[f"S{r}"] = (f'=IF(R{r}="","",IF(R{r}="Concluído",4,IF(R{r}="Cancelado","",IF(AND(TODAY()>=N{r},O{r}<>"",'
                        f'TODAY()<=O{r}),2,IF(AND(N{r}<>"",TODAY()>=N{r}),1,3)))))')
         ws[f"T{r}"] = (f'=IF(R{r}="","",IF(R{r}="Concluído","Concluído",IF(R{r}="Cancelado","Cancelado",'
                        f'IF(AND(TODAY()>=N{r},O{r}<>"",TODAY()<=O{r}),"Reprogramado",IF(AND(N{r}<>"",TODAY()>=N{r}),'
                        f'"Atrasado","No Prazo")))))')
-        for col in "ST":
-            ws[f"{col}{r}"].border = borda
-            ws[f"{col}{r}"].alignment = Alignment(horizontal="center", vertical="center")
-        if sit.farol:
-            ws[f"S{r}"].fill = PatternFill("solid", fgColor=FILL[sit.farol])
+        for col in "TU":
+            ws[f"{col}{r}"].fill = preencher(CINZA)
+        linhas_texto = max(ceil(len(a.acao or "") / 62), ceil(len(a.observacoes or "") / 44), 1)
+        ws.row_dimensions[r].height = max(35.7, 21 * linhas_texto + 12)
     ult = max(4, len(acoes) + 3)
-    dv = DataValidation(type="list", formula1='"Pendente,Concluído,Cancelado"', allow_blank=True)
-    dv6 = DataValidation(type="list", formula1='"MDO,MET,MAT,MAQ,MAB,MED"', allow_blank=True)
-    dvs = DataValidation(type="list", formula1='"SIM,NÃO"', allow_blank=True)
-    ws.add_data_validation(dv)
-    ws.add_data_validation(dv6)
-    ws.add_data_validation(dvs)
-    dv.add(f"R4:R{ult + 200}")
-    dv6.add(f"U4:U{ult + 200}")
-    dvs.add(f"E4:E{ult + 200}")
-    larg = {"A": 2, "B": 1, "C": 7, "D": 18, "E": 11, "F": 70, "G": 9, "H": 30, "I": 12, "J": 10, "K": 22, "L": 14,
-            "M": 12, "N": 12, "O": 12, "P": 5, "Q": 12, "R": 12, "S": 7, "T": 14, "U": 7, "V": 50}
-    for col, w in larg.items():
-        ws.column_dimensions[col].width = w
+    # FAROL: 4 semáforos sem o número (1 vermelho atrasado · 2 amarelo reprogramado · 3/4 verde no prazo/concluído)
+    ws.conditional_formatting.add(f"S4:S{ult}", IconSetRule("4TrafficLights", "num", [0, 1, 2, 3], showValue=False))
+    for regra, faixa_ in (('"Pendente,Concluído,Cancelado"', f"R4:R{ult + 200}"), ('"MDO,MET,MAT,MAQ,MAB,MED"', f"U4:U{ult + 200}"),
+                          ('"SIM,NÃO"', f"E4:E{ult + 200}")):
+        dv = DataValidation(type="list", formula1=regra, allow_blank=True)
+        ws.add_data_validation(dv)
+        dv.add(faixa_)
     ws.freeze_panes = "G4"
     ws.auto_filter.ref = f"C3:V{ult}"
-    # resumo (no lugar das tabelas dinâmicas do PAINEL AÇÃO)
-    wr = wb.create_sheet("PAINEL AÇÃO")
-    blocos = [("STATUS 2", Counter(dom.situacao(a.status1, a.prazo_termino, a.reprogramado, hoje).status2 for a in acoes)),
-              ("6M (pendentes)", Counter(dom.SEIS_M.get(a.seis_m, "Não classificado") for a in acoes if a.status1 == "Pendente")),
-              ("GERÊNCIA", Counter(a.gerencia or "—" for a in acoes)),
-              ("ÁREA (pendentes)", Counter(a.area_texto or "—" for a in acoes if a.status1 == "Pendente")),
-              ("RESPONSÁVEL (pendentes)", Counter(a.responsavel or "—" for a in acoes if a.status1 == "Pendente"))]
-    col = 1
-    for nome, cont in blocos:
-        wr.cell(row=1, column=col, value=nome).font = Font(bold=True)
-        wr.cell(row=2, column=col, value="Rótulo").font = Font(bold=True)
-        wr.cell(row=2, column=col + 1, value="Contagem de AÇÕES").font = Font(bold=True)
-        for k, (rot, q) in enumerate(cont.most_common(), start=3):
-            wr.cell(row=k, column=col, value=rot)
-            wr.cell(row=k, column=col + 1, value=q)
-        wr.cell(row=len(cont) + 3, column=col, value="Total Geral").font = Font(bold=True)
-        wr.cell(row=len(cont) + 3, column=col + 1, value=sum(cont.values())).font = Font(bold=True)
-        wr.column_dimensions[get_column_letter(col)].width = 34
-        wr.column_dimensions[get_column_letter(col + 1)].width = 12
-        col += 3
+    ws.print_title_rows = "1:3"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+
+def _painel(wp, acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> None:
+    """PAINEL AÇÃO: as tabelas (no lugar das dinâmicas) à direita e os gráficos do painel da obra."""
+    from openpyxl.chart import BarChart, DoughnutChart, Reference
+    from openpyxl.chart.series import DataPoint
+    from openpyxl.chart.shapes import GraphicalProperties
+
+    from app.shared.excel import barras, caber_na_largura, faixa, preencher, rotulos_so_valor
+
+    caber_na_largura(wp)
+    wp.sheet_view.showGridLines = False
+    wp.sheet_view.zoomScale = 70
+    for col in range(1, 26):
+        wp.column_dimensions[get_column_letter(col)].width = 11
+    faixa(wp, "A1:X2", f"PAINEL AÇÃO | {titulo}", VERDE, 22)
+    wp["A3"] = f"HOJE: {hoje:%d/%m/%Y}"
+    wp["A3"].font = Font(bold=True)
+    sit = {a.id: dom.situacao(a.status1, a.prazo_termino, a.reprogramado, hoje).status2 for a in acoes}
+    pend = [a for a in acoes if a.status1 == "Pendente"]
+    col0 = 27  # AA: tabelas que alimentam os gráficos
+    lin = [1]
+
+    def tabela(nome: str, cab: list[str], linhas: list[list]) -> tuple[int, int]:
+        r = lin[0]
+        wp.cell(row=r, column=col0, value=nome).font = Font(bold=True)
+        for j, h in enumerate(cab):
+            c = wp.cell(row=r + 1, column=col0 + j, value=h)
+            c.font, c.fill = Font(bold=True, color="FFFFFF"), preencher(VERDE)
+        for i, ln in enumerate(linhas, start=r + 2):
+            for j, v in enumerate(ln):
+                wp.cell(row=i, column=col0 + j, value=v)
+        tot = r + 2 + len(linhas)
+        wp.cell(row=tot, column=col0, value="Total Geral").font = Font(bold=True)
+        for j in range(1, len(cab)):
+            wp.cell(row=tot, column=col0 + j, value=sum(ln[j] or 0 for ln in linhas)).font = Font(bold=True)
+        lin[0] = tot + 3
+        return r + 2, max(r + 2, tot - 1)
+
+    for col in range(col0, col0 + 6):
+        wp.column_dimensions[get_column_letter(col)].width = 18
+    wp.column_dimensions[get_column_letter(col0)].width = 36
+    # 1. status das restrições (rosca)
+    ordem_st = [s for s in ("Concluído", "No Prazo", "Reprogramado", "Atrasado", "Cancelado") if any(v == s for v in sit.values())]
+    l_st = tabela("STATUS DAS RESTRIÇÕES", ["Status 2", "Contagem de AÇÕES"], [[s, sum(v == s for v in sit.values())] for s in ordem_st])
+    rosca = DoughnutChart()
+    rosca.title = "STATUS DAS RESTRIÇÕES"
+    rosca.add_data(Reference(wp, min_col=col0 + 1, min_row=l_st[0], max_row=l_st[1]), titles_from_data=False)
+    rosca.set_categories(Reference(wp, min_col=col0, min_row=l_st[0], max_row=l_st[1]))
+    for i, s in enumerate(ordem_st):
+        pt = DataPoint(idx=i)
+        pt.graphicalProperties = GraphicalProperties(solidFill=COR_STATUS[s])
+        rosca.series[0].dPt.append(pt)
+    rosca.dataLabels = rotulos_so_valor()
+    rosca.holeSize = 55
+    rosca.width, rosca.height = 14, 10
+    wp.add_chart(rosca, "A5")
+    # 2. pendentes por responsável e status (colunas empilhadas)
+    resp = Counter(a.responsavel or "—" for a in pend).most_common(14)
+    sts = ["Atrasado", "Reprogramado", "No Prazo"]
+    l_rp = tabela("PENDENTES POR RESPONSÁVEL", ["Responsável", *sts],
+                  [[r, *[sum(1 for a in pend if (a.responsavel or "—") == r and sit[a.id] == s) for s in sts]] for r, _q in resp])
+    ch = BarChart()
+    ch.type, ch.grouping, ch.overlap = "col", "stacked", 100
+    ch.title = "STATUS RESTRIÇÕES POR RESPONSÁVEL"
+    ch.add_data(Reference(wp, min_col=col0 + 1, max_col=col0 + 3, min_row=l_rp[0] - 1, max_row=l_rp[1]), titles_from_data=True)
+    ch.set_categories(Reference(wp, min_col=col0, min_row=l_rp[0], max_row=l_rp[1]))
+    for s_, nome in zip(ch.series, sts):
+        s_.graphicalProperties = GraphicalProperties(solidFill=COR_STATUS[nome])
+    ch.dataLabels = rotulos_so_valor()
+    ch.y_axis.majorGridlines = None
+    ch.y_axis.delete = ch.x_axis.delete = False
+    ch.width, ch.height = 26, 10
+    wp.add_chart(ch, "I5")
+    # 3. pendentes por semana do projeto
+    sem = sorted(Counter(numero_semana(d) for a in pend if (d := dom.data_da_semana(a.prazo_termino, a.reprogramado))).items())
+    l_sem = tabela("RESTRIÇÕES (PENDENTES) POR SEMANA", ["Semana", "Contagem de AÇÕES"], [[f"S{s}", q] for s, q in sem])
+    wp.add_chart(barras("RESTRIÇÕES POR SEMANA DO PROJETO", wp, col0, col0 + 1, l_sem[0], l_sem[1], "008282",
+                        horizontal=False, largura=18, altura=10), "A26")
+    # 4. por área: pendente × concluído × cancelado
+    areas = Counter(a.area_texto or "—" for a in acoes).most_common(15)
+    s1 = ["Pendente", "Concluído", "Cancelado"]
+    l_ar = tabela("RESTRIÇÕES POR ÁREAS / ATIVOS", ["Área", *s1],
+                  [[ar, *[sum(1 for a in acoes if (a.area_texto or "—") == ar and a.status1 == s) for s in s1]] for ar, _q in areas])
+    ch = BarChart()
+    ch.type, ch.grouping = "col", "clustered"
+    ch.title = "RESTRIÇÕES POR ÁREAS / ATIVOS"
+    ch.add_data(Reference(wp, min_col=col0 + 1, max_col=col0 + 3, min_row=l_ar[0] - 1, max_row=l_ar[1]), titles_from_data=True)
+    ch.set_categories(Reference(wp, min_col=col0, min_row=l_ar[0], max_row=l_ar[1]))
+    for s_, cor in zip(ch.series, ("DA291C", "008282", "BBBCBC")):
+        s_.graphicalProperties = GraphicalProperties(solidFill=cor)
+    ch.dataLabels = rotulos_so_valor()
+    ch.y_axis.majorGridlines = None
+    ch.y_axis.delete = ch.x_axis.delete = False
+    ch.width, ch.height = 26, 10
+    wp.add_chart(ch, "K26")
+    # 5. 6M das pendentes  6. por gerência
+    m6 = [[dom.SEIS_M.get(k, "Não classificado") if k else "Não classificado", q]
+          for k, q in Counter(a.seis_m for a in pend).most_common()]
+    l_6m = tabela("6M´S (PENDENTES)", ["6M", "Contagem de AÇÕES"], m6)
+    wp.add_chart(barras("6M´S", wp, col0, col0 + 1, l_6m[0], l_6m[1], "008282", largura=18, altura=10), "A47")
+    ger = Counter(a.gerencia or "—" for a in acoes).most_common()
+    l_ge = tabela("RESTRIÇÃO POR GERÊNCIA", ["Gerência", "Contagem de AÇÕES"], [[g, q] for g, q in ger])
+    wp.add_chart(barras("RESTRIÇÃO POR GERÊNCIA", wp, col0, col0 + 1, l_ge[0], l_ge[1], "007680", horizontal=False,
+                        largura=18, altura=10), "K47")
+
+
+def exportar(acoes: list[AcaoRestricaoModel], hoje: date, titulo: str) -> bytes:
+    """Plano de Ação 6WLA no layout da obra: aba Ações (farol com semáforos e status por fórmula com HOJE()) e o
+    PAINEL AÇÃO com os gráficos de status, responsável, semana, área, 6M e gerência."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Ações"
+    _acoes(ws, acoes, hoje, titulo)
+    _painel(wb.create_sheet("PAINEL AÇÃO"), acoes, hoje, titulo)
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()

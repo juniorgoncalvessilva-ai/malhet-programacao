@@ -49,4 +49,10 @@ def test_plano_de_acao_importa_ishikawa_e_exporta(client):
     ws = load_workbook(BytesIO(client.get("/api/restricoes/excel").content))["Ações"]
     assert ws["F3"].value == "AÇÕES" and ws["C4"].value == 1 and ws["E4"].value == "SIM"
     assert str(ws["S4"].value).startswith("=IF(") and ws["G4"].value.startswith("S")
+    wb = load_workbook(BytesIO(client.get("/api/restricoes/excel").content))
+    assert wb.sheetnames == ["Ações", "PAINEL AÇÃO"] and len(wb["PAINEL AÇÃO"]._charts) == 6
+    ws = wb["Ações"]
+    assert ws["O2"].value == "REPROGRAMADO" and ws["O2"].fill.fgColor.rgb.endswith("FFC000") and ws["Q3"].fill.fgColor.rgb.endswith("C00000")
+    regra = ws.conditional_formatting._cf_rules[next(iter(ws.conditional_formatting._cf_rules))][0]
+    assert regra.iconSet.iconSet == "4TrafficLights" and regra.iconSet.showValue is False
     assert client.delete(f"/api/restricoes/{n3['id']}").status_code == 204

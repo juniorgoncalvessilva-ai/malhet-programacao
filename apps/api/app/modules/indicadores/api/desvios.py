@@ -204,5 +204,8 @@ def excel(de: date | None = None, ate: date | None = None, s: Session = Depends(
         q = q.where(DesvioModel.data >= de)
     if ate:
         q = q.where(DesvioModel.data <= ate)
-    conteudo = app_.exportar_pareto(s, c.obra_id, list(s.scalars(q)))
+    from app.modules.obras.infra.models import ObraModel
+
+    obra = s.get(ObraModel, c.obra_id)
+    conteudo = app_.exportar_pareto(s, c.obra_id, list(s.scalars(q)), obra.nome if obra else "")
     return Response(conteudo, media_type=XLSX, headers={"Content-Disposition": 'attachment; filename="Pareto_desvios.xlsx"'})
