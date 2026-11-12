@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.auth import ContextoObra, ler, planejar
 from app.core.db import get_session
 from app.modules.catalogo.domain import catalogo as cat
+from app.modules.catalogo.domain import unidades as um
+from app.modules.cadastros.infra.models import UnidadeMedidaModel  # tabela UNIDADE_MEDIDA do Simova (por obra)
 from app.modules.catalogo.infra.models import GrupoAtividadeModel, ItemSimovaModel, TipoAtividadeModel
 from app.modules.referencias.infra.pq_gateway import ItemPqInfo, itens_pq, salvar_nome_simplificado
 from app.shared.errors import DomainError, NotFoundError
@@ -38,6 +40,7 @@ class TipoOut(BaseModel):
     pu: float | None = None
     na_pq_vigente: bool = True
     ativo: bool
+    unidade_simova: str | None = None  # código UNIDADE_MEDIDA do Simova casado com a unidade da PQ
     itens: list[ItemOut] = []
 
 
@@ -46,6 +49,7 @@ class GrupoOut(BaseModel):
     numero: int
     codigo: str
     descricao: str
+    unidade: str | None = None  # código UNIDADE_MEDIDA do Simova
     ativo: bool
     tipos: list[TipoOut] = []
 
@@ -53,7 +57,12 @@ class GrupoOut(BaseModel):
 class GrupoIn(BaseModel):
     descricao: str
     numero: int | None = None
+    unidade: str | None = None
     ativo: bool = True
+
+
+class LoteIn(BaseModel):
+    texto: str
 
 
 class TipoIn(BaseModel):
@@ -97,7 +106,7 @@ class ItemResp(BaseModel):
 
 
 def _tipo_out(t: TipoAtividadeModel, g: GrupoAtividadeModel, itens: list[ItemSimovaModel],
-              pq: dict[str, ItemPqInfo] | None = None) -> TipoOut:
+              pq: dict[str, ItemPqInfo] | None = None, tab: dict[str, str] | None = None) -> TipoOut:
     info = (pq or {}).get(t.item_pq) if t.item_pq else None
     info = info if info is not None and info.folha else None  # título da PQ não serve de tipo
     desc = info.texto_simova if info else t.descricao
@@ -106,6 +115,7 @@ def _tipo_out(t: TipoAtividadeModel, g: GrupoAtividadeModel, itens: list[ItemSim
                    nome_simplificado=info.nome_simplificado if info else None, unidade=(info.unid if info else t.unidade),
                    quantidade_pq=info.quantidade if info else None, pu=info.pu if info else None,
                    na_pq_vigente=bool(info) or not t.item_pq or pq is None, ativo=t.ativo,
+                   unidade_simova=um.codigo_unidade(info.unid if info else t.unidade, tab) if tab else None,
                    itens=[_item_out(i, t, g, desc) for i in itens])
 
 
@@ -129,8 +139,9 @@ def arvore(s: Session, obra_id: int) -> list[GrupoOut]:
     por_grupo: dict[int, list[TipoAtividadeModel]] = {}
     for t in tipos:
         por_grupo.setdefault(t.grupo_id, []).append(t)
-    return [GrupoOut(id=g.id, numero=g.numero, codigo=str(g.numero), descricao=g.descricao, ativo=g.ativo,
-                     tipos=[_tipo_out(t, g, por_tipo.get(t.id, []), pq) for t in por_grupo.get(g.id, [])])
+    tab = tabela_unidades(s, obra_id)
+    return [GrupoOut(id=g.id, numero=g.numero, codigo=str(g.numero), descricao=g.descricao, unidade=g.unidade, ativo=g.ativo,
+                     tipos=[_tipo_out(t, g, por_tipo.get(t.id, []), pq, tab) for t in por_grupo.get(g.id, [])])
             for g in grupos]
 
 
@@ -160,10 +171,11 @@ def criar_grupo(d: GrupoIn, s: Session = Depends(get_session), c: ContextoObra =
     n = cat.validar_numero(d.numero, "numero") if d.numero else cat.proximo_numero(nums)
     if n in nums:
         raise DomainError(f"já existe o grupo {n}", "numero")
-    g = GrupoAtividadeModel(obra_id=c.obra_id, numero=n, descricao=cat.validar_descricao(d.descricao), ativo=d.ativo)
+    g = GrupoAtividadeModel(obra_id=c.obra_id, numero=n, descricao=cat.validar_descricao(d.descricao), ativo=d.ativo,
+                            unidade=_unidade_valida(s, c.obra_id, d.unidade))
     s.add(g)
     s.flush()
-    return GrupoOut(id=g.id, numero=g.numero, codigo=str(g.numero), descricao=g.descricao, ativo=g.ativo)
+    return GrupoOut(id=g.id, numero=g.numero, codigo=str(g.numero), descricao=g.descricao, unidade=g.unidade, ativo=g.ativo)
 
 
 @router.put("/grupos/{gid}", response_model=GrupoOut)
@@ -175,8 +187,79 @@ def editar_grupo(gid: int, d: GrupoIn, s: Session = Depends(get_session), c: Con
             raise DomainError(f"já existe o grupo {d.numero}", "numero")
         g.numero = cat.validar_numero(d.numero, "numero")
     g.descricao, g.ativo = cat.validar_descricao(d.descricao), d.ativo
+    g.unidade = _unidade_valida(s, c.obra_id, d.unidade)
     s.flush()
     return next(x for x in arvore(s, c.obra_id) if x.id == g.id)
+
+
+# ---- unidades de medida (aba UNIDADE_MEDIDA do Simova) e grupos em massa (layout OPER_GRUPO) ----------------
+def unidades(s: Session, obra_id: int) -> list[UnidadeMedidaModel]:
+    lista = list(s.scalars(select(UnidadeMedidaModel).where(UnidadeMedidaModel.obra_id == obra_id)
+                           .order_by(UnidadeMedidaModel.codigo)))
+    if not lista:
+        from sqlalchemy.dialects.postgresql import insert
+
+        s.execute(insert(UnidadeMedidaModel).values([{"obra_id": obra_id, "codigo": c, "descricao": d}
+                                                     for c, d in um.UNIDADES_PADRAO])
+                  .on_conflict_do_nothing(index_elements=["obra_id", "codigo"]))
+        s.flush()
+        lista = list(s.scalars(select(UnidadeMedidaModel).where(UnidadeMedidaModel.obra_id == obra_id)
+                               .order_by(UnidadeMedidaModel.codigo)))
+    return lista
+
+
+def tabela_unidades(s: Session, obra_id: int) -> dict[str, str]:
+    return {u.codigo: u.descricao or "" for u in unidades(s, obra_id)}
+
+
+def _unidade_valida(s: Session, obra_id: int, cod: str | None) -> str | None:
+    c = um.validar_codigo_unidade(cod)
+    if c and c not in tabela_unidades(s, obra_id):
+        raise DomainError(f"unidade {c} não está na tabela UNIDADE_MEDIDA da obra", "unidade")
+    return c
+
+
+@router.get("/unidades")
+def listar_unidades(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    return [{"codigo": u.codigo, "descricao": u.descricao or ""} for u in unidades(s, c.obra_id)]
+
+
+@router.post("/unidades/lote")
+def lote_unidades(d: LoteIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Cola CODIGO · DESCRICAO (aba UNIDADE_MEDIDA do Simova): inclui as novas e atualiza a descrição das existentes."""
+    atuais = {u.codigo: u for u in unidades(s, c.obra_id)}
+    n = 0
+    for cod, desc in um.interpretar_unidades(d.texto):
+        if cod in atuais:
+            atuais[cod].descricao = desc
+        else:
+            s.add(UnidadeMedidaModel(obra_id=c.obra_id, codigo=cod, descricao=desc))
+        n += 1
+    s.flush()
+    return {"salvas": n}
+
+
+@router.post("/grupos/lote")
+def lote_grupos(d: LoteIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Grupos em massa no layout OPER_GRUPO (CODIGO · DESCRICAO · UNIDADE_MEDIDA), colados do Excel. O código é o
+    número do grupo: se já existe, atualiza descrição e unidade; senão, cria."""
+    linhas = um.interpretar_grupos(d.texto)
+    tab = tabela_unidades(s, c.obra_id)
+    fora = sorted({u for _n, _d, u in linhas if u and u not in tab})
+    if fora:
+        raise DomainError(f"unidade(s) fora da tabela UNIDADE_MEDIDA: {', '.join(fora)} — inclua-as antes", "texto")
+    atuais = {g.numero: g for g in s.scalars(select(GrupoAtividadeModel).where(GrupoAtividadeModel.obra_id == c.obra_id))}
+    criados = atualizados = 0
+    for n, desc, unid in linhas:
+        g = atuais.get(cat.validar_numero(n, "codigo"))
+        if g is None:
+            s.add(GrupoAtividadeModel(obra_id=c.obra_id, numero=n, descricao=cat.validar_descricao(desc), unidade=unid, ativo=True))
+            criados += 1
+        else:
+            g.descricao, g.unidade = cat.validar_descricao(desc), unid
+            atualizados += 1
+    s.flush()
+    return {"criados": criados, "atualizados": atualizados}
 
 
 @router.delete("/grupos/{gid}", status_code=204)
@@ -265,13 +348,27 @@ def desvincular_tipo(tid: int, s: Session = Depends(get_session), c: ContextoObr
     """Desvincula o item da PQ do grupo (só se nenhuma programação usa o tipo)."""
     from app.modules.planejamento.infra.models import LinhaProgramacaoModel
 
+    from app.modules.planejamento.infra.models import ProgramacaoModel
+    from app.modules.wbs.infra.models import WbsNoModel
+
     t = _tipo(s, c, tid)
-    if s.scalar(select(func.count()).select_from(LinhaProgramacaoModel).where(LinhaProgramacaoModel.tipo_id == t.id)):
-        raise DomainError("o tipo está em programações: inative-o em vez de desvincular")
+    usos = list(s.execute(select(ProgramacaoModel.titulo, func.count()).join(
+        LinhaProgramacaoModel, LinhaProgramacaoModel.programacao_id == ProgramacaoModel.id).where(
+        LinhaProgramacaoModel.tipo_id == t.id).group_by(ProgramacaoModel.titulo)))
+    if usos:
+        onde = "; ".join(f"{titulo} ({n} linha{'s' if n > 1 else ''})" for titulo, n in usos[:5])
+        raise DomainError(f"o item {t.item_pq or t.descricao[:40]} está em programação: {onde}. Exclua essas linhas "
+                          "(programação em rascunho) ou inative o item em vez de excluir")
+    # IWPs da WBS de execução que apontam para o tipo (vieram do P6 ou foram criados à mão) saem junto:
+    # nenhum está em programação (verificado acima); a próxima sincronização com o P6 não os recria sem o vínculo
+    iwps = list(s.scalars(select(WbsNoModel).where(WbsNoModel.obra_id == c.obra_id, WbsNoModel.tipo_atividade_id == t.id)))
+    for n in iwps:
+        s.delete(n)
     for i in s.scalars(select(ItemSimovaModel).where(ItemSimovaModel.tipo_id == t.id)):
         s.delete(i)
     s.flush()
     s.delete(t)
+    s.flush()
 
 
 # ---- nome simplificado do item da PQ e vínculo de um item a um grupo -----------------------------------
@@ -366,6 +463,19 @@ def editar_item(iid: int, d: ItemIn, s: Session = Depends(get_session), c: Conte
     item.item_pq, item.ativo = t.item_pq or (d.item_pq or "").strip() or None, d.ativo
     s.flush()
     return _item_out(item, t, s.get(GrupoAtividadeModel, t.grupo_id))
+
+
+@router.delete("/itens/{iid}", status_code=204)
+def excluir_item(iid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Exclui o item complementar (g.t.n) que nenhuma programação usa."""
+    from app.modules.planejamento.infra.models import LinhaProgramacaoModel
+
+    i = s.get(ItemSimovaModel, iid)
+    if i is None or i.obra_id != c.obra_id:
+        raise NotFoundError("Item", iid)
+    if s.scalar(select(func.count()).select_from(LinhaProgramacaoModel).where(LinhaProgramacaoModel.item_simova_id == i.id)):
+        raise DomainError("o item complementar está em programação: inative-o em vez de excluir")
+    s.delete(i)
 
 
 @router.get("/contagem")

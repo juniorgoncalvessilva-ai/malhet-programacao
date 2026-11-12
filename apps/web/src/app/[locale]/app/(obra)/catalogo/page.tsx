@@ -1,19 +1,19 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Download, Link2, Pencil, Plus, Save, Trash2, Unlink } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Layers, Link2, Pencil, Plus, Save, Trash2, Unlink } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, fmt } from '@/components/Obra/ui';
 import { k, useAcao, useCatalogo } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
-import type { GrupoCatalogo, ItemCatalogo, LinhaPq, TipoCatalogo } from '@/lib/api/types';
+import type { GrupoCatalogo, ItemCatalogo, LinhaPq, TipoCatalogo, UnidadeMedida } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Calculado, nbr } from '@/components/Obra/Calculado';
 
-type GrupoForm = { id?: number; descricao: string; numero: string; ativo: boolean };
+type GrupoForm = { id?: number; descricao: string; numero: string; unidade: string; ativo: boolean };
 type TipoForm = { id: number; grupo_id: string; numero: string; ativo: boolean; codigo: string };
 type ItemForm = { id?: number; tipo_id: number; complemento: string; ativo: boolean };
 
@@ -37,6 +37,12 @@ export default function CatalogoPage() {
   const inv = [[...k.catalogo], ['programacao'], ['pq-estrutura']];
   const pq = useQuery({ queryKey: ['pq-estrutura'], queryFn: () => api.get<{ versao: { rotulo: string; arquivo: string | null } | null; linhas: LinhaPq[] }>('/pq/estrutura') });
   const [grupo, setGrupo] = useState<GrupoForm | null>(null);
+  const unidades = useQuery({ queryKey: [...k.catalogo, 'unidades'], queryFn: () => api.get<UnidadeMedida[]>('/catalogo/unidades') });
+  const nomeUnidade = (cod?: string | null) => (cod ? `${cod} · ${unidades.data?.find((u) => u.codigo === cod)?.descricao ?? '?'}` : null);
+  const [massa, setMassa] = useState<{ grupos: string; unidades: string } | null>(null);
+  const loteGrupos = useAcao((a, texto: string) => a.post<{ criados: number; atualizados: number }>('/catalogo/grupos/lote', { texto }), inv);
+  const loteUnidades = useAcao((a, texto: string) => a.post<{ salvas: number }>('/catalogo/unidades/lote', { texto }), [[...k.catalogo]]);
+  const excluirItem = useAcao((a, id: number) => a.del(`/catalogo/itens/${id}`), inv);
   const [tipo, setTipo] = useState<TipoForm | null>(null);
   const [item, setItem] = useState<ItemForm | null>(null);
   const [destino, setDestino] = useState('');
@@ -60,7 +66,7 @@ export default function CatalogoPage() {
   const nNomes = Object.keys(nomes).length;
 
   const salvarGrupo = useAcao((a, d: GrupoForm) => {
-    const corpo = { descricao: d.descricao, numero: num(d.numero), ativo: d.ativo };
+    const corpo = { descricao: d.descricao, numero: num(d.numero), unidade: d.unidade || null, ativo: d.ativo };
     return d.id ? a.put(`/catalogo/grupos/${d.id}`, corpo) : a.post('/catalogo/grupos', corpo);
   }, inv);
   const excluirGrupo = useAcao((a, id: number) => a.del(`/catalogo/grupos/${id}`), inv);
@@ -75,7 +81,7 @@ export default function CatalogoPage() {
   const grupos = cat.data ?? [];
   const nTipos = grupos.reduce((s, g) => s + g.tipos.length, 0);
   const fechar = () => { setGrupo(null); setTipo(null); setItem(null); };
-  const abrirGrupo = (g?: GrupoCatalogo) => { fechar(); setGrupo(g ? { id: g.id, descricao: g.descricao, numero: String(g.numero), ativo: g.ativo } : { descricao: '', numero: '', ativo: true }); };
+  const abrirGrupo = (g?: GrupoCatalogo) => { fechar(); setGrupo(g ? { id: g.id, descricao: g.descricao, numero: String(g.numero), unidade: g.unidade ?? '', ativo: g.ativo } : { descricao: '', numero: '', unidade: '', ativo: true }); };
   const abrirTipo = (t: TipoCatalogo) => { fechar(); setTipo({ id: t.id, grupo_id: String(t.grupo_id), numero: String(t.numero), ativo: t.ativo, codigo: t.codigo }); };
   const abrirItem = (t: TipoCatalogo, i?: ItemCatalogo) => { fechar(); setItem(i ? { id: i.id, tipo_id: t.id, complemento: i.complemento, ativo: i.ativo } : { tipo_id: t.id, complemento: '', ativo: true }); };
   const tipoDoItem = item && grupos.flatMap((g) => g.tipos).find((t) => t.id === item.tipo_id);
@@ -108,12 +114,16 @@ export default function CatalogoPage() {
       {(grupo || tipo || item) && (
         <Painel titulo={grupo ? (grupo.id ? 'Editar grupo' : 'Novo grupo') : tipo ? `Mover ou renumerar ${tipo.codigo}` : item?.id ? 'Editar item complementar' : 'Novo item complementar'}>
           {grupo && (
-            <form className="grid gap-3 md:grid-cols-[110px_1fr_auto_auto]" onSubmit={(e) => { e.preventDefault(); salvarGrupo.mutate(grupo, { onSuccess: () => { toast.success('Grupo salvo'); fechar(); } }); }}>
+            <form className="grid gap-3 md:grid-cols-[110px_1fr_180px_auto_auto]" onSubmit={(e) => { e.preventDefault(); salvarGrupo.mutate(grupo, { onSuccess: () => { toast.success('Grupo salvo'); fechar(); } }); }}>
               <Campo rotulo="Número" placeholder="auto" inputMode="numeric" value={grupo.numero} onChange={(e) => setGrupo({ ...grupo, numero: e.target.value })} />
               <Campo rotulo="Descrição" required placeholder="Concreto" value={grupo.descricao} onChange={(e) => setGrupo({ ...grupo, descricao: e.target.value })} />
+              <Selecao rotulo="Unidade (Simova)" value={grupo.unidade} onChange={(e) => setGrupo({ ...grupo, unidade: e.target.value })}>
+                <option value="">—</option>
+                {unidades.data?.map((u) => <option key={u.codigo} value={u.codigo}>{u.codigo} · {u.descricao}</option>)}
+              </Selecao>
               <label className="flex items-end gap-2 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={grupo.ativo} onChange={(e) => setGrupo({ ...grupo, ativo: e.target.checked })} /> Ativo</label>
               <div className="flex items-end gap-2"><Botao type="submit">Salvar</Botao><Botao type="button" variante="secundario" onClick={fechar}>Cancelar</Botao></div>
-              <div className="md:col-span-4"><Erro erro={salvarGrupo.error} /></div>
+              <div className="md:col-span-5"><Erro erro={salvarGrupo.error} /></div>
             </form>
           )}
           {tipo && (
@@ -145,10 +155,37 @@ export default function CatalogoPage() {
         </Painel>
       )}
 
+      {massa && (
+        <Painel titulo="Grupos e unidades em massa (layout do Simova)" subtitulo="Copie as linhas do Excel (com ou sem o cabeçalho) e cole. Grupo com código que já existe tem a descrição e a unidade atualizadas."
+          acoes={<Botao variante="fantasma" onClick={() => setMassa(null)}>Fechar</Botao>}>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); loteGrupos.mutate(massa.grupos, { onSuccess: (r) => { toast.success(`${r.criados} grupo(s) criado(s) · ${r.atualizados} atualizado(s)`); setMassa({ ...massa, grupos: '' }); }, onError: (er) => toast.error(er.message) }); }}>
+              <label className="flex flex-col gap-1.5 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">OPER_GRUPO · CODIGO · DESCRICAO · UNIDADE_MEDIDA
+                <textarea required rows={10} value={massa.grupos} onChange={(e) => setMassa({ ...massa, grupos: e.target.value })} placeholder={'1\tCONCRETO\t007\n2\tARMADURA\t008\n4\tFORMA\t006'}
+                  className="rounded-m-md border border-m-stroke bg-m-surface-field p-2 font-mono text-[12.5px] font-normal normal-case tracking-normal text-m-text-primary outline-none focus:border-m-accent" />
+              </label>
+              <div className="flex items-center gap-2"><Botao type="submit" disabled={loteGrupos.isPending}>Salvar grupos</Botao><span className="text-[12px] text-m-text-muted">{massa.grupos.split('\n').filter((l) => /^\s*\d/.test(l)).length} linha(s)</span></div>
+            </form>
+            <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); loteUnidades.mutate(massa.unidades, { onSuccess: (r) => { toast.success(`${r.salvas} unidade(s) salva(s)`); setMassa({ ...massa, unidades: '' }); }, onError: (er) => toast.error(er.message) }); }}>
+              <label className="flex flex-col gap-1.5 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">UNIDADE_MEDIDA · CODIGO · DESCRICAO
+                <textarea rows={10} value={massa.unidades} onChange={(e) => setMassa({ ...massa, unidades: e.target.value })} placeholder={'020\tsc'}
+                  className="rounded-m-md border border-m-stroke bg-m-surface-field p-2 font-mono text-[12.5px] font-normal normal-case tracking-normal text-m-text-primary outline-none focus:border-m-accent" />
+              </label>
+              <div><Botao type="submit" variante="secundario" disabled={loteUnidades.isPending || !massa.unidades.trim()}>Salvar unidades</Botao></div>
+              <p className="text-[12px] text-m-text-muted">Tabela da obra (vai na aba UNIDADE_MEDIDA dos cadastros para o Simova; a unidade de cada item vem da PQ e é casada pelo texto):</p>
+              <div className="flex flex-wrap gap-1.5">{unidades.data?.map((u) => <span key={u.codigo} className="rounded-[6px] bg-m-surface-active px-2 py-0.5 text-[12px] text-m-text-secondary"><b className="text-m-text-primary">{u.codigo}</b> {u.descricao}</span>)}</div>
+            </form>
+          </div>
+        </Painel>
+      )}
+
       <Painel
         titulo="Quais atividades o encarregado pode escolher?"
         subtitulo="Cada grupo reúne itens da PQ. Mover de grupo ou renumerar muda o ID Simova em todas as programações abertas."
-        acoes={editar && <Botao variante="secundario" onClick={() => abrirGrupo()}><Plus size={16} /> Grupo</Botao>}
+        acoes={editar && <>
+          <Botao variante="secundario" onClick={() => setMassa({ grupos: '', unidades: '' })}><Layers size={16} /> Grupos em massa</Botao>
+          <Botao variante="secundario" onClick={() => abrirGrupo()}><Plus size={16} /> Grupo</Botao>
+        </>}
       >
         <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full border-collapse">
@@ -162,7 +199,7 @@ export default function CatalogoPage() {
                 <Fragment key={`g${g.id}`}>
                   <tr>
                     <td colSpan={8} className="bg-m-surface-active px-3 py-2.5 text-xs font-bold uppercase tracking-[0.3px] text-m-text-primary">
-                      {g.codigo} · {g.descricao}{!g.ativo && ' (inativo)'} <span className="ml-1 font-medium normal-case text-m-text-muted">{g.tipos.length} item(ns)</span>
+                      {g.codigo} · {g.descricao}{!g.ativo && ' (inativo)'} <span className="ml-1 font-medium normal-case text-m-text-muted">{g.tipos.length} item(ns){g.unidade ? ` · un. ${nomeUnidade(g.unidade)}` : ''}</span>
                       {editar && <span className="ml-3 inline-flex items-center gap-1 align-middle">
                         <button type="button" aria-label={`Editar grupo ${g.codigo}`} className="rounded p-1 text-m-text-muted hover:text-m-accent" onClick={() => abrirGrupo(g)}><Pencil size={13} /></button>
                         <button type="button" className="rounded px-1.5 py-0.5 text-[11px] font-semibold normal-case text-m-accent hover:underline" onClick={() => { setDestino(String(g.id)); document.getElementById('aba-pq')?.scrollIntoView({ behavior: 'smooth' }); }}><Link2 size={12} className="mr-1 inline" />vincular itens da PQ</button>
@@ -176,7 +213,7 @@ export default function CatalogoPage() {
                         <td className={`${tdc} font-semibold text-m-text-primary`}>{t.codigo}</td>
                         <td className={tdc}>{t.item_pq ? <span className="rounded-[6px] bg-m-info-subtle px-2 py-0.5 text-[11px] font-semibold text-m-info">{t.item_pq}</span> : <Pilula tom="atencao">sem PQ</Pilula>}</td>
                         <td className={`${tdc} min-w-[320px] whitespace-normal`}>{t.nome_simplificado ? <><b className="text-m-text-primary">{t.nome_simplificado}</b><div className="text-[11px] text-m-text-muted">PQ: {t.descricao_pq}</div></> : t.descricao}{!t.na_pq_vigente && <div className="text-[11px] text-m-warning">não está na PQ vigente</div>}</td>
-                        <td className={tdc}>{t.unidade ?? '—'}</td>
+                        <td className={tdc}>{t.unidade ?? '—'}{t.unidade && <div className={`text-[10.5px] ${t.unidade_simova ? 'text-m-text-muted' : 'text-m-warning'}`} title="Código da UNIDADE_MEDIDA do Simova">{t.unidade_simova ? `Simova ${t.unidade_simova}` : 'sem código Simova'}</div>}</td>
                         <td className={`${tdc} text-right`}>{t.quantidade_pq != null ? fmt(t.quantidade_pq) : '—'}</td>
                         <td className={`${tdc} text-right`}>{t.pu != null ? fmt(t.pu) : '—'}</td>
                         <td className={tdc}><Pilula tom={t.ativo ? 'sucesso' : 'neutro'}>{t.ativo ? 'Ativo' : 'Inativo'}</Pilula></td>
@@ -184,7 +221,7 @@ export default function CatalogoPage() {
                           {editar && <>
                             <button type="button" aria-label={`Novo complemento em ${t.codigo}`} title="Texto complementar (novo ID)" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t)}><Plus size={15} /></button>
                             <button type="button" aria-label={`Mover ${t.codigo}`} title="Mover de grupo / renumerar / inativar" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirTipo(t)}><Pencil size={15} /></button>
-                            <button type="button" aria-label={`Desvincular ${t.codigo}`} title="Desvincular do grupo" className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={async () => (await confirmar({ titulo: `Desvincular ${t.codigo} (${t.item_pq ?? ''}) do grupo?`, mensagem: <>{t.descricao}<br />Os itens complementares deste tipo também saem. Tipo usado em programação não pode ser desvinculado: inative-o.</>, acao: 'Desvincular' })) && desvincular.mutate(t.id, { onSuccess: () => toast.success(`${t.codigo} desvinculado`), onError: (e) => toast.error(e.message) })}><Unlink size={15} /></button>
+                            <button type="button" aria-label={`Excluir ${t.codigo} do grupo`} title="Excluir do grupo" className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={async () => (await confirmar({ titulo: `Excluir ${t.codigo} (${t.item_pq ?? ''}) do grupo?`, mensagem: <>{t.descricao}<br />O item da PQ volta a ficar livre. Saem junto os itens complementares deste tipo e os IWPs da WBS de execução que apontam para ele. Se o item estiver em alguma programação, o aviso diz qual: exclua as linhas (rascunho) ou inative o item.</>, acao: 'Excluir' })) && desvincular.mutate(t.id, { onSuccess: () => toast.success(`${t.codigo} excluído do grupo`), onError: (e) => toast.error(e.message, { duration: 9000 }) })}><Trash2 size={15} /></button>
                           </>}
                         </td>
                       </tr>
@@ -195,7 +232,10 @@ export default function CatalogoPage() {
                           <td className={`${tdc} whitespace-normal pl-6 text-m-text-secondary`}>… - ({i.complemento})</td>
                           <td className={tdc} colSpan={3} />
                           <td className={tdc}><Pilula tom={i.ativo ? 'sucesso' : 'neutro'}>{i.ativo ? 'Ativo' : 'Inativo'}</Pilula></td>
-                          <td className={`${tdc} text-right`}>{editar && <button type="button" aria-label={`Editar item ${i.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t, i)}><Pencil size={15} /></button>}</td>
+                          <td className={`${tdc} whitespace-nowrap text-right`}>{editar && <>
+                            <button type="button" aria-label={`Editar item ${i.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirItem(t, i)}><Pencil size={15} /></button>
+                            <button type="button" aria-label={`Excluir item ${i.codigo}`} className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={async () => (await confirmar({ titulo: `Excluir o item ${i.codigo}?`, mensagem: `${t.descricao} - (${i.complemento}). Item usado em programação não pode ser excluído: inative-o.` })) && excluirItem.mutate(i.id, { onSuccess: () => toast.success(`${i.codigo} excluído`), onError: (e) => toast.error(e.message) })}><Trash2 size={15} /></button>
+                          </>}</td>
                         </tr>
                       ))}
                     </Fragment>

@@ -90,7 +90,7 @@ export interface Area { id: number; local_id: number; cwa: string; codigo: strin
 export interface Local { id: number; codigo: string; descricao: string; ordem: number; ativo: boolean; areas: Area[] }
 export interface ItemCatalogo { id: number; tipo_id: number; numero: number; codigo: string; complemento: string; descricao: string; item_pq: string | null; ativo: boolean }
 /** Tipo = item da PQ vinculado ao grupo (descrição e unidade vêm da PQ vigente). */
-export interface TipoCatalogo {
+export interface TipoCatalogo { unidade_simova?: string | null;
   id: number; grupo_id: number; numero: number; codigo: string; item_pq: string | null; descricao: string; descricao_pq: string | null;
   nome_simplificado: string | null; unidade: string | null;
   quantidade_pq: number | null; pu: number | null; na_pq_vigente: boolean; ativo: boolean; itens: ItemCatalogo[];
@@ -100,7 +100,8 @@ export interface LinhaPq {
   criterio: string | null; quantidade: number | null; pu: number | null; total: number | null;
   tipo: { id: number; codigo: string; grupo: string; grupo_id: number } | null; nome_simplificado: string | null;
 }
-export interface GrupoCatalogo { id: number; numero: number; codigo: string; descricao: string; ativo: boolean; tipos: TipoCatalogo[] }
+export interface GrupoCatalogo { id: number; numero: number; codigo: string; descricao: string; unidade?: string | null; ativo: boolean; tipos: TipoCatalogo[] }
+export interface UnidadeMedida { codigo: string; descricao: string }
 export type StatusProgramacao = 'rascunho' | 'emitida' | 'concluida';
 export interface ProgramacaoResumo { id: number; tipo: 'SEMANAL' | 'MENSAL'; titulo: string; inicio: string; fim: string; status: StatusProgramacao; revisao: number; linhas: number }
 export interface LinhaVisao {

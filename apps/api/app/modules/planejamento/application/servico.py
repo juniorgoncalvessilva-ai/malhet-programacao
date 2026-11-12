@@ -497,24 +497,37 @@ def cadastros_simova_xlsx(s: Session, obra_id: int) -> bytes:
         for a in s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.local_id == loc.id)
                            .order_by(AreaFrenteModel.ordem, AreaFrenteModel.id)):
             ws.append([a.codigo, a.descricao, None, "1" if a.ativo else "0"])
+    from app.modules.catalogo.api.router import tabela_unidades
+    from app.modules.catalogo.domain.unidades import codigo_unidade
+    from app.modules.referencias.infra.pq_gateway import itens_pq
+
+    tab = tabela_unidades(s, obra_id)
     wg = wb.create_sheet("OPER_GRUPO")
     wg.append(["CODIGO", "DESCRICAO", "UNIDADE_MEDIDA", "MATERIAL", "OPER_GRUPO", "REVISAO_DH", "ATIVO"])
     wo = wb.create_sheet("OPER")
     wo.append(layout.OPER)
     grupos = s.scalars(select(GrupoAtividadeModel).where(GrupoAtividadeModel.obra_id == obra_id)
                        .order_by(GrupoAtividadeModel.numero)).all()
+    tipos_obra = list(s.scalars(select(TipoAtividadeModel).where(TipoAtividadeModel.obra_id == obra_id)))
+    pq = itens_pq(s, obra_id, {t.item_pq for t in tipos_obra if t.item_pq})
     for g in grupos:
-        wg.append([str(g.numero), g.descricao.upper(), None, None, None, None, "1" if g.ativo else "0"])
+        wg.append([str(g.numero), g.descricao.upper(), g.unidade, None, None, None, "1" if g.ativo else "0"])
         for t in s.scalars(select(TipoAtividadeModel).where(TipoAtividadeModel.grupo_id == g.id)
                            .order_by(TipoAtividadeModel.numero)):
             ativo = "1" if (g.ativo and t.ativo) else "0"
-            wo.append([cat.codigo_tipo(g.numero, t.numero), t.descricao, None, str(g.numero), None, None, None,
+            info = pq.get(t.item_pq) if t.item_pq else None
+            un = codigo_unidade(info.unid if info else t.unidade, tab) or g.unidade  # unidade do item da PQ
+            wo.append([cat.codigo_tipo(g.numero, t.numero), t.descricao, None, str(g.numero), None, un, None,
                        "1", None, None, ativo])
             for it in s.scalars(select(ItemSimovaModel).where(ItemSimovaModel.tipo_id == t.id)
                                 .order_by(ItemSimovaModel.numero)):
                 wo.append([cat.codigo_item(g.numero, t.numero, it.numero), cat.descricao_item(t.descricao, it.complemento),
-                           None, str(g.numero), None, None, None, "1", None, None,
+                           None, str(g.numero), None, un, None, "1", None, None,
                            "1" if (ativo == "1" and it.ativo) else "0"])
+    wu = wb.create_sheet("UNIDADE_MEDIDA")
+    wu.append(["CODIGO", "DESCRICAO"])
+    for cod, desc in sorted(tab.items()):
+        wu.append([cod, desc])
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()

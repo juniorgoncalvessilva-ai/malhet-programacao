@@ -15,6 +15,7 @@ class GrupoAtividadeModel(Base):
     obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     numero: Mapped[int] = mapped_column(Integer)
     descricao: Mapped[str] = mapped_column(String(120))
+    unidade: Mapped[str | None] = mapped_column(String(3))  # código da UNIDADE_MEDIDA do Simova (007 = m³)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

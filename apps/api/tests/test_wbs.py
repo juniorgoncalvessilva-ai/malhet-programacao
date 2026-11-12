@@ -49,6 +49,14 @@ def test_wbs_e_linha_da_programacao(client):
     assert client.delete(f"/api/wbs/nos/{iwp['id']}").status_code == 422
     assert client.delete(f"/api/wbs/nos/{cwp['id']}").status_code == 422
     assert client.delete(f"/api/wbs/nos/{gr2['id']}").status_code == 204
+    # excluir o item do grupo: em programação não sai (diz onde está); fora dela, sai junto com o IWP da WBS
+    r = client.delete(f"/api/catalogo/tipos/{tipo['id']}")
+    assert r.status_code == 422 and "Programação semanal" in r.json()["detail"]
+    lid = ln["id"]
+    assert client.delete(f"/api/programacoes/{p['id']}/linhas/{lid}").status_code == 204
+    assert client.delete(f"/api/catalogo/tipos/{tipo['id']}").status_code == 204
+    assert client.get("/api/wbs").json()["arvore"][0]["filhos"][0]["filhos"][0]["filhos"] == []
+    assert client.get("/api/catalogo").json()[0]["tipos"] == []
 
 
 def test_enviar_da_wbs_para_a_programacao(client):

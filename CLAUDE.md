@@ -34,6 +34,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `item_pq` (`folha`, `nivel`, `ordem`), lida por `referencias/infra/pq_gateway.py`. Spec 011.
   Grupo com um ou vários itens da PQ (lote ou lista por linha, `PUT /catalogo/itens-pq/{item}/grupo`); nome
   simplificado por obra+item (`pq_nome_simplificado`, `ItemPqInfo.texto_simova`) é o texto do Simova. Spec 021.
+  Grupos em massa no layout OPER_GRUPO, `grupo_atividade.unidade` e tabela `unidade_medida` (aba UNIDADE_MEDIDA do
+  Simova; unidade do item da PQ casada em `catalogo/domain/unidades.py`); excluir item do grupo leva os IWPs. Spec 028.
 - SSMA: listas suspensas vêm de `ssma/` (`cadastro_ssma`, gateway `CadastroSsmaGateway.conferir`). Técnico/RAC/PTS/
   ART/ATA = segurança; PTO = Planejamento (linha da programação). Spec 012.
 - SSMA/PTO: RAC/PTS/ART/ATA/PTO são listas na linha (JSONB, `lista_da_linha`) e aceitam arquivos (`anexo_ssma`,
