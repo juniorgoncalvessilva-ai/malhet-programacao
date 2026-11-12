@@ -259,7 +259,7 @@ export default function MontarPage() {
         </>}
       />
       <Abas rotulo="Seções da programação" ativa={abaProg} onTrocar={setAbaProg}
-        abas={[{ chave: 'montar', titulo: 'Programação' }, { chave: 'sequencia', titulo: 'Sequência (TI · II · TT · IT)' }, { chave: 'resumo', titulo: 'Resumo por frente e responsável' }]} />
+        abas={[{ chave: 'montar', titulo: 'Programação' }, { chave: 'sequencia', titulo: 'Sequência (Gantt)' }, { chave: 'resumo', titulo: 'Resumo por frente e responsável' }]} />
       {abaProg === 'resumo' && <ResumoProgramacao v={v} nomes={nomes} />}
       {abaProg === 'sequencia' && <SequenciaProgramacao pid={id} v={v} nomes={nomes} editar={!concluida && pode('encarregado')} />}
       <div className={abaProg !== 'montar' ? 'hidden' : 'contents'}>

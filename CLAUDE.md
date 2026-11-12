@@ -73,7 +73,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `descricao_reduzida`/`descricao_completa`, Excel `?nomes=`). Spec 046. Aba "Resumo por frente e responsável"
   (`ResumoProgramacao`): somas por unidade de medida, frente → área e responsável → encarregado, com memória. Spec 053.
   Sequência (`planejamento/domain/sequencia.py`, `programacao_linha.predecessoras` TI/II/TT/IT + lag, `programacao.sequenciada`,
-  `PUT /programacoes/{pid}/sequencia`), aba "Sequência", distribuição sugerida nos dias vazios e "Por encarregado"
+  `PUT /programacoes/{pid}/sequencia`), aba "Sequência (Gantt)" no modelo do MS Project (predecessoras "3TI+2 dias"), distribuição sugerida nos dias vazios e "Por encarregado"
   (`agruparPorEncarregado`). Spec 054.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.

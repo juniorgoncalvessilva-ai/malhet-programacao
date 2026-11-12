@@ -25,3 +25,10 @@ preencher. 2) Sequência em ordem cronológica: arrastar e soltar as linhas e um
 ## Teste
 `tests/test_sequencia.py` (domínio e API); e2e: sugestão 6,25 × 8 dias para 50, ligação TI conferida, sequência salva,
 agrupamento por encarregado.
+
+## Ajuste — layout do MS Project
+A aba virou "Sequência (Gantt)" no modelo do MS Project: tabela à esquerda (Id, Nome da tarefa, Duração, Início,
+Término, Predecessoras, Encarregado) e Gantt à direita (barra do 1º ao último dia com previsto, dias com previsto em
+destaque, fins de semana sombreados, setas das ligações; tarefa/ligação não respeitada em vermelho). Predecessoras numa
+coluna só, na sintaxe do Project: "3" (término-início), "3TI+2 dias", "2II", "4TT", "5IT" (aceita FS/SS/FF/SF),
+separadas por ";". Duração = dias com previsto (com memória de cálculo).
