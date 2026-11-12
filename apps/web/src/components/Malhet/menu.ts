@@ -1,4 +1,4 @@
-import { AlertTriangle, Eye, Smartphone, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Eye, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -11,7 +11,6 @@ export const MENU: GrupoMenu[] = [
     cor: 'var(--m-proc-planejar)',
     itens: [
       { titulo: 'Programação vigente', url: '/app/vigente', icone: Eye },
-      { titulo: 'App de campo (celular)', url: '/m', icone: Smartphone },
       { titulo: 'Cronograma', url: '/app/cronograma', icone: GanttChart },
       { titulo: 'WBS de execução', url: '/app/wbs', icone: ListTree },
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },

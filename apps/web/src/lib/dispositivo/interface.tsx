@@ -1,8 +1,7 @@
 'use client';
 
 /** Qual interface usar neste aparelho: "campo" (celular, /m) ou "completo" (computador/tablet, /app).
- * Automático pelo aparelho; a pessoa pode trocar (botão "Completo" no celular, "App de campo" no menu) e a escolha
- * fica guardada neste navegador. */
+ * Decidido só pelo aparelho (sem botão de troca). */
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from '@/i18n/navigation';
 
@@ -28,7 +27,8 @@ export function escolherInterface(v: Interface | null): void {
 }
 
 export function interfaceDoAparelho(): Interface {
-  return preferencia() ?? (ehCelular() ? 'campo' : 'completo');
+  escolherInterface(null); // escolhas antigas (quando havia botão de troca) não valem mais
+  return ehCelular() ? 'campo' : 'completo';
 }
 
 /** Tela do completo → equivalente no campo (o resto cai no Início do campo). */
