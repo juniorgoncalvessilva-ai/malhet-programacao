@@ -2,6 +2,8 @@
 
 import { LogosObra } from '@/components/Obra/LogosObra';
 import { BotaoNomes, nomeLinha, porCwp, useModoNomes } from '@/lib/programacao/nomes';
+import { encarregadosDe, filtrarEncarregado } from '@/lib/programacao/encarregado';
+import { FiltroEncarregado } from '@/components/Obra/FiltroEncarregado';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileSpreadsheet, Printer } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,6 +25,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
   });
   const [escolha, setEscolha] = useState<string>('ultima');
   const [nomes] = useModoNomes();
+  const [enc, setEnc] = useState('');
   const rev = escolha === 'viva' ? null : escolha === 'ultima' ? (emissoes.data?.[0]?.revisao ?? null) : Number(escolha);
   const prog = useProgramacao(id, emissoes.isLoading ? undefined : rev);
   const v = prog.data;
@@ -31,13 +34,18 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
   const rascunho = rev == null;
   const semanal = v.tipo === 'SEMANAL';
   const cel = 'border border-[#8EA9C1] px-1 py-0.5';
-  const totalValor = v.locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.pu ?? 0) * ln.total_previsto, 0);
+  const encs = encarregadosDe(v.locais);
+  const locais = filtrarEncarregado(v.locais, enc);
+  // filtrado por encarregado: o total de HH é o das linhas dele
+  const hhTotal = enc ? locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.calc?.total_hh_previsto ?? 0), 0) : v.total_hh_previsto;
+  const totalValor = locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.pu ?? 0) * ln.total_previsto, 0);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         {vigente ? <span /> : <Link href={`/app/programacoes/${id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-m-accent"><ArrowLeft size={16} /> Voltar para montar</Link>}
         <div className="flex flex-wrap items-end gap-2">
+          {encs.length > 1 && <FiltroEncarregado encs={encs} valor={enc} onChange={setEnc} />}
           <BotaoNomes className="mb-1" />
           <Selecao rotulo="Versão" value={escolha} onChange={(e) => setEscolha(e.target.value)} className="w-[260px]">
             <option value="ultima">Última emissão{emissoes.data?.[0] ? ` (rev. ${emissoes.data[0].revisao})` : ' (nenhuma: rascunho)'}</option>
@@ -59,6 +67,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
                   <div>
                     <div className="text-[13px] font-bold uppercase">{obra?.nome}{obra?.contrato ? ` · ${obra.contrato}` : ''}</div>
                     <div className="text-[15px] font-bold">{v.titulo.toUpperCase()}</div>
+                    {enc && <div className="font-semibold">Encarregado: {encs.find((e) => e.chave === enc)?.nome}</div>}
                     <div>Período {dataBR(v.inicio)} a {dataBR(v.fim)} · {rascunho ? 'RASCUNHO (não emitido)' : `Revisão ${rev}${v.emitida_em ? ` · emitida em ${new Date(v.emitida_em).toLocaleString('pt-BR')}` : ''}`}</div>
                   </div>
                   <LogosObra altura={36} />
@@ -74,7 +83,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
             </tr>
           </thead>
           <tbody>
-            {v.locais.map((l, li) => (
+            {locais.map((l, li) => (
               <Fragment key={`l${l.id}`}>
                 <tr className="break-inside-avoid"><td colSpan={11 + v.dias.length} className={`${cel} bg-[#FF0000] font-bold text-white`}>{l.codigo} · {l.descricao}</td></tr>
                 {l.areas.map((a, ai) => (
@@ -112,7 +121,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
           <tfoot>
             <tr>
               <td colSpan={9 + v.dias.length} className={`${cel} text-right font-bold`}>HH previsto (CPU da obra) · Faturamento previsto no período</td>
-              <td className={`${cel} text-right font-bold`}>{v.total_hh_previsto ? fmt(v.total_hh_previsto, 1) : ''}</td>
+              <td className={`${cel} text-right font-bold`}>{hhTotal ? fmt(hhTotal, 1) : ''}</td>
               <td className={`${cel} text-right font-bold`}>{fmt(totalValor)}</td>
             </tr>
             <tr><td colSpan={11 + v.dias.length} className="pt-6">

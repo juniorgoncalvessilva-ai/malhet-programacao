@@ -29,7 +29,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   achatamento das auxiliares) e `referencias/infra/cpu_gateway.py` (item PQ → HH/un, governa, índice). Spec 009.
 - Equipes: cadastro do Simova (`equipes/domain/simova_equipe.py`), composição efetiva pelos membros
   (`equipes/infra/composicao.py`). Papel `seguranca` só edita SSMA (`Depends(ssma)`). Excel do cliente (layout S32)
-  em `planejamento/application/exportar_cliente.py`. Spec 010.
+  em `planejamento/application/exportar_cliente.py`. Spec 010. Líder da equipe = engenheiro/supervisor do efetivo
+  (`equipe.responsavel_id` → `responsavel`, que é o Responsável da programação); programação filtra por encarregado
+  (`FiltroEncarregado`, `src/lib/programacao/encarregado.ts`). Spec 047.
 - Catálogo: tipo = item da PQ (`tipo_atividade.item_pq`, um por obra); PQ com estrutura (títulos/folhas) em
   `item_pq` (`folha`, `nivel`, `ordem`), lida por `referencias/infra/pq_gateway.py`. Spec 011.
   Grupo com um ou vários itens da PQ (lote ou lista por linha, `PUT /catalogo/itens-pq/{item}/grupo`); nome

@@ -21,6 +21,9 @@ class EquipeModel(Base):
     turno: Mapped[str | None] = mapped_column(String(30))  # Diurno, Noturno, Administrativo, Turno A…
     codigo_simova: Mapped[str | None] = mapped_column(String(20), index=True)  # "Código" do cadastro de equipe
     responsavel: Mapped[str | None] = mapped_column(String(150))  # supervisor/engenheiro (coluna Responsável)
+    # engenheiro/supervisor do efetivo que lidera a equipe: preenche `responsavel` (e o Responsável da programação)
+    responsavel_id: Mapped[int | None] = mapped_column(ForeignKey("colaborador.id", ondelete="SET NULL"), index=True)
+    lider = relationship("ColaboradorModel", foreign_keys=[responsavel_id], lazy="joined")
     equipamentos: Mapped[str | None] = mapped_column(String(500))  # coluna Equipamento do Simova
     observacao: Mapped[str | None] = mapped_column(String(300))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)

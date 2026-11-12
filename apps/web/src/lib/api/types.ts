@@ -49,6 +49,7 @@ export interface Equipe {
   id: number; nome: string; frente_codigo: string | null; setor_id?: number | null; subsetor_id?: number | null; encarregado_cracha: string | null;
   encarregado_nome: string | null; jornada_horas: number; observacao: string | null; ativo: boolean;
   turno: string | null; codigo_simova: string | null; responsavel: string | null; equipamentos: string | null;
+  responsavel_id?: number | null; responsavel_efetivo?: { id: number; nome: string; matricula: string | null; funcao: string | null; situacao: string } | null;
   composicao: ComposicaoEquipe[]; membros: MembroEquipe[]; composicao_efetiva: ComposicaoEquipe[]; hh_disponivel_dia: number;
   encarregado_efetivo?: PessoaEfetivoEquipe | null; fora_do_efetivo?: number;
 }

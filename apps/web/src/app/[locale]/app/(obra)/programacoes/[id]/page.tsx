@@ -1,6 +1,8 @@
 'use client';
 
 import { BotaoNomes, nomeLinha, porCwp, useModoNomes } from '@/lib/programacao/nomes';
+import { encarregadosDe, filtrarEncarregado } from '@/lib/programacao/encarregado';
+import { FiltroEncarregado } from '@/components/Obra/FiltroEncarregado';
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -60,6 +62,7 @@ export default function MontarPage() {
   const ptos = (cadastros.data ?? []).filter((c) => c.tipo === 'PTO' && (c.ativo || form.pto.includes(c.codigo)));
   const [modo, setModo] = useState<'previsto' | 'realizado'>('previsto');
   const [nomes] = useModoNomes();
+  const [enc, setEnc] = useState('');
   const [form, setForm] = useState<FormLinha>(VAZIO);
   const [editando, setEditando] = useState<number | null>(null);
   const [aberto, setAberto] = useState(false);
@@ -187,7 +190,9 @@ export default function MontarPage() {
   };
 
   if (!v) return <p className="text-sm text-m-text-muted">{prog.isLoading ? 'Carregando…' : 'Programação não encontrada.'}</p>;
-  const totalDia = v.dias.map((d, i) => v.locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (Number(valorCel(ln, modo, i, d.data)) || 0), 0));
+  const encs = encarregadosDe(v.locais);
+  const locaisVis = filtrarEncarregado(v.locais, enc);
+  const totalDia = v.dias.map((d, i) => locaisVis.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (Number(valorCel(ln, modo, i, d.data)) || 0), 0));
 
   return (
     <>
@@ -346,6 +351,7 @@ export default function MontarPage() {
         titulo="O que cada frente faz no período?"
         subtitulo={`${dataBR(v.inicio)} a ${dataBR(v.fim)} · digite a quantidade do período e de cada dia e clique em Salvar programação.`}
         acoes={<>
+          {encs.length > 1 && <FiltroEncarregado encs={encs} valor={enc} onChange={setEnc} />}
           <BotaoNomes />
           <Chip ativo={modo === 'previsto'} onClick={() => setModo('previsto')}>P · Previsto</Chip>
           <Chip ativo={modo === 'realizado'} onClick={() => setModo('realizado')}>R · Realizado</Chip>
@@ -373,7 +379,7 @@ export default function MontarPage() {
             </thead>
             <tbody>
               {!v.locais.length && <tr><td colSpan={v.dias.length + 8} className="py-10 text-center text-m-text-muted">Inclua a primeira linha: escolha a área, o grupo e o tipo.</td></tr>}
-              {v.locais.map((l, li) => (
+              {locaisVis.map((l, li) => (
                 <Fragment key={`l${l.id}`}>
                   <tr><td colSpan={v.dias.length + 8} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-on-accent">{l.codigo} · {l.descricao}</td></tr>
                   {l.areas.map((a, ai) => (

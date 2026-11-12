@@ -17,7 +17,7 @@ from app.modules.efetivo.infra.gateway import (
 from app.modules.equipes.application.vincular_efetivo import vincular_equipe, vincular_equipes
 from app.modules.equipes.domain.simova_equipe import separar_cracha
 from app.modules.equipes.infra.models import EquipeComposicaoModel, EquipeModel
-from app.shared.errors import NotFoundError
+from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(prefix="/equipes", tags=["equipes"])
 
@@ -62,6 +62,7 @@ class EquipeIn(BaseModel):
     turno: str | None = "Diurno"
     codigo_simova: str | None = None
     responsavel: str | None = None
+    responsavel_id: int | None = None  # engenheiro/supervisor do efetivo (preenche o responsável)
     equipamentos: str | None = None
     observacao: str | None = None
     ativo: bool = True
@@ -76,6 +77,7 @@ class EquipeOut(EquipeIn):
     composicao_efetiva: list[ComposicaoIO] = []
     membros: list[MembroOut] = []
     encarregado_efetivo: PessoaEfetivoIO | None = None
+    responsavel_efetivo: dict | None = None  # {id, nome, matricula, funcao, situacao} de quem lidera a equipe
     fora_do_efetivo: int = 0  # pessoas da equipe que não foram achadas no efetivo
 
 
@@ -94,6 +96,19 @@ def _setor_e_disciplina(s: Session, obra_id: int, e: EquipeModel) -> None:
             e.subsetor_id = None
         else:
             e.setor_id = setor
+
+
+def _responsavel(s: Session, obra_id: int, e: EquipeModel) -> None:
+    """Líder escolhido no efetivo: o nome dele vira o Responsável da equipe (e da programação)."""
+    from app.modules.efetivo.infra.models import ColaboradorModel
+
+    if e.responsavel_id is None:
+        e.lider = None
+        return
+    p = s.get(ColaboradorModel, e.responsavel_id)
+    if p is None or p.obra_id != obra_id:
+        raise DomainError("escolha o engenheiro/supervisor no efetivo desta obra", "responsavel_id")
+    e.lider, e.responsavel = p, p.nome[:150]
 
 
 def _membros(d: "EquipeIn") -> list[tuple[str, str, str | None]]:
@@ -115,6 +130,9 @@ def _out(e: EquipeModel, funcao_de: dict[str, str] | None = None,
     o.membros = [MembroOut(cracha=m.cracha, nome=m.nome, funcao=m.funcao, efetivo=_pessoa_io(pessoas.get(m.cracha), funcao_de))
                  for m in sorted(e.membros, key=lambda m: m.nome)]
     o.encarregado_efetivo = _pessoa_io(pessoas.get(e.encarregado_cracha or ""), funcao_de)
+    if e.responsavel_id and e.lider is not None:
+        o.responsavel_efetivo = {"id": e.lider.id, "nome": e.lider.nome, "matricula": e.lider.matricula,
+                                 "funcao": e.lider.funcao, "situacao": e.lider.situacao}
     if pessoas:
         o.fora_do_efetivo = sum(1 for m in o.membros if m.efetivo is None) + \
             (1 if (e.encarregado_cracha or e.encarregado_nome) and o.encarregado_efetivo is None else 0)
@@ -137,6 +155,7 @@ def criar(d: EquipeIn, s: Session = Depends(get_session), c: ContextoObra = Depe
                     composicao=[EquipeComposicaoModel(**c.model_dump()) for c in d.composicao])
     sincronizar_membros(e, _membros(d))
     _setor_e_disciplina(s, c.obra_id, e)
+    _responsavel(s, c.obra_id, e)
     s.add(e)
     vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()
@@ -154,6 +173,7 @@ def atualizar(equipe_id: int, d: EquipeIn, s: Session = Depends(get_session),
     e.composicao = [EquipeComposicaoModel(**c.model_dump()) for c in d.composicao]
     sincronizar_membros(e, _membros(d))
     _setor_e_disciplina(s, c.obra_id, e)
+    _responsavel(s, c.obra_id, e)
     s.flush()
     vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()
