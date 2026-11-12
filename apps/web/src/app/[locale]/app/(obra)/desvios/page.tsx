@@ -49,14 +49,13 @@ export default function DesviosPage() {
   return (
     <>
       <Cabecalho eyebrow="Programar · desvios" titulo={`Desvios (Pareto): ${lista.data?.length ?? 0}`}
-        descricao={<>O motivo de cada item não cumprido, no layout do Pareto semanal (Dia · Semana · ID · Classificação · Desvio · Frente · Ação · Responsabilidade · Gerência · Status · Atividade impactada). Os itens das programações são registrados na própria programação, antes de concluir; desvio de programação concluída só muda por revisão. Veja o Pareto em <Link href="/app/indicadores" className="font-semibold text-m-accent underline">Indicadores</Link>.</>}
         acoes={<>
           <Botao variante="secundario" onClick={() => api.download(`/desvios/excel${qs({ de: filtro.de || undefined, ate: filtro.ate || undefined })}`, 'Pareto_desvios.xlsx').catch((e) => toast.error(e.message))}><Download size={16} /> Exportar Pareto</Botao>
           {pode('encarregado') && <Botao onClick={() => setForm({ ...VAZIO, data: new Date().toISOString().slice(0, 10) })}><Plus size={16} /> Novo desvio</Botao>}
         </>} />
 
       {pode('planejador') && (
-        <Painel titulo="Importar o Pareto semanal" subtitulo="Planilha .xlsx com a aba Detalhamento. Reimportar não duplica; classificação que não está na lista entra nela.">
+        <Painel titulo="Importar o Pareto semanal">
           <UploadForm campos={[{ nome: 'arquivo', rotulo: 'PARETO SEMANAL.xlsx' }]} rotulo="Importar" pendente={importar.isPending}
             onEnviar={(fd) => importar.mutate(fd, {
               onSuccess: (r) => { toast.success(`${r.importados} desvio(s) importado(s)${r.repetidos ? ` · ${r.repetidos} já existiam` : ''}${r.causas_novas ? ` · ${r.causas_novas} causa(s) nova(s)` : ''}`); r.avisos.slice(0, 5).forEach((a) => toast.warning(a)); },
@@ -118,7 +117,7 @@ export default function DesviosPage() {
         </Tabela>
       </Painel>
 
-      <Painel titulo={`Classificações da obra (${causas.data?.length ?? 0})`} subtitulo="A lista nasce com as causas do Pareto semanal; renomeie, inative ou inclua as da obra.">
+      <Painel titulo={`Classificações da obra (${causas.data?.length ?? 0})`}>
         {pode('planejador') && (
           <form className="mb-3 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); novaCausa.mutate(causa, { onSuccess: () => { setCausa(''); toast.success('Classificação incluída'); }, onError: (er) => toast.error(er.message) }); }}>
             <Campo rotulo="Nova classificação" required minLength={3} value={causa} onChange={(e) => setCausa(e.target.value)} className="w-[360px] max-w-full" />

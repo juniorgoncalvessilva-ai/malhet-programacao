@@ -134,7 +134,6 @@ function Restricoes() {
   return (
     <>
       <Cabecalho eyebrow="Programar · restrições" titulo="Restrições do look-ahead (6WLA)"
-        descricao="Cada restrição é uma ação com responsável e prazo, no layout da aba Ações do Plano de Ação: o farol e o status seguem as fórmulas da planilha. A classificação 6M alimenta o Ishikawa; o Painel mostra os mesmos gráficos do Excel."
         acoes={<>
           <Botao variante="secundario" onClick={() => api.download('/restricoes/excel', 'Plano_de_Acao_6WLA.xlsx').catch((e) => toast.error(e.message))}><Download size={16} /> Plano de Ação (Excel)</Botao>
           {podeEditar && <Botao onClick={() => { setAba('acoes'); setEd({ ...NOVA }); }}><Plus size={16} /> Nova restrição</Botao>}
@@ -148,7 +147,7 @@ function Restricoes() {
       </div>
 
       {aba === 'acoes' && (
-        <Painel titulo={`Ações (${visiveis.length})`} subtitulo="Clique no lápis para editar a ação na própria linha; a observação nova entra com a data de hoje na frente."
+        <Painel titulo={`Ações (${visiveis.length})`}
           acoes={<div className="flex flex-wrap items-end gap-2">
             {(['abertas', ...ESTADOS, 'todas'] as string[]).map((s) => <Chip key={s} ativo={filtro.estado === s} onClick={() => setFiltro({ ...filtro, estado: s })}>{s === 'abertas' ? 'Pendentes' : s === 'todas' ? 'Todas' : s}</Chip>)}
           </div>}>
@@ -235,7 +234,7 @@ function Restricoes() {
             <Indicador rotulo="Pendentes no prazo" valor={conta('no_prazo', i.no_prazo == null ? '—' : `${fmt(i.no_prazo * 100, 1)} %`)} detalhe="no prazo ÷ pendentes" />
           </div>
 
-          <Painel titulo="Ishikawa das restrições pendentes (6M)" subtitulo="Onde estão as causas do que ainda trava o look-ahead. Clique no número para ver as ações; classifique o 6M na aba Ações.">
+          <Painel titulo="Ishikawa das restrições pendentes (6M)">
             <div className="grid items-stretch gap-0 lg:grid-cols-[1fr_180px]">
               <div className="grid grid-rows-[auto_28px_auto]">
                 <div className="grid gap-3 sm:grid-cols-3">{i.espinhas.slice(0, 3).map((e) => <Espinha key={e.codigo} e={e} conta={conta} />)}</div>
@@ -254,7 +253,7 @@ function Restricoes() {
             </div>
           </Painel>
 
-          <Painel titulo="Painel ação" subtitulo="Os mesmos gráficos do PAINEL AÇÃO do Excel do Plano de Ação. Clique em qualquer valor para ver as ações que o compõem.">
+          <Painel titulo="Painel ação">
             <div className="grid gap-4 xl:grid-cols-2">
               <Cartao titulo="Status das restrições"><Rosca grupos={i.graficos.status} mem={mem} /></Cartao>
               <Cartao titulo="Status restrições por responsável (pendentes)" legenda={{ Atrasado: COR_STATUS.Atrasado, Reprogramado: COR_STATUS.Reprogramado, 'No Prazo': COR_STATUS['No Prazo'] }}>
@@ -273,7 +272,7 @@ function Restricoes() {
       {aba === 'painel' && !i && <p className="text-sm text-m-text-muted">Carregando…</p>}
 
       {aba === 'importar' && pode('planejador') && (
-        <Painel titulo="Importar o Plano de Ação 6WLA" subtitulo="Planilha .xlsm ou .xlsx com a aba Ações. Reimportar atualiza pelo Nº (não duplica).">
+        <Painel titulo="Importar o Plano de Ação 6WLA">
           <UploadForm accept=".xlsm,.xlsx" campos={[{ nome: 'arquivo', rotulo: 'Plano de Ação 6WLA' }]} rotulo="Importar" pendente={importar.isPending}
             onEnviar={(fd) => importar.mutate(fd, { onSuccess: (r) => { toast.success(`${r.novas} nova(s) · ${r.atualizadas} atualizada(s)`); r.avisos.slice(0, 4).forEach((a) => toast.warning(a)); setAba('acoes'); }, onError: (e) => toast.error(e.message) })} />
         </Painel>

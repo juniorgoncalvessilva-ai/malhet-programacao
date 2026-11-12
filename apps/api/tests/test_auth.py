@@ -91,3 +91,16 @@ def test_seed_promove_conta_existente_e_tolera_senha_fraca(client):
     from app.shared.errors import DomainError
     with pytest.raises(DomainError):  # senha fora da regra: o boot registra e segue (main.lifespan)
         asyncio.run(garantir_superadmin(contas, "novo@obra.com", "fraca"))
+
+
+def test_paginas_por_usuario_e_programacao_vigente(client):
+    obra = client.get("/api/obras/minhas").json()[0]
+    a = client.post(f"/api/obras/{obra['id']}/acessos", json={"email": "leitor.paginas@ex.com", "papel": "leitor",
+                                                               "senha_inicial": "Senha12345abc", "paginas": ["/app/vigente"]})
+    assert a.status_code == 201, a.text
+    ac = a.json()["acesso"]
+    assert ac["paginas"] == ["/app/vigente"]
+    r = client.put(f"/api/obras/{obra['id']}/acessos/{ac['id']}/paginas", json={"paginas": ["/app/lookahead", "x", "/app/vigente"]}).json()
+    assert r["paginas"] == ["/app/lookahead", "/app/vigente"]
+    assert client.put(f"/api/obras/{obra['id']}/acessos/{ac['id']}/paginas", json={"paginas": []}).json()["paginas"] is None
+    assert client.get("/api/programacoes/vigente").json() == {"id": None, "revisao": None, "titulo": None}

@@ -70,7 +70,6 @@ export default function LookaheadPage() {
   return (
     <>
       <Cabecalho eyebrow="Programar · look-ahead" titulo="Andar das equipes no tempo e pelas frentes"
-        descricao={<>Cada cartão é uma equipe numa atividade e numa área, nos dias seguidos em que está programada (fim de semana sem nada não quebra o cartão). Vem das programações (previsto e realizado); a cor é a da disciplina ou do setor da equipe no organograma. Troque para <b>Por frente</b> para ver as equipes passando pelas áreas.</>}
         acoes={<>
           <Chip ativo={visao === 'equipe'} onClick={() => setVisao('equipe')}>Por equipe</Chip>
           <Chip ativo={visao === 'frente'} onClick={() => setVisao('frente')}>Por frente</Chip>

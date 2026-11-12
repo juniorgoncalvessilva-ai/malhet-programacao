@@ -75,8 +75,8 @@ function SeletorObra() {
 }
 
 function useMenuVisivel(): GrupoMenu[] {
-  const { pode, superadmin, editaSsma } = useObra();
-  return MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => (i.superadmin ? superadmin : i.ssma ? editaSsma : !i.minimo || pode(i.minimo))) }))
+  const { pode, superadmin, editaSsma, podeVer } = useObra();
+  return MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => (i.superadmin ? superadmin : i.ssma ? editaSsma : !i.minimo || pode(i.minimo)) && podeVer(i.url)) }))
     .filter((g) => g.itens.length);
 }
 
@@ -247,7 +247,7 @@ function SemObra({ superadmin }: { superadmin: boolean }) {
 }
 
 /** Item do menu da rota atual: o de caminho mais específico (/app/ssma/cadastros não acende /app/ssma). */
-function itemAtivo(pathname: string | null): string | undefined {
+export function itemAtivo(pathname: string | null): string | undefined {
   if (!pathname) return undefined;
   return MENU.flatMap((g) => g.itens).map((i) => i.url)
     .filter((u) => pathname === u || pathname.startsWith(`${u}/`) || pathname.endsWith(u) || pathname.includes(`${u}/`))

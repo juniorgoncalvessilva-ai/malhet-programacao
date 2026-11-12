@@ -320,7 +320,6 @@ export default function CronogramaPage() {
       <Cabecalho
         eyebrow="Programar · cronograma"
         titulo={dados.data?.versao ? `Cronograma vigente: ${dados.data.versao.rotulo}` : 'Nenhum cronograma importado'}
-        descricao={<>A estrutura do Primavera como no P6: WBS na ordem do cronograma (O.S. 1 antes da O.S. 2) e com o código da WBS do P6 (5, 5.1, 5.1.11…), atividades na sequência do P6. Duração em dias de 8 h. Clique no cabeçalho para ordenar por outra coluna; &quot;ordem do P6&quot; volta à estrutura do Primavera.{dados.data?.versao && dados.data.versao.ordem_p6 === false && <> <b className="text-m-warning">Este cronograma foi importado antes: reimporte o .xer em <Link href="/app/importacoes" className="underline">Importações</Link> para usar a ordem e os códigos do P6.</b></>} Marque as tarefas e envie para a programação da semana ou do mês. {!dados.data?.versao && <Link href="/app/importacoes" className="font-semibold text-m-accent">Importar o .xer</Link>}</>}
       />
       <Painel
         titulo="Quais tarefas entram na programação?"

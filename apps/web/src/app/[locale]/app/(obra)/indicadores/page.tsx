@@ -26,7 +26,7 @@ export default function IndicadoresPage() {
   const k = d?.kpis;
   const maxPareto = Math.max(1, ...(d?.pareto.map((p) => p.ocorrencias) ?? [1]));
   const paretoPainel = d && (
-    <Painel titulo="Pareto de desvios" subtitulo="Recorrência por classificação no período; o acumulado mostra quais poucas causas explicam a maior parte.">
+    <Painel titulo="Pareto de desvios">
       {!d.pareto.length ? <p className="py-6 text-center text-[13px] text-m-text-muted">Nenhum desvio no período.</p> : (
         <ul className="flex flex-col gap-1.5">
           {d.pareto.map((p) => (
@@ -43,8 +43,7 @@ export default function IndicadoresPage() {
 
   return (
     <>
-      <Cabecalho eyebrow="Programar · indicadores" titulo="Programado × realizado × capacidade"
-        descricao={<>Histórico gravado a cada emissão e conclusão de programação. PPC, aderência e produtividade usam só programações concluídas; carga e erro de programação comparam o previsto com a capacidade da equipe pela CPU. Clique em qualquer número para ver a conta. Motivos dos desvios em <Link href="/app/desvios" className="font-semibold text-m-accent underline">Desvios (Pareto)</Link>.</>} />
+      <Cabecalho eyebrow="Programar · indicadores" titulo="Programado × realizado × capacidade" />
 
       <Painel titulo="Filtros">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
@@ -86,7 +85,7 @@ export default function IndicadoresPage() {
           <Indicador rotulo="Desvios no período" valor={conta('pareto', fmt(k.desvios, 0))} detalhe="registrados no Pareto" />
         </div>
 
-        <Painel titulo="Pela capacidade × manual (encarregado)" subtitulo="Qual forma de programar chega mais perto do realizado e da capacidade da equipe.">
+        <Painel titulo="Pela capacidade × manual (encarregado)">
           <Tabela cabecalho={['Modo do previsto', 'Atividades', 'PPC', 'Aderência', 'Programado × capacidade', 'Erro de previsão']} direita={[1, 2, 3, 4, 5]} vazio={!d.por_modo.length}>
             {d.por_modo.map((m) => (
               <tr key={m.modo}>
@@ -102,7 +101,7 @@ export default function IndicadoresPage() {
         </Painel>
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <Painel titulo="PPC por semana" subtitulo="Atividades cumpridas ÷ programadas em cada semana (programações concluídas).">
+          <Painel titulo="PPC por semana">
             <div className="flex h-44 items-end gap-2 border-b border-m-stroke-subtle pb-1" role="img" aria-label="PPC por semana">
               {d.semanas.map((w) => (
                 <div key={w.semana} className="flex h-full flex-1 flex-col items-center justify-end gap-1" title={`S${w.semana}: PPC ${pct(w.ppc)} · aderência ${pct(w.aderencia)} · carga ${pct(w.carga)} · ${w.atividades} atividade(s)`}>
@@ -135,7 +134,7 @@ export default function IndicadoresPage() {
           </Tabela>
         </Painel>
 
-        <Painel titulo="Fora da capacidade" subtitulo="Atividades programadas acima de 110 % ou abaixo de 70 % da capacidade da equipe no período.">
+        <Painel titulo="Fora da capacidade">
           <Tabela cabecalho={['Programação', 'Atividade', 'Encarregado', 'Modo', 'Previsto', 'Capacidade', 'Carga']} direita={[4, 5, 6]} vazio={!d.fora_da_capacidade.length && 'Nenhuma atividade fora da faixa.'}>
             {d.fora_da_capacidade.map((a) => (
               <tr key={`${a.programacao_id}-${a.n_linha}`}>

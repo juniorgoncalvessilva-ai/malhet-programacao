@@ -43,7 +43,6 @@ export default function DeParaFuncoesPage() {
       <Cabecalho
         eyebrow="Efetivo · de-para de funções"
         titulo={pendentes ? `${pendentes} função(ões) do efetivo sem correspondência na composição` : 'Todas as funções associadas'}
-        descricao={<>O DP escreve a função de um jeito (CARPINTEIRO DE FORMAS, ARMADOR…) e a composição de custo (CPU) de outro (Carpinteiro, Armador). Associe aqui: a equipe passa a contar oficiais e serventes pela função de cada pessoa, e a programação calcula capacidade e gargalo. Função indireta (engenheiro, almoxarife…) pode ser marcada como <b>ignorar</b>. {!recursos.length && <>Sem CPU vigente: importe a CPU da obra em <Link href="/app/importacoes" className="font-semibold text-m-accent">Importações</Link>.</>}</>}
         acoes={editar && <div className="flex gap-2">
           <Botao variante="secundario" disabled={!comSugestao} onClick={sugerir}><Wand2 size={16} /> Aplicar sugestões ({comSugestao})</Botao>
           <Botao disabled={!n || salvar.isPending} onClick={() => salvar.mutate(ed, { onSuccess: (r) => { toast.success(`${r.salvos} função(ões) salvas`); setEd({}); } })}><Save size={16} /> Salvar{n ? ` (${n})` : ''}</Botao>

@@ -1,23 +1,21 @@
 'use client';
 
 import { AcessosDaObra } from '@/components/Obra/Acessos';
+import { AdminObras } from '@/components/Obra/AdminObras';
 import { Cabecalho } from '@/components/Obra/ui';
 import { useObra } from '@/lib/obra/ObraProvider';
 
+/** Acessos e usuários: quem acessa esta obra, com qual papel e quais páginas; o Super Admin vê também as obras e contas. */
 export default function AcessosPage() {
-  const { obra, pode } = useObra();
+  const { obra, pode, superadmin } = useObra();
   if (!obra) return null;
   return (
     <>
-      <Cabecalho
-        eyebrow="Administrar · acessos da obra"
-        cor="var(--m-proc-administrar)"
-        titulo={`Quem trabalha na ${obra.nome} e o que cada um pode fazer`}
-        descricao="O admin da obra libera e-mails, escolhe o papel e informa o crachá do Simova dos encarregados. Quem sai da obra perde o acesso na hora."
-      />
+      <Cabecalho eyebrow="Administrar · acessos e usuários" cor="var(--m-proc-administrar)" titulo="Acessos e usuários" />
       {pode('admin')
         ? <AcessosDaObra obraId={obra.id} obraNome={obra.nome} />
         : <p className="text-sm text-m-text-muted">Só o admin da obra gerencia acessos.</p>}
+      {superadmin && <AdminObras />}
     </>
   );
 }

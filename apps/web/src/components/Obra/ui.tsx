@@ -18,9 +18,9 @@ const TOM: Record<Tom, { bg: string; fg: string }> = {
   info: { bg: 'var(--m-info-subtle)', fg: 'var(--m-info)' },
 };
 
-/** Cabeçalho de tela: eyebrow colorido + título + descrição + ações à direita. */
-export function Cabecalho({ eyebrow, cor = 'var(--m-proc-planejar)', titulo, descricao, acoes, children }: {
-  eyebrow: string; cor?: string; titulo: string; descricao?: ReactNode; acoes?: ReactNode; children?: ReactNode;
+/** Cabeçalho de tela: eyebrow colorido + título + ações à direita (sem texto descritivo, para ganhar espaço). */
+export function Cabecalho({ eyebrow, cor = 'var(--m-proc-planejar)', titulo, acoes, children }: {
+  eyebrow: string; cor?: string; titulo: string; acoes?: ReactNode; children?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -31,7 +31,6 @@ export function Cabecalho({ eyebrow, cor = 'var(--m-proc-planejar)', titulo, des
             {eyebrow}
           </div>
           <h1 className="text-[26px] font-semibold leading-8 tracking-[-0.2px] sm:text-[30px] sm:leading-9">{titulo}</h1>
-          {descricao && <p className="text-sm leading-5 text-m-text-tertiary">{descricao}</p>}
         </div>
         {acoes && <div className="flex flex-wrap items-center gap-2">{acoes}</div>}
       </div>

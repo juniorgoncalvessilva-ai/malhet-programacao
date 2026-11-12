@@ -94,13 +94,11 @@ export default function EfetivoPage() {
       <Cabecalho
         eyebrow="Efetivo · mobilização"
         titulo={r ? `${r.ativos} pessoas no efetivo ativo, ${r.em_mobilizacao} em mobilização` : 'Efetivo da obra'}
-        descricao={<>Importe toda semana a planilha de efetivo do DP: a <b>matrícula</b> é a chave, então nomes, funções e situação se atualizam sem perder as equipes. CPF, PIS, endereço, telefone e dados pessoais da planilha <b>não</b> são guardados. {r?.ultima_importacao && <>Última importação: {r.ultima_importacao.arquivo} em {new Date(r.ultima_importacao.em).toLocaleString('pt-BR')}.</>}</>}
         acoes={<Link href="/app/efetivo/organograma"><Botao variante="secundario"><Users size={16} /> Organograma</Botao></Link>}
       />
 
       {planejar && (
-        <Painel titulo={<span className="inline-flex items-center gap-2"><Upload size={18} className="text-m-accent" />Importar a planilha de efetivo</span>}
-          subtitulo="Aba principal = efetivo próprio (matrícula 115.011 = crachá 115011 no Simova); demais abas = terceiros, cada uma é uma empresa. Quem não vier no arquivo não é apagado: fica marcado como fora do último arquivo.">
+        <Painel titulo={<span className="inline-flex items-center gap-2"><Upload size={18} className="text-m-accent" />Importar a planilha de efetivo</span>}>
           <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Planilha de efetivo (.xls ou .xlsx)' }]} accept=".xls,.xlsx,.xlsm" rotulo="Importar" pendente={importando} onEnviar={importar} />
         </Painel>
       )}
@@ -216,7 +214,7 @@ export default function EfetivoPage() {
         </div>
       </Painel>
 
-      <Painel titulo={<span className="inline-flex items-center gap-2"><History size={18} className="text-m-accent" />O que mudou no efetivo?</span>} subtitulo="Entradas, mudanças de situação e de função vindas da planilha, e movimentações de equipe.">
+      <Painel titulo={<span className="inline-flex items-center gap-2"><History size={18} className="text-m-accent" />O que mudou no efetivo?</span>}>
         <div className="max-h-[320px] overflow-auto text-[13px]">
           {(movimentos.data ?? []).map((m) => (
             <div key={m.id} className="flex flex-wrap gap-x-2 border-b border-m-row py-1.5">

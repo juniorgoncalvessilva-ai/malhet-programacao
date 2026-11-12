@@ -20,7 +20,7 @@ export default function CadastroPage() {
   };
 
   return (
-    <TelaAuth titulo="Criar conta" subtitulo="Você recebe um link por e-mail para confirmar o endereço. O acesso de administrador é dado pelo planejamento.">
+    <TelaAuth titulo="Criar conta">
       {ok ? (
         <p className="rounded-m-md bg-m-accent-subtle px-4 py-3 text-sm text-m-accent">{ok}</p>
       ) : (

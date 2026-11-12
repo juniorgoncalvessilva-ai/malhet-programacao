@@ -192,3 +192,45 @@ def excluir_anexo(aid: int, s: Session = Depends(get_session), c: ContextoObra =
     m = s.get(CadastroSsmaModel, a.cadastro_id)
     _pode_editar(c, TipoCadastro(m.tipo))
     s.delete(a)
+
+
+class TecnicosIn(BaseModel):
+    colaboradores: list[int] = []  # pessoas do efetivo (time da segurança)
+    equipe_id: int | None = None  # ou uma equipe cadastrada (equipe de segurança): entram o encarregado e os membros
+
+
+@router.post("/tecnicos/importar")
+def importar_tecnicos(d: TecnicosIn, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Alimenta a lista de Técnicos do SSMA com pessoas do efetivo ou com uma equipe inteira; quem já está fica."""
+    from app.modules.efetivo.infra.models import ColaboradorModel
+    from app.modules.equipes.infra.models import EquipeModel
+
+    _pode_editar(c, TipoCadastro.TECNICO)
+    pessoas: list[tuple[str, str | None]] = []  # (nome, descrição)
+    if d.colaboradores:
+        for p in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id,
+                                                          ColaboradorModel.id.in_(d.colaboradores))):
+            pessoas.append((p.nome, " · ".join(x for x in (f"matrícula {p.matricula}" if p.matricula else None, p.funcao) if x) or None))
+    if d.equipe_id is not None:
+        e = s.get(EquipeModel, d.equipe_id)
+        if e is None or e.obra_id != c.obra_id:
+            raise NotFoundError("Equipe", d.equipe_id)
+        if e.encarregado_nome:
+            pessoas.append((e.encarregado_nome, f"encarregado da equipe {e.nome}"))
+        for m in e.membros:
+            if (m.nome or "").strip() and not m.nome.startswith("?"):
+                pessoas.append((m.nome, " · ".join(x for x in (f"equipe {e.nome}", m.funcao) if x)))
+    if not pessoas:
+        raise DomainError("escolha pessoas do efetivo ou uma equipe", "colaboradores")
+    existentes = {x.casefold() for x in s.scalars(select(CadastroSsmaModel.codigo).where(
+        CadastroSsmaModel.obra_id == c.obra_id, CadastroSsmaModel.tipo == TipoCadastro.TECNICO.value))}
+    novos = 0
+    for nome, desc in pessoas:
+        it = ItemCadastro(TipoCadastro.TECNICO, nome, desc, None)
+        if it.codigo.casefold() in existentes:
+            continue
+        existentes.add(it.codigo.casefold())
+        s.add(CadastroSsmaModel(obra_id=c.obra_id, tipo=TipoCadastro.TECNICO.value, codigo=it.codigo, descricao=it.descricao, ativo=True))
+        novos += 1
+    s.flush()
+    return {"incluidos": novos, "ja_existiam": len(pessoas) - novos}

@@ -33,7 +33,7 @@ export default function CadastrosPage() {
 
   return (
     <>
-      <Cabecalho eyebrow="Cadastros Simova" cor="var(--m-proc-medir)" titulo="Frentes, grupos e OPERs que o Simova reconhece" descricao="Importe OPER.xlsx e FRENTE.xlsx do Simova. OPERs criadas aqui ficam marcadas para retroalimentar o Simova." />
+      <Cabecalho eyebrow="Cadastros Simova" cor="var(--m-proc-medir)" titulo="Frentes, grupos e OPERs que o Simova reconhece" />
       <div className="flex flex-col gap-4">
         {pode('admin') && <Painel
           titulo="Importar do Simova"

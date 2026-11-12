@@ -84,7 +84,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Páginas da obra em `src/app/[locale]/app/(obra)/` (o `layout.tsx` só monta com obra escolhida); menu em
   `src/components/Malhet/menu.ts`. Fluxo principal (spec 008): Importações → Frentes → Catálogo → Programações
   (montar → emitir → imprimir → FT). Hooks em `src/hooks/programacao/planejamento.ts`.
-- Obra corrente: `useObra()` (`src/lib/obra/ObraProvider.tsx`): obras, papel, `pode('planejador')`, superadmin.
+- Obra corrente: `useObra()` (`src/lib/obra/ObraProvider.tsx`): obras, papel, `pode('planejador')`, superadmin,
+  `podeVer(url)` (páginas liberadas por pessoa em `acesso_obra.paginas`; a Programação vigente `/app/vigente` fica sempre
+  aberta). Cabeçalhos sem descrição (espaço). Acessos e usuários unificados em `/app/acessos`. Spec 033.
   `useApi()` já manda o `X-Obra-Id`; trocar de obra remonta as telas. Esconda ações que o papel não permite.
 - **Memória de cálculo**: todo número calculado na tela usa `<Calculado>` (`components/Obra/Calculado.tsx`) e abre a
   conta + fontes (origem e linha/campo). Backend: `app/shared/memoria.py` (`Memoria`, `Fonte`, `pacote`); CPU com linha do

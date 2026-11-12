@@ -36,12 +36,12 @@ const nomeArquivo = (fd: FormData) => {
   return f instanceof File ? f.name.replace(/\.[^.]+$/, '') : '';
 };
 
-function Bloco({ titulo, subtitulo, icone: Icone, caminho, accept, extra }: {
-  titulo: string; subtitulo: string; icone: typeof Table2; caminho: string; accept: string; extra?: Record<string, string>;
+function Bloco({ titulo, icone: Icone, caminho, accept, extra }: {
+  titulo: string; icone: typeof Table2; caminho: string; accept: string; extra?: Record<string, string>;
 }) {
   const m = useImportar(caminho);
   return (
-    <Painel titulo={<span className="inline-flex items-center gap-2"><Icone size={18} className="text-m-accent" />{titulo}</span>} subtitulo={subtitulo}>
+    <Painel titulo={<span className="inline-flex items-center gap-2"><Icone size={18} className="text-m-accent" />{titulo}</span>}>
       <UploadForm
         campos={[{ nome: 'arquivo', rotulo: 'Arquivo' }]}
         accept={accept}
@@ -76,13 +76,12 @@ export default function ImportacoesPage() {
         eyebrow="Cadastros · importações"
         cor="var(--m-proc-medir)"
         titulo="De onde vêm os dados da programação"
-        descricao="Cronograma direto do Primavera (.xer), quantidades do take-off (PQ CONTRATO + MC FRENTES por TAG) e a CPU da obra, que alimenta todos os cálculos de produção (HH, índice, capacidade e gargalo). Cada importação vira uma nova versão vigente; as anteriores ficam no histórico."
       />
       {admin ? (
         <div className="grid gap-4 xl:grid-cols-3">
-          <Bloco titulo="Cronograma (P6 .xer)" subtitulo="Atividades, datas e WBS (CWA). A tela de montar filtra as atividades pela área escolhida." icone={CalendarClock} caminho="/importar/xer" accept=".xer" />
-          <Bloco titulo="PQ do contrato (abas PQ e MC)" subtitulo="A aba PQ com toda a estrutura (títulos, itens, critério, quantidade e preço) e a MC com a quantidade de cada item por TAG. Também aceita o take-off (PQ CONTRATO + MC FRENTES)." icone={Table2} caminho="/importar/takeoff" accept=".xlsx,.xlsm" />
-          <Bloco titulo="CPU da obra (Composição de Custo Unitário)" subtitulo="O relatório de composições do orçamento (.xls). Dele saem HH por unidade, o recurso que governa, o índice (un/dia por pessoa) e a capacidade das equipes." icone={FileSpreadsheet} caminho="/importar/cpu" accept=".xls,.xlsx" />
+          <Bloco titulo="Cronograma (P6 .xer)" icone={CalendarClock} caminho="/importar/xer" accept=".xer" />
+          <Bloco titulo="PQ do contrato (abas PQ e MC)" icone={Table2} caminho="/importar/takeoff" accept=".xlsx,.xlsm" />
+          <Bloco titulo="CPU da obra (Composição de Custo Unitário)" icone={FileSpreadsheet} caminho="/importar/cpu" accept=".xls,.xlsx" />
         </div>
       ) : (
         <Painel titulo="Somente o administrador da obra importa arquivos"><p className="text-sm text-m-text-secondary">Peça ao administrador para carregar o .xer ou o take-off atualizado.</p></Painel>
@@ -117,7 +116,7 @@ function ConsultaCpu() {
   const d = q.data;
   const rotaMem = `/cpu/item/memoria?item=${encodeURIComponent(busca)}`;
   return (
-    <Painel titulo="Como a CPU calcula um item da PQ?" subtitulo="Digite o item (ex.: 1.8.3.1.2). Coeficientes já multiplicados pelas composições auxiliares; jornada de referência de 9 h.">
+    <Painel titulo="Como a CPU calcula um item da PQ?">
       <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); setBusca(item.trim()); }}>
         <Campo rotulo="Item da PQ" value={item} onChange={(e) => setItem(e.target.value)} placeholder="1.8.3.1.2" className="w-[200px]" />
         <Botao type="submit" variante="secundario"><Search size={16} /> Consultar</Botao>

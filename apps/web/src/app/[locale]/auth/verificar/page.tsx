@@ -24,7 +24,7 @@ export default function VerificarPage() {
   }, []);
 
   return (
-    <TelaAuth titulo="Confirmar e-mail" subtitulo="Cole o token que chegou no seu e-mail.">
+    <TelaAuth titulo="Confirmar e-mail">
       {!msg?.ok && (
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); confirmar(token); }}>
           <Campo rotulo="Token" required value={token} onChange={(e) => setToken(e.target.value)} />

@@ -1,4 +1,4 @@
-import { AlertTriangle, BarChart3, BookOpen, Columns3, Fish, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Eye, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -10,6 +10,7 @@ export const MENU: GrupoMenu[] = [
     etapa: 'Programar',
     cor: 'var(--m-proc-planejar)',
     itens: [
+      { titulo: 'Programação vigente', url: '/app/vigente', icone: Eye },
       { titulo: 'Cronograma', url: '/app/cronograma', icone: GanttChart },
       { titulo: 'WBS de execução', url: '/app/wbs', icone: ListTree },
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
@@ -46,8 +47,7 @@ export const MENU: GrupoMenu[] = [
     etapa: 'Administrar',
     cor: 'var(--m-proc-administrar)',
     itens: [
-      { titulo: 'Acessos da obra', url: '/app/acessos', icone: KeyRound, minimo: 'admin' },
-      { titulo: 'Obras e usuários', url: '/app/admin/obras', icone: Building2, superadmin: true },
+      { titulo: 'Acessos e usuários', url: '/app/acessos', icone: KeyRound, minimo: 'admin' },
     ],
   },
 ];

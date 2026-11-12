@@ -65,7 +65,6 @@ export default function SsmaPage() {
         eyebrow="Segurança · SSMA da programação"
         cor="var(--m-proc-administrar)"
         titulo={v ? `${v.titulo}: ${pendentes ? `${pendentes} linha(s) sem SSMA completo` : 'SSMA completo'}` : 'SSMA da programação'}
-        descricao="Para cada atividade programada, escolha nas listas: técnico de segurança responsável e um ou mais RAC, PTS, ART e ATA (Autorização de Trabalho Ambiental); o clipe baixa o arquivo do documento. As listas vêm dos Cadastros de SSMA; use N/A quando não se aplica. O PTO é do Planejamento e aparece só para consulta. Vale também depois de emitida; depois de concluída fica só para consulta (mudança só por revisão). Vai para a coluna SSMA do Excel do cliente."
         acoes={<div className="flex items-end gap-2">
           <Selecao rotulo="Programação" value={pid ?? ''} onChange={(e) => setPid(Number(e.target.value))} className="min-w-[300px]">
             {lista.data?.map((p) => <option key={p.id} value={p.id}>{p.titulo} · {p.status === 'concluida' ? 'concluída' : p.status === 'emitida' ? 'emitida' : 'rascunho'}</option>)}

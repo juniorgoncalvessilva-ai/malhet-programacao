@@ -42,7 +42,7 @@ export default function ReferenciasPage() {
 
   return (
     <>
-      <Cabecalho eyebrow="Referências · versão vigente" cor="var(--m-proc-medir)" titulo="Cronograma, PQ, CPU e Simova que valem para a programação" descricao="Cada carga vira uma versão; só uma por tipo é vigente. O vínculo liga a atividade do cronograma (ou o item da PQ) à OPER do Simova e é resolvido sempre contra as vigentes." />
+      <Cabecalho eyebrow="Referências · versão vigente" cor="var(--m-proc-medir)" titulo="Cronograma, PQ, CPU e Simova que valem para a programação" />
       <div className="flex flex-col gap-4">
         <Painel titulo="Versões vigentes (cronograma × PQ × CPU × índices × Simova)">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">

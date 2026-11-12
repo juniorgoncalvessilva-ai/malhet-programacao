@@ -47,11 +47,10 @@ export default function FrentesPage() {
         eyebrow="Cadastros · frentes"
         cor="var(--m-proc-medir)"
         titulo={lista.length ? `${lista.length} locais e ${nAreas} áreas` : 'Nenhuma frente cadastrada'}
-        descricao="Dois níveis, como na lista da obra: Local (Novo CMD, Nova Oficina…) → Área (CWA, Ativo e descrição). O CWA é o código da frente no Simova (CWA repetido sai com sufixo .1, .2 só na exportação, porque o Simova exige código único). Quando o Ativo é encontrado no take-off, aparece a TAG que casa as quantidades. Mudou aqui, muda em todas as programações abertas e na exportação para o Simova."
       />
 
       {pode('admin') && (
-        <Painel titulo="Colar a lista de frentes" subtitulo="Copie do Excel as colunas CWA | Ativo | DESCRICAO CWA | Local (com ou sem o cabeçalho) e cole aqui. Cada linha é uma área; o Local agrupa as áreas e é criado pelo nome (código L1, L2…, editável). Ativo “-” = sem ativo. Reimportar atualiza sem duplicar (casa pelo CWA + Ativo). O formato antigo CODIGO | DESCRICAO continua aceito.">
+        <Painel titulo="Colar a lista de frentes">
           <textarea value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={MODELO} rows={7}
             className="w-full rounded-m-md border border-m-stroke bg-m-surface-field p-3 font-mono text-[12px] text-m-text-primary outline-none focus:border-m-accent" />
           <div className="flex items-center gap-3">

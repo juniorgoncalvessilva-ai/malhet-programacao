@@ -36,6 +36,7 @@ class ObraOut(BaseModel):
 
 
 class MinhaObraOut(ObraOut):
+    paginas: list[str] | None = None  # páginas liberadas (vazio = todas as do papel)
     papel: PapelObra
 
 
@@ -48,6 +49,7 @@ class AcessoIn(BaseModel):
     papel: PapelObra
     cracha: str | None = None
     senha_inicial: str | None = None
+    paginas: list[str] | None = None
 
 
 class AcessoOut(BaseModel):
@@ -58,6 +60,7 @@ class AcessoOut(BaseModel):
     email: str
     papel: PapelObra
     cracha: str | None
+    paginas: list[str] | None = None
     concedido_por: str
     concedido_em: datetime
 
@@ -77,9 +80,9 @@ def minhas(s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_
     if u.superadmin:
         obras = s.scalars(select(ObraModel).where(ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
         return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra.ADMIN) for o in obras]
-    q = (select(ObraModel, AcessoObraModel.papel).join(AcessoObraModel, AcessoObraModel.obra_id == ObraModel.id)
+    q = (select(ObraModel, AcessoObraModel.papel, AcessoObraModel.paginas).join(AcessoObraModel, AcessoObraModel.obra_id == ObraModel.id)
          .where(AcessoObraModel.usuario_id == u.id, ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
-    return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra(p)) for o, p in s.execute(q)]
+    return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra(p), paginas=pg or None) for o, p, pg in s.execute(q)]
 
 
 @router.get("/eu")
@@ -145,7 +148,33 @@ async def conceder(obra_id: int, d: AcessoIn, request: Request, s: Session = Dep
     _admin_da_obra(s, u, obra_id)
     out = await conceder_acesso(s, _contas(request), obra_id,
                                 ConcederIn(d.email, d.papel, d.cracha, d.senha_inicial), u.id)
+    out.acesso.paginas = _paginas(d.paginas)
+    s.flush()
     return ConcederResp(acesso=AcessoOut.model_validate(out.acesso), conta_criada=out.conta_criada)
+
+
+def _paginas(paginas: list[str] | None) -> list[str] | None:
+    """Lista de páginas (url do menu, ex.: /app/programacoes). Vazia = todas as do papel."""
+    lista = sorted({p.strip() for p in (paginas or []) if p and p.strip().startswith("/app/")})
+    if len(lista) > 60:
+        raise DomainError("páginas demais", "paginas")
+    return lista or None
+
+
+class PaginasIn(BaseModel):
+    paginas: list[str] | None = None
+
+
+@router.put("/obras/{obra_id}/acessos/{acesso_id}/paginas", response_model=AcessoOut)
+def paginas(obra_id: int, acesso_id: int, d: PaginasIn, s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_atual)):
+    """Quais páginas a pessoa vê nesta obra (a programação vigente fica sempre aberta)."""
+    _admin_da_obra(s, u, obra_id)
+    a = s.get(AcessoObraModel, acesso_id)
+    if a is None or a.obra_id != obra_id:
+        raise NotFoundError("Acesso", acesso_id)
+    a.paginas = _paginas(d.paginas)
+    s.flush()
+    return a
 
 
 @router.delete("/obras/{obra_id}/acessos/{acesso_id}", status_code=204)

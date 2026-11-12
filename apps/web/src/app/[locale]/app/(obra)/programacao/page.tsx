@@ -119,7 +119,6 @@ export default function ProgramacaoPage() {
       <Cabecalho
         eyebrow="Programação semanal · montar"
         titulo={titulo}
-        descricao="O encarregado escolhe a atividade (do cronograma vigente ou uma OPER padrão), a frente e a produção por dia. O HH sai do índice da CPU e é checado contra a capacidade da equipe. Aprovado, vai para a FT do Simova."
         acoes={<>
           <Botao variante="secundario" aria-label="Semana anterior" onClick={() => setInicio(somar(inicio, -7))}>‹</Botao>
           <Campo type="date" aria-label="Início da semana" value={inicio} onChange={(e) => setInicio(e.target.value)} className="w-[160px]" />
@@ -138,7 +137,6 @@ export default function ProgramacaoPage() {
       <div className="grid gap-4 2xl:grid-cols-[1fr_340px]">
         <Painel
           titulo="O que a obra faz nesta semana?"
-          subtitulo="PE por dia (unidade do grupo) e HH abaixo. Rascunho → aprovado → no Simova."
           acoes={<div className="flex flex-wrap gap-2">
             {(['todos', 'rascunho', 'aprovado', 'exportado'] as const).map((s) => (
               <Chip key={s} ativo={filtro === s} onClick={() => setFiltro(s)}>
@@ -183,7 +181,7 @@ export default function ProgramacaoPage() {
           <Erro erro={acao.error} />
         </Painel>
 
-        <Painel titulo="A equipe dá conta?" subtitulo="Pior dia da semana: HH programado ÷ HH disponível da equipe do encarregado.">
+        <Painel titulo="A equipe dá conta?">
           {!ocupacao.length && <p className="text-[13px] text-m-text-muted">Programe uma atividade para ver a ocupação.</p>}
           <div className="flex flex-col gap-3.5">
             {ocupacao.map((o) => {
@@ -206,7 +204,7 @@ export default function ProgramacaoPage() {
         </Painel>
       </div>
 
-      {pode('encarregado') && <Painel titulo="Programar atividade" subtitulo="Escolha a equipe, a OPER e a frente. Deixe o HH vazio para calcular pelo índice da CPU vigente.">
+      {pode('encarregado') && <Painel titulo="Programar atividade">
         <form onSubmit={enviar} className="flex flex-col gap-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Selecao rotulo="Equipe / encarregado" value={equipeId} onChange={(e) => setEquipeId(e.target.value)} required>

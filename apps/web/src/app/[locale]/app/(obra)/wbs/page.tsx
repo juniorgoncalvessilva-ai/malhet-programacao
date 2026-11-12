@@ -227,7 +227,6 @@ export default function WbsPage() {
       <Cabecalho
         eyebrow="Programar · WBS de execução"
         titulo={arvore.length ? `${arvore.length} área(s) · ${conta.cwp} CWP · ${conta.iwp} IWP` : 'WBS de execução vazia'}
-        descricao={<>Detalhe aqui o que a programação precisa e o cronograma não tem: <b>Área</b> (CWA das Frentes) → <b>CWP</b> (elemento + texto complementar, ex.: Radier · Eixo A–B) → <b>Grupo</b> (Concreto, Forma, Aço… do <Link href="/app/catalogo" className="font-semibold text-m-accent">Catálogo</Link>) → <b>IWP</b> (item da PQ do grupo, com a quantidade digitada ou a do take-off pela TAG da área). Na programação, &quot;Nova linha&quot; pode partir do IWP: área, item, quantidade e o texto complementar do Simova (o CWP) vêm daqui.</>}
         acoes={editar && <div className="flex flex-wrap gap-2">
           <Botao variante="secundario" disabled={sincronizando} onClick={sincronizar} title="Traz áreas, CWPs e IWPs do cronograma vigente; não apaga nada"><RefreshCw size={16} /> {sincronizando ? 'Atualizando…' : 'Atualizar pela WBS do cronograma'}</Botao>
           <Botao onClick={() => { setErro(null); setForm(vazio('area')); }}><Plus size={16} /> Área</Botao>
@@ -247,7 +246,7 @@ export default function WbsPage() {
       )}
       {form && form.tipo === 'area' && form.modo === 'novo' && <Painel titulo="Nova área na WBS">{formInline(form)}</Painel>}
       {envio && prog && (
-        <Painel titulo={`Enviar ${iwpsSel.length} IWP(s) para ${prog.titulo}`} subtitulo="Cada IWP vira uma linha: área, item da PQ, quantidade e o CWP como texto complementar do Simova vêm da WBS. IWP que já está na programação não duplica.">
+        <Painel titulo={`Enviar ${iwpsSel.length} IWP(s) para ${prog.titulo}`}>
           <div className="flex flex-wrap items-end gap-3">
             <Selecao rotulo="Equipe" value={envio.equipe_id} onChange={(e) => setEnvio({ ...envio, equipe_id: e.target.value })} className="min-w-[320px]">
               <option value="">— escolher depois —</option>
@@ -279,7 +278,7 @@ export default function WbsPage() {
           </div>
         </Painel>
       )}
-      <Painel titulo="Estrutura" subtitulo="Clique em + para descer um nível. Marque IWPs (ou um CWP/grupo/área inteiro) e envie para a programação. Nó usado em programação não pode ser excluído (inative). P6 = veio da WBS do cronograma."
+      <Painel titulo="Estrutura"
         acoes={<div className="flex flex-wrap items-end gap-2">
           {programar && <>
             <Selecao rotulo="Enviar para" value={destino} onChange={(e) => setDestino(e.target.value)} className="min-w-[260px]">

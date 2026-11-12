@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { UserPlus } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import { MENU } from '@/components/Malhet/menu';
 import { toast } from 'sonner';
 import { Botao, Campo, Erro, Painel, Pilula, Selecao, Tabela, dataBR, td } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -49,15 +50,28 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
     onError: (e) => toast.error(e.message),
   });
   const lista = acessos.data ?? [];
+  const [paginas, setPaginas] = useState<{ id: number; sel: Set<string> } | null>(null);
+  const salvarPaginas = useMutation({
+    mutationFn: (d: { id: number; paginas: string[] | null }) => api.put(`/obras/${obraId}/acessos/${d.id}/paginas`, { paginas: d.paginas }),
+    onSuccess: () => { toast.success('Páginas salvas'); setPaginas(null); qc.invalidateQueries({ queryKey: chave }); qc.invalidateQueries({ queryKey: ['obras-minhas'] }); },
+    onError: (e) => toast.error(e.message),
+  });
+  const grupos = MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => !i.superadmin && i.url !== '/app/vigente') })).filter((g) => g.itens.length);
 
   return (
     <Painel titulo={`Quem acessa ${obraNome}?`} subtitulo={`${lista.length} pessoa${lista.length === 1 ? '' : 's'} com acesso. O papel vale só para esta obra.`}>
-      <Tabela cabecalho={['E-mail', 'Papel', 'Crachá Simova', 'Desde', '']} vazio={!lista.length && (acessos.isLoading ? 'Carregando…' : 'Ninguém com acesso ainda.')}>
+      <Tabela cabecalho={['E-mail', 'Papel', 'Crachá Simova', 'Páginas', 'Desde', '']} vazio={!lista.length && (acessos.isLoading ? 'Carregando…' : 'Ninguém com acesso ainda.')}>
         {lista.map((a) => (
-          <tr key={a.id}>
+          <Fragment key={a.id}>
+          <tr>
             <td className={td}><b className="font-semibold text-m-text-primary">{a.email}</b></td>
             <td className={td}><Pilula tom={TOM[a.papel]}>{rotuloPapel(a.papel)}</Pilula></td>
             <td className={td}>{a.cracha ?? '—'}</td>
+            <td className={td}>
+              <button type="button" className="text-left font-semibold text-m-accent underline" onClick={() => setPaginas(paginas?.id === a.id ? null : { id: a.id, sel: new Set(a.paginas ?? []) })}>
+                {a.paginas?.length ? `${a.paginas.length} página(s)` : 'todas (pelo papel)'}
+              </button>
+            </td>
             <td className={td}>{dataBR(a.concedido_em)}</td>
             <td className={`${td} whitespace-nowrap text-right`}>
               <Botao variante="fantasma" className="h-8 px-3" onClick={() => setForm({ email: a.email, papel: a.papel, cracha: a.cracha ?? '', senha_inicial: '' })}>Alterar</Botao>
@@ -66,6 +80,33 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
               )}
             </td>
           </tr>
+          {paginas?.id === a.id && (
+            <tr>
+              <td colSpan={6} className="border-b border-m-row bg-m-surface-active px-3 py-3">
+                <p className="mb-2 text-[12.5px] text-m-text-secondary">Páginas que <b className="text-m-text-primary">{a.email}</b> vê nesta obra. A <b>Programação vigente</b> fica sempre aberta; nenhuma marcada = todas as que o papel permite.</p>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {grupos.map((g) => (
+                    <div key={g.etapa} className="flex flex-col gap-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.4px]" style={{ color: g.cor }}>{g.etapa}</span>
+                      {g.itens.map((i) => (
+                        <label key={i.url} className="flex items-center gap-2 text-[13px] text-m-text-primary">
+                          <input type="checkbox" checked={paginas.sel.has(i.url)} onChange={() => setPaginas((p) => { if (!p) return p; const n = new Set(p.sel); if (n.has(i.url)) n.delete(i.url); else n.add(i.url); return { ...p, sel: n }; })} />
+                          {i.titulo}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Botao disabled={salvarPaginas.isPending} onClick={() => salvarPaginas.mutate({ id: a.id, paginas: paginas.sel.size ? [...paginas.sel] : null })}>Salvar páginas</Botao>
+                  <Botao variante="secundario" onClick={() => setPaginas({ ...paginas, sel: new Set() })}>Liberar todas (pelo papel)</Botao>
+                  <Botao variante="secundario" onClick={() => setPaginas({ ...paginas, sel: new Set(['/app/vigente']) })}>Só a programação vigente</Botao>
+                  <Botao variante="fantasma" onClick={() => setPaginas(null)}>Cancelar</Botao>
+                </div>
+              </td>
+            </tr>
+          )}
+          </Fragment>
         ))}
       </Tabela>
 

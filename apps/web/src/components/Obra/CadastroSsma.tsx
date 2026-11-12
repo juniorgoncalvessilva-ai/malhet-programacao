@@ -1,11 +1,12 @@
 'use client';
 
-import { FileText, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { FileText, Paperclip, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Campo, Chip, Erro, Painel, Pilula, Tabela, dataBR, td } from '@/components/Obra/ui';
-import { k, useAcao, useCadastrosSsma } from '@/hooks/programacao/planejamento';
+import { k, useAcao, useCadastrosSsma, useEfetivo } from '@/hooks/programacao/planejamento';
+import { useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { CadastroSsma, TipoCadastroSsma } from '@/lib/api/types';
 import { useConfirmar } from '@/components/Obra/Confirmar';
@@ -31,7 +32,7 @@ export function validade(c: CadastroSsma): { tom: 'perigo' | 'atencao' | 'sucess
 type Form = { id?: number; tipo: TipoCadastroSsma; codigo: string; descricao: string; validade: string; ativo: boolean };
 
 /** Lista editável dos cadastros de SSMA/PTO (uma aba por tipo). */
-export function CadastrosSsma({ tipos, podeEditar, titulo, subtitulo }: { tipos: TipoCadastroSsma[]; podeEditar: boolean; titulo: string; subtitulo: string }) {
+export function CadastrosSsma({ tipos, podeEditar, titulo }: { tipos: TipoCadastroSsma[]; podeEditar: boolean; titulo: string }) {
   const confirmar = useConfirmar();
   const lista = useCadastrosSsma();
   const [tipo, setTipo] = useState<TipoCadastroSsma>(tipos[0]);
@@ -68,10 +69,15 @@ export function CadastrosSsma({ tipos, podeEditar, titulo, subtitulo }: { tipos:
   const itens = (lista.data ?? []).filter((c) => c.tipo === tipo);
   const r = ROTULO_SSMA[tipo];
   const novo = () => setForm({ tipo, codigo: '', descricao: '', validade: '', ativo: true });
+  const [time, setTime] = useState(false);
 
   return (
-    <Painel titulo={titulo} subtitulo={subtitulo}
-      acoes={podeEditar && <Botao onClick={novo}><Plus size={16} /> {tipo === 'TECNICO' ? 'Técnico' : r.curto}</Botao>}>
+    <Painel titulo={titulo}
+      acoes={podeEditar && <>
+        {tipo === 'TECNICO' && <Botao variante="secundario" onClick={() => setTime(!time)}><Users size={16} /> Do time de segurança</Botao>}
+        <Botao onClick={novo}><Plus size={16} /> {tipo === 'TECNICO' ? 'Técnico' : r.curto}</Botao>
+      </>}>
+      {tipo === 'TECNICO' && time && podeEditar && <TimeSeguranca aoFechar={() => setTime(false)} />}
       {tipos.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {tipos.map((t) => <Chip key={t} ativo={tipo === t} onClick={() => { setTipo(t); setForm(null); }}>{ROTULO_SSMA[t].curto} · {(lista.data ?? []).filter((c) => c.tipo === t && c.ativo).length}</Chip>)}
@@ -135,5 +141,49 @@ export function CadastrosSsma({ tipos, podeEditar, titulo, subtitulo }: { tipos:
         })}
       </Tabela>
     </Painel>
+  );
+}
+
+/** Alimenta a lista de técnicos com pessoas do efetivo (time da segurança) ou com uma equipe cadastrada inteira. */
+function TimeSeguranca({ aoFechar }: { aoFechar: () => void }) {
+  const efetivo = useEfetivo();
+  const equipes = useEquipes();
+  const [q, setQ] = useState('segur');
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [equipe, setEquipe] = useState('');
+  const importar = useAcao((a, d: { colaboradores?: number[]; equipe_id?: number }) => a.post<{ incluidos: number; ja_existiam: number }>('/ssma/tecnicos/importar', d), [[...k.cadastrosSsma], ['programacao']]);
+  const ok = (r: { incluidos: number; ja_existiam: number }) => { toast.success(`${r.incluidos} técnico(s) incluído(s)${r.ja_existiam ? ` · ${r.ja_existiam} já estavam na lista` : ''}`); setSel(new Set()); };
+  const termo = q.trim().toLowerCase();
+  const pessoas = (efetivo.data ?? []).filter((p) => !['DESMOBILIZADO', 'DESISTENCIA'].includes(p.situacao) && (!termo || `${p.nome} ${p.funcao ?? ''} ${p.matricula ?? ''}`.toLowerCase().includes(termo))).slice(0, 80);
+  return (
+    <div className="grid gap-4 rounded-m-lg border border-m-stroke-subtle p-3 lg:grid-cols-[1fr_320px]">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <Campo rotulo="Pessoas do efetivo (nome, função ou matrícula)" value={q} onChange={(e) => setQ(e.target.value)} className="w-[340px] max-w-full" />
+          <Botao disabled={!sel.size || importar.isPending} onClick={() => importar.mutate({ colaboradores: [...sel] }, { onSuccess: ok, onError: (e) => toast.error(e.message) })}>Incluir {sel.size || ''} selecionado(s)</Botao>
+        </div>
+        <ul className="max-h-60 overflow-y-auto rounded-m-md border border-m-stroke-subtle">
+          {!pessoas.length && <li className="px-3 py-4 text-[13px] text-m-text-muted">{efetivo.isLoading ? 'Carregando…' : 'Ninguém com esse filtro no efetivo.'}</li>}
+          {pessoas.map((p) => (
+            <li key={p.id} className="border-b border-m-row last:border-0">
+              <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[13px] hover:bg-m-surface-hover">
+                <input type="checkbox" checked={sel.has(p.id)} onChange={() => setSel((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })} />
+                <b className="text-m-text-primary">{p.nome}</b><span className="text-m-text-muted">{p.funcao ?? ''}{p.matricula ? ` · ${p.matricula}` : ''}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="flex flex-col gap-1.5 text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Ou a equipe de segurança inteira
+          <select value={equipe} onChange={(e) => setEquipe(e.target.value)} className="h-10 rounded-m-md border border-m-stroke bg-m-surface-field px-2 text-[13px] font-normal normal-case tracking-normal text-m-text-primary">
+            <option value="">Escolha a equipe…</option>
+            {equipes.data?.map((e) => <option key={e.id} value={e.id}>{e.nome} · {e.encarregado_nome ?? 'sem encarregado'}</option>)}
+          </select>
+        </label>
+        <Botao variante="secundario" disabled={!equipe || importar.isPending} onClick={() => importar.mutate({ equipe_id: Number(equipe) }, { onSuccess: ok, onError: (e) => toast.error(e.message) })}>Incluir encarregado e membros</Botao>
+        <Botao variante="fantasma" onClick={aoFechar}><X size={14} /> Fechar</Botao>
+      </div>
+    </div>
   );
 }

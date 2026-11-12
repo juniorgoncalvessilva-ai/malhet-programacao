@@ -31,10 +31,9 @@ export default function ProgramacoesPage() {
       <Cabecalho
         eyebrow="Programação · semanal e mensal"
         titulo={lista.data?.length ? `${lista.data.length} programaç${lista.data.length > 1 ? 'ões' : 'ão'} nesta obra` : 'Nenhuma programação ainda'}
-        descricao="A semanal vai da sexta de uma semana ao sábado da seguinte (9 dias), para emendar uma semana na outra. A mensal é dia a dia. Monte por Local → Área → atividade e emita no formato da obra."
       />
       {pode('planejador') && (
-        <Painel titulo="Nova programação" subtitulo="Na semanal, qualquer data cai na sexta de emissão da semana.">
+        <Painel titulo="Nova programação">
           <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => {
             e.preventDefault();
             criar.mutate({ tipo, referencia: ref, copiar_de: copiar ? Number(copiar) : null }, {

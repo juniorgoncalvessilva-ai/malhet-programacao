@@ -192,7 +192,6 @@ export default function MontarPage() {
       <Cabecalho
         eyebrow={`Programação ${v.tipo === 'SEMANAL' ? 'semanal' : 'mensal'} · montar`}
         titulo={`${v.titulo}: ${v.linhas} linha${v.linhas === 1 ? '' : 's'}`}
-        descricao={<>Local → Área → atividade (grupo, tipo e texto complementar, que gera o ID do Simova) → item da PQ. {concluida ? 'Concluída: nada pode ser alterado; para corrigir, abra uma revisão com o motivo.' : rascunho ? 'Previsto aberto para edição.' : 'Emitida: o previsto está travado; o realizado continua aberto até concluir.'}</>}
         acoes={<>
           <Pilula tom={concluida ? 'sucesso' : rascunho ? 'neutro' : 'acento'}>{concluida ? `Concluída${(v.conclusoes?.length ?? 0) > 1 ? ` · revisão ${(v.conclusoes?.length ?? 1) - 1}` : ''}` : rascunho ? (v.revisao ? `Reaberta · rev. ${v.revisao}` : 'Rascunho') : `Emitida · rev. ${v.revisao - 1}`}</Pilula>
           {nPend > 0 && <Botao onClick={salvar} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação ({nPend})</Botao>}
@@ -225,7 +224,7 @@ export default function MontarPage() {
       />
 
       {motivo !== null && (
-        <Painel titulo="Abrir revisão da programação concluída" subtitulo="A revisão reabre a programação (como emitida) para corrigir. O motivo e a foto do que estava concluído ficam no histórico; ao terminar, conclua de novo.">
+        <Painel titulo="Abrir revisão da programação concluída">
           <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); revisar.mutate(motivo, { onSuccess: () => { toast.success('Revisão aberta'); setMotivo(null); } }); }}>
             <Campo rotulo="Motivo da revisão" required minLength={5} maxLength={500} placeholder="Ex.: realizado de sábado lançado errado" value={motivo} onChange={(e) => setMotivo(e.target.value)} className="w-[520px] max-w-full" />
             <Botao type="submit" disabled={revisar.isPending}>Abrir revisão</Botao>
@@ -250,7 +249,7 @@ export default function MontarPage() {
       {!rascunho && <div id="desvios"><DesviosDaProgramacao pid={id} dias={v.dias} editavel={!concluida && pode('encarregado')} /></div>}
 
       {aberto && (
-        <Painel titulo={editando ? 'Editar linha' : 'Nova linha'} subtitulo="O ID do Simova sai do tipo; com texto complementar vira um item novo (ex.: 2.3.1 Concreto 20 MPa - (Fundo canaleta 2A))."
+        <Painel titulo={editando ? 'Editar linha' : 'Nova linha'}
           acoes={<Botao variante="fantasma" onClick={() => setAberto(false)}><X size={16} /> Fechar</Botao>}>
           <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={(e) => {
             e.preventDefault();

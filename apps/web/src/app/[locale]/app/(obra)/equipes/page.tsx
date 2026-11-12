@@ -111,7 +111,6 @@ export default function EquipesPage() {
       <Cabecalho
         eyebrow="Equipes · frentes de trabalho"
         titulo="Quem trabalha em cada frente, em que turno e quanto produz"
-        descricao="Monte as equipes pelo Efetivo (selecione as pessoas e crie a equipe) ou importe o cadastro do Simova. O número antes do nome (ex.: 115532 :: JOSÉ) é a matrícula: por ele cada pessoa é ligada ao Efetivo e mobilização, com nome, função e situação. A função da composição vem do de-para de funções (ou pode ser informada aqui). Exporte no padrão do Simova para importar lá."
         acoes={<div className="flex flex-wrap gap-2">
           {pode('planejador') && <Botao variante="secundario" disabled={vinculando} onClick={vincular}><Link2 size={16} /> {vinculando ? 'Vinculando…' : 'Vincular ao efetivo'}</Botao>}
           <Botao variante="secundario" onClick={() => api.download('/equipes/simova.xlsx', 'Equipe_Simova.xlsx').then(() => toast.success('Arquivo no padrão do Simova gerado (equipes ativas)')).catch((e) => toast.error(e.message))}><Download size={16} /> Exportar para o Simova</Botao>
@@ -120,7 +119,7 @@ export default function EquipesPage() {
       />
       <div className="flex flex-col gap-4">
         {pode('planejador') && (
-          <Painel titulo="Importar equipes do Simova" subtitulo="Exportação do cadastro de equipes (Código, Descrição, Encarregado, Funcionário, Equipamento, Ativo). Reimportar atualiza pelo código e mantém turno, jornada, responsável e funções.">
+          <Painel titulo="Importar equipes do Simova">
             <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Equipe.xlsx' }]} rotulo="Importar" pendente={importando} onEnviar={importarSimova} />
           </Painel>
         )}

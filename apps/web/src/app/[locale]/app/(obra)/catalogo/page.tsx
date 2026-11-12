@@ -107,7 +107,6 @@ export default function CatalogoPage() {
         eyebrow="Cadastros · catálogo de atividades"
         cor="var(--m-proc-medir)"
         titulo={grupos.length ? `${grupos.length} grupos e ${nTipos} itens da PQ no catálogo` : 'Catálogo vazio'}
-        descricao="O encarregado escolhe o Grupo (ex.: 2 Concreto) e o item da PQ, que é o tipo da atividade (2.3 = item 1.8.3.1.2). Um grupo reúne um ou vários itens da PQ. O texto complementar cria um item com ID próprio no Simova (2.3.1 Nome simplificado - (Fundo canaleta 2A)). No Simova vai o nome simplificado do item da PQ (coluna na aba PQ abaixo); sem ele, a descrição da PQ."
         acoes={<Botao variante="secundario" onClick={() => api.download('/simova/cadastros.xlsx', 'cadastros-simova.xlsx').catch((e) => toast.error(e.message))}><Download size={16} /> Cadastros p/ Simova</Botao>}
       />
 
@@ -156,7 +155,7 @@ export default function CatalogoPage() {
       )}
 
       {massa && (
-        <Painel titulo="Grupos e unidades em massa (layout do Simova)" subtitulo="Copie as linhas do Excel (com ou sem o cabeçalho) e cole. Grupo com código que já existe tem a descrição e a unidade atualizadas."
+        <Painel titulo="Grupos e unidades em massa (layout do Simova)"
           acoes={<Botao variante="fantasma" onClick={() => setMassa(null)}>Fechar</Botao>}>
           <div className="grid gap-4 lg:grid-cols-2">
             <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); loteGrupos.mutate(massa.grupos, { onSuccess: (r) => { toast.success(`${r.criados} grupo(s) criado(s) · ${r.atualizados} atualizado(s)`); setMassa({ ...massa, grupos: '' }); }, onError: (er) => toast.error(er.message) }); }}>
@@ -181,7 +180,6 @@ export default function CatalogoPage() {
 
       <Painel
         titulo="Quais atividades o encarregado pode escolher?"
-        subtitulo="Cada grupo reúne itens da PQ. Mover de grupo ou renumerar muda o ID Simova em todas as programações abertas."
         acoes={editar && <>
           <Botao variante="secundario" onClick={() => setMassa({ grupos: '', unidades: '' })}><Layers size={16} /> Grupos em massa</Botao>
           <Botao variante="secundario" onClick={() => abrirGrupo()}><Plus size={16} /> Grupo</Botao>

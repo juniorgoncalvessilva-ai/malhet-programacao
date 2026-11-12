@@ -234,3 +234,15 @@ def test_dominio_varios_itens_e_anexo():
     assert validar_anexo(TipoCadastro.RAC, "r.xls", b"\xd0\xcf\x11\xe0..")[1] == "application/vnd.ms-excel"
     with pytest.raises(DomainError):
         validar_anexo(TipoCadastro.TECNICO, "a.pdf", b"%PDF")
+
+
+def test_tecnicos_do_ssma_a_partir_da_equipe_de_seguranca(client):
+    eq = client.post("/api/equipes", json={"nome": "SEGURANÇA", "encarregado_cracha": "1", "encarregado_nome": "Ana Lima",
+                                           "jornada_horas": 9, "membros": [{"cracha": "2", "nome": "Bruno Souza", "funcao": "Técnico de segurança"}]}).json()
+    r = client.post("/api/ssma/tecnicos/importar", json={"equipe_id": eq["id"]})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"incluidos": 2, "ja_existiam": 0}
+    assert client.post("/api/ssma/tecnicos/importar", json={"equipe_id": eq["id"]}).json() == {"incluidos": 0, "ja_existiam": 2}
+    nomes = {x["codigo"] for x in client.get("/api/ssma/cadastros", params={"tipo": "TECNICO"}).json()}
+    assert {"Ana Lima", "Bruno Souza"} <= nomes
+    assert client.post("/api/ssma/tecnicos/importar", json={}).status_code == 422

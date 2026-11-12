@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -29,5 +30,7 @@ class AcessoObraModel(Base):
     email: Mapped[str] = mapped_column(String(320))
     papel: Mapped[str] = mapped_column(String(15))
     cracha: Mapped[str | None] = mapped_column(String(20))  # crachá Simova quando for encarregado
+    # páginas do app liberadas para a pessoa nesta obra (url do menu); vazio = todas as que o papel permite
+    paginas: Mapped[list | None] = mapped_column(JSONB)
     concedido_por: Mapped[str] = mapped_column(String(80))
     concedido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -23,7 +23,6 @@ export default function OrganogramaPage() {
       <Cabecalho
         eyebrow="Efetivo · organograma"
         titulo="Organograma da obra"
-        descricao="Montado a partir dos setores da obra, das equipes e do efetivo (modelo do Malhet): obra (responsável geral) → setor (responsável) → equipe (encarregado) → função. Abra ou recolha os ramos (+/−), escolha até que nível mostrar e use o zoom; clique numa função para ver as pessoas. Setores, responsáveis e cores são definidos em Setores da obra; sem setores cadastrados, o setor é a frente da equipe ou o DP do encarregado. Mobilizados sem equipe e quem está em mobilização aparecem em ramos próprios."
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Indicador rotulo="Efetivo no organograma" valor={org.data?.total ?? '—'} />
@@ -31,7 +30,7 @@ export default function OrganogramaPage() {
         <Indicador rotulo="Sem equipe" valor={contar(raiz, 'Sem equipe')} />
         <Indicador rotulo="Em mobilização" valor={contar(raiz, 'Em mobilização')} />
       </div>
-      <Painel titulo="Quem responde a quem?" subtitulo="Desmobilizados e desistências não aparecem.">
+      <Painel titulo="Quem responde a quem?">
         <Campo rotulo="Buscar no organograma" placeholder="Setor, supervisor, equipe, função, nome ou matrícula" value={busca} onChange={(e) => setBusca(e.target.value)} className="max-w-md" />
         {org.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
         {!org.isLoading && !raiz && <p className="text-sm text-m-text-muted">Ninguém no organograma para essa busca.</p>}

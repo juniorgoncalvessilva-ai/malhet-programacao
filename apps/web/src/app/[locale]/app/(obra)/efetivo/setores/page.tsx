@@ -84,14 +84,13 @@ export default function SetoresPage() {
       <Cabecalho
         eyebrow="Efetivo · setores da obra"
         titulo="Setores, disciplinas, responsáveis e cores do organograma"
-        descricao={<>A obra tem um responsável geral e cada setor e disciplina (subsetor) tem um responsável, escolhidos no efetivo. As equipes ficam no setor ou na disciplina escolhidos aqui e o <Link href="/app/efetivo/organograma" className="font-semibold text-m-accent">organograma</Link> passa a ser Obra → Setor → Disciplina → Equipe → Função. Setores e disciplinas podem ter cor, herdada pelo ramo. Os responsáveis aparecem só na própria caixa.</>}
         acoes={<div className="flex gap-2">
           <Link href="/app/efetivo/organograma"><Botao variante="secundario"><GitFork size={16} /> Ver organograma</Botao></Link>
           {editar && <Botao variante="secundario" onClick={novo}><Plus size={16} /> Novo setor</Botao>}
         </div>}
       />
       <div className="flex flex-col gap-4">
-        <Painel titulo={`Obra ${obra?.nome ?? ''}`} subtitulo="Responsável geral (topo do organograma) e cor de cada nível. Setores com cor própria usam a deles.">
+        <Painel titulo={`Obra ${obra?.nome ?? ''}`}>
           <div className="grid gap-4 lg:grid-cols-[minmax(280px,420px)_1fr]">
             <SeletorPessoa rotulo="Responsável geral da obra" valor={geral} onChange={setGeral} disabled={!editar} />
             <div className="grid gap-3 sm:grid-cols-2">

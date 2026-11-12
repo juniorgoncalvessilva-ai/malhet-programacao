@@ -13,10 +13,9 @@ export default function CadastrosSsmaPage() {
         eyebrow="Segurança · cadastros de SSMA"
         cor="var(--m-proc-administrar)"
         titulo="Técnicos, RAC, PTS, ART e ATA da obra"
-        descricao={<>O que for cadastrado aqui aparece nas listas suspensas da <Link href="/app/ssma" className="font-semibold text-m-accent">SSMA da programação</Link>. Renomear atualiza as programações em rascunho; item em uso não é excluído, só inativado. O PTO é do Planejamento: fica em <Link href="/app/pto" className="font-semibold text-m-accent">PTO (planejamento)</Link>.</>}
       />
       <CadastrosSsma tipos={['TECNICO', 'RAC', 'PTS', 'ART', 'ATA']} podeEditar={editaSsma}
-        titulo="O que a segurança pode escolher em cada linha?" subtitulo="Use a validade para enxergar documentos vencidos ou perto de vencer." />
+        titulo="O que a segurança pode escolher em cada linha?" />
     </>
   );
 }
