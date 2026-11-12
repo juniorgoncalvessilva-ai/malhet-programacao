@@ -214,3 +214,31 @@ export interface SincronizacaoWbs {
   atividades_sem_grupo: number; itens_sem_grupo: number; areas_novas: number; cwps_novos: number; grupos_novos: number;
   iwps_novos: number; iwps_atualizados: number; fora_do_cronograma: number; aviso?: string;
 }
+
+/** Desvio do Pareto semanal (motivo de item não cumprido) e causas da obra. Spec 027. */
+export interface CausaDesvio { id: number; numero: number; descricao: string; ativo: boolean }
+export interface Desvio {
+  id: number; data: string; semana: number; programacao_id: number | null; linha_id: number | null;
+  causa_id: number; causa: string | null; referencia: string | null; descricao: string; frente: string | null;
+  area_id: number | null; acao: string | null; responsavel: string | null; gerencia: string | null;
+  status: 1 | 2 | 3; status_nome: string | null; atividade_impactada: string | null; qtd_nao_cumprida: number | null;
+  origem: 'app' | 'importado';
+}
+export interface ItemNaoCumprido {
+  linha_id: number; n: number; codigo_simova: string; descricao: string; area: string;
+  previsto: number; realizado: number; falta: number; desvios: Desvio[];
+}
+export interface DesviosProgramacao { status: string; itens: ItemNaoCumprido[]; sem_causa: number; outros: Desvio[] }
+export interface PainelIndicadores {
+  kpis: { ppc: number | null; aderencia: number | null; carga: number | null; erro_programacao: number | null;
+    erro_previsao: number | null; realizado_capacidade: number | null; eficiencia_hh: number | null;
+    atividades: number; concluidas: number; classes_carga: { sobre: number; ok: number; sub: number }; desvios: number };
+  por_modo: { modo: string; rotulo: string; atividades: number; aderencia: number | null; carga: number | null; erro_previsao: number | null; ppc: number | null }[];
+  por_encarregado: { encarregado: string; atividades: number; ppc: number | null; aderencia: number | null; carga: number | null; erro_programacao: number | null; chave: number }[];
+  semanas: { semana: number; ppc: number | null; aderencia: number | null; carga: number | null; atividades: number }[];
+  pareto: { causa: string; ocorrencias: number; pct: number; pct_acumulado: number }[];
+  fora_da_capacidade: { programacao_id: number; titulo: string; n_linha: number; codigo_simova: string | null; descricao: string;
+    encarregado: string | null; unidade: string | null; previsto: number; capacidade: number; carga: number | null; classe: 'sobre' | 'sub'; modo: string }[];
+  opcoes: { encarregados: string[]; equipes: { id: number; nome: string }[]; grupos: string[]; itens: string[]; areas: { id: number; nome: string }[] };
+  memorias: Record<string, import('@/components/Obra/Calculado').MemoriaCalculo>;
+}

@@ -1,4 +1,4 @@
-import { BookOpen, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, Building2, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -15,6 +15,8 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
       { titulo: 'PTO (planejamento)', url: '/app/pto', icone: ClipboardList, minimo: 'planejador' },
       { titulo: 'SSMA da programação', url: '/app/ssma', icone: HardHat, ssma: true },
+      { titulo: 'Desvios (Pareto)', url: '/app/desvios', icone: AlertTriangle },
+      { titulo: 'Indicadores', url: '/app/indicadores', icone: BarChart3 },
     ],
   },
   {

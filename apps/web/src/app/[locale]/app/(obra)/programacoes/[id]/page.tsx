@@ -15,6 +15,7 @@ import { comoLista, type AtividadeBusca, type ItemPqBusca, type LinhaVisao, type
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
+import { DesviosDaProgramacao } from '@/components/Obra/DesviosProgramacao';
 
 interface FormLinha {
   wbs_no_id: string; area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
@@ -120,7 +121,7 @@ export default function MontarPage() {
       if (campo === 'periodo') { ln.qtd_periodo = num; ln.mudar_qtd_periodo = true; } else ln[campo as 'previsto' | 'realizado'].push({ data, valor: num });
     }
     return a.put<{ alteracoes: number }>(`/programacoes/${id}/salvar`, { linhas: Object.values(por) });
-  }, [[...k.programacao(id)], [...k.programacoes]]);
+  }, [[...k.programacao(id)], [...k.programacoes], ['desvios']]);
   const salvar = () => salvarTudo.mutate(pend, {
     onSuccess: (r) => { setPend({}); toast.success(`Programação salva (${r.alteracoes} alteraç${r.alteracoes === 1 ? 'ão' : 'ões'})`); },
     onError: (e) => toast.error(e.message),
@@ -217,7 +218,7 @@ export default function MontarPage() {
                 <Botao disabled={nPend > 0} title={nPend ? 'Salve as alterações antes de concluir' : 'Fecha a programação: depois só por revisão'} onClick={async () => {
                   if (!(await confirmar({ titulo: 'Concluir a programação?', perigo: false, acao: 'Concluir',
                     mensagem: 'Depois de concluída, nada pode ser alterado (previsto, realizado, linhas, SSMA/PTO). Para corrigir será preciso abrir uma revisão com o motivo; o que estava concluído fica guardado no histórico.' }))) return;
-                  concluir.mutate(undefined, { onSuccess: () => toast.success('Programação concluída'), onError: (e) => toast.error(e.message) });
+                  concluir.mutate(undefined, { onSuccess: () => toast.success('Programação concluída'), onError: (e) => { toast.error(e.message, { duration: 9000 }); document.getElementById('desvios')?.scrollIntoView({ behavior: 'smooth' }); } });
                 }}><Lock size={16} /> Concluir</Botao>
               </>)}
         </>}
@@ -245,6 +246,8 @@ export default function MontarPage() {
           </ul>
         </Painel>
       )}
+
+      {!rascunho && <div id="desvios"><DesviosDaProgramacao pid={id} dias={v.dias} editavel={!concluida && pode('encarregado')} /></div>}
 
       {aberto && (
         <Painel titulo={editando ? 'Editar linha' : 'Nova linha'} subtitulo="O ID do Simova sai do tipo; com texto complementar vira um item novo (ex.: 2.3.1 Concreto 20 MPa - (Fundo canaleta 2A))."

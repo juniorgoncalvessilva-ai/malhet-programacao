@@ -187,7 +187,21 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
 
     # concluir: nada muda (previsto, realizado, linha, SSMA, excluir, reabrir); só revisão com motivo
     pid = p["id"]
+    # item não cumprido (previsto > realizado) precisa do motivo no Pareto antes de concluir
+    r = client.post(f"/api/programacoes/{pid}/concluir")
+    assert r.status_code == 422 and "sem causa no Pareto" in r.json()["detail"] and r.json()["campo"] == "desvios"
+    pend = client.get(f"/api/desvios/programacao/{pid}").json()
+    assert pend["sem_causa"] == 1 and pend["itens"][0]["linha_id"] == lid and pend["itens"][0]["realizado"] == 4
+    causas = client.get("/api/desvios/causas").json()
+    chuva = next(c for c in causas if c["descricao"].startswith("Condições Meteorológicas"))
+    desvio = {"data": "2026-11-09", "causa_id": chuva["id"], "descricao": "Chuva forte parou a concretagem",
+              "programacao_id": pid, "linha_id": lid, "acao": "Reprogramar para a próxima semana", "status": 3}
+    assert client.post("/api/desvios", json={**desvio, "data": "2026-12-01"}).status_code == 422  # fora do período
+    d1 = client.post("/api/desvios", json=desvio).json()
+    assert d1["semana"] == 32 and d1["causa"] == chuva["descricao"] and d1["status_nome"] == "Concluído"
     assert client.post(f"/api/programacoes/{pid}/concluir").json() == {"conclusao": 1}
+    assert client.put(f"/api/desvios/{d1['id']}", json=desvio).status_code == 422  # concluída: só por revisão
+    assert client.delete(f"/api/desvios/{d1['id']}").status_code == 422
     real = {"campo": "realizado", "valores": [{"data": "2026-11-07", "valor": 1}]}
     assert client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json=real).status_code == 422
     assert client.put(f"/api/programacoes/{pid}/salvar", json={"linhas": [{"id": lid, "realizado": real["valores"]}]}).status_code == 422

@@ -121,6 +121,14 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
             "alertas": alertas}
 
 
+def pessoas_da_equipe(eq: EquipeModel | None, funcao_de: dict[str, str]) -> float | None:
+    """Pessoas de mão de obra da equipe (composição efetiva); sem função informada, o nº de membros."""
+    if eq is None:
+        return None
+    mod = sum(q for _r, t, q in composicao_efetiva(eq, funcao_de) if t == "MOD")
+    return float(mod or len(eq.membros) or 0) or None
+
+
 def limite_do_periodo(reg: dict) -> tuple[float | None, str]:
     """Até quanto o botão "Pela capacidade" preenche: a qtd do período; sem ela, o que resta do projeto antes do
     período (qtd de projeto − feito antes); sem nenhum dos dois, sem limite."""
@@ -237,6 +245,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "qtd_periodo": ln.qtd_periodo, "natureza": ln.natureza or "P", "modo_previsto": ln.modo_previsto or "manual",
             "responsavel": ln.responsavel or (eq.responsavel if eq else None),
             "turno": eq.turno if eq else None, "jornada": eq.jornada_horas if eq else None,
+            "pessoas": pessoas_da_equipe(eq, funcao_de),
             "equipe_codigo": eq.codigo_simova if eq else None,
             "status_crono": status_pt(at.status) if at else None,
             "realizado_anterior": anterior.get(_chave_linha(ln)),
@@ -370,6 +379,9 @@ def emitir(s: Session, p: ProgramacaoModel, usuario: str) -> EmissaoModel:
     foto["status"], foto["revisao"] = "emitida", p.revisao
     e = EmissaoModel(programacao_id=p.id, revisao=p.revisao, emitida_por=usuario, foto=foto)
     s.add(e)
+    from app.modules.indicadores.application.registrar import na_emissao
+
+    na_emissao(s, p.obra_id, p.id, p.revisao, foto)
     p.revisao += 1
     s.flush()
     return e
@@ -389,9 +401,14 @@ def concluir(s: Session, p: ProgramacaoModel, usuario: str) -> ConclusaoModel:
                           else "programação já concluída")
     n = len(p.conclusoes) + 1
     foto = visao(s, p)
+    from app.modules.indicadores.application.desvios import exigir_causas
+    from app.modules.indicadores.application.registrar import na_conclusao
+
+    exigir_causas(s, p.obra_id, p.id, foto)
     foto["status"] = "concluida"
     c = ConclusaoModel(programacao_id=p.id, numero=n, concluida_por=usuario, foto=foto)
     p.conclusoes.append(c)
+    na_conclusao(s, p.obra_id, p.id, max(0, p.revisao - 1), n, foto)
     p.status = "concluida"
     s.flush()
     return c

@@ -61,6 +61,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),
   `programacao/domain/previsto.py` (capacidade × horas do dia ÷ 9 h até a qtd do período), `PUT /programacoes/{pid}/
   modo-previsto`; a capacidade do dia e a sugestão saem sempre em `calc` (base dos KPIs). Spec 026.
+- Indicadores (`indicadores/`): histórico `programacao_fato` (linha × dia) gravado ao emitir e regravado ao concluir
+  (`application/registrar.py`, a partir da foto); desvios no layout do Pareto semanal (`desvio`, `causa_desvio`,
+  importar/exportar a aba Detalhamento); concluir exige causa para cada item não cumprido (`exigir_causas`); KPIs em
+  `indicadores/domain/kpi.py` (PPC, aderência, carga e erro × capacidade, por modo/encarregado) com memória. Spec 027.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 
