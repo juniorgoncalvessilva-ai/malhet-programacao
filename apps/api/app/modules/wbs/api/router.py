@@ -1,5 +1,8 @@
 """WBS de execução: Área (CWA) → CWP (elemento + complemento) → Grupo (catálogo) → IWP (item da PQ)."""
-from fastapi import APIRouter, Depends
+import json
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, File, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -75,7 +78,7 @@ def arvore(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
              "caminho": cods[n.id].caminho, "ativo": n.ativo, "observacao": n.observacao,
              "linhas": uso.get(n.id, 0), "area_id": n.area_id, "elemento": n.elemento, "complemento": n.complemento,
              "grupo_id": n.grupo_id, "tipo_id": n.tipo_atividade_id, "item_pq": n.item_pq,
-             "origem": n.origem, "fora_cronograma": n.fora_cronograma, "id_crono": n.id_crono,
+             "origem": n.origem, "fora_cronograma": n.fora_cronograma, "id_crono": n.id_crono, "codigo_p6": n.codigo_p6,
              "atividade_p6": atividades_p6.get(n.id_crono) if n.id_crono else None}
         if n.tipo == "area":
             a = areas.get(n.area_id)
@@ -111,6 +114,31 @@ def sincronizar_cronograma(s: Session = Depends(get_session), c: ContextoObra = 
     from app.modules.wbs.application.sincronizar_cronograma import sincronizar
 
     return sincronizar(s, c.obra_id)
+
+
+@router.post("/areas-das-frentes")
+def areas_das_frentes(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Traz para a WBS as áreas ativas das Frentes que ainda não estão nela."""
+    from app.modules.wbs.application.p6 import garantir_areas
+
+    return {"areas_novas": garantir_areas(s, c.obra_id)}
+
+
+@router.post("/exportar-p6")
+async def exportar_p6(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Recebe o .xer atual do cronograma e devolve o mesmo .xer com a WBS de execução acrescentada (para importar
+    no Primavera). Áreas e CWPs ganham o código WBS; IWPs viram atividades com Activity ID EXE-00000."""
+    from app.modules.wbs.application.p6 import exportar_xer
+
+    conteudo = await arquivo.read()
+    if len(conteudo) > 80 * 1024 * 1024:
+        raise DomainError("o .xer passa de 80 MB", "arquivo")
+    saida, resumo = exportar_xer(s, c.obra_id, conteudo)
+    base = (arquivo.filename or "cronograma.xer").rsplit(".", 1)[0]
+    nome = f"{base} + WBS de execucao.xer"
+    return Response(saida, media_type="application/octet-stream", headers={
+        "Content-Disposition": f"attachment; filename=\"{nome}\"; filename*=UTF-8''{quote(nome)}",
+        "X-Resumo": quote(json.dumps(resumo, ensure_ascii=False)), "Access-Control-Expose-Headers": "X-Resumo"})
 
 
 @router.post("/nos", status_code=201)

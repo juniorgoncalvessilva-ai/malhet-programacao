@@ -4,7 +4,8 @@
   cuja descrição é a de um item da PQ; âncora = código da atividade).
 - Roda a cada importação do cronograma: o que já existe é atualizado (casa pela âncora), o que é novo entra, e o que
   sumiu do P6 fica marcado "fora do cronograma" — nunca apagado (programações continuam apontando para ele).
-- Nós criados à mão não são tocados.
+- Nós criados à mão não são tocados; os que já foram para o P6 (exportar_p6) voltam casados pelo código WBS
+  (área e CWP: `codigo_p6`; IWP: Activity ID em `id_crono`), sem duplicar.
 """
 from collections import defaultdict
 
@@ -69,7 +70,8 @@ def sincronizar(s: Session, obra_id: int) -> dict:
         return n
 
     for at in atividades:
-        cam = ler_caminho([x.get("nome", "") for x in (at.wbs_niveis or [])])
+        niveis = at.wbs_niveis or []
+        cam = ler_caminho([x.get("nome", "") for x in niveis], [x.get("codigo") or "" for x in niveis])
         if cam is None:
             r["fora_do_ramo_de_construcao"] += 1
             continue
@@ -82,17 +84,23 @@ def sincronizar(s: Session, obra_id: int) -> dict:
             an = novo(tipo="area", area_id=aid, pai_id=None)
             area_no[aid] = an
             r["areas_novas"] += 1
+        if cam.codigo_area:
+            an.codigo_p6 = cam.codigo_area
         vistos.add(an.id)
-        # CWP: pela âncora do caminho; um CWP manual com o mesmo texto é adotado
-        cwp = next((x for x in filhos[an.id] if x.tipo == "cwp" and x.chave_p6 == cam.chave), None) or next(
+        # CWP: pelo código WBS (inclusive os que a WBS de execução mandou ao P6), depois pela âncora do caminho;
+        # um CWP manual com o mesmo texto é adotado
+        cwp = next((x for x in filhos[an.id] if x.tipo == "cwp" and cam.codigo_cwp and x.codigo_p6 == cam.codigo_cwp), None) or next(
+            (x for x in filhos[an.id] if x.tipo == "cwp" and x.chave_p6 == cam.chave), None) or next(
             (x for x in filhos[an.id] if x.tipo == "cwp" and not x.chave_p6
              and normalizar_descricao(x.elemento) == normalizar_descricao(cam.elemento)
              and normalizar_descricao(x.complemento) == normalizar_descricao(cam.complemento)), None)
         if cwp is None:
-            cwp = novo(tipo="cwp", pai_id=an.id, elemento=cam.elemento, complemento=cam.complemento, chave_p6=cam.chave)
+            cwp = novo(tipo="cwp", pai_id=an.id, elemento=cam.elemento, complemento=cam.complemento, chave_p6=cam.chave,
+                       codigo_p6=cam.codigo_cwp)
             r["cwps_novos"] += 1
         else:
             cwp.chave_p6 = cam.chave
+            cwp.codigo_p6 = cam.codigo_cwp or cwp.codigo_p6
             if cwp.origem == "p6":
                 cwp.elemento, cwp.complemento = cam.elemento, cam.complemento
         vistos.add(cwp.id)

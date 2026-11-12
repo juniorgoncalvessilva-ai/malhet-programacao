@@ -210,6 +210,11 @@ export interface NoWbs {
   unid?: string | null; quantidade?: number | null; qtd_takeoff?: number | null; quantidade_efetiva?: number | null;
   origem_qtd?: 'digitada' | 'take-off' | null; na_pq_vigente?: boolean; filhos: NoWbs[];
   origem?: 'manual' | 'p6'; fora_cronograma?: boolean; id_crono?: string | null; atividade_p6?: string | null;
+  codigo_p6?: string | null;
+}
+/** Resumo do .xer devolvido com a WBS de execução acrescentada. Spec 040. */
+export interface ExportacaoP6 {
+  projeto: string; areas_no_p6: number; areas_novas: string[]; cwps_novos: string[]; atividades_novas: string[]; iwps_sem_descricao: number;
 }
 export interface SincronizacaoWbs {
   atividades: number; fora_do_ramo_de_construcao: number; sem_area: string[]; sem_item_pq: number; sem_grupo: string[];

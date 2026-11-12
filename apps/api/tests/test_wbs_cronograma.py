@@ -37,12 +37,14 @@ def test_wbs_do_cronograma(client):
         ("C-200", desc, _niveis("O.S. 1", "PWP - SUPRIMENTOS", "CWA 004.05 - Galpão")),  # suprimentos: fora
     ])
     r = client.post("/api/wbs/sincronizar-cronograma").json()
-    assert (r["areas_novas"], r["cwps_novos"], r["grupos_novos"], r["iwps_novos"]) == (1, 1, 1, 1)
+    # a área já está na WBS desde a importação das Frentes (spec 040): o P6 só a carimba com o código WBS
+    assert (r["areas_novas"], r["cwps_novos"], r["grupos_novos"], r["iwps_novos"]) == (0, 1, 1, 1)
     assert (r["sem_item_pq"], r["fora_do_ramo_de_construcao"]) == (1, 1)
     area = client.get("/api/wbs").json()["arvore"][0]
     cwp = area["filhos"][0]
     iwp = cwp["filhos"][0]["filhos"][0]
     assert (cwp["titulo"], cwp["origem"], iwp["id_crono"], iwp["item_pq"]) == ("Sapatas - Fustes", "p6", "C-100", "1.8.3.1.2")
+    assert (area["codigo_p6"], cwp["codigo_p6"]) == ("1.2.3.4", "1.2.3.4.5.6")
     # nó manual ao lado não é tocado
     man = client.post("/api/wbs/nos", json={"tipo": "cwp", "pai_id": area["id"], "elemento": "Radier"}).json()
     # linha da programação a partir do IWP do P6 já fica ligada à atividade do cronograma

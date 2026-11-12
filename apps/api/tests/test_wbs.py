@@ -13,8 +13,9 @@ def test_wbs_e_linha_da_programacao(client):
     g2 = client.post("/api/catalogo/grupos", json={"descricao": "Forma"}).json()
 
     no = lambda **k: client.post("/api/wbs/nos", json=k)  # noqa: E731
-    a = no(tipo="area", area_id=area["id"]).json()
-    assert a["codigo"] == "004.05"
+    # a área importada nas Frentes já entra na WBS de execução (spec 040); criar de novo = repetida
+    a = client.get("/api/wbs").json()["arvore"][0]
+    assert a["codigo"] == "004.05" and a["area_id"] == area["id"]
     assert no(tipo="area", area_id=area["id"]).status_code == 422  # área repetida
     assert no(tipo="cwp", elemento="Radier").status_code == 422  # CWP precisa de área
     cwp = no(tipo="cwp", pai_id=a["id"], elemento="Radier", complemento="Eixo A–B").json()
@@ -66,7 +67,7 @@ def test_enviar_da_wbs_para_a_programacao(client):
     client.post(f"/api/catalogo/grupos/{g['id']}/itens-pq", json={"itens": ["1.8.3.1.2", "1.8.3.1.3"]})
     tipos = client.get("/api/catalogo").json()[0]["tipos"]
     no = lambda **k: client.post("/api/wbs/nos", json=k).json()  # noqa: E731
-    a = no(tipo="area", area_id=area["id"])
+    a = client.get("/api/wbs").json()["arvore"][0]  # veio das Frentes
     cwp = no(tipo="cwp", pai_id=a["id"], elemento="Radier", complemento="Sapata 2A")
     vazio = no(tipo="cwp", pai_id=a["id"], elemento="Pilares")
     gr = no(tipo="grupo", pai_id=cwp["id"], grupo_id=g["id"])

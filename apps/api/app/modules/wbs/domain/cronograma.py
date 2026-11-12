@@ -34,10 +34,20 @@ class CaminhoP6:
     elemento: str
     complemento: str | None
     chave: str  # chave do CWP: cwa + níveis abaixo dele
+    codigo_area: str | None = None  # código WBS do nível do CWA (5.4.3.4)
+    codigo_cwp: str | None = None  # código WBS do último nível do CWP (5.4.3.4.1); CWP Geral = o da área
 
 
-def ler_caminho(nomes: list[str]) -> CaminhoP6 | None:
-    """None quando o ramo não é de construção (sem nível "CWP…") ou não tem CWA com área (004.05)."""
+def codigo_wbs(codigos: list[str] | None, ate: int) -> str | None:
+    """Código WBS do P6 até o nível `ate` (inclusive): códigos curtos unidos por ponto, sem o projeto."""
+    if not codigos or ate < 0 or ate >= len(codigos) or not all(c for c in codigos[:ate + 1]):
+        return None
+    return ".".join(c.strip() for c in codigos[:ate + 1])
+
+
+def ler_caminho(nomes: list[str], codigos: list[str] | None = None) -> CaminhoP6 | None:
+    """None quando o ramo não é de construção (sem nível "CWP…") ou não tem CWA com área (004.05).
+    `codigos` = wbs_short_name de cada nível (mesma ordem): dão o código WBS da área e do CWP."""
     if not any(n.strip().upper().startswith("CWP") for n in nomes):
         return None
     idx = None
@@ -50,7 +60,8 @@ def ler_caminho(nomes: list[str]) -> CaminhoP6 | None:
     resto = [" ".join(n.split()) for n in nomes[idx + 1:] if n and n.strip()]
     elemento = (resto[0] if resto else GERAL)[:80]
     complemento = (" / ".join(resto[1:])[:120] or None) if len(resto) > 1 else None
-    return CaminhoP6(cwa, nomes[idx], elemento, complemento, chave([cwa, *resto]))
+    return CaminhoP6(cwa, nomes[idx], elemento, complemento, chave([cwa, *resto]),
+                     codigo_wbs(codigos, idx), codigo_wbs(codigos, len(nomes) - 1))
 
 
 def escolher_area(cwa: str, nome_cwa: str, areas: list[tuple[int, str, str | None]]) -> int | None:

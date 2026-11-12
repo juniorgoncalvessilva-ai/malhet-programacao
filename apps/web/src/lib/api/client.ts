@@ -67,6 +67,26 @@ export async function apiBlob(path: string, getToken: TokenGetter, obraId?: numb
   return res.blob();
 }
 
+/** POST de arquivo que devolve outro arquivo (ex.: .xer do P6 com a WBS acrescentada): baixa e devolve os cabeçalhos. */
+export async function apiPostDownload(path: string, getToken: TokenGetter, corpo: FormData, nomePadrao: string, obraId?: number): Promise<Headers> {
+  const token = await getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (obraId) headers['X-Obra-Id'] = String(obraId);
+  const res = await fetch(`${API_URL}${path}`, { method: 'POST', body: corpo, headers, credentials: 'include' });
+  if (!res.ok) return erro(res);
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') ?? '';
+  const nome = /filename\*=UTF-8''([^;]+)/.exec(cd)?.[1];
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome ? decodeURIComponent(nome) : (/filename="([^"]+)"/.exec(cd)?.[1] ?? nomePadrao);
+  a.click();
+  URL.revokeObjectURL(url);
+  return res.headers;
+}
+
 export const qs = (p: Record<string, string | number | boolean | undefined | null>) =>
   '?' +
   Object.entries(p)

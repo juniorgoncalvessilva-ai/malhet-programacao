@@ -17,6 +17,8 @@ from app.modules.frentes.domain.frentes import (
 from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
 from app.shared.errors import DomainError, NotFoundError
 
+from app.modules.wbs.application.p6 import area_tem_wbs, garantir_areas, tirar_area  # noqa: E402
+
 router = APIRouter(prefix="/frentes", tags=["frentes (local → área)"])
 
 
@@ -162,6 +164,7 @@ def criar_area(d: AreaIn, s: Session = Depends(get_session), c: ContextoObra = D
                         tag=normalizar_tag(_ativo(d.ativo_codigo)) or normalizar_tag(d.descricao), ordem=ordem, ativo=d.ativo)
     s.add(a)
     s.flush()
+    garantir_areas(s, c.obra_id)  # a área nova já aparece na WBS de execução
     return a
 
 
@@ -181,6 +184,7 @@ def editar_area(area_id: int, d: AreaIn, s: Session = Depends(get_session), c: C
     if d.ordem is not None:
         a.ordem = d.ordem
     s.flush()
+    garantir_areas(s, c.obra_id)  # reativada: volta para a WBS
     return a
 
 
@@ -193,6 +197,7 @@ def excluir_area(area_id: int, s: Session = Depends(get_session), c: ContextoObr
         raise NotFoundError("Área", area_id)
     if s.scalar(select(func.count()).select_from(LinhaProgramacaoModel).where(LinhaProgramacaoModel.area_id == area_id)):
         raise DomainError("área usada em programação: desative em vez de excluir")
+    tirar_area(s, c.obra_id, area_id)
     s.delete(a)
 
 
@@ -208,7 +213,8 @@ def excluir_todas(s: Session = Depends(get_session), c: ContextoObra = Depends(a
     areas = list(s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == c.obra_id)))
     n_areas = 0
     for a in areas:
-        if a.id not in usadas:
+        if a.id not in usadas and not area_tem_wbs(s, c.obra_id, a.id):
+            tirar_area(s, c.obra_id, a.id)
             s.delete(a)
             n_areas += 1
     s.flush()
@@ -289,4 +295,5 @@ def importar(d: ImportarIn, s: Session = Depends(get_session), c: ContextoObra =
         s.add(AreaFrenteModel(obra_id=c.obra_id, local_id=loc.id, cwa=al.cwa, codigo=al.codigo, descricao=al.descricao,
                               ativo_codigo=al.ativo, tag=al.tag, ordem=j, ativo=True))
     s.flush()
+    garantir_areas(s, c.obra_id)  # áreas novas da lista já entram na WBS de execução
     return arvore(s, c.obra_id)

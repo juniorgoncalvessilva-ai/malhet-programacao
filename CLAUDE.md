@@ -77,6 +77,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Marca da obra (`marca_obra`, `app/shared/marca.py`): logos do contratante/contratada (ou Malhet) em todo documento
   (`inserir_logos`, `cor_excel`) e cor do cliente (`/obra/marca`, `MinhaObra.cor` → tokens `--m-accent*`). Documento
   novo usa `marca_da_obra` e `<LogosObra>`; não fixe a cor do Malhet. Spec 039.
+- WBS × Frentes × Primavera: área das Frentes entra sozinha na WBS (`wbs/application/p6.py::garantir_areas`);
+  `wbs_no.codigo_p6` = código WBS do P6 (5.4.3.4) é a chave da ida e volta; `POST /wbs/exportar-p6` devolve o .xer
+  com a WBS acrescentada (`wbs/domain/xer.py`, bytes do P6 intactos, IWP → atividade EXE-00000); a sincronização casa
+  CWP pelo código e IWP pelo Activity ID. Spec 040.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

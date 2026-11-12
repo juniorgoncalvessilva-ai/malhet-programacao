@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileUp, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Calculado, nbr, type MemoriaCalculo } from '@/components/Obra/Calculado';
@@ -11,7 +11,7 @@ import { useCatalogo, useFrentes2, useProgramacoes, useWbs } from '@/hooks/progr
 import { useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
-import type { NoWbs, SincronizacaoWbs, TipoNoWbs } from '@/lib/api/types';
+import type { NoWbs, SincronizacaoWbs, TipoNoWbs, ExportacaoP6 } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 
 const FILHO: Record<TipoNoWbs, TipoNoWbs | null> = { area: 'cwp', cwp: 'grupo', grupo: 'iwp', iwp: null };
@@ -52,6 +52,8 @@ export default function WbsPage() {
   const [busca, setBusca] = useState('');
   const [sinc, setSinc] = useState<SincronizacaoWbs | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [expP6, setExpP6] = useState<ExportacaoP6 | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [erro, setErro] = useState<unknown>(null);
   const arvore = useMemo(() => wbs.data?.arvore ?? [], [wbs.data]);
@@ -121,6 +123,18 @@ export default function WbsPage() {
     try { await api.del(`/wbs/nos/${n.id}`); toast.success('Excluído'); atualizar(); } catch (e) { toast.error((e as Error).message); }
   };
   const alternar = (id: number) => setAbertos((f) => { const n = new Set(f); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const enviarAoP6 = async (arq?: File) => {
+    if (!arq) return;
+    setExportando(true);
+    const fd = new FormData();
+    fd.append('arquivo', arq);
+    try {
+      const h = await api.postDownload('/wbs/exportar-p6', fd, 'cronograma + WBS.xer');
+      setExpP6(JSON.parse(decodeURIComponent(h.get('X-Resumo') ?? '{}')) as ExportacaoP6);
+      atualizar();
+      toast.success('.xer gerado: importe no Primavera');
+    } catch (e) { toast.error((e as Error).message); } finally { setExportando(false); }
+  };
   const sincronizar = async () => {
     setSincronizando(true);
     try { const r = await api.post<SincronizacaoWbs>('/wbs/sincronizar-cronograma'); setSinc(r); atualizar(); toast.success('WBS atualizada pelo cronograma'); }
@@ -198,6 +212,7 @@ export default function WbsPage() {
           </td>
           <td className={td}><span className="text-[10.5px] uppercase tracking-[0.3px] opacity-80">{ROTULO[n.tipo]}</span></td>
           <td className={`${td} min-w-[360px]`}>{n.titulo}{n.detalhe && <span className={`ml-2 text-[11px] font-normal ${n.tipo === 'area' ? 'opacity-80' : 'text-m-text-muted'}`}>{n.detalhe}</span>}
+            {n.codigo_p6 && <span className="ml-2 text-[10.5px] font-normal text-m-text-muted" title="Código WBS no Primavera">WBS {n.codigo_p6}</span>}
             {n.origem === 'p6' && <span className="ml-2 rounded-[5px] bg-m-info-subtle px-1.5 py-px text-[10px] font-semibold text-m-info" title="Veio da WBS do cronograma (P6)">P6</span>}
             {n.fora_cronograma && <span className="ml-1"><Pilula tom="atencao">fora do cronograma</Pilula></span>}
             {n.id_crono && <div className="text-[11px] font-normal text-m-text-muted">atividade {n.id_crono}{n.atividade_p6 ? ` · ${n.atividade_p6}` : ''}</div>}
@@ -229,6 +244,11 @@ export default function WbsPage() {
         titulo={arvore.length ? `${arvore.length} área(s) · ${conta.cwp} CWP · ${conta.iwp} IWP` : 'WBS de execução vazia'}
         acoes={editar && <div className="flex flex-wrap gap-2">
           <Botao variante="secundario" disabled={sincronizando} onClick={sincronizar} title="Traz áreas, CWPs e IWPs do cronograma vigente; não apaga nada"><RefreshCw size={16} /> {sincronizando ? 'Atualizando…' : 'Atualizar pela WBS do cronograma'}</Botao>
+          <label title="Escolha o .xer atual do cronograma: volta o mesmo arquivo com as áreas, CWPs e IWPs criados aqui, para importar no Primavera"
+            className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-m-stroke px-4 text-[13.5px] font-semibold text-m-accent hover:bg-m-accent-subtle ${exportando ? 'pointer-events-none opacity-60' : ''}`}>
+            <FileUp size={16} /> {exportando ? 'Gerando .xer…' : 'Levar ao Primavera (.xer)'}
+            <input type="file" accept=".xer" className="sr-only" onChange={(e) => { enviarAoP6(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
           <Botao onClick={() => { setErro(null); setForm(vazio('area')); }}><Plus size={16} /> Área</Botao>
         </div>}
       />
@@ -241,6 +261,17 @@ export default function WbsPage() {
             {!!sinc.atividades_sem_grupo && <p className="text-m-warning">{sinc.atividades_sem_grupo} atividade(s) com item da PQ que ainda não está em grupo do Catálogo ({sinc.itens_sem_grupo} itens): vincule os itens aos grupos no <Link href="/app/catalogo" className="font-semibold underline">Catálogo</Link> e atualize de novo.</p>}
             {!!sinc.sem_item_pq && <p>{sinc.sem_item_pq} atividade(s) sem item da PQ com a mesma descrição: ficam só como CWP (crie o IWP à mão se precisar).</p>}
             {!!sinc.sem_area.length && <p className="text-m-warning">CWA do cronograma sem área nas Frentes: {sinc.sem_area.join(', ')}</p>}
+          </div>
+        </Painel>
+      )}
+      {expP6 && (
+        <Painel titulo={`WBS de execução acrescentada ao .xer · projeto ${expP6.projeto}`} acoes={<Botao variante="secundario" onClick={() => setExpP6(null)}>Fechar</Botao>}>
+          <div className="grid gap-2 text-[13px] text-m-text-secondary md:grid-cols-2">
+            <p>Novos no P6: <b className="text-m-text-primary">{expP6.areas_novas.length}</b> área(s), <b className="text-m-text-primary">{expP6.cwps_novos.length}</b> CWP, <b className="text-m-text-primary">{expP6.atividades_novas.length}</b> atividade(s) · {expP6.areas_no_p6} área(s) já estavam lá</p>
+            <p>Importe o arquivo no Primavera (Importar → XER → atualizar o projeto existente). Na próxima importação do cronograma, tudo volta casado pelo código WBS e pelo Activity ID, sem duplicar.</p>
+            {!!expP6.areas_novas.length && <p>Códigos WBS das áreas: {expP6.areas_novas.slice(0, 12).join(', ')}{expP6.areas_novas.length > 12 ? '…' : ''}</p>}
+            {!!expP6.atividades_novas.length && <p>Activity IDs: {expP6.atividades_novas.slice(0, 12).join(', ')}{expP6.atividades_novas.length > 12 ? '…' : ''}</p>}
+            {!!expP6.iwps_sem_descricao && <p className="text-m-warning">{expP6.iwps_sem_descricao} IWP(s) com item fora da PQ vigente ficaram de fora.</p>}
           </div>
         </Painel>
       )}

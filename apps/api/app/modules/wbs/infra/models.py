@@ -24,6 +24,7 @@ class WbsNoModel(Base):
     id_crono: Mapped[str | None] = mapped_column(String(40), index=True)  # IWP vindo do P6: código da atividade
     origem: Mapped[str] = mapped_column(String(6), default="manual", server_default="manual")  # manual | p6
     chave_p6: Mapped[str | None] = mapped_column(String(400))  # CWP vindo do P6: caminho da WBS abaixo do CWA
+    codigo_p6: Mapped[str | None] = mapped_column(String(200), index=True)  # área/CWP: código WBS no P6 (5.4.3.4), sem o projeto
     fora_cronograma: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # sumiu do P6 vigente
     observacao: Mapped[str | None] = mapped_column(String(300))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
