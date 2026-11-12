@@ -177,6 +177,14 @@ export default function EquipesPage() {
                   : null}
                 {!form.responsavel_id && <Campo rotulo="Responsável (fora do efetivo)" value={form.responsavel ?? ''} onChange={(e) => setForm({ ...form, responsavel: e.target.value || null })} />}
               </div>
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <BuscaEfetivo rotulo="Supervisor / líder intermediário (efetivo)" pessoas={efetivo.data ?? []}
+                  onEscolher={(x) => setForm({ ...form, supervisor_id: x.id })} />
+                {form.supervisor_id
+                  ? <p className="text-[12.5px] text-m-text-secondary">Atual: <b className="text-m-text-primary">{efetivo.data?.find((y) => y.id === form.supervisor_id)?.nome ?? `#${form.supervisor_id}`}</b> · une equipes abaixo do responsável no organograma
+                      <button type="button" className="ml-2 font-semibold text-m-danger underline" onClick={() => setForm({ ...form, supervisor_id: null })}>tirar</button></p>
+                  : <p className="text-[12px] text-m-text-muted">Opcional: une esta equipe com outras sob o mesmo supervisor.</p>}
+              </div>
               <Selecao rotulo="Setor da obra" value={form.setor_id ?? ''} onChange={(e) => {
                 const sid = e.target.value ? Number(e.target.value) : null;
                 const manter = setores.data?.setores.find((x) => x.id === sid)?.disciplinas.some((x) => x.id === form.subsetor_id);

@@ -63,6 +63,7 @@ class EquipeIn(BaseModel):
     codigo_simova: str | None = None
     responsavel: str | None = None
     responsavel_id: int | None = None  # engenheiro/supervisor do efetivo (preenche o responsável)
+    supervisor_id: int | None = None  # líder intermediário (une equipes abaixo do responsável)
     equipamentos: str | None = None
     observacao: str | None = None
     ativo: bool = True
@@ -78,6 +79,7 @@ class EquipeOut(EquipeIn):
     membros: list[MembroOut] = []
     encarregado_efetivo: PessoaEfetivoIO | None = None
     responsavel_efetivo: dict | None = None  # {id, nome, matricula, funcao, situacao} de quem lidera a equipe
+    supervisor_efetivo: dict | None = None
     fora_do_efetivo: int = 0  # pessoas da equipe que não foram achadas no efetivo
 
 
@@ -111,6 +113,18 @@ def _responsavel(s: Session, obra_id: int, e: EquipeModel) -> None:
     e.lider, e.responsavel = p, p.nome[:150]
 
 
+def _supervisor(s: Session, obra_id: int, e: EquipeModel) -> None:
+    from app.modules.efetivo.infra.models import ColaboradorModel
+
+    if e.supervisor_id is None:
+        e.supervisor = None
+        return
+    p = s.get(ColaboradorModel, e.supervisor_id)
+    if p is None or p.obra_id != obra_id:
+        raise DomainError("escolha o supervisor no efetivo desta obra", "supervisor_id")
+    e.supervisor = p
+
+
 def _membros(d: "EquipeIn") -> list[tuple[str, str, str | None]]:
     """Crachá vazio → número antes do nome ("115532 - José"); sem número, o próprio nome segura a vaga."""
     out = []
@@ -130,6 +144,9 @@ def _out(e: EquipeModel, funcao_de: dict[str, str] | None = None,
     o.membros = [MembroOut(cracha=m.cracha, nome=m.nome, funcao=m.funcao, efetivo=_pessoa_io(pessoas.get(m.cracha), funcao_de))
                  for m in sorted(e.membros, key=lambda m: m.nome)]
     o.encarregado_efetivo = _pessoa_io(pessoas.get(e.encarregado_cracha or ""), funcao_de)
+    if e.supervisor_id and e.supervisor is not None:
+        o.supervisor_efetivo = {"id": e.supervisor.id, "nome": e.supervisor.nome, "matricula": e.supervisor.matricula,
+                                "funcao": e.supervisor.funcao, "situacao": e.supervisor.situacao}
     if e.responsavel_id and e.lider is not None:
         o.responsavel_efetivo = {"id": e.lider.id, "nome": e.lider.nome, "matricula": e.lider.matricula,
                                  "funcao": e.lider.funcao, "situacao": e.lider.situacao}
@@ -156,6 +173,7 @@ def criar(d: EquipeIn, s: Session = Depends(get_session), c: ContextoObra = Depe
     sincronizar_membros(e, _membros(d))
     _setor_e_disciplina(s, c.obra_id, e)
     _responsavel(s, c.obra_id, e)
+    _supervisor(s, c.obra_id, e)
     s.add(e)
     vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()
@@ -174,6 +192,7 @@ def atualizar(equipe_id: int, d: EquipeIn, s: Session = Depends(get_session),
     sincronizar_membros(e, _membros(d))
     _setor_e_disciplina(s, c.obra_id, e)
     _responsavel(s, c.obra_id, e)
+    _supervisor(s, c.obra_id, e)
     s.flush()
     vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()
@@ -291,30 +310,96 @@ def _tirar(e: EquipeModel, cracha: str) -> None:
     e.membros.remove(m)
 
 
+def _incluir(s: Session, obra_id: int, e: EquipeModel, cod: str, nome_digitado: str | None, de_equipe_id: int | None) -> str:
+    """Inclui (ou move, com `de_equipe_id`) a pessoa na equipe; devolve o nome. Nome vem do efetivo."""
+    from app.modules.efetivo.infra.models import ColaboradorModel
+
+    cod = (cod or "").strip()
+    if not cod:
+        raise DomainError("informe o crachá ou a matrícula", "cracha")
+    pessoa = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == obra_id, ColaboradorModel.cracha == cod)) or \
+        s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == obra_id, ColaboradorModel.matricula == cod))
+    cracha = (pessoa.cracha or pessoa.matricula or cod) if pessoa else cod
+    nome = pessoa.nome if pessoa else (nome_digitado or "").strip()
+    if not nome:
+        raise DomainError("pessoa fora do efetivo: informe o nome", "nome")
+    if any(m.cracha == cracha for m in e.membros) or e.encarregado_cracha == cracha:
+        raise DomainError(f"{nome} já está na equipe {e.nome}")
+    if de_equipe_id is not None and de_equipe_id != e.id:
+        _tirar(_equipe(s, obra_id, de_equipe_id), cracha)
+    e.membros.append(EquipeMembroModel(cracha=cracha[:20], nome=nome[:150], funcao=None))
+    return nome
+
+
 @router.post("/{equipe_id}/membros", response_model=EquipeOut)
 def incluir_membro(equipe_id: int, d: MembroAcaoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Inclui a pessoa na equipe (com `de_equipe_id`, move: sai da outra). Nome e função vêm do efetivo."""
-    from app.modules.efetivo.infra.models import ColaboradorModel
-
     e = _equipe(s, c.obra_id, equipe_id)
-    cod = (d.cracha or "").strip()
-    if not cod:
-        raise DomainError("informe o crachá ou a matrícula", "cracha")
-    pessoa = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.cracha == cod)) or \
-        s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.matricula == cod))
-    cracha = (pessoa.cracha or pessoa.matricula or cod) if pessoa else cod
-    nome = pessoa.nome if pessoa else (d.nome or "").strip()
-    if not nome:
-        raise DomainError("pessoa fora do efetivo: informe o nome", "nome")
-    if d.de_equipe_id is not None and d.de_equipe_id != equipe_id:
-        _tirar(_equipe(s, c.obra_id, d.de_equipe_id), cracha)
-    if any(m.cracha == cracha for m in e.membros) or e.encarregado_cracha == cracha:
-        raise DomainError(f"{nome} já está na equipe {e.nome}")
-    e.membros.append(EquipeMembroModel(cracha=cracha[:20], nome=nome[:150], funcao=None))
+    _incluir(s, c.obra_id, e, d.cracha, d.nome, d.de_equipe_id)
     s.flush()
     vincular_equipe(e, LocalizadorEfetivo(s, c.obra_id))
     s.flush()
     return _out(e, funcoes_por_cracha(s, c.obra_id), pessoas_por_cracha(s, c.obra_id))
+
+
+class ItemLoteIn(BaseModel):
+    cracha: str
+    de_equipe_id: int | None = None
+
+
+class LoteIn(BaseModel):
+    itens: list[ItemLoteIn]
+    para_equipe_id: int | None = None  # vazio = tirar das equipes de origem
+
+
+@router.post("/membros/lote")
+def mover_lote(d: LoteIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Arrastar e soltar no organograma (spec 052): várias pessoas de uma vez para uma equipe (incluir/mover) ou para
+    fora (tirar). Quem não dá (encarregado, já na equipe) volta em `erros`; o resto é feito."""
+    para = _equipe(s, c.obra_id, d.para_equipe_id) if d.para_equipe_id is not None else None
+    feitos, erros = 0, []
+    for it in d.itens:
+        try:
+            with s.begin_nested():
+                if para is None:
+                    if it.de_equipe_id is None:
+                        continue
+                    _tirar(_equipe(s, c.obra_id, it.de_equipe_id), it.cracha)
+                else:
+                    if it.de_equipe_id == para.id:
+                        continue
+                    _incluir(s, c.obra_id, para, it.cracha, None, it.de_equipe_id)
+                s.flush()
+            feitos += 1
+        except DomainError as er:
+            erros.append(er.mensagem)
+    if para is not None:
+        vincular_equipe(para, LocalizadorEfetivo(s, c.obra_id))
+    s.flush()
+    return {"feitos": feitos, "erros": erros[:30]}
+
+
+class LiderancaIn(BaseModel):
+    equipes: list[int]
+    papel: str  # responsavel | supervisor
+    colaborador_id: int | None = None  # vazio = tira
+
+
+@router.put("/lideranca/definir")
+def definir_lideranca(d: LiderancaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Responsável ou supervisor (líder intermediário) de várias equipes de uma vez, escolhido no efetivo."""
+    if d.papel not in ("responsavel", "supervisor"):
+        raise DomainError("papel: responsavel ou supervisor", "papel")
+    for eid in d.equipes:
+        e = _equipe(s, c.obra_id, eid)
+        if d.papel == "responsavel":
+            e.responsavel_id = d.colaborador_id
+            _responsavel(s, c.obra_id, e)
+        else:
+            e.supervisor_id = d.colaborador_id
+            _supervisor(s, c.obra_id, e)
+    s.flush()
+    return {"equipes": len(d.equipes)}
 
 
 @router.delete("/{equipe_id}/membros/{cracha}", status_code=204)

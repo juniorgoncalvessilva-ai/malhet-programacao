@@ -430,6 +430,7 @@ def organograma(q: str | None = None, vista: str = "setor", s: Session = Depends
     equipes_ativas = list(s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.ativo.is_(True))))
     # responsáveis (engenheiros) das equipes: caixa própria abaixo do dono do setor, fora das listas de funções
     responsaveis |= {e.responsavel_id for e in equipes_ativas if e.responsavel_id}
+    responsaveis |= {e.supervisor_id for e in equipes_ativas if e.supervisor_id}
     pessoas: list[PessoaOrg] = []
     na_equipe: set[str] = set()
     por_frente = vista == "frente"
@@ -447,7 +448,9 @@ def organograma(q: str | None = None, vista: str = "setor", s: Session = Depends
         base = {"equipe": e.nome, "encarregado": enc.nome if enc else e.encarregado_nome, "setor": setor,
                 "disciplina": disciplina, "turno": e.turno or "", "equipe_id": e.id,
                 "lider": e.lider.nome if e.lider else None,
-                "lider_funcao": e.lider.funcao if e.lider else None}
+                "lider_funcao": e.lider.funcao if e.lider else None,
+                "supervisor": e.supervisor.nome if e.supervisor else None,
+                "supervisor_funcao": e.supervisor.funcao if e.supervisor else None}
         if por_frente:
             base["frente"], base["area"] = frente_de.get(e.id, (None, None))
         for mb in e.membros:

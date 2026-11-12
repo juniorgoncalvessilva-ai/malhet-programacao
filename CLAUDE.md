@@ -54,7 +54,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Spec 016.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
-  organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049.
+  organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e
+  soltar/lote (`POST /equipes/membros/lote`), migrar/tirar função, supervisor (líder intermediário, `equipe.supervisor_id`,
+  `PUT /equipes/lideranca/definir`) e visibilidade (`src/lib/efetivo/visibilidade.ts`). Spec 052.
 - Setores da obra (`setor_obra`, responsável do efetivo, cor) e `organograma_config` (responsável geral + cores por
   nível); `equipe.setor_id`. Spec 018. Vista por frente (`?vista=frente`): Obra → Setor (dono) → Frente (local) → Área →
   Equipe; frente da equipe = `equipe.frente_codigo` (área/local) ou a área da programação mais recente

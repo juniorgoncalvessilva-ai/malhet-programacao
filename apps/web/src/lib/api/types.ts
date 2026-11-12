@@ -49,6 +49,7 @@ export interface Equipe {
   id: number; nome: string; frente_codigo: string | null; setor_id?: number | null; subsetor_id?: number | null; encarregado_cracha: string | null;
   encarregado_nome: string | null; jornada_horas: number; observacao: string | null; ativo: boolean;
   turno: string | null; codigo_simova: string | null; responsavel: string | null; equipamentos: string | null;
+  supervisor_id?: number | null; supervisor_efetivo?: { id: number; nome: string; matricula: string | null; funcao: string | null; situacao: string } | null;
   responsavel_id?: number | null; responsavel_efetivo?: { id: number; nome: string; matricula: string | null; funcao: string | null; situacao: string } | null;
   composicao: ComposicaoEquipe[]; membros: MembroEquipe[]; composicao_efetiva: ComposicaoEquipe[]; hh_disponivel_dia: number;
   encarregado_efetivo?: PessoaEfetivoEquipe | null; fora_do_efetivo?: number;
@@ -191,11 +192,11 @@ export interface ResumoEfetivo {
 }
 export interface FuncaoDePara { funcao_chave: string; funcao: string; total: number; ativos: number; recurso: string | null; ignorar: boolean; definido: boolean; sugestao: string | null }
 export interface NoOrganograma {
-  id: string; tipo: 'obra' | 'setor' | 'responsavel' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao'; titulo: string; detalhe: string; qtd: number;
+  id: string; tipo: 'obra' | 'setor' | 'responsavel' | 'supervisor' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao'; titulo: string; detalhe: string; qtd: number;
   cor: string | null; responsavel: string | null; ref?: number | null;
   pessoas: { matricula: string; nome: string; funcao: string; situacao: string; turno: string; equipe_id?: number | null; papel?: 'membro' | 'encarregado' | null }[]; filhos: NoOrganograma[];
 }
-export type NivelCor = 'obra' | 'setor' | 'responsavel' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao';
+export type NivelCor = 'obra' | 'setor' | 'responsavel' | 'supervisor' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao';
 export type CoresOrganograma = Record<NivelCor, string>;
 export interface PessoaRef { id: number; nome: string; matricula: string | null; funcao: string | null; situacao: SituacaoEfetivo }
 export interface DisciplinaObra { id: number; setor_id: number; nome: string; cor: string | null; ordem: number; responsavel: PessoaRef | null; equipes: { id: number; nome: string }[] }
