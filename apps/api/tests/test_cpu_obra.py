@@ -195,6 +195,18 @@ def test_fluxo_cpu_calcula_hh_indice_capacidade_e_ft(client):
     assert {"ppc", "aderencia", "carga", "erro_programacao", "eficiencia_hh", "modo_carga:capacidade", "enc_ppc:0"} <= set(ind["memorias"])
     assert ind["memorias"]["aderencia"]["passos"][-1]["conta"] == "realizado 14,64 ÷ previsto 20"
     assert client.get("/api/indicadores", params={"encarregado": "Ninguém"}).json()["kpis"]["atividades"] == 0
+    # look-ahead: a equipe aparece num cartão de seg 09 a qua 11 na área da linha
+    la = client.get("/api/lookahead", params={"de": "2026-11-02", "ate": "2026-11-15"}).json()
+    assert len(la["dias"]) == 14 and la["equipes"][0]["nome"] == "EQ" and la["equipes"][0]["cor"].startswith("#")
+    b = la["blocos"][0]
+    assert (b["inicio"], b["fim"], b["area_id"], b["total_previsto"]) == ("2026-11-09", "2026-11-11", area["id"], 20)
+    assert b["codigo_simova"] == "1.1" and b["status"] == "concluida" and len(la["blocos"]) == 1
+    assert client.get("/api/lookahead", params={"de": "2026-11-02", "ate": "2026-01-01"}).status_code == 422
+    # restrição pendente da área com prazo até o fim do cartão marca o cartão
+    client.post("/api/restricoes", json={"acao": "Liberar acesso", "area_id": area["id"], "prazo_termino": "2026-11-10"})
+    client.post("/api/restricoes", json={"acao": "Depois do cartão", "area_id": area["id"], "prazo_termino": "2026-11-30"})
+    b = client.get("/api/lookahead", params={"de": "2026-11-02", "ate": "2026-11-15"}).json()["blocos"][0]
+    assert b["restricoes"]["pendentes"] == 1
 
 
 @pytest.mark.parametrize("arquivo", ["5b7583e5-Composi__o_de_Custo_Unit_rio_VERS_O_OBRA.xls"])

@@ -12,3 +12,4 @@ from app.modules.ssma.infra import models as _ssma  # noqa: F401
 from app.modules.efetivo.infra import models as _efetivo  # noqa: F401
 from app.modules.wbs.infra import models as _wbs  # noqa: F401
 from app.modules.indicadores.infra import models as _indicadores  # noqa: F401
+from app.modules.restricoes.infra import models as _restricoes  # noqa: F401

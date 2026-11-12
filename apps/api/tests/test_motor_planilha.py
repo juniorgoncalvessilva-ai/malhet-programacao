@@ -135,3 +135,35 @@ def test_previsto_pela_capacidade_usa_fator_do_dia_e_para_no_limite():
     assert previsto_pela_capacidade(10.0, f, limite=25) == [None, None, None, 10.0, 10.0, 5.0, None, None, None]
     assert previsto_pela_capacidade(None, f) == [None] * 9
     assert previsto_pela_capacidade(0.0, f, limite=10) == [None] * 9
+
+
+def test_lookahead_blocos_da_equipe_no_tempo():
+    from datetime import date as D
+
+    from app.modules.lookahead.domain.blocos import DiaEquipe, blocos, faixas
+
+    def dia(d, area=1, at=("forma",), prog=1, ini=D(2026, 11, 6), eq=7):
+        return DiaEquipe(eq, area, at, d, 5.0, None, prog, 10 + area, ini)
+
+    dias = [dia(D(2026, 11, 9)), dia(D(2026, 11, 10)), dia(D(2026, 11, 11)),  # seg–qua na área 1
+            dia(D(2026, 11, 11), area=2), dia(D(2026, 11, 12), area=2), dia(D(2026, 11, 13), area=2),  # qua–sex na área 2
+            dia(D(2026, 11, 16), area=2),  # segunda seguinte: o fim de semana não quebra o bloco
+            dia(D(2026, 11, 13), area=2, prog=2, ini=D(2026, 11, 13))]  # sexta repetida na semana seguinte: vale a mais nova
+    bs = blocos(dias)
+    assert [(b.area_id, b.inicio.day, b.fim.day, len(b.dias)) for b in bs] == [(1, 9, 11, 3), (2, 11, 16, 4)]
+    assert [d.programacao_id for d in bs[1].dias if d.data.day == 13] == [2]
+    assert faixas(bs) == {0: 0, 1: 1}  # quarta nas duas áreas: os cartões não se sobrepõem
+
+
+def test_farol_e_status_da_acao_como_na_planilha_6wla():
+    from datetime import date as D
+
+    from app.modules.restricoes.domain.acao import situacao
+
+    hoje = D(2026, 11, 12)
+    assert situacao("Concluído", D(2026, 11, 1), None, hoje).farol == 4
+    assert situacao("Cancelado", D(2026, 11, 1), None, hoje).status2 == "Cancelado"
+    assert situacao("Pendente", D(2026, 11, 20), None, hoje).status2 == "No Prazo"
+    assert situacao("Pendente", D(2026, 11, 12), None, hoje).status2 == "Atrasado"  # planilha: hoje ≥ término
+    assert situacao("Pendente", D(2026, 11, 5), D(2026, 11, 19), hoje).status2 == "Reprogramado"
+    assert situacao("Pendente", D(2026, 11, 5), D(2026, 11, 10), hoje).farol == 1

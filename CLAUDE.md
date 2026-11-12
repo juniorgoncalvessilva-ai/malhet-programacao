@@ -67,6 +67,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`application/registrar.py`, a partir da foto); desvios no layout do Pareto semanal (`desvio`, `causa_desvio`,
   importar/exportar a aba Detalhamento); concluir exige causa para cada item não cumprido (`exigir_causas`); KPIs em
   `indicadores/domain/kpi.py` (PPC, aderência, carga e erro × capacidade, por modo/encarregado) com memória. Spec 027.
+- Look-ahead das equipes (`lookahead/`): blocos equipe × atividade × área a partir dos dias programados
+  (`domain/blocos.py`), cor da disciplina/setor, `GET /lookahead`. Spec 029. Restrições 6WLA (`restricoes/`): aba Ações
+  do Plano de Ação (farol/status das fórmulas da planilha em `domain/acao.py`), Ishikawa 6M, importar/exportar Excel;
+  restrição pendente marca o cartão do look-ahead. Spec 030.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

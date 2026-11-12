@@ -27,6 +27,8 @@ from app.modules.efetivo.api.router import router as efetivo
 from app.modules.wbs.api.router import router as wbs
 from app.modules.indicadores.api.desvios import router as desvios
 from app.modules.indicadores.api.router import router as indicadores
+from app.modules.lookahead.api.router import router as lookahead
+from app.modules.restricoes.api.router import router as restricoes
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -84,5 +86,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes):
     app.include_router(r, prefix="/api")

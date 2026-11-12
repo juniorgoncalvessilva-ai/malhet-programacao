@@ -243,3 +243,34 @@ export interface PainelIndicadores {
   opcoes: { encarregados: string[]; equipes: { id: number; nome: string }[]; grupos: string[]; itens: string[]; areas: { id: number; nome: string }[] };
   memorias: Record<string, import('@/components/Obra/Calculado').MemoriaCalculo>;
 }
+
+/** Look-ahead das equipes (spec 029): blocos equipe × atividade × área no tempo. */
+export interface BlocoLookahead {
+  id: number; equipe_id: number | null; area_id: number; linha_id: number; programacao_id: number; programacao: string;
+  status: string; codigo_simova: string | null; descricao: string; grupo: string | null; item_pq: string | null; unidade: string | null;
+  inicio: string; fim: string; total_previsto: number; total_realizado: number | null;
+  dias: { data: string; previsto: number; realizado: number | null }[]; faixa_equipe: number; faixa_area: number;
+  restricoes?: { pendentes: number; vencidas: number; ids?: number[] };
+}
+export interface Lookahead {
+  de: string; ate: string; dias: { data: string; dia: string; semana: number }[];
+  equipes: { id: number | null; nome: string; encarregado: string | null; cor: string; origem_cor: string; turno: string | null; faixas: number }[];
+  areas: { id: number; codigo: string; descricao: string; local: string | null; faixas: number }[];
+  blocos: BlocoLookahead[]; programacoes: { id: number; titulo: string; status: string }[];
+}
+
+/** Restrição / ação do look-ahead — aba Ações do Plano de Ação 6WLA (spec 030). */
+export interface AcaoRestricao {
+  id: number; numero: number; atividade: string | null; impeditivo: boolean | null; acao: string; semana: number | null;
+  area_texto: string | null; area_id: number | null; referencia: string | null; reuniao: string; responsavel: string | null;
+  gerencia: string | null; prazo_inicio: string | null; prazo_termino: string | null; reprogramado: string | null;
+  reprogramacoes: number; conclusao: string | null; status1: 'Pendente' | 'Concluído' | 'Cancelado'; farol: 1 | 2 | 3 | 4 | null;
+  status2: 'Atrasado' | 'Reprogramado' | 'No Prazo' | 'Concluído' | 'Cancelado'; seis_m: string | null; observacoes: string | null;
+  linha_id: number | null; equipe_id: number | null; origem: 'app' | 'importado';
+}
+export interface Ishikawa {
+  total: number; pendentes: number; impeditivas: number; no_prazo: number | null; status: Record<string, number>;
+  espinhas: { codigo: string | null; nome: string; pendentes: number; atrasadas: number; itens: { id: number; numero: number; acao: string; status2: string }[] }[];
+  gerencia: [string, number][]; area: [string, number][]; responsavel: [string, number][]; semana: [number, number][];
+  memorias: Record<string, import('@/components/Obra/Calculado').MemoriaCalculo>;
+}

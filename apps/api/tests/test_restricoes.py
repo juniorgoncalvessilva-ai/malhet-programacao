@@ -1,0 +1,52 @@
+"""Spec 030: restrições do look-ahead (Plano de Ação 6WLA), Ishikawa e Excel."""
+from datetime import date, datetime, timedelta
+from io import BytesIO
+
+from openpyxl import Workbook, load_workbook
+
+
+def _plano() -> bytes:
+    wb = Workbook()
+    wb.active.title = "Instruções"
+    ws = wb.create_sheet("Ações")
+    ws["V1"] = "Atualização: 28/10/2026"
+    ws["G2"], ws["M2"] = "SEMANA", "PRAZO"
+    ws.append([])
+    ws.append([None, None, "Nº", "ATIVIDADE", "IMPETITIVO", "AÇÕES ", "INÍCIO", "ÁREA", "ID ", "REUNIÃO", "RESPONSÁVEL",
+               "GERÊNCIA", "INÍCIO", "TÉRMINO", "DATA", "nº", "DATA", "STATUS 1", "FAROL", "STATUS 2", "6M ", "OBSERVAÇÕES"])
+    ws.delete_rows(3)
+    ws.append([None, None, 1, "Planejamento", "SIM", "Liberar a área do radier", "S32", "CMD", None, "6WLA", "Fulano",
+               "CONTRATADA", datetime(2026, 11, 2), datetime(2026, 11, 6), None, None, None, "Pendente", 1, "Atrasado", None, None])
+    ws.append([None, None, 2, "Implantação", "NÃO", "Energia provisória", "S30", "CMD", None, "6WLA", "Beltrano", "CLIENTE",
+               datetime(2026, 10, 20), datetime(2026, 10, 25), None, None, datetime(2026, 10, 24), "Concluído", 4, "Concluído", "MAT", None])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_plano_de_acao_importa_ishikawa_e_exporta(client):
+    r = client.post("/api/restricoes/importar", files={"arquivo": ("plano.xlsm", _plano())}).json()
+    assert r == {"novas": 2, "atualizadas": 0, "avisos": []}
+    assert client.post("/api/restricoes/importar", files={"arquivo": ("plano.xlsm", _plano())}).json()["atualizadas"] == 2
+    lista = {a["numero"]: a for a in client.get("/api/restricoes").json()}
+    a1 = lista[1]
+    assert a1["impeditivo"] is True and a1["semana"] == 31 and a1["status2"] == "Atrasado" and a1["farol"] == 1
+    assert lista[2]["status2"] == "Concluído" and lista[2]["seis_m"] == "MAT"
+    # reprogramar: nova data e nº + 1 → "Reprogramado" enquanto hoje ≤ data
+    nova = (date.today() + timedelta(days=5)).isoformat()
+    r = client.post(f"/api/restricoes/{a1['id']}/reprogramar", json={"data": nova, "observacao": "aguardando topografia"}).json()
+    assert (r["reprogramacoes"], r["status2"], r["semana"] is not None) == (1, "Reprogramado", True)
+    assert "aguardando topografia" in r["observacoes"]
+    corpo = {"acao": "Treinar armadores", "seis_m": "MDO", "prazo_inicio": "2026-11-10", "prazo_termino": "2026-11-05"}
+    assert client.post("/api/restricoes", json=corpo).status_code == 422  # término antes do início
+    n3 = client.post("/api/restricoes", json={**corpo, "prazo_termino": nova}).json()
+    assert n3["numero"] == 3 and n3["status2"] == "No Prazo"
+    assert client.post("/api/restricoes", json={**corpo, "seis_m": "XYZ", "prazo_termino": nova}).status_code == 422
+    ish = client.get("/api/restricoes/ishikawa").json()
+    esp = {e["codigo"]: e for e in ish["espinhas"]}
+    assert ish["pendentes"] == 2 and esp["MDO"]["pendentes"] == 1 and esp[None]["pendentes"] == 1
+    assert ish["memorias"]["6m:MDO"]["valor"] == "1" and "status:Concluído" in ish["memorias"]
+    ws = load_workbook(BytesIO(client.get("/api/restricoes/excel").content))["Ações"]
+    assert ws["F3"].value == "AÇÕES" and ws["C4"].value == 1 and ws["E4"].value == "SIM"
+    assert str(ws["S4"].value).startswith("=IF(") and ws["G4"].value.startswith("S")
+    assert client.delete(f"/api/restricoes/{n3['id']}").status_code == 204
