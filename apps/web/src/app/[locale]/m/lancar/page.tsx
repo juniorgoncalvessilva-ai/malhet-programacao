@@ -7,6 +7,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useCausas } from '@/components/Obra/DesviosProgramacao';
 import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
+import { Miniatura, TirarFotos, useEnviarFoto } from '@/components/Mobile/Fotos';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
@@ -36,6 +37,8 @@ function Lancar() {
   const [texto, setTexto] = useState('');
   const [todas, setTodas] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [fotos, setFotos] = useState<Blob[]>([]);
+  const enviarFoto = useEnviarFoto();
 
   // começa na linha pedida (?linha=) ou na primeira sem realizado
   useEffect(() => {
@@ -48,7 +51,7 @@ function Lancar() {
   useEffect(() => {
     if (!ln) return;
     setValor(ln.realizado != null ? String(ln.realizado) : ln.previsto != null ? String(ln.previsto) : '');
-    setCausa(null); setTexto(''); setTodas(false);
+    setCausa(null); setTexto(''); setTodas(false); setFotos([]);
   }, [ln?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const editavel = !!d?.programacao?.editavel && pode('encarregado');
@@ -66,11 +69,14 @@ function Lancar() {
     setSalvando(true);
     try {
       await api.put(`/programacoes/${d.programacao.id}/linhas/${ln.id}/valores`, { campo: 'realizado', valores: [{ data, valor: q }] });
+      let desvioId: number | null = null;
       if (abaixo && causa) {
         const nome = causas.data?.find((c) => c.id === causa)?.descricao ?? 'Desvio';
-        await api.post('/desvios', { data, causa_id: causa, descricao: texto.trim() || nome, programacao_id: d.programacao.id, linha_id: ln.id,
-          referencia: ln.codigo_simova, frente: ln.area, atividade_impactada: ln.descricao, qtd_nao_cumprida: Math.round(((prev ?? 0) - (q ?? 0)) * 100) / 100, status: 1 });
+        desvioId = (await api.post<{ id: number }>('/desvios', { data, causa_id: causa, descricao: texto.trim() || nome, programacao_id: d.programacao.id, linha_id: ln.id,
+          referencia: ln.codigo_simova, frente: ln.area, atividade_impactada: ln.descricao, qtd_nao_cumprida: Math.round(((prev ?? 0) - (q ?? 0)) * 100) / 100, status: 1 })).id;
       }
+      // foto da frente: prova do desvio, se houve; senão, da atividade naquele dia
+      for (const f of fotos) await (desvioId ? enviarFoto('desvio', desvioId, f) : enviarFoto('linha', ln.id, f, { data }));
       toast.success(`${ln.codigo_simova}: ${num(q)} ${ln.unidade ?? ''} lançado`);
       qc.invalidateQueries({ queryKey: ['campo'] });
       qc.invalidateQueries({ queryKey: ['programacao'] });
@@ -153,6 +159,12 @@ function Lancar() {
                 {ativas.length > CAUSAS_VISIVEIS && <button type="button" onClick={() => setTodas(!todas)} className="min-h-[40px] rounded-full px-3.5 text-[14px] font-semibold text-m-accent underline">{todas ? 'menos' : `mais ${ativas.length - CAUSAS_VISIVEIS}`}</button>}
               </div>
               {causa && <input aria-label="O que aconteceu" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="O que aconteceu (opcional)" className="h-12 rounded-[14px] border border-m-stroke bg-m-surface-field px-3.5 text-[15px] outline-none focus:border-m-accent" />}
+            </section>
+          )}
+          {editavel && (
+            <section className="flex flex-col gap-2 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-[18px]">
+              <TirarFotos fotos={fotos} onChange={setFotos} />
+              {ln.fotos.length > 0 && <div className="flex flex-wrap gap-2">{ln.fotos.map((id) => <Miniatura key={id} id={id} />)}</div>}
             </section>
           )}
           {!editavel && <p className="text-center text-[13px] text-m-text-muted">{d?.programacao?.status === 'concluida' ? 'Programação concluída: só consulta.' : 'Seu papel só consulta.'}</p>}

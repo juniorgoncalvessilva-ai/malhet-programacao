@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { apiDownload, apiFetch } from '@/lib/api/client';
+import { apiBlob, apiDownload, apiFetch } from '@/lib/api/client';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { useObraOpcional } from '@/lib/obra/ObraProvider';
 
@@ -21,5 +21,6 @@ export function useApi() {
     put: useCallback(<T,>(p: string, body: unknown) => apiFetch<T>(p, getToken, h({ method: 'PUT', body: JSON.stringify(body) })), [getToken, h]),
     del: useCallback(<T = void,>(p: string) => apiFetch<T>(p, getToken, h({ method: 'DELETE' })), [getToken, h]),
     download: useCallback((p: string, nome: string) => apiDownload(p, getToken, nome, obraId), [getToken, obraId]),
+    blob: useCallback((p: string) => apiBlob(p, getToken, obraId), [getToken, obraId]),
   };
 }

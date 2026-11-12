@@ -95,9 +95,13 @@ def _preencher(s: Session, c: ContextoObra, a: AcaoRestricaoModel, d: AcaoIn) ->
 
 @router.get("")
 def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    from app.modules.campo.api.fotos import fotos_de
+
     hoje = date.today()
-    return [planilha.saida(a, hoje) for a in s.scalars(select(AcaoRestricaoModel).where(
-        AcaoRestricaoModel.obra_id == c.obra_id).order_by(AcaoRestricaoModel.numero.desc()))]
+    lista = list(s.scalars(select(AcaoRestricaoModel).where(AcaoRestricaoModel.obra_id == c.obra_id)
+                           .order_by(AcaoRestricaoModel.numero.desc())))
+    fotos = fotos_de(s, c.obra_id, "restricao", [a.id for a in lista])
+    return [{**planilha.saida(a, hoje), "fotos": fotos.get(a.id, [])} for a in lista]
 
 
 @router.post("", status_code=201)

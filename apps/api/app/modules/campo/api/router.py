@@ -46,6 +46,12 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
 
     desvios = list(s.scalars(select(DesvioModel).where(DesvioModel.obra_id == c.obra_id, DesvioModel.programacao_id == p.id)))
     causas = {x.id: x.descricao for x in s.scalars(select(CausaDesvioModel).where(CausaDesvioModel.obra_id == c.obra_id))}
+    from app.modules.campo.infra.models import FotoCampoModel
+
+    fotos_dia: dict[int, list[int]] = {}
+    for fid, lid in s.execute(select(FotoCampoModel.id, FotoCampoModel.alvo_id).where(
+            FotoCampoModel.obra_id == c.obra_id, FotoCampoModel.alvo == "linha", FotoCampoModel.data == d)):
+        fotos_dia.setdefault(lid, []).append(fid)
     linhas, pendentes = [], []
     for loc in v["locais"]:
         for a in loc["areas"]:
@@ -59,7 +65,7 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
                 if prev or real is not None:
                     linhas.append({**comum, "previsto": prev, "realizado": real,
                                    "capacidade": (ln["calc"].get("capacidade_dia") or [None] * len(datas))[i],
-                                   "previsto_periodo": ln["total_previsto"], "realizado_periodo": ln["total_realizado"],
+                                   "fotos": fotos_dia.get(ln["id"], []), "previsto_periodo": ln["total_previsto"], "realizado_periodo": ln["total_realizado"],
                                    "desvios": [{"id": x.id, "causa": causas.get(x.causa_id), "descricao": x.descricao}
                                                for x in desvios if x.linha_id == ln["id"] and x.data == d]})
                 # dias anteriores (até ontem) com previsto e sem realizado lançado

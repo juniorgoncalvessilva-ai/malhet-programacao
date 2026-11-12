@@ -223,7 +223,7 @@ export interface Desvio {
   causa_id: number; causa: string | null; referencia: string | null; descricao: string; frente: string | null;
   area_id: number | null; acao: string | null; responsavel: string | null; gerencia: string | null;
   status: 1 | 2 | 3; status_nome: string | null; atividade_impactada: string | null; qtd_nao_cumprida: number | null;
-  origem: 'app' | 'importado';
+  origem: 'app' | 'importado'; fotos?: number[];
 }
 export interface ItemNaoCumprido {
   linha_id: number; n: number; codigo_simova: string; descricao: string; area: string;
@@ -266,7 +266,7 @@ export interface AcaoRestricao {
   gerencia: string | null; prazo_inicio: string | null; prazo_termino: string | null; reprogramado: string | null;
   reprogramacoes: number; conclusao: string | null; status1: 'Pendente' | 'Concluído' | 'Cancelado'; farol: 1 | 2 | 3 | 4 | null;
   status2: 'Atrasado' | 'Reprogramado' | 'No Prazo' | 'Concluído' | 'Cancelado'; seis_m: string | null; observacoes: string | null;
-  linha_id: number | null; equipe_id: number | null; origem: 'app' | 'importado';
+  linha_id: number | null; equipe_id: number | null; origem: 'app' | 'importado'; fotos?: number[];
 }
 export interface Ishikawa {
   total: number; pendentes: number; impeditivas: number; no_prazo: number | null; status: Record<string, number>;
@@ -286,7 +286,7 @@ export interface LinhaCampo {
 export interface DiaCampo {
   data: string; hoje: string; dia_semana?: string; anterior?: string; seguinte?: string; so_minha_equipe: boolean;
   programacao: { id: number; titulo: string; status: string; tipo: string; editavel: boolean; inicio: string; fim: string } | null;
-  linhas: (LinhaCampo & { previsto: number | null; realizado: number | null; capacidade: number | null; previsto_periodo: number;
+  linhas: (LinhaCampo & { previsto: number | null; realizado: number | null; capacidade: number | null; previsto_periodo: number; fotos: number[];
     realizado_periodo: number; desvios: { id: number; causa: string | null; descricao: string }[] })[];
   pendentes: (LinhaCampo & { data: string; dia: string; previsto: number })[];
 }

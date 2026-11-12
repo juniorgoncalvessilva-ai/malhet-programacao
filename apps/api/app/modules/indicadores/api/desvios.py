@@ -103,8 +103,12 @@ def listar(de: date | None = None, ate: date | None = None, programacao_id: int 
         q = q.where(DesvioModel.programacao_id == programacao_id)
     if causa_id:
         q = q.where(DesvioModel.causa_id == causa_id)
+    from app.modules.campo.api.fotos import fotos_de
+
     nomes = _nomes(s, c.obra_id)
-    return [_out(d, nomes) for d in s.scalars(q.order_by(DesvioModel.data.desc(), DesvioModel.id.desc()))]
+    lista = list(s.scalars(q.order_by(DesvioModel.data.desc(), DesvioModel.id.desc())))
+    fotos = fotos_de(s, c.obra_id, "desvio", [d.id for d in lista])
+    return [{**_out(d, nomes), "fotos": fotos.get(d.id, [])} for d in lista]
 
 
 @router.get("/programacao/{pid}")

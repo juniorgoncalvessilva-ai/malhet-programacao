@@ -65,3 +65,24 @@ def test_plano_de_acao_importa_ishikawa_e_exporta(client):
     regra = ws.conditional_formatting._cf_rules[next(iter(ws.conditional_formatting._cf_rules))][0]
     assert regra.iconSet.iconSet == "4TrafficLights" and regra.iconSet.showValue is False
     assert client.delete(f"/api/restricoes/{n3['id']}").status_code == 204
+
+
+def test_fotos_de_campo_na_restricao(client):
+    jpg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00" + b"\x00" * 64 + b"\xff\xd9"
+    a = client.post("/api/restricoes", json={"acao": "Liberar a frente do radier"}).json()
+    r = client.post("/api/fotos", data={"alvo": "restricao", "alvo_id": str(a["id"]), "legenda": "frente travada"},
+                    files={"arquivo": ("f.jpg", jpg, "image/jpeg")})
+    assert r.status_code == 201, r.text
+    f = r.json()
+    assert f["legenda"] == "frente travada" and f["tamanho"] == len(jpg)
+    assert client.post("/api/fotos", data={"alvo": "restricao", "alvo_id": str(a["id"])},
+                       files={"arquivo": ("x.jpg", b"nao e foto", "image/jpeg")}).status_code == 422
+    assert client.post("/api/fotos", data={"alvo": "restricao", "alvo_id": "999999"},
+                       files={"arquivo": ("f.jpg", jpg, "image/jpeg")}).status_code == 404
+    assert client.post("/api/fotos", data={"alvo": "xpto", "alvo_id": "1"}, files={"arquivo": ("f.jpg", jpg, "image/jpeg")}).status_code == 422
+    lista = {x["id"]: x for x in client.get("/api/restricoes").json()}
+    assert lista[a["id"]]["fotos"] == [f["id"]]
+    img = client.get(f"/api/fotos/{f['id']}/arquivo")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg" and img.content == jpg
+    assert client.delete(f"/api/fotos/{f['id']}").status_code == 204
+    assert client.get("/api/fotos", params={"alvo": "restricao", "alvo_id": a["id"]}).json() == []

@@ -30,6 +30,7 @@ from app.modules.indicadores.api.router import router as indicadores
 from app.modules.lookahead.api.router import router as lookahead
 from app.modules.restricoes.api.router import router as restricoes
 from app.modules.campo.api.router import router as campo
+from app.modules.campo.api.fotos import router as fotos
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -87,5 +88,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos):
     app.include_router(r, prefix="/api")

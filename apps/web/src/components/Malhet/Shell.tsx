@@ -3,6 +3,7 @@
 import { Check, ChevronsUpDown, LayoutGrid, LogOut, Menu as MenuIcon, Moon, Sun, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
+import { ehCelular, escolherInterface } from '@/lib/dispositivo/interface';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { cn } from '@/lib/utils';
@@ -105,7 +106,7 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
                 <Link
                   key={i.url}
                   href={i.url}
-                  onClick={onNavegar}
+                  onClick={() => { if (i.url === '/m') escolherInterface('campo'); onNavegar?.(); }}
                   aria-current={ativo ? 'page' : undefined}
                   className={cn(
                     'relative flex h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-sm transition-colors',
@@ -217,6 +218,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Usuario />
           </div>
         </header>
+        <AvisoCelular />
         <main className="flex flex-col gap-5 px-4 pb-10 pt-7 sm:px-8 print:p-0">
           {obra || telaAdmin || carregando ? children : <SemObra superadmin={superadmin} />}
         </main>
@@ -252,4 +254,17 @@ export function itemAtivo(pathname: string | null): string | undefined {
   return MENU.flatMap((g) => g.itens).map((i) => i.url)
     .filter((u) => pathname === u || pathname.startsWith(`${u}/`) || pathname.endsWith(u) || pathname.includes(`${u}/`))
     .sort((a, b) => b.length - a.length)[0];
+}
+
+/** No celular, quem escolheu o app completo vê o atalho de volta para o app de campo. */
+function AvisoCelular() {
+  const [celular, setCelular] = useState(false);
+  useEffect(() => { setCelular(ehCelular()); }, []);
+  if (!celular) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-m-stroke-subtle bg-m-accent-subtle px-4 py-2 text-[13px] text-m-text-primary print:hidden">
+      <span>Você está no app completo.</span>
+      <Link href="/m" onClick={() => escolherInterface('campo')} className="font-semibold text-m-accent underline">Abrir o app de campo</Link>
+    </div>
+  );
 }

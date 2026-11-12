@@ -56,6 +56,17 @@ export async function apiDownload(path: string, getToken: TokenGetter, nomePadra
   return Number(res.headers.get('X-Itens') ?? 0);
 }
 
+/** Arquivo como Blob (ex.: foto para mostrar na tela: o <img> sozinho não manda o token nem a obra). */
+export async function apiBlob(path: string, getToken: TokenGetter, obraId?: number): Promise<Blob> {
+  const token = await getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (obraId) headers['X-Obra-Id'] = String(obraId);
+  const res = await fetch(`${API_URL}${path}`, { headers, credentials: 'include' });
+  if (!res.ok) return erro(res);
+  return res.blob();
+}
+
 export const qs = (p: Record<string, string | number | boolean | undefined | null>) =>
   '?' +
   Object.entries(p)

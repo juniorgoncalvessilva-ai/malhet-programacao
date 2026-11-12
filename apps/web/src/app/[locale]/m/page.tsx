@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Check, ChevronRight, Plus } from 'lucide-react';
+import { AlertTriangle, Camera, Check, ChevronRight, Plus } from 'lucide-react';
 import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
@@ -58,10 +58,10 @@ export default function CampoInicio() {
           <span className="text-[12px] leading-4 text-m-text-muted">Dias sem lançar</span>
           <span className="text-[26px] font-semibold leading-8 tabular-nums">{d ? d.pendentes.length : '—'}</span>
         </Link>
-        <div className="flex flex-col gap-1 rounded-[14px] border border-m-warning/30 bg-m-warning-subtle p-3.5">
+        <Link href="/m/restricoes" className="flex flex-col gap-1 rounded-[14px] border border-m-warning/30 bg-m-warning-subtle p-3.5">
           <span className="text-[12px] leading-4 text-m-warning">Restrições abertas</span>
           <span className="text-[26px] font-semibold leading-8 tabular-nums">{restr.data ? pendRestr : '—'}</span>
-        </div>
+        </Link>
       </div>
 
       <h2 className="mt-0.5 text-[13px] font-semibold leading-[18px] text-m-text-secondary">O que fazer agora</h2>
@@ -82,6 +82,12 @@ export default function CampoInicio() {
             <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
           </Link>
         )}
+        <Link href="/m/ocorrencias/nova" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-warning-subtle text-m-warning"><Camera size={18} /></span>
+          <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Registrar ocorrência</span>
+            <span className="text-[12px] leading-4 text-m-text-muted">Foto, local e causa</span></span>
+          <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
+        </Link>
         {linhas.map((l) => (
           <Link key={l.id} href={`/m/lancar?linha=${l.id}`} className="flex min-h-[56px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5 py-2">
             <span className="flex flex-1 flex-col"><span className="line-clamp-1 text-[14px] font-medium leading-5">{l.codigo_simova} · {l.descricao}</span>
