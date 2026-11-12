@@ -158,6 +158,25 @@ def test_fluxo_cpu_calcula_hh_indice_capacidade_e_ft(client):
     ln = dict(zip(cab, [x.value for x in ws[2]]))
     assert ln["PE_SEGUNDA"] == "10" and float(ln["HH_SEGUNDA"]) == pytest.approx(round(10 * hh_un, 2))
 
+    # botões "Pela capacidade" × "Manual (encarregado)": capacidade 9,64/dia × fator do dia até a qtd do período (20)
+    pid = p["id"]
+    client.put(f"/api/programacoes/{pid}/salvar", json={"linhas": [{"id": lid, "qtd_periodo": 20, "mudar_qtd_periodo": True}]})
+    r = client.put(f"/api/programacoes/{pid}/modo-previsto", json={"modo": "capacidade"}).json()
+    assert r == {"aplicadas": 1, "puladas": []}
+    ln = client.get(f"/api/programacoes/{pid}").json()["locais"][0]["areas"][0]["linhas"][0]
+    assert ln["modo_previsto"] == "capacidade"
+    assert ln["previsto"] == [None, None, None, 9.64, 9.64, 0.72, None, None, None]
+    assert ln["calc"]["capacidade_dia"][7] == pytest.approx(9 / (2.8 / 3) * 8 / 9, abs=1e-3)  # sexta 8 h
+    m = client.get(f"/api/programacoes/{pid}/linhas/{lid}/memoria").json()["memorias"]
+    assert m["previsto_sugerido"]["valor"] == "20 m³" and m["capacidade_dia:7"]["passos"][0]["conta"] == "8 h ÷ 9 h"
+    # o encarregado mexeu num dia: vira "ajustado"; a sugestão continua guardada para os indicadores
+    client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json={"campo": "previsto", "valores": [{"data": "2026-11-11", "valor": 3}]})
+    ln = client.get(f"/api/programacoes/{pid}").json()["locais"][0]["areas"][0]["linhas"][0]
+    assert ln["modo_previsto"] == "ajustado" and ln["calc"]["previsto_sugerido"][5] == 0.72
+    assert client.put(f"/api/programacoes/{pid}/modo-previsto", json={"modo": "manual", "linhas": [lid]}).json()["aplicadas"] == 1
+    assert client.put(f"/api/programacoes/{pid}/modo-previsto", json={"modo": "x"}).status_code == 422
+    assert client.put(f"/api/programacoes/{pid}/modo-previsto", json={"modo": "manual", "linhas": [999999]}).status_code == 404
+
 
 @pytest.mark.parametrize("arquivo", ["5b7583e5-Composi__o_de_Custo_Unit_rio_VERS_O_OBRA.xls"])
 def test_cpu_real_quando_disponivel(arquivo):

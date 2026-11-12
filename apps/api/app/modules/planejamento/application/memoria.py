@@ -135,6 +135,54 @@ def _capacidade(o: OrigemCpu, eq: EquipeModel, jornada: float, funcao_de: dict, 
                    tuple(passos), tuple(fontes), tuple(notas))
 
 
+MODOS = {"capacidade": "pela capacidade (botão)", "manual": "manual (filling do encarregado)",
+         "ajustado": "pela capacidade e ajustado à mão"}
+
+
+def _memorias_capacidade_dia(ln: dict, c: dict, un: str, p: ProgramacaoModel, prog: str) -> list[Memoria]:
+    base = "equipe completa" if (p.base_capacidade or "equipe") == "equipe" else "recurso que governa"
+    fcap = Fonte("Capacidade", f"{num(c['capacidade_un_dia'])} {un}/dia", f"calculada ({base})",
+                 "abra a capacidade da equipe para ver a conta")
+    fcal = Fonte("Horas do dia", "SEG–QUI 9 h · SEX 8 h · SÁB/DOM 0 h", "calendário padrão da obra",
+                 "jornada de referência 9 h; na semanal a sexta e o sábado anteriores ficam com 0 h")
+    mems = []
+    for i, d in enumerate(ln["_dias"]):
+        cap_d = c["capacidade_dia"][i]
+        data = d["data"][8:10] + "/" + d["data"][5:7]
+        mems.append(Memoria(f"capacidade_dia:{i}", f"Capacidade em {d['dia']} {data}", f"{num(cap_d)} {un}",
+                            "capacidade do dia = capacidade da equipe × fator do dia (horas do dia ÷ 9 h)",
+                            (Passo("Fator do dia", f"{num(c['horas_dia'][i])} h ÷ 9 h", num(c["fator_dia"][i], 3)),
+                             Passo("Capacidade × fator", f"{num(c['capacidade_un_dia'])} × {num(c['fator_dia'][i], 3)}",
+                                   f"{num(cap_d)} {un}", True)),
+                            (fcap, fcal)))
+    lim = c.get("limite_sugestao")
+    passos = []
+    acc = 0.0
+    for i, d in enumerate(ln["_dias"]):
+        q = c["previsto_sugerido"][i]
+        if q is None:
+            continue
+        acc += q
+        cheio = abs(q - (c["capacidade_dia"][i] or 0)) < 0.006
+        passos.append(Passo(f"{d['dia']} {d['data'][8:10]}/{d['data'][5:7]}",
+                            f"{num(c['capacidade_dia'][i])} {un}" + ("" if cheio else f" → limitado ao que falta ({num(q)})"),
+                            f"{num(q)} {un} · acumulado {num(acc)}"))
+    passos.append(Passo("Total sugerido", " + ".join(num(x) for x in c["previsto_sugerido"] if x) or "—",
+                        f"{num(c['total_sugerido'])} {un}", True))
+    modo = ln.get("modo_previsto") or "manual"
+    notas = [f"Modo desta linha: {MODOS.get(modo, modo)}."]
+    if modo != "capacidade":
+        notas.append(f"Programado {num(ln['total_previsto'])} {un} × capacidade {num(c['total_capacidade'])} {un} "
+                     "no período: a diferença alimenta o indicador de erro de programação.")
+    mems.append(Memoria("previsto_sugerido", "Previsto pela capacidade", f"{num(c['total_sugerido'])} {un}",
+                        "previsto do dia = capacidade do dia, somando até o limite",
+                        tuple(passos),
+                        (fcap, fcal, Fonte("Limite", f"{num(lim)} {un}" if lim is not None else "sem limite",
+                                           c.get("origem_limite") or "—", f"{prog} · linha {ln['n']}")),
+                        tuple(notas)))
+    return mems
+
+
 def realizado_anterior_detalhe(s: Session, p: ProgramacaoModel, chave: tuple) -> list[tuple[str, str, float]]:
     """(programação, data, realizado) de cada dia antes do início desta, pela mesma atividade (o mais recente vale)."""
     q = (select(ProgramacaoModel).where(ProgramacaoModel.obra_id == p.obra_id, ProgramacaoModel.tipo == p.tipo,
@@ -170,6 +218,9 @@ def memorias_linha(s: Session, p: ProgramacaoModel, linha_id: int) -> dict:
                                 p.base_capacidade or "equipe"))
     if eq is not None:
         mems.append(memoria_composicao_equipe(s, p.obra_id, eq))
+    # capacidade do dia e o que o botão "Pela capacidade" daria (guardado mesmo no modo manual)
+    if c.get("capacidade_un_dia"):
+        mems += _memorias_capacidade_dia(ln, c, un, p, prog)
     # por dia: HH e oficiais
     for i, d in enumerate(ln["_dias"]):
         q = ln["previsto"][i]

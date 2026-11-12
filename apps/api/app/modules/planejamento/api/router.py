@@ -298,6 +298,18 @@ def base_capacidade(pid: int, d: BaseCapacidadeIn, s: Session = Depends(get_sess
     return {"base": p.base_capacidade}
 
 
+class ModoPrevistoIn(BaseModel):
+    modo: str  # capacidade | manual
+    linhas: list[int] | None = None  # vazio = todas as linhas
+
+
+@router.put("/programacoes/{pid}/modo-previsto")
+def modo_previsto(pid: int, d: ModoPrevistoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Botões "Pela capacidade" (preenche o previsto do dia = capacidade × fator do dia, até a qtd do período) e
+    "Manual (encarregado)". Vale para uma linha ou para todas."""
+    return sv.aplicar_modo_previsto(s, sv.obter(s, c.obra_id, pid), d.modo, d.linhas)
+
+
 @router.post("/programacoes/{pid}/concluir")
 def concluir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Fecha a programação emitida: depois disso nada muda, só revisão com motivo."""

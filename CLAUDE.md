@@ -58,8 +58,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`exigir_aberta`, `programacao_conclusao`). Specs 023–024.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
+- Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),
+  `programacao/domain/previsto.py` (capacidade × horas do dia ÷ 9 h até a qtd do período), `PUT /programacoes/{pid}/
+  modo-previsto`; a capacidade do dia e a sugestão saem sempre em `calc` (base dos KPIs). Spec 026.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
-  sequenciador}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
+  sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 
 ## Front (apps/web) — AI Coders Starter Kit + identidade Malhet
 - Visual = design system CorpMind do canvas Malhet (skill `ui-malhet`): tokens em `src/css/malhet.css`, classes

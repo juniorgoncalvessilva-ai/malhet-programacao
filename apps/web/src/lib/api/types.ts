@@ -115,7 +115,10 @@ export interface LinhaVisao {
   qtd_periodo: number | null; natureza: 'P' | 'O' | 'E'; responsavel: string | null; turno: string | null;
   jornada: number | null; equipe_codigo: string | null; status_crono: string | null;
   realizado_anterior: number | null; restante: number | null; ssma: Ssma;
+  /** Como o previsto foi feito: botão "Pela capacidade", filling do encarregado, ou capacidade ajustada à mão. */
+  modo_previsto?: ModoPrevisto;
 }
+export type ModoPrevisto = 'capacidade' | 'manual' | 'ajustado';
 /** Técnico é um só; RAC, PTS, ART, ATA e PTO aceitam vários itens (emissões antigas podem trazer texto). */
 export interface Ssma { tecnico: string | null; rac: ItensSsma; pts: ItensSsma; art: ItensSsma; pto: ItensSsma; ata: ItensSsma }
 export type ItensSsma = string[] | string | null;
@@ -134,6 +137,11 @@ export interface CalculoLinha {
   gargalo: string | null; apoio_externo: string[]; custo_unitario: number | null;
   hh_previsto: (number | null)[]; oficiais: (number | null)[]; acima_capacidade: boolean[];
   total_hh_previsto: number; total_hh_realizado: number; alertas: string[];
+  /** Capacidade de cada dia (capacidade × horas do dia ÷ 9 h) e o previsto que o botão "Pela capacidade" daria. */
+  fator_dia?: number[]; horas_dia?: number[]; capacidade_dia?: (number | null)[];
+  capacidade_equipe_dia?: (number | null)[]; capacidade_governa_dia?: (number | null)[];
+  previsto_sugerido?: (number | null)[]; total_sugerido?: number; total_capacidade?: number;
+  limite_sugestao?: number | null; origem_limite?: string;
 }
 export interface RecursoCpuItem { recurso: string; tipo: 'MOD' | 'EQU'; coef: number; un_dia_por_pessoa: number | null }
 export interface CpuDoItem {

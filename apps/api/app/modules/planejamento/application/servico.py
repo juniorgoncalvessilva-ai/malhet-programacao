@@ -31,6 +31,7 @@ from app.modules.referencias.infra.models import (
     PqQuantidadeTagModel,
 )
 from app.modules.programacao.domain.gargalo import capacidade_da_equipe, capacidade_pelo_governa, capacidade_por_funcao
+from app.modules.programacao.domain.previsto import capacidade_por_dia, fatores_do_periodo, previsto_pela_capacidade
 from app.modules.referencias.domain.cpu_obra import nome_recurso
 from app.modules.referencias.infra.cpu_gateway import CpuGateway, ParametrosCpu
 from app.modules.referencias.application.importar_xer import status_pt
@@ -120,6 +121,32 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
             "alertas": alertas}
 
 
+def limite_do_periodo(reg: dict) -> tuple[float | None, str]:
+    """Até quanto o botão "Pela capacidade" preenche: a qtd do período; sem ela, o que resta do projeto antes do
+    período (qtd de projeto − feito antes); sem nenhum dos dois, sem limite."""
+    if reg.get("qtd_periodo") is not None:
+        return float(reg["qtd_periodo"]), "quantidade do período"
+    if reg.get("qtd_projeto") is not None:
+        return max(0.0, round(reg["qtd_projeto"] - (reg.get("realizado_anterior") or 0), 4)), "resta do projeto antes do período"
+    return None, "sem limite (sem qtd do período nem de projeto)"
+
+
+def sugestao_capacidade(reg: dict, fatores) -> None:
+    """Capacidade de cada dia (nas duas bases) e o previsto que o botão "Pela capacidade" daria — guardado mesmo
+    quando o encarregado programa à mão, para comparar programado × capacidade nos indicadores."""
+    c = reg["calc"]
+    c["fator_dia"] = [f.fator for f in fatores]
+    c["horas_dia"] = [f.horas for f in fatores]
+    c["capacidade_dia"] = capacidade_por_dia(c["capacidade_un_dia"], fatores)
+    c["capacidade_equipe_dia"] = capacidade_por_dia(c["capacidade_equipe"], fatores)
+    c["capacidade_governa_dia"] = capacidade_por_dia(c["capacidade_governa"], fatores)
+    lim, origem = limite_do_periodo(reg)
+    c["limite_sugestao"], c["origem_limite"] = lim, origem
+    c["previsto_sugerido"] = previsto_pela_capacidade(c["capacidade_un_dia"], fatores, lim)
+    c["total_sugerido"] = round(sum(x or 0 for x in c["previsto_sugerido"]), 4)
+    c["total_capacidade"] = round(sum(x or 0 for x in c["capacidade_dia"]), 4)
+
+
 def _chave_linha(ln: LinhaProgramacaoModel) -> tuple:
     return (ln.area_id, ln.tipo_id, ln.item_simova_id, ln.item_pq)
 
@@ -173,6 +200,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             AtividadeCronogramaModel.versao_id == vig["CRONOGRAMA"], AtividadeCronogramaModel.id_crono.in_(ids_crono)))}
 
     anterior = realizado_anterior(s, p)
+    fatores = fatores_do_periodo(datas, semanal=p.tipo == "SEMANAL")
     wbs_cod = {}
     if any(ln.wbs_no_id for ln in p.linhas):
         from app.modules.wbs.infra.gateway import codigos
@@ -206,7 +234,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "equipe_id": ln.equipe_id, "equipe": eq.nome if eq else None,
             "encarregado": (eq.encarregado_nome if eq else None), "cracha": (eq.encarregado_cracha if eq else None),
             "observacao": ln.observacao, "previsto": prev, "realizado": real,
-            "qtd_periodo": ln.qtd_periodo, "natureza": ln.natureza or "P",
+            "qtd_periodo": ln.qtd_periodo, "natureza": ln.natureza or "P", "modo_previsto": ln.modo_previsto or "manual",
             "responsavel": ln.responsavel or (eq.responsavel if eq else None),
             "turno": eq.turno if eq else None, "jornada": eq.jornada_horas if eq else None,
             "equipe_codigo": eq.codigo_simova if eq else None,
@@ -220,6 +248,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
         reg = por_area[a.id][-1]
         feito = (reg["realizado_anterior"] or 0) + reg["total_realizado"]
         reg["restante"] = round(reg["qtd_projeto"] - feito, 4) if reg["qtd_projeto"] is not None else None
+        sugestao_capacidade(reg, fatores)
     # dentro de cada área, as linhas seguem a estrutura do Primavera (ordem da atividade do cronograma no P6);
     # linhas sem atividade do cronograma vêm depois, na ordem em que foram incluídas
     ordem_crono = {k: x.ordem_p6 for k, x in cron.items() if x.ordem_p6 is not None}
@@ -284,8 +313,52 @@ def salvar_valores(s: Session, p: ProgramacaoModel, linha_id: int, valores: list
             v = ValorDiaModel(data=d)
             ln.valores.append(v)
             atuais[d] = v
+        if campo == "previsto" and ln.modo_previsto == "capacidade" and (v.previsto or None) != q:
+            ln.modo_previsto = "ajustado"
         setattr(v, campo, q)
     s.flush()
+
+
+def aplicar_modo_previsto(s: Session, p: ProgramacaoModel, modo: str, linhas: list[int] | None) -> dict:
+    """Botões da programação. "capacidade": previsto do dia = capacidade × fator do dia até o limite (sobrescreve o
+    previsto da linha). "manual": o encarregado preenche; nada é apagado, só muda o modo."""
+    exigir_rascunho(p)
+    if modo not in ("capacidade", "manual"):
+        raise DomainError("modo: capacidade ou manual", "modo")
+    alvo = [ln for ln in p.linhas if linhas is None or ln.id in set(linhas)]
+    if linhas is not None and len(alvo) != len(set(linhas)):
+        raise NotFoundError("Linha", ",".join(str(x) for x in set(linhas) - {ln.id for ln in alvo}))
+    if modo == "manual":
+        for ln in alvo:
+            ln.modo_previsto = "manual"
+        s.flush()
+        return {"aplicadas": len(alvo), "puladas": []}
+    v = visao(s, p)
+    regs = {r["id"]: r for loc in v["locais"] for a in loc["areas"] for r in a["linhas"]}
+    datas = [date.fromisoformat(d["data"]) for d in v["dias"]]
+    feitas, puladas = 0, []
+    for ln in alvo:
+        r = regs[ln.id]
+        c = r["calc"]
+        if not c["capacidade_un_dia"]:
+            motivo = ("sem equipe" if not ln.equipe_id else "sem item da PQ/CPU" if not c["hh_un"]
+                      else "capacidade zero (" + "; ".join(c["alertas"][:1]) + ")" if c["alertas"] else "sem capacidade")
+            puladas.append({"linha": r["n"], "id": ln.id, "descricao": r["descricao"], "motivo": motivo})
+            continue
+        sug = dict(zip(datas, c["previsto_sugerido"]))
+        atuais = {x.data: x for x in ln.valores}
+        for d in datas:
+            x = atuais.get(d)
+            if x is None:
+                if sug[d] is None:
+                    continue
+                x = ValorDiaModel(data=d)
+                ln.valores.append(x)
+            x.previsto = sug[d]
+        ln.modo_previsto = "capacidade"
+        feitas += 1
+    s.flush()
+    return {"aplicadas": feitas, "puladas": puladas}
 
 
 def emitir(s: Session, p: ProgramacaoModel, usuario: str) -> EmissaoModel:

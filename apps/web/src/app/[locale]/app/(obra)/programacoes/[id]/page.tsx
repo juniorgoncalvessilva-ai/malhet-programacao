@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileCheck2, FileSpreadsheet, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { Calculado } from '@/components/Obra/Calculado';
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -11,7 +11,7 @@ import { useEquipes } from '@/hooks/programacao/queries';
 import { buscaAtividades, buscaPq, k, useAcao, useCadastrosSsma, useCatalogo, useFrentes2, useProgramacao, useWbs } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
-import { comoLista, type AtividadeBusca, type ItemPqBusca, type LinhaVisao, type NoWbs } from '@/lib/api/types';
+import { comoLista, type AtividadeBusca, type ItemPqBusca, type LinhaVisao, type ModoPrevisto, type NoWbs } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
@@ -23,6 +23,11 @@ interface FormLinha {
 }
 const VAZIO: FormLinha = { wbs_no_id: '', area_id: '', grupo_id: '', tipo_id: '', complemento: '', item_pq: '', equipe_id: '', id_crono: '', qtd_projeto: '', observacao: '', natureza: 'P', responsavel: '', qtd_periodo: '', pto: [] };
 const NATUREZA = { P: 'Programada', O: 'Oportunidade', E: 'Emergencial' } as const;
+const MODO: Record<ModoPrevisto, { rotulo: string; tom: string; dica: string }> = {
+  capacidade: { rotulo: 'pela capacidade', tom: 'bg-m-accent-subtle text-m-accent', dica: 'Previsto = capacidade da equipe × horas do dia, até a qtd do período' },
+  manual: { rotulo: 'manual', tom: 'bg-m-surface-active text-m-text-secondary', dica: 'Quantitativo do encarregado (filling)' },
+  ajustado: { rotulo: 'capacidade ajustada', tom: 'bg-m-warning-subtle text-m-warning', dica: 'Veio da capacidade e foi alterado à mão' },
+};
 type Pendentes = Record<string, string>; // `${linha}|${campo}|${data}` → valor ; `${linha}|periodo` → qtd
 
 export default function MontarPage() {
@@ -89,6 +94,20 @@ export default function MontarPage() {
   const emitir = useAcao((a) => a.post<{ revisao: number }>(`/programacoes/${id}/emitir`), chave);
   const reabrir = useAcao((a) => a.post(`/programacoes/${id}/reabrir`), chave);
   const baseCap = useAcao((a, base: string) => a.put(`/programacoes/${id}/base-capacidade`, { base }), chave);
+  type RespModo = { aplicadas: number; puladas: { linha: number; descricao: string; motivo: string }[] };
+  const modoPrev = useAcao((a, d: { modo: 'capacidade' | 'manual'; linhas: number[] | null }) => a.put<RespModo>(`/programacoes/${id}/modo-previsto`, d), chave);
+  const aplicarModo = async (m: 'capacidade' | 'manual', ln?: LinhaVisao) => {
+    if (m === 'capacidade' && !(await confirmar({ titulo: ln ? `Programar ${ln.codigo_simova} pela capacidade?` : 'Programar todas as linhas pela capacidade?', perigo: false, acao: 'Preencher',
+      mensagem: 'O previsto de cada dia passa a ser a capacidade da equipe × horas do dia (SEG–QUI 9 h, SEX 8 h, fim de semana 0), até a quantidade do período (ou o que resta do projeto). O previsto atual dessas linhas é substituído.' }))) return;
+    modoPrev.mutate({ modo: m, linhas: ln ? [ln.id] : null }, {
+      onSuccess: (r) => {
+        if (m === 'manual') toast.success(ln ? 'Linha no modo manual (encarregado)' : 'Todas as linhas no modo manual (encarregado)');
+        else toast.success(`${r.aplicadas} linha(s) programada(s) pela capacidade`);
+        if (r.puladas.length) toast.warning(`Sem capacidade: ${r.puladas.map((p) => `linha ${p.linha} (${p.motivo})`).join('; ')}`, { duration: 9000 });
+      },
+      onError: (e) => toast.error(e.message),
+    });
+  };
   const concluir = useAcao((a) => a.post<{ conclusao: number }>(`/programacoes/${id}/concluir`), chave);
   const revisar = useAcao((a, motivo: string) => a.post(`/programacoes/${id}/revisar`, { motivo }), chave);
   const [motivo, setMotivo] = useState<string | null>(null);
@@ -325,6 +344,10 @@ export default function MontarPage() {
         acoes={<>
           <Chip ativo={modo === 'previsto'} onClick={() => setModo('previsto')}>P · Previsto</Chip>
           <Chip ativo={modo === 'realizado'} onClick={() => setModo('realizado')}>R · Realizado</Chip>
+          {modo === 'previsto' && rascunho && pode('encarregado') && v.linhas > 0 && <>
+            <Botao variante="secundario" disabled={nPend > 0 || modoPrev.isPending} title={nPend ? 'Salve as alterações antes' : 'Preenche o previsto de todas as linhas pela capacidade produtiva da equipe'} onClick={() => aplicarModo('capacidade')}><Gauge size={16} /> Pela capacidade (todas)</Botao>
+            <Botao variante="secundario" disabled={modoPrev.isPending} title="Todas as linhas no quantitativo manual do encarregado (filling); o previsto atual fica" onClick={() => aplicarModo('manual')}><Hand size={16} /> Manual (todas)</Botao>
+          </>}
           {rascunho && pode('encarregado') && !aberto && <Botao onClick={() => abrirNova()}><Plus size={16} /> Nova linha</Botao>}
         </>}
       >
@@ -380,6 +403,7 @@ export default function MontarPage() {
                                   value={pv} onChange={(e) => setPend({ ...pend, [`${ln.id}|periodo`]: e.target.value })}
                                   className={`h-8 w-[72px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] font-semibold outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${difere ? 'border-m-warning' : 'border-m-stroke'}`} />
                                 {difere && <div className="mt-0.5 text-[10px] text-m-warning">dias somam {fmt(soma)}{rascunho && pode('encarregado') && <> · <button type="button" className="font-semibold underline" onClick={() => distribuir(ln)}>distribuir</button></>}</div>}
+                                <ModoLinha ln={ln} pid={id} editar={rascunho && pode('encarregado') && nPend === 0 && !modoPrev.isPending} aplicar={aplicarModo} />
                               </>;
                             })()}
                           </td>
@@ -400,6 +424,7 @@ export default function MontarPage() {
                                 className={`h-8 w-[58px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${pend[`${ln.id}|${modo}|${d.data}`] !== undefined ? 'border-m-accent bg-m-accent-subtle' : modo === 'previsto' && ln.calc?.acima_capacidade[di] ? 'border-m-danger text-m-danger' : modo === 'realizado' ? 'border-m-info/40' : 'border-m-stroke'}`}
                               />
                               {modo === 'previsto' && ln.calc?.hh_previsto[di] ? <div className="mt-0.5 text-center text-[10px] text-m-text-muted"><Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={`hh_dia:${di}`}>{`${fmt(ln.calc.hh_previsto[di], 1)} HH`}</Calculado></div> : null}
+                              {modo === 'previsto' && ln.calc?.capacidade_dia?.[di] ? <div className="text-center text-[10px] text-m-text-tertiary" title="Capacidade da equipe neste dia">cap <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={`capacidade_dia:${di}`}>{fmt(ln.calc.capacidade_dia[di], 1)}</Calculado></div> : null}
                             </td>
                           ))}
                           <td className="whitespace-nowrap px-2 py-2 text-right font-semibold text-m-text-primary">
@@ -458,6 +483,23 @@ function dicaDia(ln: LinhaVisao, di: number): string | undefined {
     c.oficiais[di] ? `${fmt(c.oficiais[di], 1)} ${c.recurso_governa ?? 'oficial'}(s)` : null,
     c.acima_capacidade[di] && c.capacidade_un_dia != null ? `acima da capacidade da equipe (${fmt(c.capacidade_un_dia)}/dia)` : null];
   return partes.filter(Boolean).join(' · ') || undefined;
+}
+
+/** Modo do previsto da linha e os dois botões: pela capacidade da equipe ou manual (filling do encarregado). */
+function ModoLinha({ ln, pid, editar, aplicar }: { ln: LinhaVisao; pid: number; editar: boolean; aplicar: (m: 'capacidade' | 'manual', ln?: LinhaVisao) => void }) {
+  const m = MODO[ln.modo_previsto ?? 'manual'];
+  const c = ln.calc;
+  const temCap = !!c?.capacidade_un_dia;
+  return (
+    <div className="mt-1 flex flex-col items-end gap-0.5 text-[10px]">
+      <span title={m.dica} className={`whitespace-nowrap rounded-[5px] px-1.5 py-px font-semibold ${m.tom}`}>{m.rotulo}</span>
+      {temCap && c?.total_sugerido != null && <span className="whitespace-nowrap text-m-text-muted">cap. <Calculado rota={`/programacoes/${pid}/linhas/${ln.id}/memoria`} chave="previsto_sugerido">{fmt(c.total_sugerido)}</Calculado></span>}
+      {editar && <span className="flex gap-1.5 whitespace-nowrap">
+        <button type="button" disabled={!temCap} title={temCap ? 'Preencher o previsto pela capacidade da equipe' : 'Sem capacidade: falta equipe, item da PQ ou CPU'} className="font-semibold text-m-accent underline disabled:cursor-not-allowed disabled:text-m-text-tertiary disabled:no-underline" onClick={() => aplicar('capacidade', ln)}>capacidade</button>
+        <button type="button" title="Quantitativo do encarregado" className="font-semibold text-m-text-secondary underline" onClick={() => aplicar('manual', ln)}>manual</button>
+      </span>}
+    </div>
+  );
 }
 
 /** Produção da linha pela CPU da obra: HH/un, quem governa, índice e capacidade da equipe (cada número abre a conta). */

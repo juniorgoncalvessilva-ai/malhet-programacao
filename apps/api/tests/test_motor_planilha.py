@@ -121,3 +121,17 @@ def test_capacidade_pela_equipe_e_pelo_recurso_que_governa():
     assert capacidade_da_equipe(coefs, comp, 9, "Pedreiro").capacidade_un_dia == pytest.approx(min(por.values()))
     assert capacidade_pelo_governa(coefs, comp, 9, "Pedreiro") == pytest.approx(6 * 9 / 1.3)
     assert capacidade_pelo_governa(coefs, {"Servente": 2}, 9, "Pedreiro") == 0.0  # sem quem governa
+
+
+def test_previsto_pela_capacidade_usa_fator_do_dia_e_para_no_limite():
+    from app.modules.programacao.domain.previsto import capacidade_por_dia, fatores_do_periodo, previsto_pela_capacidade
+
+    datas = [date(2026, 11, 6 + i) for i in range(9)]  # sex 06 → sáb 14
+    f = fatores_do_periodo(datas, semanal=True)
+    assert [x.horas for x in f] == [0, 0, 0, 9, 9, 9, 9, 8, 0]  # sex/sáb anteriores zerados, domingo 0
+    assert capacidade_por_dia(10.0, f)[7] == pytest.approx(10 * 8 / 9, abs=1e-4)
+    assert previsto_pela_capacidade(10.0, f) == [None, None, None, 10.0, 10.0, 10.0, 10.0, 8.89, None]
+    # limite (qtd do período) 25: 10 + 10 + 5 e para
+    assert previsto_pela_capacidade(10.0, f, limite=25) == [None, None, None, 10.0, 10.0, 5.0, None, None, None]
+    assert previsto_pela_capacidade(None, f) == [None] * 9
+    assert previsto_pela_capacidade(0.0, f, limite=10) == [None] * 9

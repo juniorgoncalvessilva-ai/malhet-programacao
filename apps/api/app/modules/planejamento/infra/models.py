@@ -45,6 +45,9 @@ class LinhaProgramacaoModel(Base):
     qtd_projeto: Mapped[float | None] = mapped_column(Float)  # manual; vazio = take-off da TAG
     qtd_periodo: Mapped[float | None] = mapped_column(Float)  # quanto se prevê fazer nesta semana/mês
     natureza: Mapped[str] = mapped_column(String(1), default="P", server_default="P")  # Programada|Oportunidade|Emergencial
+    # como o previsto foi feito: capacidade (botão "Pela capacidade") | manual (filling do encarregado) |
+    # ajustado (veio da capacidade e foi alterado à mão) — base dos KPIs de erro de programação
+    modo_previsto: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
     responsavel: Mapped[str | None] = mapped_column(String(150))
     observacao: Mapped[str | None] = mapped_column(String(300))
     # SSMA (preenchido pela segurança)
