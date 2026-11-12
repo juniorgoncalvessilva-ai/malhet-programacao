@@ -58,6 +58,9 @@ export function SequenciaProgramacao({ pid, v, nomes, editar }: { pid: number; v
   const [sujo, setSujo] = useState(false);
   const [arrastando, setArrastando] = useState<number | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [classificar, setClassificar] = useState<'id' | 'inicio' | 'termino' | 'duracao' | 'encarregado' | 'frente'>('id');
+  const [agrupar, setAgrupar] = useState<'nenhum' | 'frente' | 'encarregado'>('nenhum');
+  const [fechados, setFechados] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (sujo) return; // não atropela o que está sendo editado quando os dados recarregam
     setOrdem(linhas.map((l) => l.id));
@@ -124,11 +127,47 @@ export function SequenciaProgramacao({ pid, v, nomes, editar }: { pid: number; v
     return a === undefined || b === undefined ? null : { a, b };
   };
   const larguraGantt = v.dias.length * DIA_W;
-  const setas = ordem.flatMap((lid, i) => (ligs[lid] ?? []).map((x) => {
-    const j = pos.get(x.de);
+  const ordenavel = classificar === 'id' && agrupar === 'nenhum'; // arrastar só na ordem do Id, sem grupos
+  const nDias = (lid: number) => v.dias.filter((_, di) => porId.get(lid)?.previsto[di]).length;
+  const frenteDe = (lid: number) => porId.get(lid)?.onde ?? '—';
+  const encDe = (lid: number) => porId.get(lid)?.encarregado ?? porId.get(lid)?.equipe ?? 'Sem encarregado';
+  const chaveOrd = (lid: number): (string | number)[] => {
+    const j = porId.get(lid)?.janela;
+    const ini = j ? dia(j[0]) : Number.MAX_SAFE_INTEGER; const fim = j ? dia(j[1]) : Number.MAX_SAFE_INTEGER;
+    switch (classificar) {
+      case 'inicio': return [ini, fim, pos.get(lid) ?? 0];
+      case 'termino': return [fim, ini, pos.get(lid) ?? 0];
+      case 'duracao': return [-nDias(lid), ini, pos.get(lid) ?? 0];
+      case 'encarregado': return [encDe(lid), ini, pos.get(lid) ?? 0];
+      case 'frente': return [frenteDe(lid), pos.get(lid) ?? 0];
+      default: return [pos.get(lid) ?? 0];
+    }
+  };
+  const cmp = (a: number, b: number) => {
+    const x = chaveOrd(a); const y = chaveOrd(b);
+    for (let k = 0; k < x.length; k++) { if (x[k] < y[k]) return -1; if (x[k] > y[k]) return 1; }
+    return 0;
+  };
+  type Vis = { tipo: 'grupo'; chave: string; rotulo: string; ids: number[] } | { tipo: 'tarefa'; lid: number };
+  const vis: Vis[] = (() => {
+    const ordenadas = [...ordem].sort(cmp);
+    if (agrupar === 'nenhum') return ordenadas.map((lid) => ({ tipo: 'tarefa' as const, lid }));
+    const chaveG = agrupar === 'frente' ? frenteDe : encDe;
+    const grupos = new Map<string, number[]>();
+    for (const lid of ordenadas) { const k = chaveG(lid); grupos.set(k, [...(grupos.get(k) ?? []), lid]); }
+    return [...grupos.entries()].sort(([a, ia], [b, ib]) => (agrupar === 'frente' ? a.localeCompare(b, 'pt-BR', { numeric: true }) : cmp(ia[0], ib[0])))
+      .flatMap(([k, ids]) => [{ tipo: 'grupo' as const, chave: k, rotulo: k, ids }, ...(fechados.has(k) ? [] : ids.map((lid) => ({ tipo: 'tarefa' as const, lid })))]);
+  })();
+  const linhaDe = new Map(vis.flatMap((x, r) => (x.tipo === 'tarefa' ? [[x.lid, r] as [number, number]] : [])));
+  const barraGrupo = (ids: number[]) => {
+    const bs = ids.map(barra).filter(Boolean) as { a: number; b: number }[];
+    return bs.length ? { a: Math.min(...bs.map((x) => x.a)), b: Math.max(...bs.map((x) => x.b)) } : null;
+  };
+  const setas = ordem.flatMap((lid) => (ligs[lid] ?? []).map((x) => {
+    const rP = linhaDe.get(x.de); const rS = linhaDe.get(lid);
     const bp = barra(x.de); const bs = barra(lid);
-    if (!j || !bp || !bs) return null;
-    const yP = (j - 1) * LINHA_H + LINHA_H / 2; const yS = i * LINHA_H + LINHA_H / 2;
+    if (rP === undefined || rS === undefined || !bp || !bs) return null;
+    const yP = rP * LINHA_H + LINHA_H / 2; const yS = rS * LINHA_H + LINHA_H / 2;
     const xP = (x.tipo === 'TI' || x.tipo === 'TT' ? bp.b + 1 : bp.a) * DIA_W + (x.tipo === 'TI' || x.tipo === 'TT' ? 0 : 0);
     const fimNoInicio = x.tipo === 'TI' || x.tipo === 'II';
     const xS = (fimNoInicio ? bs.a : bs.b + 1) * DIA_W;
@@ -149,9 +188,20 @@ export function SequenciaProgramacao({ pid, v, nomes, editar }: { pid: number; v
         {editar && <Botao variante="secundario" onClick={cronologica}><ListOrdered size={16} /> Ordenar cronologicamente</Botao>}
         {editar && <Botao disabled={!sujo || salvando} onClick={salvar}><Save size={16} /> {salvando ? 'Salvando…' : 'Salvar sequência'}</Botao>}
         {sujo && <span className="text-[12.5px] font-semibold text-m-warning">alterações não salvas</span>}
+        <label className="flex items-center gap-1.5 text-[12.5px] text-m-text-secondary">Classificar por
+          <select aria-label="Classificar por" value={classificar} onChange={(e) => setClassificar(e.target.value as typeof classificar)} className="h-9 rounded-full border border-m-stroke bg-m-surface-field px-3 text-[12.5px] text-m-text-primary">
+            <option value="id">Id (sequência)</option><option value="inicio">Início</option><option value="termino">Término</option>
+            <option value="duracao">Duração (maior primeiro)</option><option value="encarregado">Encarregado</option><option value="frente">Frente</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 text-[12.5px] text-m-text-secondary">Agrupar por
+          <select aria-label="Agrupar por" value={agrupar} onChange={(e) => { setAgrupar(e.target.value as typeof agrupar); setFechados(new Set()); }} className="h-9 rounded-full border border-m-stroke bg-m-surface-field px-3 text-[12.5px] text-m-text-primary">
+            <option value="nenhum">Nenhum</option><option value="frente">Frente</option><option value="encarregado">Encarregado</option>
+          </select>
+        </label>
         <span className={`text-[12.5px] ${nAlertas ? 'text-m-danger' : 'text-m-text-muted'}`}>{nAlertas ? `${nAlertas} predecessora(s) não respeitada(s) pelos dias programados` : 'Predecessoras conferidas com os dias programados'}</span>
       </div>
-      <p className="text-[12px] text-m-text-muted">Como no MS Project: arraste as tarefas para ordenar; em Predecessoras digite o Id e o tipo — <b>3</b> (término-início) · <b>3TI+2 dias</b> · <b>2II</b> · <b>4TT</b> · <b>5IT</b> — separados por &quot;;&quot;. Início e término = 1º e último dia com previsto.</p>
+      <p className="text-[12px] text-m-text-muted">Como no MS Project: arraste as tarefas para ordenar (com Classificar por Id e sem agrupamento); em Predecessoras digite o Id e o tipo — <b>3</b> (término-início) · <b>3TI+2 dias</b> · <b>2II</b> · <b>4TT</b> · <b>5IT</b> — separados por &quot;;&quot;. Início e término = 1º e último dia com previsto.</p>
 
       <div className="flex overflow-hidden rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised">
         {/* tabela (lado esquerdo do Project) */}
@@ -165,27 +215,43 @@ export function SequenciaProgramacao({ pid, v, nomes, editar }: { pid: number; v
               </tr>
             </thead>
             <tbody>
-              {ordem.map((lid, i) => {
+              {vis.map((x, r) => {
+                if (x.tipo === 'grupo') {
+                  const bg = barraGrupo(x.ids);
+                  const fechado = fechados.has(x.chave);
+                  return (
+                    <tr key={`g:${x.chave}`} style={{ height: LINHA_H }} className="bg-m-surface-hover font-semibold">
+                      <td className={`${td} text-center`}><button type="button" aria-label={`${fechado ? 'Abrir' : 'Recolher'} ${x.rotulo}`} onClick={() => setFechados((s) => { const n = new Set(s); if (n.has(x.chave)) n.delete(x.chave); else n.add(x.chave); return n; })} className="text-m-text-secondary">{fechado ? '▸' : '▾'}</button></td>
+                      <td className={`${td} max-w-[360px] truncate text-m-text-primary`} title={x.rotulo}>{x.rotulo} <span className="font-normal text-m-text-muted">· {x.ids.length} tarefa(s)</span></td>
+                      <td className={`${td} text-right`}>{bg ? `${bg.b - bg.a + 1} d` : '—'}</td>
+                      <td className={td}>{bg ? v.dias[bg.a].data.slice(8) + '/' + v.dias[bg.a].data.slice(5, 7) : '—'}</td>
+                      <td className={td}>{bg ? v.dias[bg.b].data.slice(8) + '/' + v.dias[bg.b].data.slice(5, 7) : '—'}</td>
+                      <td className={td} /><td className={td} />
+                    </tr>
+                  );
+                }
+                const lid = x.lid;
+                const i = ordem.indexOf(lid);
                 const ln = porId.get(lid);
                 if (!ln) return null;
                 const al = alertas(lid);
                 const diasPrev = v.dias.filter((_, di) => ln.previsto[di]).map((d) => d.data);
                 return (
-                  <tr key={lid} style={{ height: LINHA_H }} className={`${arrastando === i ? 'opacity-40' : ''} ${al.length ? 'bg-m-danger-subtle' : ''}`}
-                    draggable={editar} onDragStart={(e) => { setArrastando(i); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); }}
+                  <tr key={lid} style={{ height: LINHA_H, ...(r % 2 === 1 && !al.length ? { background: 'color-mix(in srgb, #44546A 10%, transparent)' } : {}) }} className={`${arrastando === i ? 'opacity-40' : ''} ${al.length ? 'bg-m-danger-subtle' : ''}`}
+                    draggable={editar && ordenavel} onDragStart={(e) => { setArrastando(i); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); }}
                     onDragEnd={() => setArrastando(null)} onDragOver={(e) => { if (editar) e.preventDefault(); }}
                     onDrop={(e) => { e.preventDefault(); const de = Number(e.dataTransfer.getData('text/plain')); if (!Number.isNaN(de)) mover(de, i); setArrastando(null); }}>
                     <td className={`${td} whitespace-nowrap`}>
                       <span className="inline-flex items-center gap-0.5">
-                        {editar && <GripVertical size={13} className="cursor-grab text-m-text-muted" aria-hidden="true" />}
+                        {editar && ordenavel && <GripVertical size={13} className="cursor-grab text-m-text-muted" aria-hidden="true" />}
                         <b className="w-5 text-right text-m-text-primary">{i + 1}</b>
-                        {editar && <>
+                        {editar && ordenavel && <>
                           <button type="button" aria-label={`Subir ${ln.codigo_simova}`} disabled={i === 0} className="text-m-text-muted disabled:opacity-30" onClick={() => mover(i, i - 1)}><ArrowUp size={12} /></button>
                           <button type="button" aria-label={`Descer ${ln.codigo_simova}`} disabled={i === ordem.length - 1} className="text-m-text-muted disabled:opacity-30" onClick={() => mover(i, i + 1)}><ArrowDown size={12} /></button>
                         </>}
                       </span>
                     </td>
-                    <td className={`${td} max-w-[360px]`} title={`${ln.onde}${ln.cwp?.texto ? ` · CWP ${ln.cwp.texto}` : ''}${al.length ? `\n${al.join('\n')}` : ''}`}>
+                    <td className={`${td} max-w-[360px] ${agrupar !== 'nenhum' ? 'pl-5' : ''}`} title={`${ln.onde}${ln.cwp?.texto ? ` · CWP ${ln.cwp.texto}` : ''}${al.length ? `\n${al.join('\n')}` : ''}`}>
                       <span className="block truncate">{al.length > 0 && <AlertTriangle size={12} className="mr-1 inline text-m-danger" />}<b className="text-m-text-primary">{ln.codigo_simova}</b> {nomeLinha(ln, nomes)}</span>
                     </td>
                     <td className={`${td} whitespace-nowrap text-right`}>{diasPrev.length
@@ -219,12 +285,23 @@ export function SequenciaProgramacao({ pid, v, nomes, editar }: { pid: number; v
                 </div>
               ))}
             </div>
-            <div className="relative" style={{ height: ordem.length * LINHA_H }}>
+            <div className="relative" style={{ height: vis.length * LINHA_H }}>
               {/* fundo: fins de semana e linhas */}
               <div className="absolute inset-0 flex">
                 {v.dias.map((d) => <div key={d.data} style={{ width: DIA_W }} className={`h-full shrink-0 border-r border-m-stroke-subtle ${['SÁB', 'DOM'].includes(d.dia) ? 'bg-m-surface-hover' : ''}`} />)}
               </div>
-              {ordem.map((lid, i) => {
+              {vis.map((x, i) => {
+                if (x.tipo === 'grupo') {
+                  const bg = barraGrupo(x.ids);
+                  return (
+                    <Fragment key={`g:${x.chave}`}>
+                      <div className="absolute left-0 right-0 bg-m-surface-hover" style={{ top: i * LINHA_H, height: LINHA_H - 1 }} />
+                      <div className="absolute left-0 right-0 border-b border-m-stroke-subtle" style={{ top: (i + 1) * LINHA_H - 1 }} />
+                      {bg && <div className="absolute bg-m-text-primary" title={`${x.rotulo}: resumo`} style={{ top: i * LINHA_H + 13, height: 6, left: bg.a * DIA_W + 2, width: (bg.b - bg.a + 1) * DIA_W - 4, clipPath: 'polygon(0 0,100% 0,100% 100%,calc(100% - 5px) 50%,5px 50%,0 100%)' }} />}
+                    </Fragment>
+                  );
+                }
+                const lid = x.lid;
                 const ln = porId.get(lid);
                 const b = barra(lid);
                 const ruim = alertas(lid).length > 0;
@@ -240,7 +317,7 @@ export function SequenciaProgramacao({ pid, v, nomes, editar }: { pid: number; v
                   </Fragment>
                 );
               })}
-              <svg className="pointer-events-none absolute left-0 top-0" width={larguraGantt} height={ordem.length * LINHA_H} aria-hidden="true">
+              <svg className="pointer-events-none absolute left-0 top-0" width={larguraGantt} height={vis.length * LINHA_H} aria-hidden="true">
                 <defs>
                   <marker id="seta-ok" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--m-text-secondary)" /></marker>
                   <marker id="seta-ruim" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--m-danger)" /></marker>

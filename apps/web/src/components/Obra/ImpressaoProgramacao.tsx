@@ -41,6 +41,9 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
   const locais = porEnc ? agruparPorEncarregado(filtrados) : filtrados;
   // filtrado por encarregado: o total de HH é o das linhas dele
   const hhTotal = enc ? locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.calc?.total_hh_previsto ?? 0), 0) : v.total_hh_previsto;
+  // atividades alternadas (branca / azul-acinzentada D6DCE4) nas colunas descritivas, como o Excel do cliente (modelo S27)
+  const posVis = new Map(locais.flatMap((l) => l.areas.flatMap((a) => porCwp(a.linhas).map((x) => x.ln.id))).map((x, i) => [x, i]));
+  const zb = (lid: number) => ((posVis.get(lid) ?? 0) % 2 === 1 ? 'bg-[#D6DCE4]' : '');
   const totalValor = locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.pu ?? 0) * ln.total_previsto, 0);
 
   return (
@@ -97,18 +100,18 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
                       <Fragment key={ln.id}>
                         {inicio && cwp && <tr className="break-inside-avoid"><td colSpan={11 + v.dias.length} className={`${cel} bg-[#DCE6F1] pl-4 font-semibold text-[#173761]`}>CWP {cwp.codigo ? `${cwp.codigo} · ` : ''}{cwp.texto}</td></tr>}
                         <tr className="break-inside-avoid">
-                          <td rowSpan={2} className={`${cel} align-middle`}>{li + 1}.{ai + 1}.{i + 1}</td>
-                          <td rowSpan={2} className={`${cel} align-middle font-semibold`}>{ln.codigo_simova}</td>
-                          <td rowSpan={2} className={`${cel} align-middle`}>{nomeLinha(ln, nomes)}{ln.id_crono && <div className="text-[9px] text-black/60">{ln.id_crono}</div>}</td>
-                          <td rowSpan={2} className={`${cel} align-middle`}>{ln.item_pq ?? '—'}</td>
-                          <td rowSpan={2} className={`${cel} text-center align-middle`}>{ln.unidade ?? ''}</td>
-                          <td rowSpan={2} className={`${cel} text-right align-middle`}>{ln.qtd_projeto != null ? fmt(ln.qtd_projeto) : ''}</td>
-                          <td rowSpan={2} className={`${cel} align-middle`}>{ln.encarregado ?? ln.equipe ?? ''}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} align-middle`}>{li + 1}.{ai + 1}.{i + 1}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} align-middle font-semibold`}>{ln.codigo_simova}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} align-middle`}>{nomeLinha(ln, nomes)}{ln.id_crono && <div className="text-[9px] text-black/60">{ln.id_crono}</div>}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} align-middle`}>{ln.item_pq ?? '—'}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} text-center align-middle`}>{ln.unidade ?? ''}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} text-right align-middle`}>{ln.qtd_projeto != null ? fmt(ln.qtd_projeto) : ''}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} align-middle`}>{ln.encarregado ?? ln.equipe ?? ''}</td>
                           <td className={`${cel} bg-[#FFFF00] text-center font-bold`}>P</td>
                           {ln.previsto.map((q, di) => <td key={di} className={`${cel} bg-[#FFFF00] text-right`}>{q ? fmt(q) : ''}</td>)}
                           <td className={`${cel} bg-[#FFFF00] text-right font-semibold`}>{ln.total_previsto ? fmt(ln.total_previsto) : ''}</td>
-                          <td rowSpan={2} className={`${cel} text-right align-middle`}>{ln.calc?.total_hh_previsto ? fmt(ln.calc.total_hh_previsto, 1) : ''}</td>
-                          <td rowSpan={2} className={`${cel} text-right align-middle`}>{ln.pu ? fmt(ln.pu * ln.total_previsto) : ''}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} text-right align-middle`}>{ln.calc?.total_hh_previsto ? fmt(ln.calc.total_hh_previsto, 1) : ''}</td>
+                          <td rowSpan={2} className={`${cel} ${zb(ln.id)} text-right align-middle`}>{ln.pu ? fmt(ln.pu * ln.total_previsto) : ''}</td>
                         </tr>
                         <tr className="break-inside-avoid">
                           <td className={`${cel} text-center font-bold`}>R</td>

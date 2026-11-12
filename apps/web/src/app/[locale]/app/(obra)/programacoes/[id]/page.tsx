@@ -221,6 +221,9 @@ export default function MontarPage() {
   const encs = encarregadosDe(v.locais);
   const locaisFiltrados = filtrarEncarregado(v.locais, enc);
   const locaisVis = porEnc ? agruparPorEncarregado(locaisFiltrados) : locaisFiltrados;
+  const ordemVis = locaisVis.flatMap((l) => l.areas.flatMap((a) => porCwp(a.linhas).map((x) => x.ln.id)));
+  const posVis = new Map(ordemVis.map((x, i) => [x, i]));
+  const zebra = (lid: number): React.CSSProperties | undefined => ((posVis.get(lid) ?? 0) % 2 === 1 ? { background: 'color-mix(in srgb, #44546A 16%, transparent)' } : undefined);
   const totalDia = v.dias.map((d, i) => locaisVis.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (Number(valorCel(ln, modo, i, d.data)) || 0), 0));
 
   return (
@@ -416,11 +419,11 @@ export default function MontarPage() {
               {!v.locais.length && <tr><td colSpan={v.dias.length + 8} className="py-10 text-center text-m-text-muted">Inclua a primeira linha: escolha a área, o grupo e o tipo.</td></tr>}
               {locaisVis.map((l, li) => (
                 <Fragment key={`l${l.id}`}>
-                  <tr><td colSpan={v.dias.length + 8} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-on-accent">{l.codigo} · {l.descricao}</td></tr>
+                  <tr><td colSpan={v.dias.length + 8} className="bg-[#FF0000] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-white">{l.codigo} · {l.descricao}</td></tr>
                   {l.areas.map((a, ai) => (
                     <Fragment key={`a${a.id}`}>
                       <tr>
-                        <td colSpan={v.dias.length + 8} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1.5 text-xs font-semibold text-m-accent">
+                        <td colSpan={v.dias.length + 8} className="border-b border-m-stroke-subtle bg-[#173761] px-3 py-1.5 text-xs font-semibold text-white">
                           {a.codigo} · {a.descricao}
                           {rascunho && pode('encarregado') && !porEnc && <button type="button" className="ml-3 font-semibold underline" onClick={() => abrirNova(a.id)}>+ linha</button>}
                         </td>
@@ -432,7 +435,7 @@ export default function MontarPage() {
                             CWP {cwp.codigo ? `${cwp.codigo} · ` : ''}{cwp.texto}
                           </td></tr>
                         )}
-                        <tr className="border-b border-m-row align-top">
+                        <tr className="border-b border-m-row align-top" style={zebra(ln.id)}>
                           <td className="px-2 py-2 text-m-text-muted">{li + 1}.{ai + 1}.{i + 1}</td>
                           <td className="min-w-[240px] px-2 py-2">
                             <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{nomeLinha(ln, nomes)}</span>

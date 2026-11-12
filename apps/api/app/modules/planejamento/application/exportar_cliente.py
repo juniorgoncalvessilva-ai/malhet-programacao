@@ -16,6 +16,7 @@ from app.modules.referencias.domain.cpu_obra import eh_apoio
 from app.modules.ssma.domain.cadastro import texto_da_lista
 
 AZUL, VERMELHO, BRANCO, VERDE_PR = "FF173761", "FFFF0000", "FFFFFFFF", "FF2B665E"
+ZEBRA = "FFD6DCE4"  # atividades alternadas (modelo S27: "Azul-acinzentado, Texto 2, 80% mais claro") — colunas G..AJ
 FINO, MEDIO = Side(style="thin"), Side(style="medium")
 GRADE = Border(left=FINO, right=FINO, top=FINO, bottom=FINO)
 CENTRO = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -167,8 +168,11 @@ def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, f
     r = 12
     n_area = 0
     lin_valor: list[int] = []
+    n_ativ = 0  # alternância das atividades (branca / zebrada), contínua na planilha toda, como no modelo
     for loc in v["locais"]:
-        _cel(ws, f"J{r}", loc["descricao"].upper(), sz=48, b=True, fill=VERMELHO, cor=BRANCO)
+        for ci in range(7, ult + 1):  # faixa do local na linha inteira (G até a última coluna), como no modelo
+            _cel(ws, f"{L(ci)}{r}", None, sz=48, b=True, fill=VERMELHO, cor=BRANCO)
+        ws[f"J{r}"] = loc["descricao"].upper()
         ws.row_dimensions[r].height = 55.5
         r += 1
         for a in loc["areas"]:
@@ -199,9 +203,11 @@ def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, f
                     "AB": f"=SUM(AC{p}:AJ{p})" if rec else None,
                     **{k: (rec.get(k) or None) for k in ("AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ")},
                 }
+                n_ativ += 1
+                zebra = ZEBRA if n_ativ % 2 == 0 else None
                 for letra, val in fixos.items():
                     for rx in (p, rr):
-                        _cel(ws, f"{letra}{rx}", None, fmt=NUM if letra in "WXY" else None)
+                        _cel(ws, f"{letra}{rx}", None, fmt=NUM if letra in "WXY" else None, fill=zebra)
                     ws[f"{letra}{p}"] = val
                     _merge(ws, f"{letra}{p}", f"{letra}{rr}")
                 _cel(ws, f"AK{p}", "P", b=True, cor=VERDE_PR)
