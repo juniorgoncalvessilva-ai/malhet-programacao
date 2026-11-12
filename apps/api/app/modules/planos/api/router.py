@@ -134,6 +134,24 @@ def _preencher(s: Session, c: ContextoObra, it: PlanoItemModel, d: ItemIn) -> No
     it.observacao = (d.observacao or "").strip()[:600] or None
 
 
+def _vigente_crono(s: Session, obra_id: int) -> int | None:
+    from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
+
+    return ResolvedorReferencias(s, obra_id).versoes_vigentes().get("CRONOGRAMA")
+
+
+def _status_no_cronograma(s: Session, obra_id: int, ids: set[str]) -> dict[str, str | None]:
+    from app.modules.referencias.application.importar_xer import status_pt
+    from app.modules.referencias.infra.models import AtividadeCronogramaModel
+
+    vig = _vigente_crono(s, obra_id)
+    if not vig or not ids:
+        return {}
+    return {a: status_pt(st) for a, st in s.execute(select(AtividadeCronogramaModel.id_crono, AtividadeCronogramaModel.status)
+                                                    .where(AtividadeCronogramaModel.versao_id == vig,
+                                                           AtividadeCronogramaModel.id_crono.in_(ids)))}
+
+
 def _saida(s: Session, obra_id: int, itens: list[PlanoItemModel]) -> list[dict]:
     ids = [i.id for i in itens] or [0]
     areas = {a.id: a for a in s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == obra_id))}
@@ -152,6 +170,8 @@ def _saida(s: Session, obra_id: int, itens: list[PlanoItemModel]) -> list[dict]:
     hoje = date.today()
     from app.modules.restricoes.domain.acao import situacao as farol
 
+    status_crono = _status_no_cronograma(s, obra_id, {i.id_crono for i in itens if i.id_crono})
+
     out = []
     for i in itens:
         a = areas.get(i.area_id)
@@ -164,7 +184,8 @@ def _saida(s: Session, obra_id: int, itens: list[PlanoItemModel]) -> list[dict]:
             "wbs_no_id": i.wbs_no_id, "tipo_id": i.tipo_id, "id_crono": i.id_crono,
             "equipe_id": i.equipe_id, "equipe": equipes[i.equipe_id].nome if i.equipe_id in equipes else None,
             "inicio": i.inicio.isoformat(), "fim": i.fim.isoformat(), "quantidade": i.quantidade,
-            "responsavel": i.responsavel, "marco": i.marco, "marco_id": i.marco_id, "analisado": i.analisado,
+            "responsavel": i.responsavel, "recursos": i.recursos or [], "status_crono": status_crono.get(i.id_crono),
+            "marco": i.marco, "marco_id": i.marco_id, "analisado": i.analisado,
             "analisado_em": i.analisado_em.isoformat() if i.analisado_em else None, "observacao": i.observacao,
             "restricoes": [{"id": x.id, "numero": x.numero, "acao": x.acao, "responsavel": x.responsavel,
                             "prazo": (x.reprogramado or x.prazo_termino).isoformat() if (x.reprogramado or x.prazo_termino) else None,
@@ -382,3 +403,119 @@ def migrar(d: MigrarIn, s: Session = Depends(get_session), c: ContextoObra = Dep
         criadas += 1
     s.flush()
     return {"criadas": criadas, "bloqueados": bloqueados, "avisos": avisos[:30]}
+
+
+# ---- puxar do cronograma (período) ------------------------------------------------------------------------
+class DoCronogramaIn(BaseModel):
+    inicio: date
+    fim: date
+    excluir_concluidas: bool = True
+    so_construcao: bool = True  # só o ramo "CWP…" (construção) da EAP
+    busca: str | None = None
+    ids: list[str] | None = None  # Activity IDs escolhidos na prévia (vazio = todos do período)
+    equipe_id: int | None = None
+    marco_id: int | None = None
+
+
+def _do_periodo(s: Session, obra_id: int, d: DoCronogramaIn):
+    """Atividades do cronograma vigente que cruzam o período, com área (CWA das Frentes) e IWP da WBS quando houver."""
+    from app.modules.referencias.application.importar_xer import status_pt
+    from app.modules.referencias.infra.models import AtividadeCronogramaModel
+    from app.modules.wbs.domain.cronograma import escolher_area, ler_caminho
+
+    if d.fim < d.inicio:
+        raise DomainError("o fim do período vem depois do início", "fim")
+    if (d.fim - d.inicio).days > dom.MAX_DIAS:
+        raise DomainError(f"período de até {dom.MAX_DIAS} dias", "fim")
+    vig = _vigente_crono(s, obra_id)
+    if vig is None:
+        raise DomainError("importe o cronograma (.xer) antes de puxar")
+    ats = list(s.scalars(select(AtividadeCronogramaModel).where(
+        AtividadeCronogramaModel.versao_id == vig, AtividadeCronogramaModel.inicio.is_not(None),
+        AtividadeCronogramaModel.fim.is_not(None), func.date(AtividadeCronogramaModel.inicio) <= d.fim,
+        func.date(AtividadeCronogramaModel.fim) >= d.inicio).order_by(AtividadeCronogramaModel.ordem_p6, AtividadeCronogramaModel.id)))
+    areas = list(s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == obra_id, AreaFrenteModel.ativo.is_(True))))
+    lista_areas = [(a.id, a.cwa, a.ativo_codigo) for a in areas]
+    area_rot = {a.id: f"{a.codigo} · {a.descricao}" for a in areas}
+    iwp_de = dict(s.execute(select(WbsNoModel.id_crono, WbsNoModel.id).where(
+        WbsNoModel.obra_id == obra_id, WbsNoModel.tipo == "iwp", WbsNoModel.ativo.is_(True), WbsNoModel.id_crono.is_not(None))).all())
+    termo = (d.busca or "").strip().lower()
+    out, concluidas, fora = [], 0, 0
+    for a in ats:
+        status = status_pt(a.status)
+        nomes = [x.get("nome", "") for x in (a.wbs_niveis or [])]
+        cam = ler_caminho(nomes, [x.get("codigo") or "" for x in (a.wbs_niveis or [])])
+        if d.so_construcao and cam is None:
+            fora += 1
+            continue
+        if d.excluir_concluidas and status == "Concluída":
+            concluidas += 1
+            continue
+        if termo and termo not in f"{a.id_crono} {a.atividade} {' '.join(nomes)}".lower():
+            continue
+        aid = escolher_area(cam.cwa, cam.nome_cwa, lista_areas) if cam else None
+        out.append({"id_crono": a.id_crono, "atividade": a.atividade, "inicio": a.inicio.date(), "fim": a.fim.date(),
+                    "status": status, "area_id": aid, "area": area_rot.get(aid), "caminho": " › ".join(nomes[-2:]),
+                    "wbs_no_id": iwp_de.get(a.id_crono), "recursos": a.recursos or []})
+    return out, concluidas, fora
+
+
+@router.post("/cronograma/previa")
+def previa_cronograma(d: DoCronogramaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """O que viria do cronograma no período (sem gravar): atividades, já no plano ou não, e as concluídas deixadas de fora."""
+    lista, concluidas, fora = _do_periodo(s, c.obra_id, d)
+    ja = set(s.scalars(select(PlanoItemModel.id_crono).where(PlanoItemModel.obra_id == c.obra_id, PlanoItemModel.id_crono.is_not(None))))
+    return {"atividades": [{**x, "inicio": x["inicio"].isoformat(), "fim": x["fim"].isoformat(), "no_plano": x["id_crono"] in ja}
+                           for x in lista[:1500]],
+            "total": len(lista), "concluidas_excluidas": concluidas, "fora_da_construcao": fora}
+
+
+@router.post("/itens/do-cronograma", status_code=201)
+def do_cronograma(d: DoCronogramaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Puxa as atividades do período para o plano, com datas, área, IWP (quando a WBS tem) e os recursos alocados no
+    P6. Atividade já no plano (mesmo Activity ID) é atualizada: datas e recursos do cronograma, sem duplicar."""
+    lista, concluidas, _ = _do_periodo(s, c.obra_id, d)
+    if d.ids:
+        quer = set(d.ids)
+        lista = [x for x in lista if x["id_crono"] in quer]
+    existentes = {i.id_crono: i for i in s.scalars(select(PlanoItemModel).where(
+        PlanoItemModel.obra_id == c.obra_id, PlanoItemModel.id_crono.in_([x["id_crono"] for x in lista] or [""])))}
+    novos = atualizados = 0
+    for x in lista:
+        it = existentes.get(x["id_crono"])
+        if it is not None:
+            it.inicio, it.fim, it.recursos = x["inicio"], x["fim"], x["recursos"] or None
+            atualizados += 1
+            continue
+        it = PlanoItemModel(obra_id=c.obra_id, numero=_proximo(s, c.obra_id), criado_por=c.usuario.id)
+        _preencher(s, c, it, ItemIn(descricao=x["atividade"][:300], wbs_no_id=x["wbs_no_id"], area_id=x["area_id"],
+                                    inicio=x["inicio"], fim=x["fim"], equipe_id=d.equipe_id, marco_id=d.marco_id))
+        it.id_crono, it.recursos = x["id_crono"], x["recursos"] or None
+        s.add(it)
+        s.flush()
+        novos += 1
+    return {"novos": novos, "atualizados": atualizados, "concluidas_excluidas": concluidas}
+
+
+@router.post("/tirar-concluidas")
+def tirar_concluidas(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Exclui do plano as atividades concluídas no cronograma vigente. Fica quem já foi para a programação ou tem
+    restrição pendente no 6WLA (com o motivo)."""
+    itens = list(s.scalars(select(PlanoItemModel).where(PlanoItemModel.obra_id == c.obra_id, PlanoItemModel.id_crono.is_not(None))))
+    st = _status_no_cronograma(s, c.obra_id, {i.id_crono for i in itens})
+    alvo = [i for i in itens if st.get(i.id_crono) == "Concluída"]
+    ids = [i.id for i in alvo] or [0]
+    migr = set(s.scalars(select(LinhaProgramacaoModel.plano_item_id).where(LinhaProgramacaoModel.plano_item_id.in_(ids))))
+    pend = set(s.scalars(select(AcaoRestricaoModel.plano_item_id).where(AcaoRestricaoModel.plano_item_id.in_(ids),
+                                                                        AcaoRestricaoModel.status1 == "Pendente")))
+    removidos, mantidos = 0, []
+    for i in alvo:
+        if i.id in migr:
+            mantidos.append(f"{dom.codigo_item(i.numero)}: já está em programação")
+        elif i.id in pend:
+            mantidos.append(f"{dom.codigo_item(i.numero)}: restrição pendente no 6WLA")
+        else:
+            s.delete(i)
+            removidos += 1
+    s.flush()
+    return {"removidos": removidos, "mantidos": mantidos[:50]}

@@ -87,7 +87,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   situação derivada (analisar → restrição → liberado → programado); restrição do item = ação do 6WLA
   (`acao_restricao.plano_item_id`); migra para a programação (`programacao_linha.plano_item_id`; semanal só sem restrição
   pendente). Abas 90 dias | 6 semanas | Pull planning | Levar à programação em `/app/plano`. Aba do navegador
-  "Contratada | Obra" + favicon da contratada (`TituloAba`, `marca_obra.nome_contratada`). Spec 043.
+  "Contratada | Obra" + favicon da contratada (`TituloAba`, `marca_obra.nome_contratada`). Spec 043. Puxar de um período do
+  cronograma (`/planos/itens/do-cronograma`, excluir concluídas) com os recursos do P6 (`atividade_cronograma.recursos`
+  ← TASKRSRC, copiados em `plano_item.recursos`); `/planos/tirar-concluidas`. Spec 044.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

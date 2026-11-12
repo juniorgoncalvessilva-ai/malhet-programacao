@@ -90,6 +90,25 @@ def estrutura_wbs(wbs: list[dict[str, str]]) -> dict[str, list[tuple[str, str, s
     return {wid: niveis(wid) for wid in por_id}
 
 
+TIPO_RECURSO = {"RT_Labor": "mao_de_obra", "RT_Equip": "equipamento", "RT_Mat": "material"}
+
+
+def recursos_por_tarefa(t: dict[str, list[dict[str, str]]]) -> dict[str, list[dict]]:
+    """task_id → recursos alocados (TASKRSRC + RSRC): código, nome, tipo, quantidade orçada e restante, unidade.
+    Mão de obra e equipamento em horas; material na unidade do recurso (UMEASURE)."""
+    unid = {u.get("unit_id"): (u.get("unit_abbrev") or "").strip() for u in t.get("UMEASURE", [])}
+    rsrc = {r.get("rsrc_id"): r for r in t.get("RSRC", [])}
+    out: dict[str, list[dict]] = {}
+    for a in t.get("TASKRSRC", []):
+        r = rsrc.get(a.get("rsrc_id"), {})
+        tipo = TIPO_RECURSO.get(a.get("rsrc_type") or r.get("rsrc_type", ""), "outro")
+        out.setdefault(a.get("task_id", ""), []).append({
+            "codigo": (r.get("rsrc_short_name") or "").strip() or None, "nome": (r.get("rsrc_name") or "").strip() or "?",
+            "tipo": tipo, "qtd": _num(a.get("target_qty")), "restante": _num(a.get("remain_qty")),
+            "unid": unid.get(r.get("unit_id")) or None if tipo == "material" else "h"})
+    return out
+
+
 def _chave_codigo(code: str) -> tuple:
     """Ordem natural do Activity ID (C-9 antes de C-10)."""
     import re
@@ -110,6 +129,7 @@ def carregar_xer(session: Session, obra_id: int, arquivo: BinaryIO, *, nome_arqu
     v = nova_versao(session, obra_id, "CRONOGRAMA", rotulo, usuario, data_base.date() if data_base else None,
                     nome_arquivo, f"P6 {proj.get('proj_short_name', '')}".strip())
     estrutura = estrutura_wbs(t.get("PROJWBS", []))
+    recursos = recursos_por_tarefa(t)
     validas, vistos = [], set()
     for r in tasks:
         code = (r.get("task_code") or "").strip()
@@ -132,7 +152,8 @@ def carregar_xer(session: Session, obra_id: int, arquivo: BinaryIO, *, nome_arqu
             detalhe_wbs=None, status=STATUS.get(r.get("status_code", ""), r.get("status_code")),
             inicio=inicio, fim=fim, realizado=_num(r.get("phys_complete_pct")),
             horas_crono=_num(r.get("target_drtn_hr_cnt")),
-            wbs_niveis=[{"nome": n, "codigo": c, "ordem": k} for n, c, k in niv] or None, ordem_p6=ordem))
+            wbs_niveis=[{"nome": n, "codigo": c, "ordem": k} for n, c, k in niv] or None, ordem_p6=ordem,
+            recursos=recursos.get(r.get("task_id", "")) or None))
     v.qtd_itens = len(vistos)
     res.contagem["CRONOGRAMA"] = len(vistos)
     res.contagem["LIGACOES"] = len(t.get("TASKPRED", []))

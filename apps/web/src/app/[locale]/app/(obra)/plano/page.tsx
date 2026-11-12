@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Diamond, ListTree, Plus, Send, ShieldAlert, Trash2, X } from 'lucide-react';
+import { CalendarSearch, CheckCircle2, Diamond, Eraser, GanttChart, ListTree, Plus, Send, ShieldAlert, Trash2, X } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Abas } from '@/components/Obra/Abas';
@@ -13,12 +13,12 @@ import { useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
-import type { ItemPlano, NoWbs, PlanoResposta, PreviaMigracao, SituacaoPlano } from '@/lib/api/types';
+import type { AtividadePeriodo, ItemPlano, NoWbs, PlanoResposta, PreviaMigracao, RecursoP6, SituacaoPlano } from '@/lib/api/types';
 
 type Aba = '90' | '6' | 'pull' | 'migrar';
 const ROTULO: Record<SituacaoPlano, string> = { analisar: 'A analisar', restricao: 'Com restrição', liberado: 'Liberado', programado: 'Programado' };
 const TOM: Record<SituacaoPlano, 'neutro' | 'perigo' | 'sucesso' | 'acento'> = { analisar: 'neutro', restricao: 'perigo', liberado: 'sucesso', programado: 'acento' };
-const BARRA: Record<SituacaoPlano, string> = { analisar: 'bg-m-text-muted/40', restricao: 'bg-m-danger', liberado: 'bg-m-success', programado: 'bg-m-accent' };
+const BARRA: Record<SituacaoPlano, string> = { analisar: 'bg-m-text-muted opacity-50', restricao: 'bg-m-danger', liberado: 'bg-m-success', programado: 'bg-m-accent' };
 const SEIS_M: Record<string, string> = { MDO: 'Mão de obra', MET: 'Método', MAT: 'Material', MAQ: 'Máquina', MAB: 'Meio ambiente', MED: 'Medida' };
 const hoje = () => new Date().toISOString().slice(0, 10);
 const somaDias = (iso: string, d: number) => { const x = new Date(`${iso}T12:00:00`); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10); };
@@ -37,6 +37,16 @@ export default function PlanoPage() {
   const [sel, setSel] = useState<number | null>(null);
   const [novo, setNovo] = useState(false);
   const [daWbs, setDaWbs] = useState(false);
+  const [doCrono, setDoCrono] = useState(false);
+  const api = useApi();
+  const atualizar = useAtualizar();
+  const confirmar = useConfirmar();
+  const tirarConcluidas = async () => {
+    if (!(await confirmar({ titulo: 'Excluir do plano as atividades concluídas?', mensagem: 'Saem as que estão concluídas no cronograma vigente. Ficam as que já foram para a programação ou têm restrição pendente no 6WLA.' }))) return;
+    api.post<{ removidos: number; mantidos: string[] }>('/planos/tirar-concluidas')
+      .then((r) => { toast.success(`${r.removidos} atividade(s) concluída(s) excluída(s) do plano`); r.mantidos.slice(0, 4).forEach((m) => toast.warning(m)); atualizar(); })
+      .catch((e) => toast.error(e.message));
+  };
   const itens = plano.data?.itens ?? [];
   const item = itens.find((i) => i.id === sel) ?? null;
   const r = plano.data?.resumo;
@@ -44,13 +54,16 @@ export default function PlanoPage() {
     <>
       <Cabecalho eyebrow="Programar · plano de 90 dias" titulo="Plano de 90 dias"
         acoes={pode('planejador') && <div className="flex flex-wrap gap-2">
-          <Botao variante="secundario" onClick={() => { setDaWbs(true); setNovo(false); }}><ListTree size={16} /> Puxar da WBS</Botao>
+          <Botao variante="secundario" onClick={() => { setDoCrono(true); setDaWbs(false); setNovo(false); }}><GanttChart size={16} /> Puxar do cronograma</Botao>
+          <Botao variante="secundario" onClick={() => { setDaWbs(true); setNovo(false); setDoCrono(false); }}><ListTree size={16} /> Puxar da WBS</Botao>
+          <Botao variante="secundario" onClick={tirarConcluidas}><Eraser size={16} /> Excluir concluídas</Botao>
           <Botao onClick={() => { setNovo(true); setDaWbs(false); }}><Plus size={16} /> Atividade ou marco</Botao>
         </div>} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {(Object.keys(ROTULO) as SituacaoPlano[]).map((k) => <Indicador key={k} rotulo={ROTULO[k]} valor={r?.[k] ?? '—'} tom={k === 'restricao' && r?.[k] ? 'perigo' : k === 'liberado' ? 'sucesso' : undefined} />)}
       </div>
       {novo && <FormItem onFechar={() => setNovo(false)} marcos={itens.filter((i) => i.marco)} />}
+      {doCrono && <FormDoCronograma onFechar={() => setDoCrono(false)} marcos={itens.filter((i) => i.marco)} />}
       {daWbs && <FormDaWbs onFechar={() => setDaWbs(false)} marcos={itens.filter((i) => i.marco)} />}
       <Abas rotulo="Horizonte" ativa={aba} onTrocar={(a) => { setAba(a); setSel(null); }} abas={[
         { chave: '90', titulo: '90 dias' }, { chave: '6', titulo: '6 semanas' }, { chave: 'pull', titulo: 'Pull planning' }, { chave: 'migrar', titulo: 'Levar à programação' },
@@ -98,7 +111,8 @@ function Grade({ dados, seis, sel, onSel }: { dados: PlanoResposta; seis: boolea
                 <tr key={i.id} onClick={() => onSel(i.id)} className={`cursor-pointer border-b border-m-row hover:bg-m-surface-hover ${sel === i.id ? 'bg-m-accent-subtle' : ''}`}>
                   <td className="sticky left-0 z-10 bg-inherit px-3 py-2">
                     <div className="font-medium text-m-text-primary">{i.marco && <Diamond size={12} className="mr-1 inline text-m-warning" />}{i.descricao}</div>
-                    <div className="text-[11px] text-m-text-muted">{i.codigo} · {dataBR(i.inicio)}{i.fim !== i.inicio ? ` a ${dataBR(i.fim)}` : ''}{i.equipe ? ` · ${i.equipe}` : ''}{i.quantidade != null ? ` · ${fmt(i.quantidade)}` : ''}</div>
+                    <div className="text-[11px] text-m-text-muted">{i.codigo} · {dataBR(i.inicio)}{i.fim !== i.inicio ? ` a ${dataBR(i.fim)}` : ''}{i.equipe ? ` · ${i.equipe}` : ''}{i.quantidade != null ? ` · ${fmt(i.quantidade)}` : ''}{i.id_crono ? ` · ${i.id_crono}` : ''}{i.recursos.length ? ` · ${i.recursos.length} recurso(s)` : ''}
+                      {i.status_crono === 'Concluída' && <span className="ml-1.5 font-semibold text-m-success">concluída no cronograma</span>}</div>
                   </td>
                   <td className="px-2 py-2">{!i.marco && <Pilula tom={TOM[i.situacao]}>{ROTULO[i.situacao]}</Pilula>}</td>
                   {seis && <td className="whitespace-nowrap px-2 py-2 text-[12px]">{i.marco ? '' : i.pendentes ? <span className="text-m-danger">{i.pendentes} pendente(s){i.restricoes.filter((x) => x.status1 === 'Pendente').map((x) => x.prazo).filter(Boolean).sort()[0] ? ` · até ${dm(i.restricoes.filter((x) => x.status1 === 'Pendente').map((x) => x.prazo!).filter(Boolean).sort()[0])}` : ''}</span> : i.analisado ? 'nenhuma' : <span className="text-m-text-muted">não analisado</span>}</td>}
@@ -164,7 +178,7 @@ function Detalhe({ item, marcos, onFechar }: { item: ItemPlano; marcos: ItemPlan
   if (editar) return <FormItem item={item} marcos={marcos} onFechar={() => setEditar(false)} />;
   return (
     <Painel titulo={`${item.codigo} · ${item.descricao}`}
-      subtitulo={`${item.marco ? 'Marco' : ROTULO[item.situacao]} · ${dataBR(item.inicio)} a ${dataBR(item.fim)}${item.area ? ` · ${item.area}` : ''}${item.equipe ? ` · ${item.equipe}` : ''}`}
+      subtitulo={`${item.marco ? 'Marco' : ROTULO[item.situacao]}${item.id_crono ? ` · ${item.id_crono}${item.status_crono ? ` (${item.status_crono.toLowerCase()} no cronograma)` : ''}` : ''} · ${dataBR(item.inicio)} a ${dataBR(item.fim)}${item.area ? ` · ${item.area}` : ''}${item.equipe ? ` · ${item.equipe}` : ''}`}
       acoes={<div className="flex gap-2">
         {pode('planejador') && <Botao variante="secundario" onClick={() => setEditar(true)}>Editar</Botao>}
         {pode('planejador') && <Botao variante="excluir" aria-label="Excluir item" onClick={async () => (await confirmar({ titulo: `Excluir ${item.codigo}?`, mensagem: item.descricao }))
@@ -172,6 +186,7 @@ function Detalhe({ item, marcos, onFechar }: { item: ItemPlano; marcos: ItemPlan
         <Botao variante="fantasma" aria-label="Fechar" onClick={onFechar}><X size={16} /></Botao>
       </div>}>
       {item.programacoes.length > 0 && <p className="text-[13px] text-m-text-secondary">Na programação: {item.programacoes.map((p, k) => <Fragment key={p.id}>{k ? ', ' : ''}<Link href={`/app/programacoes/${p.id}`} className="font-semibold text-m-accent underline">{p.titulo}</Link></Fragment>)}</p>}
+      {item.recursos.length > 0 && <Recursos recursos={item.recursos} />}
       {!item.marco && <>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-[14px] font-semibold text-m-text-primary">Restrições (alimentam o <Link href="/app/restricoes" className="text-m-accent underline">Restrições 6WLA</Link>)</h3>
@@ -359,6 +374,99 @@ function Migrar() {
           </table>
         </div>
       )}
+    </Painel>
+  );
+}
+
+const TIPO_RECURSO: Record<RecursoP6['tipo'], string> = { mao_de_obra: 'Mão de obra', equipamento: 'Equipamento', material: 'Material', outro: 'Outro' };
+
+/** Recursos alocados na atividade do P6 (TASKRSRC): quantidade orçada e restante, como estão no cronograma. */
+function Recursos({ recursos }: { recursos: RecursoP6[] }) {
+  return (
+    <div>
+      <h3 className="mb-1.5 text-[14px] font-semibold text-m-text-primary">Recursos alocados no cronograma (P6)</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-[12.5px]">
+          <thead><tr className="text-left text-[11px] uppercase tracking-[0.3px] text-m-text-muted">
+            <th className="px-2 py-1.5">Recurso</th><th className="px-2 py-1.5">Tipo</th><th className="px-2 py-1.5 text-right">Orçado</th><th className="px-2 py-1.5 text-right">Restante</th>
+          </tr></thead>
+          <tbody>
+            {[...recursos].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.nome.localeCompare(b.nome)).map((r, k) => (
+              <tr key={`${r.codigo}-${k}`} className="border-b border-m-row">
+                <td className="px-2 py-1.5 text-m-text-primary">{r.nome}{r.codigo && <span className="ml-1.5 text-[11px] text-m-text-muted">{r.codigo}</span>}</td>
+                <td className="px-2 py-1.5">{TIPO_RECURSO[r.tipo]}</td>
+                <td className="px-2 py-1.5 text-right">{r.qtd != null ? `${fmt(r.qtd)} ${r.unid ?? ''}` : '—'}</td>
+                <td className="px-2 py-1.5 text-right">{r.restante != null ? `${fmt(r.restante)} ${r.unid ?? ''}` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Puxar do cronograma vigente as atividades de um período (com área, IWP e recursos do P6). */
+function FormDoCronograma({ marcos, onFechar }: { marcos: ItemPlano[]; onFechar: () => void }) {
+  const api = useApi();
+  const atualizar = useAtualizar();
+  const equipes = useEquipes();
+  const [f, setF] = useState({ inicio: hoje(), fim: somaDias(hoje(), 90), excluir_concluidas: true, so_construcao: true, busca: '', equipe_id: '', marco_id: '' });
+  const [pv, setPv] = useState<{ atividades: AtividadePeriodo[]; total: number; concluidas_excluidas: number; fora_da_construcao: number } | null>(null);
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  const [carregando, setCarregando] = useState(false);
+  const corpo = () => ({ inicio: f.inicio, fim: f.fim, excluir_concluidas: f.excluir_concluidas, so_construcao: f.so_construcao, busca: f.busca || null });
+  const verPrevia = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setCarregando(true);
+    api.post<typeof pv>('/planos/cronograma/previa', corpo())
+      .then((r) => { setPv(r); setMarcadas(new Set(r!.atividades.filter((a) => !a.no_plano).map((a) => a.id_crono))); })
+      .catch((er) => toast.error(er.message)).finally(() => setCarregando(false));
+  };
+  const puxar = () => api.post<{ novos: number; atualizados: number }>('/planos/itens/do-cronograma', { ...corpo(), ids: [...marcadas],
+    equipe_id: f.equipe_id ? Number(f.equipe_id) : null, marco_id: f.marco_id ? Number(f.marco_id) : null })
+    .then((r) => { toast.success(`${r.novos} atividade(s) no plano${r.atualizados ? ` · ${r.atualizados} atualizada(s) pelo cronograma` : ''}`); atualizar(); onFechar(); })
+    .catch((er) => toast.error(er.message));
+  const lista = pv?.atividades ?? [];
+  const todas = lista.length > 0 && lista.every((a) => marcadas.has(a.id_crono));
+  return (
+    <Painel titulo="Puxar do cronograma (período)" acoes={<Botao variante="fantasma" aria-label="Fechar" onClick={onFechar}><X size={16} /></Botao>}>
+      <form onSubmit={verPrevia} className="grid gap-3 md:grid-cols-6 md:items-end">
+        <Campo rotulo="De" type="date" value={f.inicio} onChange={(e) => setF({ ...f, inicio: e.target.value })} required />
+        <Campo rotulo="Até" type="date" value={f.fim} onChange={(e) => setF({ ...f, fim: e.target.value })} required />
+        <div className="md:col-span-2"><Campo rotulo="Filtrar (ID, atividade ou WBS)" value={f.busca} onChange={(e) => setF({ ...f, busca: e.target.value })} /></div>
+        <label className="flex items-center gap-1.5 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={f.excluir_concluidas} onChange={(e) => setF({ ...f, excluir_concluidas: e.target.checked })} /> Excluir concluídas</label>
+        <label className="flex items-center gap-1.5 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={f.so_construcao} onChange={(e) => setF({ ...f, so_construcao: e.target.checked })} /> Só construção (CWP)</label>
+        <Selecao rotulo="Equipe (opcional)" value={f.equipe_id} onChange={(e) => setF({ ...f, equipe_id: e.target.value })}><option value="">—</option>{equipes.data?.filter((e) => e.ativo).map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}</Selecao>
+        <Selecao rotulo="Puxada pelo marco (opcional)" value={f.marco_id} onChange={(e) => setF({ ...f, marco_id: e.target.value })}><option value="">—</option>{marcos.map((m) => <option key={m.id} value={m.id}>{m.codigo} · {m.descricao}</option>)}</Selecao>
+        <div className="flex gap-2 md:col-span-4"><Botao type="submit" variante="secundario" disabled={carregando}><CalendarSearch size={16} /> {carregando ? 'Buscando…' : 'Ver atividades do período'}</Botao></div>
+      </form>
+      {pv && <>
+        <p className="text-[12.5px] text-m-text-muted">{pv.total} atividade(s) no período{pv.concluidas_excluidas ? ` · ${pv.concluidas_excluidas} concluída(s) deixada(s) de fora` : ''}{pv.fora_da_construcao ? ` · ${pv.fora_da_construcao} fora da construção` : ''}{pv.total > lista.length ? ` · mostrando ${lista.length}: filtre para ver o resto` : ''}. Atividade já no plano é atualizada (datas e recursos).</p>
+        <div className="max-h-[420px] overflow-auto rounded-m-md border border-m-stroke-subtle">
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead className="sticky top-0 bg-m-surface-raised"><tr className="text-left text-[11px] uppercase tracking-[0.3px] text-m-text-muted">
+              <th className="px-2 py-2"><input type="checkbox" aria-label="Marcar todas" checked={todas} onChange={() => setMarcadas(todas ? new Set() : new Set(lista.map((a) => a.id_crono)))} /></th>
+              <th className="px-2 py-2">Atividade</th><th className="px-2 py-2">Área</th><th className="px-2 py-2">Janela</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Recursos</th>
+            </tr></thead>
+            <tbody>
+              {lista.map((a) => (
+                <tr key={a.id_crono} className="border-b border-m-row">
+                  <td className="px-2 py-1.5"><input type="checkbox" aria-label={`Puxar ${a.id_crono}`} checked={marcadas.has(a.id_crono)}
+                    onChange={() => setMarcadas((m) => { const n = new Set(m); if (n.has(a.id_crono)) n.delete(a.id_crono); else n.add(a.id_crono); return n; })} /></td>
+                  <td className="px-2 py-1.5"><div className="text-m-text-primary">{a.atividade}</div><div className="text-[11px] text-m-text-muted">{a.id_crono} · {a.caminho}{a.wbs_no_id ? ' · IWP na WBS' : ''}{a.no_plano ? ' · já no plano' : ''}</div></td>
+                  <td className="px-2 py-1.5">{a.area ?? <span className="text-m-warning">sem área</span>}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5">{dm(a.inicio)} a {dm(a.fim)}</td>
+                  <td className="px-2 py-1.5">{a.status}</td>
+                  <td className="px-2 py-1.5" title={a.recursos.map((r) => `${r.nome}: ${fmt(r.qtd)} ${r.unid ?? ''}`).join('\n')}>{a.recursos.length ? `${a.recursos.length} (${[...new Set(a.recursos.map((r) => TIPO_RECURSO[r.tipo].toLowerCase()))].join(', ')})` : '—'}</td>
+                </tr>
+              ))}
+              {!lista.length && <tr><td colSpan={6} className="px-2 py-6 text-center text-m-text-muted">Nenhuma atividade no período.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex gap-2"><Botao disabled={!marcadas.size} onClick={puxar}><GanttChart size={16} /> Puxar {marcadas.size} atividade(s)</Botao></div>
+      </>}
     </Painel>
   );
 }

@@ -73,6 +73,8 @@ class AtividadeCronogramaModel(Base):
     # (o nome da WBS pode ter " / ", então o caminho não é guardado como texto separado por barra)
     wbs_niveis: Mapped[list | None] = mapped_column(JSONB)
     ordem_p6: Mapped[int | None] = mapped_column(Integer, index=True)  # posição da atividade na estrutura do P6
+    # recursos alocados no P6 (TASKRSRC): [{"codigo", "nome", "tipo" (mao_de_obra|equipamento|material), "qtd", "restante", "unid"}]
+    recursos: Mapped[list | None] = mapped_column(JSONB)
 
 
 class ItemPqModel(Base):

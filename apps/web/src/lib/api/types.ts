@@ -299,12 +299,14 @@ export interface DiaCampo {
 
 /** Plano de 90 dias, 6 semanas e pull planning. Spec 043. */
 export type SituacaoPlano = 'analisar' | 'restricao' | 'liberado' | 'programado';
+export interface RecursoP6 { codigo: string | null; nome: string; tipo: 'mao_de_obra' | 'equipamento' | 'material' | 'outro'; qtd: number | null; restante: number | null; unid: string | null }
+export interface AtividadePeriodo { id_crono: string; atividade: string; inicio: string; fim: string; status: string | null; area_id: number | null; area: string | null; caminho: string; wbs_no_id: number | null; recursos: RecursoP6[]; no_plano: boolean }
 export interface RestricaoPlano { id: number; numero: number; acao: string; responsavel: string | null; prazo: string | null; status1: string; impeditivo: boolean | null; seis_m: string | null; farol: string }
 export interface ItemPlano {
   id: number; numero: number; codigo: string; descricao: string; area_id: number | null; area: string | null; local: string | null;
   wbs_no_id: number | null; tipo_id: number | null; id_crono: string | null; equipe_id: number | null; equipe: string | null;
   inicio: string; fim: string; quantidade: number | null; responsavel: string | null; marco: boolean; marco_id: number | null;
-  analisado: boolean; analisado_em: string | null; observacao: string | null; restricoes: RestricaoPlano[]; pendentes: number;
+  recursos: RecursoP6[]; status_crono: string | null; analisado: boolean; analisado_em: string | null; observacao: string | null; restricoes: RestricaoPlano[]; pendentes: number;
   impeditivas: number; programacoes: { id: number; titulo: string; tipo: string }[]; situacao: SituacaoPlano;
 }
 export interface PlanoResposta { semanas: { inicio: string; fim: string }[]; itens: ItemPlano[]; resumo: Record<SituacaoPlano, number> }

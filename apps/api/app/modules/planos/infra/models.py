@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -23,6 +24,7 @@ class PlanoItemModel(Base):
     fim: Mapped[date] = mapped_column(Date, index=True)
     quantidade: Mapped[float | None] = mapped_column(Float)
     responsavel: Mapped[str | None] = mapped_column(String(150))
+    recursos: Mapped[list | None] = mapped_column(JSONB)  # recursos alocados na atividade do P6 (cópia ao puxar)
     marco: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # pull planning: é um marco
     marco_id: Mapped[int | None] = mapped_column(ForeignKey("plano_item.id", ondelete="SET NULL"))  # marco que puxa
     analisado: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # restrições levantadas

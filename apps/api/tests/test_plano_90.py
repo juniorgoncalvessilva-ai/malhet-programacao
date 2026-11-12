@@ -89,3 +89,57 @@ def test_nomes_da_marca(client):
     r = client.put("/api/obra/marca/nomes", json={"nome_contratada": "  Construtora   X ", "nome_contratante": "Cliente Y"})
     assert r.status_code == 200 and r.json()["nome_contratada"] == "Construtora X"
     assert client.get("/api/obra/marca").json()["nome_contratante"] == "Cliente Y"
+
+
+def _xer_com_recursos() -> bytes:
+    linhas = [
+        "ERMHDR\t24.12",
+        "%T\tPROJECT", "%F\tproj_id\tproj_short_name\tlast_recalc_date", "%R\t1\tTAM\t2026-11-01 00:00",
+        "%T\tPROJWBS", "%F\twbs_id\tproj_id\tproj_node_flag\tseq_num\twbs_short_name\twbs_name\tparent_wbs_id",
+        "%R\t10\t1\tY\t0\tTAM\tProjeto\t", "%R\t20\t1\tN\t1\t5\tO.S. 1\t10", "%R\t21\t1\tN\t2\t4\tCWP - CONSTRUÇÃO\t20",
+        "%R\t22\t1\tN\t1\t3\tCWA 004 - Novo CMD\t21", "%R\t23\t1\tN\t1\t4\tCWA 004.05 - ED-1800AA-01 - Galpão\t22",
+        "%R\t30\t1\tN\t1\t3\tPWP - SUPRIMENTOS\t20",
+        "%T\tUMEASURE", "%F\tunit_id\tseq_num\tunit_abbrev\tunit_name", "%R\t101\t1\tm³\tMetro cúbico",
+        "%T\tRSRC", "%F\trsrc_id\trsrc_name\trsrc_short_name\tunit_id\trsrc_type",
+        "%R\t1\tPEDREIRO (HH)\tTAM-PED\t\tRT_Labor", "%R\t2\tBETONEIRA (HM)\tTAM-BET\t\tRT_Equip", "%R\t3\tCONCRETO FCK30\tTAM-C30\t101\tRT_Mat",
+        "%T\tTASK", "%F\ttask_id\tproj_id\twbs_id\ttask_code\ttask_name\ttask_type\tstatus_code\tearly_start_date\tearly_end_date\tact_start_date\tact_end_date",
+        "%R\t1\t1\t23\tC-1\tForma do radier\tTT_Task\tTK_NotStart\t2026-12-01 07:00\t2026-12-10 17:00\t\t",
+        "%R\t2\t1\t23\tC-2\tConcreto do radier\tTT_Task\tTK_Active\t2026-12-05 07:00\t2026-12-20 17:00\t2026-12-05 07:00\t",
+        "%R\t3\t1\t23\tC-3\tLimpeza do terreno\tTT_Task\tTK_Complete\t2026-11-20 07:00\t2026-12-02 17:00\t2026-11-20 07:00\t2026-12-02 17:00",
+        "%R\t4\t1\t23\tC-4\tFundação fora do período\tTT_Task\tTK_NotStart\t2027-03-01 07:00\t2027-03-10 17:00\t\t",
+        "%R\t5\t1\t30\tS-1\tCompra de aço\tTT_Task\tTK_NotStart\t2026-12-01 07:00\t2026-12-05 17:00\t\t",
+        "%T\tTASKRSRC", "%F\ttaskrsrc_id\ttask_id\tproj_id\trsrc_id\ttarget_qty\tremain_qty\trsrc_type",
+        "%R\t1\t2\t1\t1\t120\t80\tRT_Labor", "%R\t2\t2\t1\t2\t30\t30\tRT_Equip", "%R\t3\t2\t1\t3\t45\t45\tRT_Mat",
+        "%R\t4\t1\t1\t1\t60\t60\tRT_Labor",
+        "%E",
+    ]
+    return "\r\n".join(linhas).encode("cp1252")
+
+
+def test_puxar_do_cronograma_por_periodo_com_recursos(client):
+    client.post("/api/frentes/importar", json={"texto": LISTA})
+    assert client.post("/api/importar/xer", data={"rotulo": "S48"}, files={"arquivo": ("c.xer", _xer_com_recursos())}).status_code == 200
+    periodo = {"inicio": "2026-12-01", "fim": "2026-12-31"}
+    pv = client.post("/api/planos/cronograma/previa", json=periodo).json()
+    # C-4 fora do período, S-1 fora da construção (PWP), C-3 concluída: fica de fora por padrão
+    assert [a["id_crono"] for a in pv["atividades"]] == ["C-1", "C-2"]
+    assert (pv["concluidas_excluidas"], pv["fora_da_construcao"]) == (1, 1)
+    c2 = pv["atividades"][1]
+    assert c2["area"].startswith("004.05") and {r["codigo"] for r in c2["recursos"]} == {"TAM-PED", "TAM-BET", "TAM-C30"}
+    mat = next(r for r in c2["recursos"] if r["tipo"] == "material")
+    assert (mat["qtd"], mat["unid"]) == (45, "m³") and next(r for r in c2["recursos"] if r["tipo"] == "mao_de_obra")["restante"] == 80
+    # só os escolhidos
+    r = client.post("/api/planos/itens/do-cronograma", json={**periodo, "ids": ["C-2"]}).json()
+    assert (r["novos"], r["atualizados"]) == (1, 0)
+    r = client.post("/api/planos/itens/do-cronograma", json={**periodo, "excluir_concluidas": False}).json()
+    assert (r["novos"], r["atualizados"], r["concluidas_excluidas"]) == (2, 1, 0)  # C-1 e C-3 novas; C-2 atualizada
+    itens = {i["id_crono"]: i for i in client.get("/api/planos?inicio=2026-11-23").json()["itens"]}
+    assert set(itens) == {"C-1", "C-2", "C-3"}
+    assert (itens["C-2"]["inicio"], itens["C-2"]["fim"], itens["C-2"]["status_crono"]) == ("2026-12-05", "2026-12-20", "Em andamento")
+    assert len(itens["C-2"]["recursos"]) == 3 and itens["C-1"]["recursos"][0]["nome"] == "PEDREIRO (HH)"
+    # excluir as concluídas do plano (a com restrição pendente fica)
+    client.post(f"/api/planos/itens/{itens['C-1']['id']}/restricoes", json={"acao": "Projeto liberado para construção"})
+    r = client.post("/api/planos/tirar-concluidas").json()
+    assert r["removidos"] == 1 and not r["mantidos"]
+    assert {i["id_crono"] for i in client.get("/api/planos?inicio=2026-11-23").json()["itens"]} == {"C-1", "C-2"}
+    assert client.post("/api/planos/cronograma/previa", json={"inicio": "2026-12-31", "fim": "2026-12-01"}).status_code == 422
