@@ -211,6 +211,34 @@ def completar_foto(s: Session, obra_id: int, foto: dict) -> dict:
     return foto
 
 
+def _janela(datas: list, prev: list) -> list[str] | None:
+    """1º e último dia com previsto na programação (base da conferência da sequência)."""
+    dias = [d for d, v in zip(datas, prev) if v]
+    return [dias[0].isoformat(), dias[-1].isoformat()] if dias else None
+
+
+def _marcar_sequencia(linhas: list[dict]) -> None:
+    """Nº da linha na sequência (1, 2, 3…) e a conferência das ligações TI/II/TT/IT com as janelas."""
+    from datetime import date as _d
+
+    from app.modules.planejamento.domain.sequencia import ROTULO, Ligacao, conferir
+
+    for i, ln in enumerate(linhas, start=1):
+        ln["seq"] = i
+    por_id = {ln["id"]: ln for ln in linhas}
+    jan = lambda ln: tuple(_d.fromisoformat(x) for x in ln["janela"]) if ln.get("janela") else None  # noqa: E731
+    for ln in linhas:
+        alertas = []
+        for x in ln["predecessoras"]:
+            pred = por_id.get(x.get("de"))
+            if pred is None:
+                continue
+            msg = conferir(Ligacao(x["de"], x["tipo"], int(x.get("lag") or 0)), jan(pred), jan(ln))
+            if msg:
+                alertas.append(f"{x['tipo']} com nº {pred['seq']} ({ROTULO[x['tipo']]}): {msg}")
+        ln["alertas_sequencia"] = alertas
+
+
 def visao(s: Session, p: ProgramacaoModel) -> dict:
     """Programação resolvida para tela/impressão: locais → áreas → linhas, com totais."""
     vig = ResolvedorReferencias(s, p.obra_id).versoes_vigentes()
@@ -292,6 +320,8 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "status_crono": status_pt(at.status) if at else None,
             "realizado_anterior": anterior.get(_chave_linha(ln)),
             "ssma": {k: getattr(ln, f"ssma_{k}") for k in ("tecnico", "rac", "pts", "art", "pto", "ata")},
+            "ordem": ln.ordem, "predecessoras": ln.predecessoras or [],
+            "janela": _janela(datas, prev),
             "total_previsto": round(sum(_num(x) for x in prev), 4), "total_realizado": round(sum(_num(x) for x in real), 4),
             "calc": calculo_linha(cpu.get(ln.item_pq) if ln.item_pq else None, eq, prev, real, funcao_de,
                                   p.base_capacidade or "equipe"),
@@ -303,8 +333,13 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
     # dentro de cada área, as linhas seguem a estrutura do Primavera (ordem da atividade do cronograma no P6);
     # linhas sem atividade do cronograma vêm depois, na ordem em que foram incluídas
     ordem_crono = {k: x.ordem_p6 for k, x in cron.items() if x.ordem_p6 is not None}
+    # sequência manual (spec 054): a ordem definida na aba Sequência manda; sem ela, a do Primavera
+    chave_seq = ((lambda ln: (ln["ordem"], ln["n"])) if p.sequenciada
+                 else (lambda ln: (ordem_crono.get(ln["id_crono"], 10**9), ln["n"])))
     for lista in por_area.values():
-        lista.sort(key=lambda ln: (ordem_crono.get(ln["id_crono"], 10**9), ln["n"]))
+        lista.sort(key=chave_seq)
+    todas_seq = sorted((ln for lista in por_area.values() for ln in lista), key=chave_seq)
+    _marcar_sequencia(todas_seq)
     saida_locais = []
     for loc in sorted(locais.values(), key=lambda x: (x.ordem, x.id)):
         areas_loc = sorted([a for a in areas.values() if a.local_id == loc.id and a.id in por_area],
@@ -318,7 +353,7 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
     hh_dia = [round(sum(ln["calc"]["hh_previsto"][i] or 0 for ln in todas), 2) for i in range(len(datas))]
     return {"id": p.id, "tipo": p.tipo, "titulo": p.titulo, "inicio": p.inicio.isoformat(), "fim": p.fim.isoformat(),
             "status": p.status, "revisao": p.revisao, "hh_previsto_dia": hh_dia,
-            "base_capacidade": p.base_capacidade or "equipe",
+            "base_capacidade": p.base_capacidade or "equipe", "sequenciada": bool(p.sequenciada),
             "conclusoes": [{"numero": c.numero, "concluida_por": c.concluida_por,
                             "concluida_em": c.concluida_em.isoformat() if c.concluida_em else None,
                             "revisada_por": c.revisada_por, "motivo_revisao": c.motivo_revisao,

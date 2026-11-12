@@ -112,6 +112,8 @@ export interface LinhaVisao {
   wbs_no_id?: number | null; wbs_codigo?: string | null; wbs_caminho?: string | null;
   /** Spec 046: CWP da linha (nível entre a área e as linhas) e os dois textos da atividade. */
   cwp?: { id: number | null; codigo: string | null; texto: string } | null; descricao_reduzida?: string; descricao_completa?: string;
+  /** Spec 054: sequência (nº, ordem manual, ligações TI/II/TT/IT, janela do previsto e alertas da conferência). */
+  seq?: number; ordem?: number; predecessoras?: { de: number; tipo: TipoLigacao; lag: number }[]; janela?: [string, string] | null; alertas_sequencia?: string[];
   grupo: { codigo: string; descricao: string }; codigo_simova: string; descricao: string; complemento: string | null;
   unidade: string | null; item_pq: string | null; descricao_pq: string | null; pu: number | null;
   qtd_takeoff: number | null; qtd_projeto: number | null; id_crono: string | null; atividade_crono: string | null;
@@ -319,3 +321,5 @@ export interface PreviaMigracao {
   itens: (ItemPlano & { unid: string | null; qtd_sugerida: number | null; dias_no_periodo: number; ja_na_programacao: boolean; migravel: boolean })[];
   memorias: Record<string, import('@/components/Obra/Calculado').MemoriaCalculo>;
 }
+
+export type TipoLigacao = 'TI' | 'II' | 'TT' | 'IT';

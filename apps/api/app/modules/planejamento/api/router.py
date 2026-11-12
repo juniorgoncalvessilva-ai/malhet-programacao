@@ -296,6 +296,51 @@ def valores(pid: int, lid: int, d: ValoresIn, s: Session = Depends(get_session),
     sv.salvar_valores(s, p, lid, [v.model_dump() for v in d.valores], d.campo)
 
 
+class LigacaoIn(BaseModel):
+    de: int
+    tipo: str
+    lag: int = 0
+
+
+class SequenciaIn(BaseModel):
+    ordem: list[int]  # ids das linhas na ordem cronológica
+    predecessoras: dict[int, list[LigacaoIn]] = {}
+
+
+@router.put("/programacoes/{pid}/sequencia")
+def sequencia(pid: int, d: SequenciaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Ordem cronológica das linhas e ligações TI/II/TT/IT (spec 054). Programação concluída só muda por revisão."""
+    from app.modules.planejamento.domain.sequencia import Ligacao, validar
+
+    p = sv.obter(s, c.obra_id, pid)
+    sv.exigir_aberta(p)
+    ids = {ln.id for ln in p.linhas}
+    if set(d.ordem) != ids or len(d.ordem) != len(ids):
+        raise DomainError("a ordem precisa ter todas as linhas da programação, uma vez cada", "ordem")
+    ligs = {suc: [Ligacao(x.de, x.tipo.upper(), x.lag) for x in ls] for suc, ls in d.predecessoras.items() if ls}
+    validar(ligs, ids)
+    pos = {lid: i for i, lid in enumerate(d.ordem, start=1)}
+    for ln in p.linhas:
+        ln.ordem = pos[ln.id]
+        ln.predecessoras = [{"de": x.de, "tipo": x.tipo, "lag": x.lag} for x in ligs.get(ln.id, [])] or None
+    p.sequenciada = True
+    s.flush()
+    return {"linhas": len(ids)}
+
+
+@router.post("/programacoes/{pid}/sequencia/previa")  # só consulta (não conta como mudança, spec 045)
+def sequencia_cronologica(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Reordena pela data (1º dia com previsto) respeitando as ligações; devolve a nova ordem sem gravar."""
+    from app.modules.planejamento.domain.sequencia import Ligacao, ordem_cronologica
+
+    p = sv.obter(s, c.obra_id, pid)
+    v = sv.visao(s, p)
+    linhas = [ln for loc in v["locais"] for a in loc["areas"] for ln in a["linhas"]]
+    jan = {ln["id"]: (tuple(date.fromisoformat(x) for x in ln["janela"]) if ln["janela"] else None) for ln in linhas}
+    ligs = {ln["id"]: [Ligacao(x["de"], x["tipo"], int(x.get("lag") or 0)) for x in ln["predecessoras"]] for ln in linhas}
+    return {"ordem": ordem_cronologica([ln["id"] for ln in linhas], jan, {ln["id"]: ln["seq"] for ln in linhas}, ligs)}
+
+
 @router.post("/programacoes/{pid}/emitir")
 def emitir(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     e = sv.emitir(s, sv.obter(s, c.obra_id, pid), c.usuario.id)

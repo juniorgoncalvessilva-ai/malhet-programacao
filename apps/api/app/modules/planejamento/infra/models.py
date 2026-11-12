@@ -5,7 +5,7 @@ abertas. A emissão guarda uma foto (snapshot) — o documento emitido não muda
 """
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,7 @@ class ProgramacaoModel(Base):
     status: Mapped[str] = mapped_column(String(12), default="rascunho")  # rascunho | emitida | concluida
     # capacidade da linha: "equipe" = equipe completa (gargalo) | "governa" = só o recurso que governa (apoio vira aviso)
     base_capacidade: Mapped[str] = mapped_column(String(8), default="equipe", server_default="equipe")
+    sequenciada: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # ordem manual (spec 054)
     revisao: Mapped[int] = mapped_column(Integer, default=0)  # nº de emissões feitas
     criado_por: Mapped[str] = mapped_column(String(80))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -60,6 +61,8 @@ class LinhaProgramacaoModel(Base):
     ssma_pto: Mapped[list | None] = mapped_column(JSONB)
     ssma_ata: Mapped[list | None] = mapped_column(JSONB)
     ordem: Mapped[int] = mapped_column(Integer, default=0)
+    # ligações com outras linhas da programação: [{"de": linha_id, "tipo": "TI|II|TT|IT", "lag": dias}] (spec 054)
+    predecessoras: Mapped[list | None] = mapped_column(JSONB)
     valores: Mapped[list["ValorDiaModel"]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by="ValorDiaModel.data")
 

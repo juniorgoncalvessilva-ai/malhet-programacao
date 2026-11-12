@@ -2,7 +2,8 @@
 
 import { LogosObra } from '@/components/Obra/LogosObra';
 import { BotaoNomes, nomeLinha, porCwp, useModoNomes } from '@/lib/programacao/nomes';
-import { encarregadosDe, filtrarEncarregado } from '@/lib/programacao/encarregado';
+import { agruparPorEncarregado, encarregadosDe, filtrarEncarregado } from '@/lib/programacao/encarregado';
+import { AgruparPor } from '@/components/Obra/SequenciaProgramacao';
 import { FiltroEncarregado } from '@/components/Obra/FiltroEncarregado';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileSpreadsheet, Printer } from 'lucide-react';
@@ -26,6 +27,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
   const [escolha, setEscolha] = useState<string>('ultima');
   const [nomes] = useModoNomes();
   const [enc, setEnc] = useState('');
+  const [porEnc, setPorEnc] = useState(false);
   const rev = escolha === 'viva' ? null : escolha === 'ultima' ? (emissoes.data?.[0]?.revisao ?? null) : Number(escolha);
   const prog = useProgramacao(id, emissoes.isLoading ? undefined : rev);
   const v = prog.data;
@@ -35,7 +37,8 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
   const semanal = v.tipo === 'SEMANAL';
   const cel = 'border border-[#8EA9C1] px-1 py-0.5';
   const encs = encarregadosDe(v.locais);
-  const locais = filtrarEncarregado(v.locais, enc);
+  const filtrados = filtrarEncarregado(v.locais, enc);
+  const locais = porEnc ? agruparPorEncarregado(filtrados) : filtrados;
   // filtrado por encarregado: o total de HH é o das linhas dele
   const hhTotal = enc ? locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.calc?.total_hh_previsto ?? 0), 0) : v.total_hh_previsto;
   const totalValor = locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.pu ?? 0) * ln.total_previsto, 0);
@@ -46,6 +49,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
         {vigente ? <span /> : <Link href={`/app/programacoes/${id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-m-accent"><ArrowLeft size={16} /> Voltar para montar</Link>}
         <div className="flex flex-wrap items-end gap-2">
           {encs.length > 1 && <FiltroEncarregado encs={encs} valor={enc} onChange={setEnc} />}
+          <AgruparPor porEnc={porEnc} onChange={setPorEnc} />
           <BotaoNomes className="mb-1" />
           <Selecao rotulo="Versão" value={escolha} onChange={(e) => setEscolha(e.target.value)} className="w-[260px]">
             <option value="ultima">Última emissão{emissoes.data?.[0] ? ` (rev. ${emissoes.data[0].revisao})` : ' (nenhuma: rascunho)'}</option>

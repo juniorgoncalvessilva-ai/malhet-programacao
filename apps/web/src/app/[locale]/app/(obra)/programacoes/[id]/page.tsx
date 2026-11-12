@@ -1,10 +1,11 @@
 'use client';
 
 import { BotaoNomes, nomeLinha, porCwp, useModoNomes } from '@/lib/programacao/nomes';
-import { encarregadosDe, filtrarEncarregado } from '@/lib/programacao/encarregado';
+import { agruparPorEncarregado, encarregadosDe, filtrarEncarregado } from '@/lib/programacao/encarregado';
 import { FiltroEncarregado } from '@/components/Obra/FiltroEncarregado';
 import { Abas } from '@/components/Obra/Abas';
 import { ResumoProgramacao } from '@/components/Obra/ResumoProgramacao';
+import { AgruparPor, SequenciaProgramacao } from '@/components/Obra/SequenciaProgramacao';
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -64,7 +65,8 @@ export default function MontarPage() {
   const ptos = (cadastros.data ?? []).filter((c) => c.tipo === 'PTO' && (c.ativo || form.pto.includes(c.codigo)));
   const [modo, setModo] = useState<'previsto' | 'realizado'>('previsto');
   const [nomes] = useModoNomes();
-  const [abaProg, setAbaProg] = useState<'montar' | 'resumo'>('montar');
+  const [abaProg, setAbaProg] = useState<'montar' | 'sequencia' | 'resumo'>('montar');
+  const [porEnc, setPorEnc] = useState(false);
   const [enc, setEnc] = useState('');
   const [form, setForm] = useState<FormLinha>(VAZIO);
   const [editando, setEditando] = useState<number | null>(null);
@@ -136,6 +138,29 @@ export default function MontarPage() {
   });
   const valorCel = (ln: LinhaVisao, campo: 'previsto' | 'realizado', di: number, data: string) =>
     pend[`${ln.id}|${campo}|${data}`] ?? (ln[campo][di] != null ? String(ln[campo][di]) : '');
+  // distribuição sugerida (spec 054): o que falta do previsto do período dividido pelos dias ainda vazios (sem domingo)
+  const sugestao = (ln: LinhaVisao, valores: (di: number, data: string) => string): Record<number, string> | null => {
+    if (!v) return null;
+    const alvo = Number(pend[`${ln.id}|periodo`] ?? ln.qtd_periodo ?? 0);
+    if (!alvo) return null;
+    const vals = v.dias.map((d, di) => valores(di, d.data));
+    const soma = vals.reduce((s2, x) => s2 + (Number(x) || 0), 0);
+    const vazios = v.dias.map((d, di) => (vals[di] === '' && d.dia !== 'DOM' ? di : -1)).filter((di) => di >= 0);
+    const resto = Math.round((alvo - soma) * 100) / 100;
+    if (resto <= 0.005 || !vazios.length) return null;
+    const parte = Math.floor((resto / vazios.length) * 100) / 100;
+    const out: Record<number, string> = {};
+    vazios.forEach((di, i) => { out[di] = String(i === vazios.length - 1 ? Math.round((resto - parte * (vazios.length - 1)) * 100) / 100 : parte); });
+    return out;
+  };
+  const distribuirResto = (ln: LinhaVisao) => {
+    if (!v) return;
+    const sg = sugestao(ln, (di, data) => valorCel(ln, 'previsto', di, data));
+    if (!sg) return;
+    const novo = { ...pend };
+    Object.entries(sg).forEach(([di, x]) => { novo[`${ln.id}|previsto|${v.dias[Number(di)].data}`] = x; });
+    setPend(novo);
+  };
   const distribuir = (ln: LinhaVisao) => {
     if (!v) return;
     const alvo = Number(pend[`${ln.id}|periodo`] ?? ln.qtd_periodo ?? 0);
@@ -194,7 +219,8 @@ export default function MontarPage() {
 
   if (!v) return <p className="text-sm text-m-text-muted">{prog.isLoading ? 'Carregando…' : 'Programação não encontrada.'}</p>;
   const encs = encarregadosDe(v.locais);
-  const locaisVis = filtrarEncarregado(v.locais, enc);
+  const locaisFiltrados = filtrarEncarregado(v.locais, enc);
+  const locaisVis = porEnc ? agruparPorEncarregado(locaisFiltrados) : locaisFiltrados;
   const totalDia = v.dias.map((d, i) => locaisVis.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (Number(valorCel(ln, modo, i, d.data)) || 0), 0));
 
   return (
@@ -233,9 +259,10 @@ export default function MontarPage() {
         </>}
       />
       <Abas rotulo="Seções da programação" ativa={abaProg} onTrocar={setAbaProg}
-        abas={[{ chave: 'montar', titulo: 'Programação' }, { chave: 'resumo', titulo: 'Resumo por frente e responsável' }]} />
+        abas={[{ chave: 'montar', titulo: 'Programação' }, { chave: 'sequencia', titulo: 'Sequência (TI · II · TT · IT)' }, { chave: 'resumo', titulo: 'Resumo por frente e responsável' }]} />
       {abaProg === 'resumo' && <ResumoProgramacao v={v} nomes={nomes} />}
-      <div className={abaProg === 'resumo' ? 'hidden' : 'contents'}>
+      {abaProg === 'sequencia' && <SequenciaProgramacao pid={id} v={v} nomes={nomes} editar={!concluida && pode('encarregado')} />}
+      <div className={abaProg !== 'montar' ? 'hidden' : 'contents'}>
 
       {motivo !== null && (
         <Painel titulo="Abrir revisão da programação concluída">
@@ -359,6 +386,7 @@ export default function MontarPage() {
         subtitulo={`${dataBR(v.inicio)} a ${dataBR(v.fim)} · digite a quantidade do período e de cada dia e clique em Salvar programação.`}
         acoes={<>
           {encs.length > 1 && <FiltroEncarregado encs={encs} valor={enc} onChange={setEnc} />}
+          <AgruparPor porEnc={porEnc} onChange={setPorEnc} />
           <BotaoNomes />
           <Chip ativo={modo === 'previsto'} onClick={() => setModo('previsto')}>P · Previsto</Chip>
           <Chip ativo={modo === 'realizado'} onClick={() => setModo('realizado')}>R · Realizado</Chip>
@@ -394,7 +422,7 @@ export default function MontarPage() {
                       <tr>
                         <td colSpan={v.dias.length + 8} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1.5 text-xs font-semibold text-m-accent">
                           {a.codigo} · {a.descricao}
-                          {rascunho && pode('encarregado') && <button type="button" className="ml-3 font-semibold underline" onClick={() => abrirNova(a.id)}>+ linha</button>}
+                          {rascunho && pode('encarregado') && !porEnc && <button type="button" className="ml-3 font-semibold underline" onClick={() => abrirNova(a.id)}>+ linha</button>}
                         </td>
                       </tr>
                       {porCwp(a.linhas).map(({ ln, cwp, inicio }, i) => (
@@ -426,31 +454,40 @@ export default function MontarPage() {
                                 <input aria-label={`${ln.codigo_simova} previsto no período`} type="number" min="0" step="any" disabled={!(rascunho && pode('encarregado'))}
                                   value={pv} onChange={(e) => setPend({ ...pend, [`${ln.id}|periodo`]: e.target.value })}
                                   className={`h-8 w-[72px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] font-semibold outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${difere ? 'border-m-warning' : 'border-m-stroke'}`} />
-                                {difere && <div className="mt-0.5 text-[10px] text-m-warning">dias somam {fmt(soma)}{rascunho && pode('encarregado') && <> · <button type="button" className="font-semibold underline" onClick={() => distribuir(ln)}>distribuir</button></>}</div>}
+                                {difere && <div className="mt-0.5 text-[10px] text-m-warning">dias somam {fmt(soma)}{rascunho && pode('encarregado') && <>
+                                  {modo === 'previsto' && sugestao(ln, (di, data) => valorCel(ln, 'previsto', di, data)) && <> · <button type="button" className="font-semibold underline" title="Preenche só os dias vazios com o que falta (a sugestão em cinza)" onClick={() => distribuirResto(ln)}>distribuir o restante</button></>}
+                                  {' · '}<button type="button" className="font-semibold underline" title="Refaz todos os dias por igual (sem domingo)" onClick={() => distribuir(ln)}>redistribuir tudo</button></>}</div>}
                                 <ModoLinha ln={ln} pid={id} editar={rascunho && pode('encarregado') && nPend === 0 && !modoPrev.isPending} aplicar={aplicarModo} />
                               </>;
                             })()}
                           </td>
-                          {v.dias.map((d, di) => (
+                          {(() => { const sg = modo === 'previsto' && podeEditarValor ? sugestao(ln, (di2, data2) => valorCel(ln, 'previsto', di2, data2)) : null; return v.dias.map((d, di) => (
                             <td key={d.data} className="px-0.5 py-1.5">
                               <input
                                 aria-label={`${ln.codigo_simova} ${d.dia} ${d.data}`}
                                 type="number" min="0" step="any" disabled={!podeEditarValor}
                                 value={valorCel(ln, modo, di, d.data)}
+                                placeholder={sg?.[di] ?? ''}
+                                title={sg?.[di] ? `Sugestão: ${sg[di]} (o que falta do período ÷ dias vazios) · "distribuir o restante" aplica` : dicaDia(ln, di)}
                                 onChange={(e) => {
                                   const k2 = `${ln.id}|${modo}|${d.data}`;
                                   const original = ln[modo][di] != null ? String(ln[modo][di]) : '';
                                   const novo = { ...pend };
                                   if (e.target.value === original) delete novo[k2]; else novo[k2] = e.target.value;
+                                  // sobrou um só dia vazio: ele recebe o que falta do período (dá para mudar)
+                                  if (modo === 'previsto' && e.target.value !== '') {
+                                    const val = (di2: number, data2: string) => novo[`${ln.id}|previsto|${data2}`] ?? (ln.previsto[di2] != null ? String(ln.previsto[di2]) : '');
+                                    const sgn = sugestao(ln, val);
+                                    if (sgn && Object.keys(sgn).length === 1) { const [di3, x] = Object.entries(sgn)[0]; novo[`${ln.id}|previsto|${v.dias[Number(di3)].data}`] = x; }
+                                  }
                                   setPend(novo);
                                 }}
-                                title={dicaDia(ln, di)}
                                 className={`h-8 w-[58px] rounded-[8px] border bg-m-surface-field px-1.5 text-right text-[13px] outline-none focus:border-m-accent disabled:border-transparent disabled:bg-transparent ${pend[`${ln.id}|${modo}|${d.data}`] !== undefined ? 'border-m-accent bg-m-accent-subtle' : modo === 'previsto' && ln.calc?.acima_capacidade[di] ? 'border-m-danger text-m-danger' : modo === 'realizado' ? 'border-m-info/40' : 'border-m-stroke'}`}
                               />
                               {modo === 'previsto' && ln.calc?.hh_previsto[di] ? <div className="mt-0.5 text-center text-[10px] text-m-text-muted"><Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={`hh_dia:${di}`}>{`${fmt(ln.calc.hh_previsto[di], 1)} HH`}</Calculado></div> : null}
                               {modo === 'previsto' && ln.calc?.capacidade_dia?.[di] ? <div className="text-center text-[10px] text-m-text-tertiary" title="Capacidade da equipe neste dia">cap <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={`capacidade_dia:${di}`}>{fmt(ln.calc.capacidade_dia[di], 1)}</Calculado></div> : null}
                             </td>
-                          ))}
+                          )); })()}
                           <td className="whitespace-nowrap px-2 py-2 text-right font-semibold text-m-text-primary">
                             {fmt(modo === 'previsto' ? ln.total_previsto : ln.total_realizado)}
                             {ln.calc?.hh_un ? <div className="text-[11px] font-normal text-m-text-muted"><Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={modo === 'previsto' ? 'total_hh_previsto' : 'total_hh_realizado'}>{`${fmt(modo === 'previsto' ? ln.calc.total_hh_previsto : ln.calc.total_hh_realizado, 1)} HH`}</Calculado></div> : null}
