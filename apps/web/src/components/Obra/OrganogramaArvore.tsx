@@ -1,6 +1,7 @@
 'use client';
 
-import { ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, Minus, Plus, ScanSearch } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, Minus, Plus, ScanSearch, UserPlus, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { Colaborador, CoresOrganograma, NoOrganograma } from '@/lib/api/types';
@@ -284,13 +285,7 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
           </label>
           <button type="button" className="font-semibold text-m-accent" onClick={() => setIncluindo(incluindo === 'pessoa' ? '' : 'pessoa')}>+ pessoa</button>
           <button type="button" className="font-semibold text-m-accent" onClick={() => setIncluindo(incluindo === 'funcao' ? '' : 'funcao')}>+ função</button>
-          {incluindo === 'pessoa' && (
-            <div className="w-[300px]">
-              <BuscaEfetivo rotulo={`Incluir em ${no.titulo}`} pessoas={edicao.efetivo} manterAberto
-                onEscolher={(x) => { edicao.mover([{ cracha: x.cracha || x.matricula || '', nome: x.nome, de: x.equipe_id ?? null }], no.ref!).catch(() => undefined); }} />
-            </div>
-          )}
-          {incluindo === 'funcao' && <IncluirFuncao equipeId={no.ref} edicao={edicao} onFechar={() => setIncluindo('')} />}
+          {incluindo && <CardIncluir equipeId={no.ref} equipe={no.titulo} modo={incluindo} onModo={setIncluindo} edicao={edicao} onFechar={() => setIncluindo('')} />}
         </div>
       )}
       {edicao && refs.length > 0 && (
@@ -341,6 +336,59 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
   );
 }
 
+/**
+ * Card por cima da tela (fora da área com zoom do organograma) para incluir pessoas ou uma função na equipe — a busca
+ * e a lista aparecem inteiras, sem ficar atrás das outras caixas.
+ */
+function CardIncluir({ equipeId, equipe, modo, onModo, edicao, onFechar }: {
+  equipeId: number; equipe: string; modo: 'pessoa' | 'funcao'; onModo: (m: 'pessoa' | 'funcao') => void; edicao: EdicaoOrganograma; onFechar: () => void;
+}) {
+  const [incluidos, setIncluidos] = useState<string[]>([]);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar(); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onFechar]);
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 p-4 pt-[10vh]" onMouseDown={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
+      <div role="dialog" aria-modal="true" aria-label={`Incluir em ${equipe}`} className="flex w-[560px] max-w-full flex-col gap-3 rounded-m-lg border border-m-stroke bg-m-surface-raised p-4 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Incluir na equipe</p>
+            <h3 className="text-[16px] font-semibold text-m-text-primary">{equipe}</h3>
+          </div>
+          <button type="button" aria-label="Fechar" onClick={onFechar} className="rounded-full p-1.5 text-m-text-muted hover:bg-m-surface-hover"><X size={18} /></button>
+        </div>
+        <div className="inline-flex w-fit items-center gap-1 rounded-full border border-m-stroke p-0.5" role="group" aria-label="O que incluir">
+          {([['pessoa', 'Pessoa'], ['funcao', 'Função inteira']] as const).map(([m, r]) => (
+            <button key={m} type="button" aria-pressed={modo === m} onClick={() => onModo(m)}
+              className={cn('h-8 rounded-full px-3 text-[12.5px] font-semibold', modo === m ? 'bg-m-accent text-white' : 'text-m-text-secondary hover:bg-m-surface-hover')}>{r}</button>
+          ))}
+        </div>
+        {modo === 'pessoa' ? (
+          <>
+            <BuscaEfetivo rotulo="Buscar no efetivo (nome, matrícula, crachá ou função)" pessoas={edicao.efetivo} manterAberto
+              onEscolher={(x) => {
+                edicao.mover([{ cracha: x.cracha || x.matricula || '', nome: x.nome, de: x.equipe_id ?? null }], equipeId)
+                  .then(() => setIncluidos((l) => [x.nome, ...l])).catch(() => undefined);
+              }} />
+            <p className="text-[12px] text-m-text-muted">Quem já está em outra equipe é movido para esta. Pode incluir várias pessoas seguidas.</p>
+            {incluidos.length > 0 && (
+              <div className="rounded-m-md border border-m-stroke-subtle p-2 text-[12.5px]">
+                <span className="font-semibold text-m-text-primary">Incluídos agora:</span>
+                <ul className="mt-1 flex flex-wrap gap-1.5">{incluidos.map((n, i) => <li key={`${n}-${i}`} className="inline-flex items-center gap-1 rounded-full bg-m-accent-subtle px-2 py-0.5 text-m-accent"><UserPlus size={12} />{n}</li>)}</ul>
+              </div>
+            )}
+          </>
+        ) : <IncluirFuncao equipeId={equipeId} edicao={edicao} onFechar={onFechar} />}
+        <div className="flex justify-end"><button type="button" onClick={onFechar} className="h-9 rounded-full border border-m-stroke px-4 text-[13px] font-semibold text-m-text-primary hover:bg-m-surface-hover">Concluir</button></div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /** "+ função": escolhe a função e marca quem entra (sem equipe vem marcado; quem está em outra equipe é migrado). */
 function IncluirFuncao({ equipeId, edicao, onFechar }: { equipeId: number; edicao: EdicaoOrganograma; onFechar: () => void }) {
   const [funcao, setFuncao] = useState('');
@@ -349,12 +397,12 @@ function IncluirFuncao({ equipeId, edicao, onFechar }: { equipeId: number; edica
   const [marc, setMarc] = useState<Set<number>>(new Set());
   useEffect(() => { setMarc(new Set(gente.filter((c) => !c.equipe_id).map((c) => c.id))); }, [funcao]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="w-[320px] rounded-m-md border border-m-stroke bg-m-surface-raised p-2 text-[11.5px]">
+    <div className="w-full text-[13px]">
       <select aria-label="Função a incluir" value={funcao} onChange={(e) => setFuncao(e.target.value)} className="w-full rounded-[6px] border border-m-stroke bg-m-surface-field px-1 py-1">
         <option value="">— escolha a função —</option>{funcoes.map((f) => <option key={f} value={f}>{f}</option>)}
       </select>
       {funcao && (
-        <ul className="mt-1 max-h-48 overflow-auto">
+        <ul className="mt-2 max-h-[45vh] overflow-auto rounded-m-md border border-m-stroke-subtle p-1">
           {gente.map((c) => (
             <li key={c.id}><label className="flex items-center gap-1.5 py-0.5">
               <input type="checkbox" checked={marc.has(c.id)} onChange={() => setMarc((m) => { const n = new Set(m); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })} />
