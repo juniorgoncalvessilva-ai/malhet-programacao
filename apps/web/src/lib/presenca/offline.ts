@@ -1,5 +1,7 @@
 'use client';
 
+import { loja, req } from '@/lib/offline/db';
+
 /**
  * Guarda da presença no próprio celular (IndexedDB) — spec 063. A base (pessoas, códigos, rostos) e as leituras ficam
  * no aparelho; as leituras sobem em sequência quando houver internet (`sincronizar`). Nada aqui depende de rede.
@@ -26,34 +28,6 @@ export interface LeituraLocal {
 }
 /** Presença já registrada no servidor por qualquer celular (a leitura válida do dia). */
 export interface PresencaRemota { colaborador_id: number; hora: string; meio: Meio; id_local: string }
-
-const NOME = 'malhet-campo';
-let conexao: Promise<IDBDatabase> | null = null;
-
-function abrir(): Promise<IDBDatabase> {
-  conexao ??= new Promise((ok, falha) => {
-    const r = indexedDB.open(NOME, 1);
-    r.onupgradeneeded = () => {
-      const db = r.result;
-      if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
-      if (!db.objectStoreNames.contains('leituras')) {
-        const st = db.createObjectStore('leituras', { keyPath: 'id_local' });
-        st.createIndex('obra_data', ['obra_id', 'data']);
-      }
-    };
-    r.onsuccess = () => ok(r.result);
-    r.onerror = () => { conexao = null; falha(r.error); };
-  });
-  return conexao;
-}
-
-function req<T>(r: IDBRequest<T>): Promise<T> {
-  return new Promise((ok, falha) => { r.onsuccess = () => ok(r.result); r.onerror = () => falha(r.error); });
-}
-
-async function loja(nome: 'kv' | 'leituras', modo: IDBTransactionMode) {
-  return (await abrir()).transaction(nome, modo).objectStore(nome);
-}
 
 export async function lerBase(obraId: number): Promise<BasePresenca | null> {
   return ((await req((await loja('kv', 'readonly')).get(`base:${obraId}`))) as BasePresenca | undefined) ?? null;
@@ -120,7 +94,7 @@ export async function salvarRemotos(obraId: number, data: string, lista: Presenc
   await req((await loja('kv', 'readwrite')).put(lista, `remotos:${obraId}:${data}`));
 }
 
-export const idLocal = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+export { idLocal } from '@/lib/offline/db';
 export const hojeLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 export const normalizarCodigo = (v: string) => v.replace(/[\s:\-]/g, '').toUpperCase();
 

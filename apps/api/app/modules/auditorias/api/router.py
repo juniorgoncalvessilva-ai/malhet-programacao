@@ -1,8 +1,10 @@
-"""Auditorias e inspeções (spec 064): modelos (templates), opções do formulário, registros, envio e texto do WhatsApp."""
-from datetime import date
+"""Auditorias e inspeções (spec 064): modelos (templates), opções do formulário, registros, envio e texto do WhatsApp.
+Spec 072: o celular grava a auditoria inteira sem internet e envia de uma vez (`/registros/completo`, idempotente)."""
+import json
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, UploadFile
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,11 +13,13 @@ from app.core.db import get_session
 from app.modules.auditorias import application as ap
 from app.modules.auditorias.domain.auditoria import MODELO_SEGURANCA, ROTULO_STATUS, pendencias, texto_envio, validar_config
 from app.modules.auditorias.infra.models import ModeloAuditoriaModel, RegistroAuditoriaModel
+from app.modules.campo.domain.foto import LIMITE, tipo_da_imagem
 from app.modules.campo.infra.models import FotoCampoModel
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
 from app.modules.obras.domain.obra import PapelObra
 from app.shared.errors import DomainError, NotFoundError
+from app.shared.offline import validar_id_local
 
 router = APIRouter(prefix="/auditorias", tags=["auditorias e inspeções"])
 
@@ -211,8 +215,7 @@ def _registro(s: Session, c: ContextoObra, rid: int) -> RegistroAuditoriaModel:
     return r
 
 
-@router.post("/registros", status_code=201)
-def criar_registro(d: RegistroIn, s: Session = Depends(get_session), c: ContextoObra = Depends(auditar)):
+def _novo(s: Session, c: ContextoObra, d: RegistroIn) -> tuple[RegistroAuditoriaModel, ModeloAuditoriaModel]:
     ap.garantir_padrao(s, c.obra_id)
     mid = d.modelo_id or s.scalar(select(ModeloAuditoriaModel.id).where(ModeloAuditoriaModel.obra_id == c.obra_id, ModeloAuditoriaModel.padrao.is_(True)))
     m = s.get(ModeloAuditoriaModel, mid) if mid else None
@@ -223,7 +226,47 @@ def criar_registro(d: RegistroIn, s: Session = Depends(get_session), c: Contexto
     _aplicar(s, r, d, c.obra_id)
     s.add(r)
     s.flush()
+    return r, m
+
+
+@router.post("/registros", status_code=201)
+def criar_registro(d: RegistroIn, s: Session = Depends(get_session), c: ContextoObra = Depends(auditar)):
+    r, _ = _novo(s, c, d)
     return _saida(s, c.obra_id, [r])[0]
+
+
+class RegistroCompletoIn(RegistroIn):
+    id_local: str
+    registrado_em: datetime | None = None
+
+
+@router.post("/registros/completo", status_code=201)
+async def registro_completo(dados: str = Form(...), momentos: str = Form("[]"), fotos: list[UploadFile] = File(default=[]),
+                            s: Session = Depends(get_session), c: ContextoObra = Depends(auditar)):
+    """Auditoria feita no celular (com ou sem internet), enviada de uma vez: registro + fotos (antes/depois) + finalizar,
+    tudo ou nada. Reenviar o mesmo `id_local` devolve o registro já gravado (`repetido`), sem duplicar."""
+    try:
+        d = RegistroCompletoIn.model_validate_json(dados)
+        ms = json.loads(momentos)
+    except (ValidationError, ValueError):
+        raise DomainError("dados da auditoria inválidos", "dados") from None
+    validar_id_local(d.id_local)
+    ja = s.scalar(select(RegistroAuditoriaModel).where(RegistroAuditoriaModel.obra_id == c.obra_id,
+                                                       RegistroAuditoriaModel.id_local == d.id_local))
+    if ja is not None:
+        return {**_saida(s, c.obra_id, [ja])[0], "texto": _texto(s, c, ja, s.get(ModeloAuditoriaModel, ja.modelo_id)), "repetido": True}
+    if not isinstance(ms, list) or len(ms) != len(fotos) or any(x not in ("antes", "depois") for x in ms):
+        raise DomainError("cada foto precisa dizer se é do antes ou do depois", "momentos")
+    r, m = _novo(s, c, d)
+    r.id_local, r.registrado_em = d.id_local, d.registrado_em
+    for arq, momento in zip(fotos, ms):
+        conteudo = await arq.read(LIMITE + 1)
+        s.add(FotoCampoModel(obra_id=c.obra_id, alvo="auditoria", alvo_id=r.id, data=r.data, legenda=momento,
+                             content_type=tipo_da_imagem(conteudo), tamanho=len(conteudo), conteudo=conteudo,
+                             enviado_por=c.usuario.id))
+    s.flush()
+    ap.finalizar(s, r, m.config, c.usuario.id)
+    return {**_saida(s, c.obra_id, [r])[0], "texto": _texto(s, c, r, m), "repetido": False}
 
 
 @router.put("/registros/{rid}")

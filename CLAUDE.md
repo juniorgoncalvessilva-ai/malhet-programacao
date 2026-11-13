@@ -106,6 +106,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`acoes/`: `acao_5w2h`, eventos andamento/concluir com evidência/verificar eficácia/cancelar, `candidatas` e `de-origem`
   de ocorrências e restrições). Web `/app/auditorias`, `/app/auditorias/modelos`, `/app/acoes`; celular `/m/auditorias`,
   `/m/acoes` (`components/Auditoria/`, `src/lib/auditorias`). Spec 064.
+  Offline (spec 072): fila genérica no aparelho (`src/lib/offline/{db,fila}.ts`, `SincronizarFila`, `registrarEnvio`) — grava tudo
+  antes de enviar; `POST /auditorias/registros/completo` (tudo ou nada, `id_local` idempotente); listas com `comCopia`; SW `aquecer`.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

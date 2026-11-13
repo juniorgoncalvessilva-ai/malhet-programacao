@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qs } from '@/lib/api/client';
 import type { CadastroSsma, Colaborador, FuncaoDePara, GrupoCatalogo, MovimentoEfetivo, NoOrganograma, CoresOrganograma, SetoresObra, NoWbs, ResumoEfetivo, Local, ProgramacaoResumo, ProgramacaoVisao } from '@/lib/api/types';
+import { useObraOpcional } from '@/lib/obra/ObraProvider';
+import { comCopia } from '@/lib/offline/db';
 import { useApi } from './useApi';
 
 export const k = {
@@ -54,7 +56,9 @@ export function useCadastrosSsma() {
 
 export function useFrentes2() {
   const api = useApi();
-  return useQuery({ queryKey: k.frentes, queryFn: () => api.get<Local[]>('/frentes') });
+  const obraId = useObraOpcional()?.obra?.id;
+  // cópia no aparelho: escolher a frente no campo sem internet (auditoria, etilômetro — spec 072)
+  return useQuery({ queryKey: k.frentes, networkMode: 'always', queryFn: () => comCopia(`${obraId}:frentes`, () => api.get<Local[]>('/frentes')) });
 }
 export function useCatalogo() {
   const api = useApi();

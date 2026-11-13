@@ -22,7 +22,8 @@ class ModeloAuditoriaModel(Base):
 
 class RegistroAuditoriaModel(Base):
     __tablename__ = "auditoria_registro"
-    __table_args__ = (UniqueConstraint("obra_id", "numero", name="uq_auditoria_registro_numero"),)
+    __table_args__ = (UniqueConstraint("obra_id", "numero", name="uq_auditoria_registro_numero"),
+                      UniqueConstraint("obra_id", "id_local", name="uq_auditoria_registro_id_local"))
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     modelo_id: Mapped[int] = mapped_column(ForeignKey("auditoria_modelo.id", ondelete="RESTRICT"), index=True)
@@ -50,3 +51,6 @@ class RegistroAuditoriaModel(Base):
     auditor: Mapped[str | None] = mapped_column(String(150))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     enviado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # spec 072: id gerado no celular (registro feito sem internet) — reenviar a fila não duplica
+    id_local: Mapped[str | None] = mapped_column(String(64))
+    registrado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # hora do registro no aparelho

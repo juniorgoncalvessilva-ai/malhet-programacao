@@ -4,6 +4,7 @@ import { TituloAba } from '@/components/Obra/LogosObra';
 import { SincronizarDados } from '@/lib/tempo-real';
 
 import { SincronizarPresenca } from '@/lib/presenca/SincronizarPresenca';
+import { SincronizarFila } from '@/lib/offline/SincronizarFila';
 import { useEffect, type ReactNode } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { OfertaInstalar } from '@/components/Mobile/OfertaInstalar';
@@ -28,6 +29,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
           <TituloAba />
           <SincronizarDados />
           {obra && <SincronizarPresenca />}
+          {obra && <SincronizarFila />}
           {obra ? (bloqueada ? <p className="pt-10 text-center text-sm text-m-text-muted">Tela não liberada para você nesta obra.</p> : children) : <p className="pt-10 text-center text-sm text-m-text-muted">{carregando ? 'Carregando obra…' : 'Sem acesso a nenhuma obra.'}</p>}
         </main>
         <nav aria-label="Navegação do campo" className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[480px] -translate-x-1/2 border-t border-m-stroke-subtle bg-m-surface-raised pb-[max(env(safe-area-inset-bottom),10px)] pt-2" style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}>

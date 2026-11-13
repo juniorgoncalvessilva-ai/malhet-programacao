@@ -3,6 +3,7 @@
 import { Plus, Settings2, X } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { DetalheRegistro, corStatusRegistro } from '@/components/Auditoria/DetalheRegistro';
+import { FilaAuditorias } from '@/components/Auditoria/FilaAuditorias';
 import { FormAuditoria } from '@/components/Auditoria/FormAuditoria';
 import { Botao, Cabecalho, Campo, Indicador, Painel, Selecao } from '@/components/Obra/ui';
 import { Link } from '@/i18n/navigation';
@@ -33,6 +34,7 @@ export default function AuditoriasPage() {
           <Link href="/app/acoes"><Botao variante="secundario">Plano de ação 5W2H</Botao></Link>
           {pode_ && <Botao onClick={() => setNova(true)}><Plus size={16} /> Nova auditoria</Botao>}
         </>} />
+      <FilaAuditorias />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Indicador rotulo="Registros no período" valor={regs.length} />
         <Indicador rotulo="Adequadas na hora (ver e agir)" valor={regs.filter((r) => r.status === 'adequada').length} />

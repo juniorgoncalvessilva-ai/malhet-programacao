@@ -2,6 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/hooks/programacao/useApi';
+import { useObraOpcional } from '@/lib/obra/ObraProvider';
+import { comCopia } from '@/lib/offline/db';
 
 /** Auditorias por modelo e ações 5W2H (spec 064): tipos e consultas compartilhados entre o web e o celular. */
 export type TipoCampo = 'tipo_auditoria' | 'frente' | 'data' | 'engenheiro' | 'encarregado' | 'rac' | 'tipo_registro'
@@ -47,21 +49,30 @@ export const FAROL_ACAO: Record<string, { rotulo: string; cls: string }> = {
 };
 export const dataBR = (iso: string | null | undefined) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—');
 
+// modelos e opções ficam guardados no aparelho: a auditoria abre e registra sem internet (spec 072)
 export function useModelosAuditoria() {
   const api = useApi();
-  return useQuery({ queryKey: ['auditorias', 'modelos'], queryFn: () => api.get<ModeloAuditoria[]>('/auditorias/modelos') });
+  const obraId = useObraOpcional()?.obra?.id;
+  return useQuery({ queryKey: ['auditorias', 'modelos'], networkMode: 'always', retry: 1,
+    queryFn: () => comCopia(`${obraId}:auditorias/modelos`, () => api.get<ModeloAuditoria[]>('/auditorias/modelos')) });
 }
 export function useOpcoesAuditoria() {
   const api = useApi();
-  return useQuery({ queryKey: ['auditorias', 'opcoes'], queryFn: () => api.get<OpcoesAuditoria>('/auditorias/opcoes'), staleTime: 60000 });
+  const obraId = useObraOpcional()?.obra?.id;
+  return useQuery({ queryKey: ['auditorias', 'opcoes'], staleTime: 60000, networkMode: 'always', retry: 1,
+    queryFn: () => comCopia(`${obraId}:auditorias/opcoes`, () => api.get<OpcoesAuditoria>('/auditorias/opcoes')) });
 }
 export function useRegistrosAuditoria(filtro = '') {
   const api = useApi();
-  return useQuery({ queryKey: ['auditorias', 'registros', filtro], queryFn: () => api.get<RegistroAuditoria[]>(`/auditorias/registros${filtro}`) });
+  const obraId = useObraOpcional()?.obra?.id;
+  return useQuery({ queryKey: ['auditorias', 'registros', filtro], networkMode: 'always', retry: 1,
+    queryFn: () => comCopia(`${obraId}:auditorias/registros${filtro}`, () => api.get<RegistroAuditoria[]>(`/auditorias/registros${filtro}`)) });
 }
 export function useAcoes(filtro = '') {
   const api = useApi();
-  return useQuery({ queryKey: ['acoes', filtro], queryFn: () => api.get<Acao5W2H[]>(`/acoes${filtro}`) });
+  const obraId = useObraOpcional()?.obra?.id;
+  return useQuery({ queryKey: ['acoes', filtro], networkMode: 'always', retry: 1,
+    queryFn: () => comCopia(`${obraId}:acoes${filtro}`, () => api.get<Acao5W2H[]>(`/acoes${filtro}`)) });
 }
 
 /** Envia pelo WhatsApp: no celular, o compartilhamento nativo leva texto + fotos; sem ele, abre o WhatsApp só com o texto. */

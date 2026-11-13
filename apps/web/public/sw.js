@@ -1,7 +1,9 @@
 /* Service worker do app Malhet (spec 063): instalar no celular e abrir o app de campo sem internet.
    - Páginas do campo (/pt-BR/m/...): rede primeiro (cada deploy chega na hora); sem rede, a última cópia guardada.
    - Arquivos do build (/_next/static, com hash) e modelos da leitura facial (/models): guardados na primeira vez.
-   - A API (/backend) nunca passa pelo cache: os dados offline ficam no IndexedDB do próprio app. */
+   - A API (/backend) nunca passa pelo cache: os dados offline ficam no IndexedDB do próprio app.
+   - Spec 072: com internet, o app pede para "aquecer" as telas do campo (mensagem `aquecer`): a página e os arquivos do
+     build que ela usa ficam guardados, e a tela abre sem rede mesmo que a pessoa nunca a tenha aberto antes. */
 const VERSAO = 'malhet-campo-v1';
 const PAGINAS = `${VERSAO}-paginas`;
 const ESTATICOS = `${VERSAO}-estaticos`;
@@ -48,4 +50,26 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin || url.pathname.startsWith('/backend/')) return;
   if (ehEstatico(url)) { e.respondWith(cachePrimeiro(req)); return; }
   if (ehCampo(url)) e.respondWith(redePrimeiro(req));
+});
+
+async function aquecer(urls) {
+  const pag = await caches.open(PAGINAS);
+  const est = await caches.open(ESTATICOS);
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, { credentials: 'same-origin' });
+      if (!r.ok || r.type !== 'basic') continue;
+      const html = await r.clone().text();
+      await pag.put(u, r);
+      for (const m of html.matchAll(/(?:src|href)="(\/_next\/static\/[^"]+)"/g)) {
+        if (await est.match(m[1])) continue;
+        const s = await fetch(m[1]);
+        if (s.ok) await est.put(m[1], s);
+      }
+    } catch (e) { /* sem rede no meio: fica para a próxima */ }
+  }
+}
+
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.tipo === 'aquecer' && Array.isArray(e.data.urls)) e.waitUntil(aquecer(e.data.urls.filter((u) => ehCampo(new URL(u, self.location.origin)))));
 });

@@ -3,6 +3,7 @@
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { DetalheRegistro, corStatusRegistro } from '@/components/Auditoria/DetalheRegistro';
+import { FilaAuditorias } from '@/components/Auditoria/FilaAuditorias';
 import { TopoM } from '@/components/Mobile/ui';
 import { Link } from '@/i18n/navigation';
 import { dataBR, useRegistrosAuditoria } from '@/lib/auditorias';
@@ -16,6 +17,7 @@ export default function AuditoriasCampo() {
     <>
       <TopoM titulo="Auditorias" sub="últimos 30 dias" acao={<Link href="/m/auditorias/nova" aria-label="Nova auditoria" className="grid h-11 w-11 place-items-center rounded-full bg-m-accent-strong text-m-on-accent"><Plus size={22} /></Link>} />
       <Link href="/m/auditorias/nova" className="flex min-h-[56px] items-center justify-center gap-2 rounded-[14px] border-2 border-m-accent-strong bg-m-surface-raised text-[15px] font-semibold text-m-accent"><Plus size={18} /> Nova auditoria</Link>
+      <FilaAuditorias compacto />
       <Link href="/m/acoes" className="text-center text-[13px] font-semibold text-m-accent underline">Ações 5W2H (plano de ação)</Link>
       {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
       {q.data && !q.data.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhuma auditoria nos últimos 30 dias.</p>}

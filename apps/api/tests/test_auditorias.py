@@ -103,3 +103,39 @@ def test_acoes_manuais_e_de_ocorrencia(client):
     assert sem == [m["id"]]  # programação das ações: pelo dia de execução
     assert client.post(f"/api/acoes/{m['id']}/evento", json={"evento": "cancelar"}).status_code == 422  # motivo
     assert client.post(f"/api/acoes/{m['id']}/evento", json={"evento": "cancelar", "texto": "duplicada"}).json()["status"] == "cancelada"
+
+
+def test_auditoria_feita_sem_internet_envia_de_uma_vez(client):
+    """Spec 072: o celular guarda registro + fotos e envia tudo junto; reenviar a fila não duplica; erro não grava metade."""
+    import json
+
+    client.post("/api/frentes/importar", json={"texto": LISTA})
+    area = client.get("/api/frentes").json()[0]["areas"][0]
+    dados = {"id_local": "cel1-aud-000001", "registrado_em": "2026-11-12T09:10:00-03:00", "data": "2026-11-12",
+             "tipo": "Inspeção", "tipo_registro": "Condição insegura", "area_id": area["id"], "nao_conformidade": "Extintor vencido",
+             "medida_corretiva": "Trocar o extintor", "ver_agir": False, "engenheiro": "Thiago Aleixo",
+             "encarregado": "Damião Feliz", "acompanhamento": "Ermelindo", "plano_responsavel": "Damião Feliz", "plano_prazo": "2026-11-14"}
+    envio = lambda d, momentos, n: client.post("/api/auditorias/registros/completo",
+                                                data={"dados": json.dumps(d), "momentos": json.dumps(momentos)},
+                                                files=[("fotos", (f"f{i}.jpg", _jpeg(), "image/jpeg")) for i in range(n)])
+    # sem a foto do antes o modelo não aceita — e nada fica gravado pela metade
+    r = envio(dados, [], 0)
+    assert r.status_code == 422 and "foto" in r.text.lower()
+    assert client.get("/api/auditorias/registros").json() == []
+    assert envio(dados, ["antes"], 2).status_code == 422  # cada foto diz se é antes ou depois
+    assert envio({**dados, "id_local": "x"}, ["antes"], 1).status_code == 422
+
+    r = envio(dados, ["antes"], 1)
+    assert r.status_code == 201, r.text
+    a = r.json()
+    assert a["status"] == "plano" and a["acao"] and a["repetido"] is False and a["fotos"] == [{"id": a["fotos"][0]["id"], "momento": "antes"}]
+    assert f"Nº {a['numero']}" in a["texto"]
+    # a fila subiu de novo (a resposta se perdeu no caminho): devolve o mesmo, sem duplicar registro, foto ou ação
+    b = envio(dados, ["antes"], 1).json()
+    assert b["repetido"] is True and b["id"] == a["id"] and b["numero"] == a["numero"]
+    assert len(client.get("/api/auditorias/registros").json()) == 1 and len(client.get("/api/acoes").json()) == 1
+
+    sim = {**dados, "id_local": "cel1-aud-000002", "ver_agir": True, "plano_responsavel": None, "plano_prazo": None}
+    assert envio(sim, ["antes"], 1).status_code == 422  # SIM sem a foto do depois
+    c = envio(sim, ["antes", "depois"], 2).json()
+    assert c["status"] == "adequada" and sorted(x["momento"] for x in c["fotos"]) == ["antes", "depois"]
