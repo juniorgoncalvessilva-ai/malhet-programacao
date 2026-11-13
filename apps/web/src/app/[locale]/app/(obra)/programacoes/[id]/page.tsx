@@ -22,6 +22,7 @@ import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
 import { DesviosDaProgramacao } from '@/components/Obra/DesviosProgramacao';
+import { RevisoesProgramacao } from '@/components/Obra/RevisoesProgramacao';
 
 interface FormLinha {
   wbs_no_id: string; area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
@@ -289,6 +290,8 @@ export default function MontarPage() {
           </ul>
         </Painel>
       )}
+
+      <RevisoesProgramacao pid={id} concluida={concluida} emitida={!rascunho && !concluida} />
 
       {!rascunho && <div id="desvios"><DesviosDaProgramacao pid={id} dias={v.dias} editavel={!concluida && pode('encarregado')} /></div>}
 

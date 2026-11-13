@@ -64,6 +64,16 @@ def na_emissao(s: Session, obra_id: int, programacao_id: int, revisao: int, foto
     return len(novas)
 
 
+def ao_excluir_emissao(s: Session, programacao_id: int, revisao: int, reativar: int | None) -> None:
+    """Revisão emitida excluída (spec 060): some o histórico dela; se era a vigente, a anterior volta a valer."""
+    s.execute(delete(FatoProgramacaoModel).where(FatoProgramacaoModel.programacao_id == programacao_id,
+                                                 FatoProgramacaoModel.revisao == revisao))
+    if reativar is not None:
+        s.execute(update(FatoProgramacaoModel).where(FatoProgramacaoModel.programacao_id == programacao_id,
+                                                     FatoProgramacaoModel.revisao == reativar).values(vigente=True))
+    s.flush()
+
+
 def na_conclusao(s: Session, obra_id: int, programacao_id: int, revisao: int, numero: int, foto: dict) -> int:
     s.execute(delete(FatoProgramacaoModel).where(FatoProgramacaoModel.programacao_id == programacao_id,
                                                  FatoProgramacaoModel.vigente.is_(True)))

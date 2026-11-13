@@ -80,7 +80,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `PUT /programacoes/{pid}/sequencia`), aba "Sequência (Gantt)" no modelo do MS Project (predecessoras "3TI+2 dias"), distribuição sugerida nos dias vazios e "Por encarregado"
   (`agruparPorEncarregado`). Spec 054. Cores do modelo S27 (local vermelho FF0000 na linha toda, área azul 173761,
   atividades alternadas C5D9F1, spec 059) no Excel do cliente, na tela e na impressão; Gantt com "Classificar por" e "Agrupar por"
-  (frente/encarregado, linha-resumo). Spec 055.
+  (frente/encarregado, linha-resumo). Spec 055. Excluir revisão emitida só pelo super admin (`DELETE /programacoes/{pid}/emissoes/{rev}`,
+  `excluir_emissao`; a anterior volta a vigente; última de concluída não sai; `RevisoesProgramacao`). Spec 060.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

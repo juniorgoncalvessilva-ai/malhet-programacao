@@ -464,6 +464,32 @@ def emitir(s: Session, p: ProgramacaoModel, usuario: str) -> EmissaoModel:
     return e
 
 
+def excluir_emissao(s: Session, p: ProgramacaoModel, rev: int) -> dict:
+    """Exclui uma revisão emitida (spec 060, só super admin — a rota confere). Some a foto e o histórico dela nos
+    indicadores. Se for a última: a revisão anterior volta a ser a vigente nos indicadores, a numeração recua (a próxima
+    emissão reaproveita o número) e a programação emitida volta a rascunho. A última emissão de uma programação
+    concluída não sai: ela sustenta a conclusão (abra uma revisão antes)."""
+    from app.modules.indicadores.application.registrar import ao_excluir_emissao
+
+    todas = list(s.scalars(select(EmissaoModel).where(EmissaoModel.programacao_id == p.id)))
+    e = next((x for x in todas if x.revisao == rev), None)
+    if e is None:
+        raise NotFoundError("Emissão", rev)
+    restantes = sorted((x.revisao for x in todas if x.revisao != rev), reverse=True)
+    ultima = rev == max(x.revisao for x in todas)
+    if ultima and p.status == "concluida":
+        raise DomainError("programação concluída: a última revisão emitida sustenta a conclusão — abra uma revisão "
+                          "(com o motivo) antes de excluí-la", "revisao")
+    s.delete(e)
+    ao_excluir_emissao(s, p.id, rev, restantes[0] if ultima and restantes else None)
+    if ultima:
+        p.revisao = restantes[0] + 1 if restantes else 0
+        if p.status == "emitida":
+            p.status = "rascunho"
+    s.flush()
+    return {"excluida": rev, "restantes": restantes, "status": p.status, "proxima_revisao": p.revisao}
+
+
 def reabrir(p: ProgramacaoModel) -> None:
     exigir_aberta(p)
     if p.status != "emitida":

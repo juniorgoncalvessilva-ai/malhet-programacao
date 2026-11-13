@@ -440,6 +440,14 @@ def emissao(pid: int, rev: int, s: Session = Depends(get_session), c: ContextoOb
     return {**sv.completar_foto(s, c.obra_id, copy.deepcopy(e.foto)), "emitida_em": e.emitida_em.isoformat(), "emitida_por": e.emitida_por}
 
 
+@router.delete("/programacoes/{pid}/emissoes/{rev}")
+def excluir_emissao(pid: int, rev: int, s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    """Exclui uma revisão emitida da programação — só o super admin (spec 060)."""
+    if not c.usuario.superadmin:
+        raise negar("só o super admin pode excluir revisões da programação")
+    return sv.excluir_emissao(s, sv.obter(s, c.obra_id, pid), rev)
+
+
 @router.get("/programacoes/{pid}/ft")
 def ft(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
     p = sv.obter(s, c.obra_id, pid)
