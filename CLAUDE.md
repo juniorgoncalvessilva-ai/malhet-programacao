@@ -94,6 +94,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`src/lib/presenca/`), service worker `public/sw.js` (campo rede-primeiro, estáticos e `/models/face` em cache), sessão e
   obras lembradas no aparelho. Web: `/app/presenca` e `/app/efetivo/identificacao`. Modelos copiados do npm no build
   (`scripts/copiar-modelos-face.mjs`, fora do git). Câmera/NFC/SW exigem HTTPS. Spec 063.
+- Auditorias por modelo (`auditorias/`: `auditoria_modelo` com tipos/registros/campos, Segurança padrão; `auditoria_registro`
+  com VER E AGIR — SIM pede foto do depois, NÃO abre ação 5W2H; texto do WhatsApp `texto_envio`) e plano de ação 5W2H
+  (`acoes/`: `acao_5w2h`, eventos andamento/concluir com evidência/verificar eficácia/cancelar, `candidatas` e `de-origem`
+  de ocorrências e restrições). Web `/app/auditorias`, `/app/auditorias/modelos`, `/app/acoes`; celular `/m/auditorias`,
+  `/m/acoes` (`components/Auditoria/`, `src/lib/auditorias`). Spec 064.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

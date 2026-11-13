@@ -56,7 +56,7 @@ export async function carimbarFoto(foto: Blob, linhas: string[], quando = moment
 
 export function useEnviarFoto() {
   const api = useApi();
-  return async (alvo: 'desvio' | 'restricao' | 'linha', alvoId: number, foto: Blob, extra?: { data?: string; legenda?: string }) => {
+  return async (alvo: 'desvio' | 'restricao' | 'linha' | 'auditoria' | 'acao', alvoId: number, foto: Blob, extra?: { data?: string; legenda?: string }) => {
     const fd = new FormData();
     fd.append('alvo', alvo); fd.append('alvo_id', String(alvoId));
     if (extra?.data) fd.append('data', extra.data);

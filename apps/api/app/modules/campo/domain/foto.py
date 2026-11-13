@@ -1,7 +1,7 @@
 """Foto de campo (prova da frente): JPEG, PNG ou WebP de verdade (assinatura), até 8 MB; o celular já reduz antes."""
 from app.shared.errors import DomainError
 
-ALVOS = ("desvio", "restricao", "linha")
+ALVOS = ("desvio", "restricao", "linha", "auditoria", "acao")
 LIMITE = 8 * 1024 * 1024
 _ASSINATURAS = ((b"\xff\xd8\xff", "image/jpeg"), (b"\x89PNG\r\n\x1a\n", "image/png"))
 

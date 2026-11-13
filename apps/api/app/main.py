@@ -34,6 +34,8 @@ from app.modules.campo.api.fotos import router as fotos
 from app.modules.obras.api.marca import router as marca
 from app.modules.planos.api.router import router as planos
 from app.modules.presenca.api.router import router as presenca
+from app.modules.acoes.api.router import router as acoes
+from app.modules.auditorias.api.router import router as auditorias
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -103,5 +105,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias):
     app.include_router(r, prefix="/api")

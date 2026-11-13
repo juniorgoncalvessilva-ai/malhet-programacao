@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Camera, Check, ChevronRight, Plus } from 'lucide-react';
+import { AlertTriangle, Camera, Check, ChevronRight, ListChecks, Plus, ShieldAlert } from 'lucide-react';
 import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
@@ -82,6 +82,18 @@ export default function CampoInicio() {
             <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
           </Link>
         )}
+        <Link href="/m/auditorias/nova" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-danger-subtle text-m-danger"><ShieldAlert size={18} /></span>
+          <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Auditoria de segurança</span>
+            <span className="text-[12px] leading-4 text-m-text-muted">Notificação, interdição, inspeção, N3 · envia no WhatsApp</span></span>
+          <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
+        </Link>
+        <Link href="/m/acoes" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-info-subtle text-m-info"><ListChecks size={18} /></span>
+          <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Ações 5W2H</span>
+            <span className="text-[12px] leading-4 text-m-text-muted">Concluir com foto e verificar a eficácia</span></span>
+          <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
+        </Link>
         <Link href="/m/ocorrencias/nova" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-warning-subtle text-m-warning"><Camera size={18} /></span>
           <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Registrar ocorrência</span>

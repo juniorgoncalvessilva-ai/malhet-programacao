@@ -21,6 +21,10 @@ def _alvo_existe(s: Session, obra_id: int, alvo: str, alvo_id: int) -> None:
         from app.modules.indicadores.infra.models import DesvioModel as M
     elif alvo == "restricao":
         from app.modules.restricoes.infra.models import AcaoRestricaoModel as M
+    elif alvo == "auditoria":
+        from app.modules.auditorias.infra.models import RegistroAuditoriaModel as M
+    elif alvo == "acao":
+        from app.modules.acoes.infra.models import AcaoModel as M
     else:
         from app.modules.planejamento.infra.models import LinhaProgramacaoModel, ProgramacaoModel
 
