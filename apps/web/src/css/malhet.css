@@ -1,6 +1,7 @@
 /* Malhet · design system CorpMind (tokens de project/ds/corpmind/tokens.json do canvas Malhet).
    Claro = "Teal", escuro = "Carvão". next-themes alterna a classe .dark no <html>. */
 :root {
+  --m-zebra-programacao: #C5D9F1; /* linhas alternadas da programação (spec 059) */
   --m-surface-base: #F6F8F8;
   --m-surface-raised: #FFFFFF;
   --m-surface-field: #FFFFFF;
@@ -35,6 +36,7 @@
   --m-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 .dark {
+  --m-zebra-programacao: color-mix(in srgb, #C5D9F1 22%, transparent);
   --m-surface-base: #141517;
   --m-surface-raised: #1B1D20;
   --m-surface-field: #232529;

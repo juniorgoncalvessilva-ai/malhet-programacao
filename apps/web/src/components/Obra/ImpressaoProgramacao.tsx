@@ -41,9 +41,9 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
   const locais = porEnc ? agruparPorEncarregado(filtrados) : filtrados;
   // filtrado por encarregado: o total de HH é o das linhas dele
   const hhTotal = enc ? locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.calc?.total_hh_previsto ?? 0), 0) : v.total_hh_previsto;
-  // atividades alternadas (branca / azul-acinzentada D6DCE4) nas colunas descritivas, como o Excel do cliente (modelo S27)
+  // atividades alternadas (branca / azul-claro C5D9F1, spec 059) nas colunas descritivas, como o Excel do cliente (modelo S27)
   const posVis = new Map(locais.flatMap((l) => l.areas.flatMap((a) => porCwp(a.linhas).map((x) => x.ln.id))).map((x, i) => [x, i]));
-  const zb = (lid: number) => ((posVis.get(lid) ?? 0) % 2 === 1 ? 'bg-[#D6DCE4]' : '');
+  const zb = (lid: number) => ((posVis.get(lid) ?? 0) % 2 === 1 ? 'bg-[#C5D9F1]' : '');
   const totalValor = locais.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (ln.pu ?? 0) * ln.total_previsto, 0);
 
   return (

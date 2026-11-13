@@ -237,7 +237,7 @@ export function SequenciaProgramacao({ pid, v, nomes, editar }: { pid: number; v
                 const al = alertas(lid);
                 const diasPrev = v.dias.filter((_, di) => ln.previsto[di]).map((d) => d.data);
                 return (
-                  <tr key={lid} style={{ height: LINHA_H, ...(r % 2 === 1 && !al.length ? { background: 'color-mix(in srgb, #44546A 10%, transparent)' } : {}) }} className={`${arrastando === i ? 'opacity-40' : ''} ${al.length ? 'bg-m-danger-subtle' : ''}`}
+                  <tr key={lid} style={{ height: LINHA_H, ...(r % 2 === 1 && !al.length ? { background: 'var(--m-zebra-programacao)' } : {}) }} className={`${arrastando === i ? 'opacity-40' : ''} ${al.length ? 'bg-m-danger-subtle' : ''}`}
                     draggable={editar && ordenavel} onDragStart={(e) => { setArrastando(i); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); }}
                     onDragEnd={() => setArrastando(null)} onDragOver={(e) => { if (editar) e.preventDefault(); }}
                     onDrop={(e) => { e.preventDefault(); const de = Number(e.dataTransfer.getData('text/plain')); if (!Number.isNaN(de)) mover(de, i); setArrastando(null); }}>

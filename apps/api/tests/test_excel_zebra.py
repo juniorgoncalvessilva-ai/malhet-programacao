@@ -1,5 +1,5 @@
 """Spec 055: Excel do cliente no modelo S27 — faixa do local em vermelho na linha toda e atividades alternadas
-(branca / azul-acinzentada D6DCE4 nas colunas G..AJ; P/R e dias sem preenchimento)."""
+(branca / azul-claro C5D9F1 nas colunas G..AJ; P/R e dias sem preenchimento)."""
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -28,5 +28,5 @@ def test_excel_zebrado_no_modelo(client):
     assert len(linhas) == 3
     local = 12
     assert _cor(ws[f"G{local}"]) == _cor(ws[f"J{local}"]) == _cor(ws[f"AJ{local}"]) == "FFFF0000"  # linha toda
-    assert _cor(ws[f"J{linhas[0]}"]) is None and _cor(ws[f"J{linhas[1]}"]) == "FFD6DCE4" and _cor(ws[f"J{linhas[2]}"]) is None
-    assert _cor(ws[f"U{linhas[1]}"]) == "FFD6DCE4" and _cor(ws[f"AL{linhas[1]}"]) is None  # dias sem zebra
+    assert _cor(ws[f"J{linhas[0]}"]) is None and _cor(ws[f"J{linhas[1]}"]) == "FFC5D9F1" and _cor(ws[f"J{linhas[2]}"]) is None
+    assert _cor(ws[f"U{linhas[1]}"]) == "FFC5D9F1" and _cor(ws[f"AL{linhas[1]}"]) is None  # dias sem zebra

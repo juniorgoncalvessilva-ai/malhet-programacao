@@ -16,7 +16,7 @@ from app.modules.referencias.domain.cpu_obra import eh_apoio
 from app.modules.ssma.domain.cadastro import texto_da_lista
 
 AZUL, VERMELHO, BRANCO, VERDE_PR = "FF173761", "FFFF0000", "FFFFFFFF", "FF2B665E"
-ZEBRA = "FFD6DCE4"  # atividades alternadas (modelo S27: "Azul-acinzentado, Texto 2, 80% mais claro") — colunas G..AJ
+ZEBRA = "FFC5D9F1"  # atividades alternadas (azul-claro C5D9F1, pedido da obra; spec 059) — colunas G..AJ
 FINO, MEDIO = Side(style="thin"), Side(style="medium")
 GRADE = Border(left=FINO, right=FINO, top=FINO, bottom=FINO)
 CENTRO = Alignment(horizontal="center", vertical="center", wrap_text=True)

@@ -223,7 +223,7 @@ export default function MontarPage() {
   const locaisVis = porEnc ? agruparPorEncarregado(locaisFiltrados) : locaisFiltrados;
   const ordemVis = locaisVis.flatMap((l) => l.areas.flatMap((a) => porCwp(a.linhas).map((x) => x.ln.id)));
   const posVis = new Map(ordemVis.map((x, i) => [x, i]));
-  const zebra = (lid: number): React.CSSProperties | undefined => ((posVis.get(lid) ?? 0) % 2 === 1 ? { background: 'color-mix(in srgb, #44546A 16%, transparent)' } : undefined);
+  const zebra = (lid: number): React.CSSProperties | undefined => ((posVis.get(lid) ?? 0) % 2 === 1 ? { background: 'var(--m-zebra-programacao)' } : undefined);
   const totalDia = v.dias.map((d, i) => locaisVis.flatMap((l) => l.areas.flatMap((a) => a.linhas)).reduce((s, ln) => s + (Number(valorCel(ln, modo, i, d.data)) || 0), 0));
 
   return (
