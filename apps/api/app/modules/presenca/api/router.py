@@ -1,7 +1,7 @@
 """Apropriação de presença (spec 063): base para o celular trabalhar sem internet, sincronização da fila de leituras,
 presença do dia por equipe (com a capacidade produtiva dos presentes) e o cadastro do crachá/NFC/rosto."""
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -131,13 +131,33 @@ def hoje(data: date | None = None, s: Session = Depends(get_session), c: Context
                                                                   LeituraPresencaModel.data == d, LeituraPresencaModel.valida.is_(True)))]
 
 
+def _setores(s: Session, obra_id: int) -> dict[int, dict]:
+    from app.modules.efetivo.infra.models import SetorObraModel
+    return {x.id: {"id": x.id, "nome": x.nome, "cor": x.cor}
+            for x in s.scalars(select(SetorObraModel).where(SetorObraModel.obra_id == obra_id))}
+
+
+def _composicao(e: EquipeModel, por_chave: dict[str, ColaboradorModel]) -> list[tuple[ColaboradorModel, str]]:
+    """Encarregado + membros ativos da equipe (pessoa do efetivo, sem repetir)."""
+    lista: list[tuple[ColaboradorModel, str]] = []
+    if e.encarregado_cracha and e.encarregado_cracha in por_chave:
+        lista.append((por_chave[e.encarregado_cracha], "encarregado"))
+    for m in e.membros:
+        p = por_chave.get(m.cracha)
+        if p is not None and p.situacao not in FORA and all(x.id != p.id for x, _ in lista):
+            lista.append((p, "membro"))
+    return lista
+
+
 @router.get("/dia")
-def dia(data: date | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    """Presença do dia por equipe e a capacidade produtiva com os presentes, linha a linha da programação do dia."""
+def dia(data: date | None = None, atividades: bool = False, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Presença do dia por equipe (com o setor para agrupar). Com `atividades=true`, também a capacidade produtiva com
+    os presentes linha a linha da programação do dia (spec 063; a tela deixou de mostrar na spec 071)."""
     d = data or date.today()
     lt = primeiras_do_dia([(x.colaborador_id, x.hora, x.meio) for x in s.scalars(select(LeituraPresencaModel).where(
         LeituraPresencaModel.obra_id == c.obra_id, LeituraPresencaModel.data == d))])  # 3º item: nº de leituras (duplicadas)
     por, equipes = _equipe_por_pessoa(s, c.obra_id)
+    setores = _setores(s, c.obra_id)
     pessoas = {p.id: p for p in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id))}
     por_chave = {k: p for p in pessoas.values() for k in _chaves(p)}
     presentes_chaves = {k for cid in lt for k in _chaves(pessoas[cid])} if lt else set()
@@ -150,17 +170,12 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
 
     saida_eq, nas_equipes = [], set()
     for e in equipes:
-        lista = []
-        if e.encarregado_cracha and e.encarregado_cracha in por_chave:
-            lista.append(pessoa(por_chave[e.encarregado_cracha], "encarregado"))
-        for m in e.membros:
-            p = por_chave.get(m.cracha)
-            if p is not None and p.situacao not in FORA and all(x["id"] != p.id for x in lista):
-                lista.append(pessoa(p, "membro"))
+        lista = [pessoa(p, papel) for p, papel in _composicao(e, por_chave)]
         nas_equipes |= {x["id"] for x in lista}
         pres = [x for x in lista if x["presente"]]
         jornada = float(e.jornada_horas or 0)
         saida_eq.append({"equipe_id": e.id, "nome": e.nome, "encarregado": e.encarregado_nome, "jornada": jornada,
+                         "setor": setores.get(e.setor_id) if e.setor_id else None,
                          "total": len(lista), "presentes": len(pres), "hh_disponivel": round(len(pres) * jornada, 2),
                          "por_funcao": [{"funcao": f, "presentes": sum(1 for x in pres if (x["funcao"] or "—") == f), "total": n}
                                         for f, n in sorted(Counter(x["funcao"] or "—" for x in lista).items())],
@@ -173,7 +188,7 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
     from app.modules.planejamento.application import servico as sv
 
     prog = programacao_do_dia(s, c.obra_id, d)
-    if prog is not None:
+    if prog is not None and atividades:
         v = sv.visao(s, prog)
         i = [x["data"] for x in v["dias"]].index(d.isoformat())
         cap_pres = sv.capacidade_com_presentes(s, prog, presentes_chaves)
@@ -198,6 +213,38 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
             "presentes": len(lt), "nas_equipes": tot, "presentes_nas_equipes": pres,
             "hh_disponivel": round(sum(e["hh_disponivel"] for e in saida_eq), 2),
             "equipes": saida_eq, "sem_equipe": sorted(avulsos, key=lambda x: x["nome"])}
+
+
+@router.get("/indicadores")
+def indicadores(de: date | None = None, ate: date | None = None, s: Session = Depends(get_session),
+                c: ContextoObra = Depends(ler)):
+    """Indicadores da presença no período (padrão: últimos 30 dias): taxa de presença e absenteísmo por dia e por
+    equipe, meio de leitura, horário de chegada, HH disponível e quem mais faltou — com a memória de cálculo."""
+    from app.modules.presenca.domain.indicadores import EquipeInd, calcular
+
+    ate = ate or date.today()
+    de = de or ate - timedelta(days=29)
+    if de > ate:
+        raise DomainError("início do período depois do fim", "de")
+    if (ate - de).days > 366:
+        raise DomainError("período de no máximo um ano", "de")
+    leit = s.execute(select(LeituraPresencaModel.data, LeituraPresencaModel.colaborador_id, LeituraPresencaModel.hora,
+                            LeituraPresencaModel.meio).where(
+        LeituraPresencaModel.obra_id == c.obra_id, LeituraPresencaModel.data >= de, LeituraPresencaModel.data <= ate,
+        LeituraPresencaModel.valida.is_(True)))
+    presencas: dict[date, dict[int, tuple[datetime, str]]] = {}
+    for d, cid, hora, meio in leit:
+        dd = presencas.setdefault(d, {})
+        if cid not in dd or hora < dd[cid][0]:
+            dd[cid] = (hora, meio)
+    _, equipes = _equipe_por_pessoa(s, c.obra_id)
+    setores = _setores(s, c.obra_id)
+    pessoas = {p.id: p for p in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id))}
+    por_chave = {k: p for p in pessoas.values() for k in _chaves(p)}
+    eqs = [EquipeInd(e.id, e.nome, setores[e.setor_id]["nome"] if e.setor_id in setores else None,
+                     float(e.jornada_horas or 0), frozenset(p.id for p, _ in _composicao(e, por_chave))) for e in equipes]
+    r = calcular(eqs, presencas, {p.id: p.nome for p in pessoas.values()})
+    return {"de": de.isoformat(), "ate": ate.isoformat(), **r}
 
 
 def _funcoes(s: Session, obra_id: int) -> list[dict]:

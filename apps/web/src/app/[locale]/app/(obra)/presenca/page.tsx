@@ -1,21 +1,20 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Abas } from '@/components/Obra/Abas';
 import { Calculado, type MemoriaCalculo } from '@/components/Obra/Calculado';
-import { Cabecalho, Campo, Indicador, Painel, Pilula } from '@/components/Obra/ui';
+import { IndicadoresPresenca } from '@/components/Obra/PresencaIndicadores';
+import { Cabecalho, Campo, Chip, Indicador, Painel } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 
 interface PessoaDia { id: number; nome: string; matricula: string | null; funcao: string | null; papel: string; presente: boolean; hora: string | null; meio: string | null; leituras?: number }
-interface LinhaDia {
-  id: number; codigo: string; atividade: string; area: string; unidade: string | null; previsto: number;
-  capacidade_programada: number | null; capacidade_presentes: number | null; capacidade_un_dia_presentes: number | null; fator_dia: number; gargalo: string | null;
-}
+interface Setor { id: number; nome: string; cor: string | null }
 interface EquipeDia {
   equipe_id: number; nome: string; encarregado: string | null; jornada: number; total: number; presentes: number; hh_disponivel: number;
-  por_funcao: { funcao: string; presentes: number; total: number }[]; pessoas: PessoaDia[]; linhas: LinhaDia[];
+  setor: Setor | null; por_funcao: { funcao: string; presentes: number; total: number }[]; pessoas: PessoaDia[];
 }
 interface Dia {
   data: string; programacao: { id: number; titulo: string } | null; presentes: number; nas_equipes: number; presentes_nas_equipes: number;
@@ -25,6 +24,9 @@ interface Dia {
 const n = (x: number | null | undefined, c = 2) => (x == null ? '—' : x.toLocaleString('pt-BR', { maximumFractionDigits: c }));
 const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const MEIO: Record<string, string> = { nfc: 'NFC', qr: 'QR', codigo: 'código', facial: 'rosto', manual: 'manual' };
+const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
+const semCracha = (s: string | null) => (s ?? '').replace(/^\s*\d+\s*::\s*/, '');
+const SEM_SETOR = 'Sem setor';
 
 const memHH = (e: EquipeDia): MemoriaCalculo => ({
   chave: 'hh', titulo: `HH disponível · ${e.nome}`, valor: `${n(e.hh_disponivel)} h`, formula: 'presentes × jornada da equipe',
@@ -34,106 +36,166 @@ const memHH = (e: EquipeDia): MemoriaCalculo => ({
     { dado: 'Jornada', valor: `${n(e.jornada)} h`, origem: 'Cadastro da equipe', local: e.nome }],
   notas: ['Presente = pelo menos uma leitura da pessoa no dia.'],
 });
-const memCap = (e: EquipeDia, l: LinhaDia): MemoriaCalculo => ({
-  chave: 'cap', titulo: `Capacidade com os presentes · ${l.codigo}`, valor: `${n(l.capacidade_presentes)} ${l.unidade ?? ''}`,
-  formula: 'capacidade da equipe (mesma conta da programação) só com os membros presentes × fator do dia',
-  passos: [
-    { descricao: 'Membros presentes por função', conta: e.por_funcao.map((f) => `${f.presentes}/${f.total} ${f.funcao}`).join(' · ') || '—', resultado: `${e.presentes} de ${e.total}`, destaque: false },
-    { descricao: 'Capacidade por dia (presentes)', conta: 'jornada ÷ maior (h/un da função ÷ presentes da função) — gargalo', resultado: `${n(l.capacidade_un_dia_presentes)} ${l.unidade ?? ''}/dia`, destaque: false },
-    { descricao: 'No dia', conta: `${n(l.capacidade_un_dia_presentes)} × fator ${n(l.fator_dia)}`, resultado: `${n(l.capacidade_presentes)} ${l.unidade ?? ''}`, destaque: true },
-    { descricao: 'Programado (equipe completa)', conta: 'capacidade do dia na programação', resultado: `${n(l.capacidade_programada)} ${l.unidade ?? ''}`, destaque: false },
-  ],
-  fontes: [{ dado: 'Presentes', valor: String(e.presentes), origem: 'Apropriação de presença', local: e.nome },
-    { dado: 'CPU / composição', valor: l.gargalo ?? '—', origem: 'CPU vigente da obra', local: l.codigo }],
-  notas: ['Sem membros cadastrados na equipe não dá para calcular (—). Ninguém presente = 0.'],
-});
+const memGrupo = (nome: string, eqs: EquipeDia[], d: Dia | null): MemoriaCalculo => {
+  const pres = eqs.reduce((a, e) => a + e.presentes, 0); const tot = eqs.reduce((a, e) => a + e.total, 0);
+  const hh = eqs.reduce((a, e) => a + e.hh_disponivel, 0);
+  return {
+    chave: 'grupo', titulo: d ? 'Presentes nas equipes' : `Presentes · ${nome}`, valor: `${pres} de ${tot}`, formula: 'Σ presentes das equipes ÷ Σ efetivo das equipes',
+    passos: [...eqs.map((e) => ({ descricao: e.nome, conta: `${e.presentes} de ${e.total} · ${n(e.hh_disponivel)} HH`, resultado: `${e.presentes}/${e.total}`, destaque: false })),
+      { descricao: 'Total', conta: `${pres} de ${tot} · ${n(hh)} HH`, resultado: tot ? `${n((pres / tot) * 100, 1)}%` : '—', destaque: true }],
+    fontes: [{ dado: 'Presença', valor: String(pres), origem: 'Apropriação (app de campo)', local: '1ª leitura de cada pessoa no dia' },
+      { dado: 'Efetivo', valor: String(tot), origem: 'Cadastro de Equipes', local: 'encarregado + membros ativos' }],
+    notas: d ? ['Pessoa que está em duas equipes conta uma vez no total da obra.'] : [],
+  };
+};
 
-/** Apropriação do dia (spec 063): quem está presente em cada equipe e a capacidade produtiva com os presentes. */
+/** Presença do dia (specs 063 e 071): equipes agrupadas por setor em cartões compactos e a aba de indicadores. */
 export default function PresencaDiaPage() {
+  const [aba, setAba] = useState<'equipes' | 'indicadores'>('equipes');
+  return (
+    <>
+      <Cabecalho eyebrow="Efetivo · apropriação" cor="var(--m-proc-executar)" titulo="Presença do dia"
+        acoes={<Link href="/app/efetivo/identificacao" className="text-[13px] font-semibold text-m-accent underline">Crachá e rosto</Link>} />
+      <Abas rotulo="Presença" ativa={aba} onTrocar={setAba} abas={[{ chave: 'equipes', titulo: 'Equipes' }, { chave: 'indicadores', titulo: 'Indicadores' }]} />
+      {aba === 'equipes' ? <Equipes /> : <IndicadoresPresenca />}
+    </>
+  );
+}
+
+function Equipes() {
   const api = useApi();
   const [data, setData] = useState(hoje());
+  const [busca, setBusca] = useState('');
+  const [filtro, setFiltro] = useState<'todas' | 'faltas' | 'completas'>('todas');
   const [aberta, setAberta] = useState<Set<number>>(new Set());
   const q = useQuery({ queryKey: ['presenca', 'dia', data], queryFn: () => api.get<Dia>(`/presenca/dia?data=${data}`) });
   const d = q.data;
   const alternar = (id: number) => setAberta((s) => { const x = new Set(s); if (x.has(id)) x.delete(id); else x.add(id); return x; });
 
+  const grupos = useMemo(() => {
+    const t = busca.trim().toLowerCase();
+    const eqs = (d?.equipes ?? []).filter((e) => e.total)
+      .filter((e) => filtro === 'todas' || (filtro === 'faltas' ? e.presentes < e.total : e.presentes === e.total))
+      .filter((e) => !t || [e.nome, e.encarregado, e.setor?.nome, ...e.pessoas.map((p) => p.nome)].some((x) => (x ?? '').toLowerCase().includes(t)));
+    const m = new Map<string, { setor: Setor | null; equipes: EquipeDia[] }>();
+    for (const e of eqs) {
+      const k = e.setor?.nome ?? SEM_SETOR;
+      if (!m.has(k)) m.set(k, { setor: e.setor, equipes: [] });
+      m.get(k)!.equipes.push(e);
+    }
+    return [...m.entries()].sort(([a], [b]) => (a === SEM_SETOR ? 1 : b === SEM_SETOR ? -1 : a.localeCompare(b, 'pt-BR')));
+  }, [d, busca, filtro]);
+  const todasAbertas = grupos.length > 0 && grupos.every(([, g]) => g.equipes.every((e) => aberta.has(e.equipe_id)));
+
   return (
     <>
-      <Cabecalho eyebrow="Efetivo · apropriação" cor="var(--m-proc-executar)" titulo="Presença do dia"
-        acoes={<Link href="/app/efetivo/identificacao" className="text-[13px] font-semibold text-m-accent underline">Crachá e rosto</Link>} />
       <div className="flex flex-wrap items-end gap-3">
         <Campo rotulo="Dia" type="date" value={data} onChange={(e) => setData(e.target.value)} />
-        {d?.programacao && <span className="pb-2 text-[13px] text-m-text-muted">Programação do dia: {d.programacao.titulo}</span>}
+        <label className="relative flex min-w-[220px] flex-1 flex-col gap-1.5 md:max-w-[320px]">
+          <span className="text-[13px] font-medium text-m-text-secondary">Buscar equipe ou pessoa</span>
+          <Search size={15} className="pointer-events-none absolute bottom-3 left-3 text-m-text-muted" />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome, encarregado, setor…"
+            className="h-10 rounded-m-md border border-m-stroke bg-m-surface-field pl-9 pr-3 text-[14px] outline-none focus:border-m-accent" />
+        </label>
+        <div className="flex flex-wrap gap-1.5 pb-1">
+          <Chip ativo={filtro === 'todas'} onClick={() => setFiltro('todas')}>Todas</Chip>
+          <Chip ativo={filtro === 'faltas'} onClick={() => setFiltro('faltas')}>Com ausentes</Chip>
+          <Chip ativo={filtro === 'completas'} onClick={() => setFiltro('completas')}>Completas</Chip>
+          <Chip onClick={() => setAberta(todasAbertas ? new Set() : new Set(grupos.flatMap(([, g]) => g.equipes.map((e) => e.equipe_id))))}>
+            {todasAbertas ? 'Recolher nomes' : 'Mostrar nomes'}</Chip>
+        </div>
       </div>
       {d && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Indicador rotulo="Presentes" valor={d.presentes} />
-          <Indicador rotulo="Nas equipes" valor={`${d.presentes_nas_equipes} de ${d.nas_equipes}`} />
-          <Indicador rotulo="HH disponível" valor={`${n(d.hh_disponivel)} h`} />
-          <Indicador rotulo="Presentes sem equipe" valor={d.sem_equipe.length} />
+          <Indicador rotulo="Presentes" valor={d.presentes} detalhe="pessoas com leitura no dia" />
+          <Indicador rotulo="Nas equipes" valor={<Calculado chave="grupo" memoria={() => memGrupo('obra', d.equipes.filter((e) => e.total), d)}>{`${d.presentes_nas_equipes} de ${d.nas_equipes}`}</Calculado>}
+            detalhe={d.nas_equipes ? `${n((d.presentes_nas_equipes / d.nas_equipes) * 100, 1)}% do efetivo` : undefined} />
+          <Indicador rotulo="HH disponível" valor={`${n(d.hh_disponivel)} h`} detalhe="presentes × jornada" />
+          <Indicador rotulo="Presentes sem equipe" valor={d.sem_equipe.length} tom={d.sem_equipe.length ? 'atencao' : undefined} />
         </div>
       )}
       {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
       {d && !d.presentes && <Painel titulo="Ninguém registrado"><p className="text-[13px] text-m-text-muted">Nenhuma leitura de presença neste dia. As leituras entram pelo app de campo (botão Presença) e sobem quando o celular tem internet.</p></Painel>}
-      {d?.equipes.filter((e) => e.total).map((e) => {
-        const falta = e.linhas.filter((l) => l.capacidade_presentes != null && l.previsto > l.capacidade_presentes + 1e-9);
+      {d && !grupos.length && d.presentes > 0 && <p className="text-[13px] text-m-text-muted">Nenhuma equipe com esse filtro.</p>}
+
+      {grupos.map(([nome, g]) => {
+        const pres = g.equipes.reduce((a, e) => a + e.presentes, 0); const tot = g.equipes.reduce((a, e) => a + e.total, 0);
+        const hh = g.equipes.reduce((a, e) => a + e.hh_disponivel, 0);
+        const cor = g.setor?.cor ?? 'var(--m-stroke)';
         return (
-          <Painel key={e.equipe_id} titulo={
-            <button type="button" onClick={() => alternar(e.equipe_id)} aria-expanded={aberta.has(e.equipe_id)} className="flex items-center gap-2 text-left">
-              {aberta.has(e.equipe_id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              <span>{e.nome}</span>
-              <span className="text-[13px] font-normal text-m-text-muted">{e.encarregado ? `· ${e.encarregado.replace(/^\s*\d+\s*::\s*/, '')}` : ''}</span>
-            </button>}
-            acoes={<span className="flex flex-wrap items-center gap-2 text-[13px]">
-              <Pilula tom={e.presentes === e.total ? 'sucesso' : e.presentes ? 'atencao' : 'perigo'}>{e.presentes} de {e.total} presentes</Pilula>
-              <Calculado chave="hh" memoria={() => memHH(e)}>{n(e.hh_disponivel)} HH</Calculado>
-              {falta.length > 0 && <Pilula tom="perigo"><AlertTriangle size={13} className="mr-1 inline" />{falta.length} atividade(s) acima do que os presentes fazem</Pilula>}
-            </span>}>
-            <div className="flex flex-wrap gap-1.5">
-              {e.por_funcao.map((f) => <span key={f.funcao} className={`rounded-full px-2.5 py-1 text-[12px] font-medium ${f.presentes === f.total ? 'bg-m-success-subtle text-m-success' : 'bg-m-warning-subtle text-m-warning'}`}>{f.presentes}/{f.total} {f.funcao}</span>)}
+          <section key={nome} aria-label={`Setor ${nome}`} className="flex flex-col gap-2.5">
+            <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-m-stroke-subtle pb-1.5">
+              <span className="h-3 w-3 rounded-full" style={{ background: cor }} aria-hidden />
+              <h2 className="text-[15px] font-semibold text-m-text-primary">{nome}</h2>
+              <span className="text-[13px] text-m-text-muted">{g.equipes.length} equipe(s) ·{' '}
+                <Calculado chave="grupo" memoria={() => memGrupo(nome, g.equipes, null)}>{`${pres} de ${tot} presentes`}</Calculado> · {n(hh)} HH</span>
+            </header>
+            <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+              {g.equipes.map((e) => <CartaoEquipe key={e.equipe_id} e={e} cor={cor} aberta={aberta.has(e.equipe_id)} onAlternar={() => alternar(e.equipe_id)} />)}
             </div>
-            {e.linhas.length > 0 && (
-              <table className="mt-3 w-full text-[13px]">
-                <thead className="text-left text-[11px] uppercase tracking-[0.4px] text-m-text-muted">
-                  <tr><th className="py-1.5">Atividade do dia</th><th className="text-right">Previsto</th><th className="text-right">Capacidade programada</th><th className="text-right">Com os presentes</th></tr>
-                </thead>
-                <tbody>
-                  {e.linhas.map((l) => {
-                    const acima = l.capacidade_presentes != null && l.previsto > l.capacidade_presentes + 1e-9;
-                    return (
-                      <tr key={l.id} className="border-t border-m-stroke-subtle">
-                        <td className="py-1.5 pr-3"><b>{l.codigo}</b> · {l.atividade}<span className="block text-[12px] text-m-text-muted">{l.area}</span></td>
-                        <td className="text-right tabular-nums">{n(l.previsto)} {l.unidade}</td>
-                        <td className="text-right tabular-nums">{n(l.capacidade_programada)}</td>
-                        <td className={`text-right font-semibold tabular-nums ${acima ? 'text-m-danger' : 'text-m-success'}`}>
-                          {l.capacidade_presentes == null ? '—' : <Calculado chave="cap" memoria={() => memCap(e, l)}>{n(l.capacidade_presentes)}</Calculado>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-            {aberta.has(e.equipe_id) && (
-              <ul className="mt-3 grid gap-x-6 gap-y-1 text-[13px] md:grid-cols-2">
-                {e.pessoas.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-2 border-b border-m-stroke-subtle py-1">
-                    <span className="min-w-0 truncate"><b className={p.presente ? 'text-m-text-primary' : 'text-m-text-muted'}>{p.nome}</b> <span className="text-[12px] text-m-text-muted">{[p.funcao, p.papel === 'encarregado' && 'encarregado'].filter(Boolean).join(' · ')}</span></span>
-                    <span className={`shrink-0 text-[12px] font-semibold ${p.presente ? 'text-m-success' : 'text-m-danger'}`}>{p.presente ? `${new Date(p.hora!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · ${MEIO[p.meio ?? ''] ?? p.meio}${(p.leituras ?? 1) > 1 ? ` · ${p.leituras} leituras (vale a 1ª)` : ''}` : 'ausente'}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Painel>
+          </section>
         );
       })}
+
       {d && d.sem_equipe.length > 0 && (
-        <Painel titulo="Presentes sem equipe">
-          <ul className="grid gap-1 text-[13px] md:grid-cols-2">
-            {d.sem_equipe.map((p) => <li key={p.id}>{p.nome} <span className="text-m-text-muted">· {p.funcao ?? '—'} · {p.hora ? new Date(p.hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}</span></li>)}
+        <section aria-label="Presentes sem equipe" className="flex flex-col gap-2">
+          <header className="flex items-center gap-3 border-b border-m-stroke-subtle pb-1.5">
+            <h2 className="text-[15px] font-semibold text-m-warning">Presentes sem equipe</h2>
+            <span className="text-[13px] text-m-text-muted">{d.sem_equipe.length} pessoa(s) — coloque numa equipe pelo organograma</span>
+          </header>
+          <ul className="grid gap-x-6 gap-y-0.5 text-[13px] md:grid-cols-2 xl:grid-cols-3">
+            {d.sem_equipe.map((p) => <li key={p.id} className="truncate">{p.nome} <span className="text-m-text-muted">· {p.funcao ?? '—'} · {hora(p.hora)}</span></li>)}
           </ul>
-        </Painel>
+        </section>
       )}
     </>
+  );
+}
+
+function CartaoEquipe({ e, cor, aberta, onAlternar }: { e: EquipeDia; cor: string; aberta: boolean; onAlternar: () => void }) {
+  const pct = e.total ? e.presentes / e.total : 0;
+  const tom = e.presentes === e.total ? 'text-m-success' : e.presentes ? 'text-m-warning' : 'text-m-danger';
+  const barra = e.presentes === e.total ? 'var(--m-success)' : e.presentes ? 'var(--m-warning)' : 'var(--m-danger)';
+  const ausentes = e.pessoas.filter((p) => !p.presente);
+  return (
+    <article className="flex flex-col gap-2 rounded-m-carimbo border border-m-stroke-subtle border-l-4 bg-m-surface-raised px-3.5 py-3" style={{ borderLeftColor: cor }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-[14px] font-semibold text-m-text-primary" title={e.nome}>{e.nome}</h3>
+          {e.encarregado && <p className="truncate text-[12px] text-m-text-muted">Enc. {semCracha(e.encarregado)}</p>}
+        </div>
+        <div className="shrink-0 text-right">
+          <span className={`text-[18px] font-semibold tabular-nums leading-6 ${tom}`}>{e.presentes}<span className="text-[13px] font-normal text-m-text-muted">/{e.total}</span></span>
+          <span className="block text-[12px] text-m-text-muted"><Calculado chave="hh" memoria={() => memHH(e)}>{`${n(e.hh_disponivel)} HH`}</Calculado></span>
+        </div>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-m-row" role="progressbar" aria-valuemin={0} aria-valuemax={e.total} aria-valuenow={e.presentes} aria-label={`${e.presentes} de ${e.total} presentes`}>
+        <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, background: barra }} />
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {e.por_funcao.map((f) => (
+          <span key={f.funcao} className={`rounded-full px-2 py-0.5 text-[11.5px] font-medium ${f.presentes === f.total ? 'bg-m-success-subtle text-m-success' : 'bg-m-warning-subtle text-m-warning'}`}>{f.presentes}/{f.total} {f.funcao}</span>
+        ))}
+      </div>
+      {!aberta && ausentes.length > 0 && ausentes.length <= 3 && (
+        <p className="truncate text-[12px] text-m-danger" title={ausentes.map((p) => p.nome).join(', ')}>Ausente: {ausentes.map((p) => p.nome.split(' ')[0]).join(', ')}</p>
+      )}
+      <button type="button" onClick={onAlternar} aria-expanded={aberta} className="flex items-center gap-1 self-start text-[12.5px] font-semibold text-m-accent">
+        {aberta ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{aberta ? 'Esconder nomes' : `Ver ${e.total} nome(s)`}
+      </button>
+      {aberta && (
+        <ul className="flex flex-col text-[12.5px]">
+          {e.pessoas.map((p) => (
+            <li key={p.id} className="flex items-center justify-between gap-2 border-t border-m-stroke-subtle py-1">
+              <span className="min-w-0 truncate"><b className={p.presente ? 'font-semibold text-m-text-primary' : 'font-normal text-m-text-muted'}>{p.nome}</b>{' '}
+                <span className="text-[11.5px] text-m-text-muted">{[p.funcao, p.papel === 'encarregado' && 'enc.'].filter(Boolean).join(' · ')}</span></span>
+              <span className={`shrink-0 text-[11.5px] font-semibold ${p.presente ? 'text-m-success' : 'text-m-danger'}`}
+                title={(p.leituras ?? 1) > 1 ? `${p.leituras} leituras — vale a 1ª` : undefined}>
+                {p.presente ? `${hora(p.hora)} · ${MEIO[p.meio ?? ''] ?? p.meio}${(p.leituras ?? 1) > 1 ? ` ×${p.leituras}` : ''}` : 'ausente'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
   );
 }

@@ -99,6 +99,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   link `/m/presenca?c=&m=` gravado no crachá (`gravarCracha`, Android) ou em etiqueta QR (`CrachasLink.tsx`), QR/código pela
   câmera com ZXing quando não há `BarcodeDetector` (`leitores.ts`, `codigoLido`). Spec 067. Duplicidade entre celulares: vale a
   leitura mais cedo (`presenca_leitura.valida`, `validas`), `GET /presenca/hoje` avisa "já registrado por outro celular". Spec 069.
+  Presença do dia em abas Equipes (agrupadas por setor, cartões compactos; atividades só com `?atividades=true`) | Indicadores
+  (`GET /presenca/indicadores`, `presenca/domain/indicadores.py`, `PresencaIndicadores.tsx`: taxa, absenteísmo, chegada, meio). Spec 071.
 - Auditorias por modelo (`auditorias/`: `auditoria_modelo` com tipos/registros/campos, Segurança padrão; `auditoria_registro`
   com VER E AGIR — SIM pede foto do depois, NÃO abre ação 5W2H; texto do WhatsApp `texto_envio`) e plano de ação 5W2H
   (`acoes/`: `acao_5w2h`, eventos andamento/concluir com evidência/verificar eficácia/cancelar, `candidatas` e `de-origem`

@@ -81,3 +81,37 @@ def test_duas_leituras_da_mesma_pessoa_vale_a_mais_cedo(client):
     p = next(x for e in client.get("/api/presenca/dia", params={"data": "2026-11-12"}).json()["equipes"] if e["equipe_id"] == eq
              for x in e["pessoas"] if x["id"] == ped)
     assert p["leituras"] == 3 and p["meio"] == "qr" and p["hora"].startswith("2026-11-12T10:01")
+
+
+def test_dia_por_setor_e_indicadores_do_periodo(client):
+    """Spec 071: a presença do dia traz o setor da equipe (para agrupar) e os indicadores do período, com memória."""
+    enc, ped, srv, eq = _montar(client)
+    assert client.post("/api/efetivo/setores", json={"nome": "Civil", "cor": "#0f766e", "equipes": [eq]}).status_code == 201
+    L = lambda i, cid, d, h, m="nfc": {"id_local": f"cel1-ind{i:04d}", "colaborador_id": cid, "data": d,
+                                       "hora": f"{d}T{h}:00-03:00", "meio": m}
+    leituras = [L(1, enc, "2026-11-10", "06:50"), L(2, ped, "2026-11-10", "07:10", "qr"), L(3, srv, "2026-11-10", "07:20"),
+                L(4, enc, "2026-11-11", "06:55", "facial"), L(5, ped, "2026-11-11", "07:05"),
+                L(6, ped, "2026-11-11", "08:00")]  # 2ª leitura do mesmo dia não conta duas vezes
+    assert client.post("/api/presenca/leituras", json={"leituras": leituras}).json()["aceitas"] == 6
+
+    d = client.get("/api/presenca/dia", params={"data": "2026-11-10"}).json()
+    e = next(x for x in d["equipes"] if x["equipe_id"] == eq)
+    assert e["setor"]["nome"] == "Civil" and e["setor"]["cor"].upper() == "#0F766E" and e["linhas"] == []
+
+    r = client.get("/api/presenca/indicadores", params={"de": "2026-11-09", "ate": "2026-11-12"})
+    assert r.status_code == 200, r.text
+    r = r.json()
+    res = r["resumo"]  # dias 09 e 12 sem leitura não são apurados (não viram falta)
+    assert (res["dias"], res["efetivo"], res["presencas"], res["possiveis"]) == (2, 3, 5, 6)
+    assert res["taxa"] == round(5 / 6, 4) and res["absenteismo"] == round(1 / 6, 4) and res["media_presentes"] == 2.5
+    assert [(x["data"], x["presentes_nas_equipes"]) for x in r["por_dia"]] == [("2026-11-10", 3), ("2026-11-11", 2)]
+    eqi = next(x for x in r["por_equipe"] if x["equipe_id"] == eq)
+    assert (eqi["setor"], eqi["faltas"], eqi["presencas"]) == ("Civil", 1, 5) and eqi["hh"] == round(5 * e["jornada"], 2)
+    assert r["por_meio"] == {"nfc": 3, "qr": 1, "facial": 1}
+    assert {x["hora"]: x["pessoas"] for x in r["chegada"]} == {6: 2, 7: 3}  # horário de Brasília
+    assert r["mais_faltas"] == [{"colaborador_id": srv, "nome": "SERVENTE TESTE TRES", "equipe": "EQUIPE.1_FORMA", "faltas": 1, "dias": 2}]
+    m = r["memorias"]["taxa"]
+    assert m["valor"] == "83,3%" and m["passos"][1]["conta"] == "3 × 2" and m["passos"][3]["conta"] == "5 ÷ 6"
+    assert client.get("/api/presenca/indicadores", params={"de": "2026-11-12", "ate": "2026-11-01"}).status_code == 422
+    vazio = client.get("/api/presenca/indicadores", params={"de": "2026-01-01", "ate": "2026-01-31"}).json()
+    assert vazio["resumo"]["dias"] == 0 and vazio["resumo"]["taxa"] is None and vazio["por_dia"] == []
