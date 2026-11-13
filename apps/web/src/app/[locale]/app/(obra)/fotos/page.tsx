@@ -10,12 +10,12 @@ import { useFrentes2 } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
 
-type Tipo = 'atividade' | 'ocorrencia' | 'restricao';
+type Tipo = 'atividade' | 'ocorrencia' | 'restricao' | 'auditoria' | 'acao';
 type Agrupar = 'frente' | 'atividade' | 'data';
 interface FotoBook {
   id: number; tipo: Tipo; data: string; area_id: number | null; area: string; local: string | null; atividade: string | null;
   cwp: string | null; equipe: string | null; titulo: string | null; causa: string | null; acao?: string | null; status?: string;
-  legenda: string | null; enviado_em: string | null;
+  legenda: string | null; enviado_em: string | null; momento?: 'antes' | 'depois';
 }
 
 const dataBR = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -37,7 +37,7 @@ function Cartao({ f, onAbrir }: { f: FotoBook; onAbrir: () => void }) {
       </button>
       <figcaption className="flex flex-col gap-0.5 p-2.5 text-[12px] leading-4">
         <span className="font-semibold text-m-text-primary">{dataBR(f.data)}{f.enviado_em ? ` · ${hora(f.enviado_em)}` : ''}</span>
-        {f.causa && <span className="font-semibold uppercase tracking-[0.3px] text-m-warning">{f.causa}</span>}
+        {f.causa && <span className="font-semibold uppercase tracking-[0.3px] text-m-warning">{f.causa}{f.momento ? <span className={`ml-1.5 rounded px-1 ${f.momento === 'depois' ? 'bg-m-success-subtle text-m-success' : 'bg-m-danger-subtle text-m-danger'}`}>{f.momento}</span> : null}</span>}
         {f.titulo && <span className="text-m-text-primary">{f.titulo}</span>}
         {f.atividade && <span className="text-m-text-secondary">{f.atividade}</span>}
         {f.cwp && <span className="text-m-info">CWP {f.cwp}</span>}
@@ -89,7 +89,7 @@ export default function BookFotosPage() {
   // grupos de 1º e 2º nível conforme o agrupamento (sempre mais novo primeiro dentro de cada um)
   const grupos = useMemo(() => {
     const chave1 = (f: FotoBook) => (agrupar === 'frente' ? `${f.local ? `${f.local} › ` : ''}${f.area}` : agrupar === 'atividade' ? (f.atividade ?? f.causa ?? 'Sem atividade') : f.data);
-    const chave2 = (f: FotoBook) => (agrupar === 'data' ? `${f.local ? `${f.local} › ` : ''}${f.area}` : agrupar === 'frente' ? (tipo === 'ocorrencia' ? (f.causa ?? 'Sem causa') : (f.atividade ?? 'Sem atividade')) : f.data);
+    const chave2 = (f: FotoBook) => (agrupar === 'data' ? `${f.local ? `${f.local} › ` : ''}${f.area}` : agrupar === 'frente' ? (tipo === 'ocorrencia' ? (f.causa ?? 'Sem causa') : tipo === 'auditoria' ? `${f.causa ?? ''} · ${f.atividade ?? ''}` : (f.atividade ?? 'Sem atividade')) : f.data);
     const m = new Map<string, Map<string, FotoBook[]>>();
     for (const f of fotos) {
       const a = m.get(chave1(f)) ?? new Map<string, FotoBook[]>();
@@ -102,7 +102,7 @@ export default function BookFotosPage() {
   }, [fotos, agrupar, tipo]);
   const rot = (k: string, nivel: 1 | 2) => ((agrupar === 'data' && nivel === 1) || (agrupar !== 'data' && nivel === 2 && /^\d{4}-\d\d-\d\d$/.test(k)) ? dataBR(k) : k);
   const areas = (frentes.data ?? []).flatMap((l) => l.areas.map((a) => ({ id: a.id, rotulo: `${l.codigo} › ${a.codigo} · ${a.descricao}` })));
-  const nomeTipo = { atividade: 'atividades', ocorrencia: 'ocorrências', restricao: 'restrições' }[tipo];
+  const nomeTipo = { atividade: 'atividades', ocorrencia: 'ocorrências', restricao: 'restrições', auditoria: 'auditorias', acao: 'ações 5W2H (evidências)' }[tipo];
 
   return (
     <>
@@ -112,7 +112,8 @@ export default function BookFotosPage() {
       </div>
       <div className="print:hidden">
         <Abas rotulo="Tipo de foto" ativa={tipo} onTrocar={setTipo}
-          abas={[{ chave: 'atividade', titulo: 'Atividades' }, { chave: 'ocorrencia', titulo: 'Ocorrências' }, { chave: 'restricao', titulo: 'Restrições' }]} />
+          abas={[{ chave: 'atividade', titulo: 'Atividades' }, { chave: 'ocorrencia', titulo: 'Ocorrências' }, { chave: 'restricao', titulo: 'Restrições' },
+            { chave: 'auditoria', titulo: 'Auditorias' }, { chave: 'acao', titulo: 'Ações 5W2H' }]} />
       </div>
       <Painel titulo={<span className="print:hidden">Filtros</span>} className="print:hidden">
         <div className="flex flex-wrap items-end gap-3">
@@ -146,7 +147,7 @@ export default function BookFotosPage() {
       </header>
 
       {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
-      {q.data && !fotos.length && <Painel titulo="Nenhuma foto"><p className="text-[13px] text-m-text-muted">Nenhuma foto de {nomeTipo} no período e filtros escolhidos. As fotos entram pelo app de campo (Lançar, Ocorrências e Restrições).</p></Painel>}
+      {q.data && !fotos.length && <Painel titulo="Nenhuma foto"><p className="text-[13px] text-m-text-muted">Nenhuma foto de {nomeTipo} no período e filtros escolhidos. As fotos entram pelo app de campo (Lançar, Ocorrências, Restrições, Auditorias e Ações 5W2H).</p></Painel>}
       {grupos.map(([k1, sub]) => (
         <section key={k1} className="flex flex-col gap-3 rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised p-4 print:break-inside-auto print:border-0 print:p-0">
           <h2 className="text-[16px] font-semibold text-m-text-primary">{rot(k1, 1)} <span className="text-[12.5px] font-normal text-m-text-muted">· {sub.reduce((s, [, l]) => s + l.length, 0)} foto(s)</span></h2>

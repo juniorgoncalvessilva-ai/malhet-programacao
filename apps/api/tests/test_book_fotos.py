@@ -49,3 +49,25 @@ def test_book_de_fotos(client):
     assert [x["id"] for x in client.get("/api/fotos/book", params={"tipo": "ocorrencia", "de": "2026-11-10", "ate": "2026-11-10"}).json()] == [f2]
     assert client.get("/api/fotos/book", params={"tipo": "ocorrencia", "de": "2026-11-11"}).json() == []
     assert client.get("/api/fotos/book", params={"area_id": 999999}).json() == []
+
+
+def test_book_com_auditorias_e_acoes(client):
+    """Spec 070: fotos das auditorias (antes/depois) e evidências das ações 5W2H entram no book."""
+    from tests.test_auditorias import LISTA, _foto_leg
+
+    client.post("/api/frentes/importar", json={"texto": LISTA})
+    area = client.get("/api/frentes").json()[0]["areas"][0]
+    base = {"data": "2026-11-12", "tipo": "Inspeção", "tipo_registro": "Condição insegura", "area_id": area["id"], "engenheiro": "Eng",
+            "encarregado": "Enc", "nao_conformidade": "Guarda-corpo solto", "medida_corretiva": "Fixar", "acompanhamento": "X"}
+    r = client.post("/api/auditorias/registros", json={**base, "ver_agir": False, "plano_responsavel": "Enc", "plano_prazo": "2026-11-14"}).json()
+    _foto_leg(client, "auditoria", r["id"], "antes")
+    rascunho = client.post("/api/auditorias/registros", json={**base, "ver_agir": True}).json()
+    _foto_leg(client, "auditoria", rascunho["id"], "antes")  # rascunho não entra no book
+    fim = client.post(f"/api/auditorias/registros/{r['id']}/finalizar").json()
+    _foto_leg(client, "acao", fim["acao"]["id"], "evidencia")
+    aud = client.get("/api/fotos/book", params={"tipo": "auditoria"}).json()
+    assert len(aud) == 1 and aud[0]["area_id"] == area["id"] and aud[0]["titulo"].startswith("Inspeção Nº 1 · ANTES")
+    assert aud[0]["causa"] == "Inspeção" and aud[0]["atividade"] == "Condição insegura" and aud[0]["momento"] == "antes"
+    ac = client.get("/api/fotos/book", params={"tipo": "acao"}).json()
+    assert len(ac) == 1 and ac[0]["titulo"].startswith("Ação A-1 · evidência") and ac[0]["atividade"] == "Inspeção Nº 1"
+    assert {x["tipo"] for x in client.get("/api/fotos/book").json()} == {"auditoria", "acao"}

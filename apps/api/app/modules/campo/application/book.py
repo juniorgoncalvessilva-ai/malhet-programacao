@@ -12,7 +12,7 @@ from app.modules.planejamento.application import servico as sv
 from app.modules.planejamento.infra.models import LinhaProgramacaoModel, ProgramacaoModel
 from app.modules.restricoes.infra.models import AcaoRestricaoModel
 
-TIPOS = {"atividade": "linha", "ocorrencia": "desvio", "restricao": "restricao"}
+TIPOS = {"atividade": "linha", "ocorrencia": "desvio", "restricao": "restricao", "auditoria": "auditoria", "acao": "acao"}
 
 
 def _frentes(s: Session, obra_id: int) -> dict[int, dict]:
@@ -54,6 +54,14 @@ def montar_book(s: Session, obra_id: int, de: date | None, ate: date | None, tip
         faltam = {d.linha_id for d in desvios.values() if d.linha_id and d.linha_id not in linhas}
         for lid, aid in s.execute(select(LinhaProgramacaoModel.id, LinhaProgramacaoModel.area_id).where(LinhaProgramacaoModel.id.in_(faltam))):
             linhas.setdefault(lid, {"area_id": aid})
+    # auditorias (antes/depois) e evidências das ações 5W2H — spec 070
+    from app.modules.acoes.infra.models import AcaoModel
+    from app.modules.auditorias.infra.models import RegistroAuditoriaModel
+
+    ids_aud = {f.alvo_id for f in fotos if f.alvo == "auditoria"}
+    auditorias = {r.id: r for r in s.scalars(select(RegistroAuditoriaModel).where(RegistroAuditoriaModel.id.in_(ids_aud), RegistroAuditoriaModel.obra_id == obra_id))} if ids_aud else {}
+    ids_acao = {f.alvo_id for f in fotos if f.alvo == "acao"}
+    acoes = {a.id: a for a in s.scalars(select(AcaoModel).where(AcaoModel.id.in_(ids_acao), AcaoModel.obra_id == obra_id))} if ids_acao else {}
     ids_restr = {f.alvo_id for f in fotos if f.alvo == "restricao"}
     restricoes = {r.id: r for r in s.scalars(select(AcaoRestricaoModel).where(AcaoRestricaoModel.id.in_(ids_restr), AcaoRestricaoModel.obra_id == obra_id))} if ids_restr else {}
 
@@ -79,6 +87,25 @@ def montar_book(s: Session, obra_id: int, de: date | None, ate: date | None, tip
             item = {**base, **fr, "tipo": "ocorrencia", "data": d.data.isoformat(),
                     "atividade": " · ".join(x for x in (d.referencia, d.atividade_impactada) if x) or None, "cwp": None, "equipe": None,
                     "programacao": None, "titulo": d.descricao, "causa": causas.get(d.causa_id), "acao": d.acao}
+        elif f.alvo == "auditoria":
+            r = auditorias.get(f.alvo_id)
+            if r is None or r.status == "rascunho":
+                continue
+            fr = frentes.get(r.area_id) if r.area_id else None
+            fr = fr or {**sem_frente, "area": r.area_texto or "Sem frente", "local": r.local}
+            momento = "DEPOIS" if (f.legenda or "").startswith("depois") else "ANTES"
+            item = {**base, **fr, "tipo": "auditoria", "data": r.data.isoformat(), "atividade": r.tipo_registro, "cwp": None,
+                    "equipe": r.encarregado, "programacao": None, "titulo": f"{r.tipo} Nº {r.numero} · {momento} · {r.nao_conformidade or ''}"[:300],
+                    "causa": r.tipo, "acao": r.medida_corretiva, "momento": momento.lower()}
+        elif f.alvo == "acao":
+            a = acoes.get(f.alvo_id)
+            if a is None:
+                continue
+            fr = frentes.get(a.area_id) if a.area_id else None
+            fr = fr or {**sem_frente, "area": a.onde or "Sem frente"}
+            item = {**base, **fr, "tipo": "acao", "data": (a.concluida_em or f.enviado_em).date().isoformat(),
+                    "atividade": a.origem_texto, "cwp": None, "equipe": a.quem, "programacao": None,
+                    "titulo": f"Ação A-{a.numero} · evidência · {a.o_que}"[:300], "causa": None, "acao": a.conclusao_texto}
         else:
             r = restricoes.get(f.alvo_id)
             if r is None:
