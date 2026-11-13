@@ -3,7 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useCausas } from '@/components/Obra/DesviosProgramacao';
 import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
@@ -61,6 +61,16 @@ function Lancar() {
   const abaixo = prev != null && q != null && q < prev - 0.005;
   const passo = passoDe(prev);
   const somar = (delta: number) => setValor(String(Math.max(0, Math.round(((q ?? 0) + delta) * 100) / 100)));
+  // navegar entre as atividades do dia: setas e arrastar para o lado (spec 061)
+  const toque = useRef<{ x: number; y: number } | null>(null);
+  const navegar = (k: number) => { if (k >= 0 && k < linhas.length) setI(k); };
+  const aoTocar = (e: React.TouchEvent) => { const t = e.touches[0]; toque.current = { x: t.clientX, y: t.clientY }; };
+  const aoSoltar = (e: React.TouchEvent) => {
+    const ini = toque.current; toque.current = null;
+    if (!ini || (e.target as HTMLElement).closest('input, textarea')) return;
+    const t = e.changedTouches[0]; const dx = t.clientX - ini.x; const dy = t.clientY - ini.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) navegar(i + (dx < 0 ? 1 : -1));
+  };
   const irPara = (k: number) => { if (k >= linhas.length) { router.push('/m'); toast.success('Dia lançado'); } else setI(Math.max(0, k)); };
 
   const salvar = async () => {
@@ -94,7 +104,7 @@ function Lancar() {
         <Link href="/m" aria-label="Voltar ao início" className="grid h-11 w-11 place-items-center"><ChevronLeft size={22} /></Link>
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="text-[17px] font-semibold leading-[22px]">Lançar o dia</h1>
-          <span className="truncate text-[12px] leading-4 text-m-text-muted">{ln ? `Atividade ${i + 1} de ${linhas.length} · ${ln.area.split(' · ')[0]}` : dataLonga(data)}</span>
+          <span className="truncate text-[12px] leading-4 text-m-text-muted">{ln ? `Atividade ${i + 1} de ${linhas.length} · arraste para o lado para trocar` : dataLonga(data)}</span>
         </div>
       </header>
 
@@ -116,11 +126,23 @@ function Lancar() {
 
       {ln && (
         <>
-          <section className="flex flex-col gap-3.5 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-[18px]">
+          <nav aria-label="Atividades do dia" className="flex items-center justify-between gap-2">
+            <button type="button" aria-label="Atividade anterior" disabled={i === 0} onClick={() => navegar(i - 1)}
+              className="flex h-11 items-center gap-1 rounded-full border border-m-stroke px-3 text-[14px] font-semibold text-m-accent disabled:opacity-35"><ChevronLeft size={20} /> Anterior</button>
+            <span className="text-[13px] font-semibold tabular-nums text-m-text-secondary">{i + 1} de {linhas.length}</span>
+            <button type="button" aria-label="Próxima atividade" disabled={i + 1 >= linhas.length} onClick={() => navegar(i + 1)}
+              className="flex h-11 items-center gap-1 rounded-full border border-m-stroke px-3 text-[14px] font-semibold text-m-accent disabled:opacity-35">Próxima <ChevronRight size={20} /></button>
+          </nav>
+          <section onTouchStart={aoTocar} onTouchEnd={aoSoltar} className="flex flex-col gap-3.5 overflow-hidden rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-[18px]">
+            <div className="-mx-[18px] -mt-[18px] flex flex-col gap-0.5 bg-m-accent-strong px-[18px] py-3 text-m-on-accent" aria-label="Frente da atividade">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.5px] opacity-80">Frente{ln.local ? ` · ${ln.local}` : ''}</span>
+              <span className="text-[19px] font-bold leading-6">{ln.area}</span>
+              {ln.cwp && <span className="text-[12.5px] font-medium opacity-90">CWP {ln.cwp}</span>}
+            </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-[12px] font-medium uppercase leading-4 tracking-[0.48px] text-m-success">{ln.grupo} · {ln.codigo_simova}</span>
               <span className="text-[17px] font-semibold leading-[22px]">{ln.descricao}</span>
-              <span className="text-[13px] leading-[18px] text-m-text-secondary">{ln.area}{ln.equipe ? ` · ${ln.equipe}` : ''}</span>
+              {(ln.equipe || ln.encarregado) && <span className="text-[13px] leading-[18px] text-m-text-secondary">{[ln.equipe, ln.encarregado && `Enc. ${ln.encarregado}`].filter(Boolean).join(' · ')}</span>}
               <span className="text-[13px] leading-[18px] text-m-text-secondary">Programado {data === hojeIso() ? 'hoje' : 'no dia'}: <b className="text-m-text-primary">{num(prev)} {ln.unidade ?? ''}</b>{ln.capacidade ? ` · capacidade ${num(ln.capacidade, 1)}` : ''}</span>
             </div>
             <div className="flex flex-col gap-2">

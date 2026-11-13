@@ -19,6 +19,41 @@ export async function reduzirFoto(arq: File, maior = 1600): Promise<Blob> {
   } finally { URL.revokeObjectURL(url); }
 }
 
+/** Momento em que cada foto foi tirada/escolhida (para o carimbo de data e hora). */
+export const momentoDaFoto = new WeakMap<Blob, Date>();
+export const dataHoraBR = (d: Date) => `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+/**
+ * Carimbo na foto, como os apps de "timestamp camera" (spec 061): faixa escura no rodapé com a data e a hora em destaque
+ * e as linhas seguintes (frente de serviço, obra…). Devolve um JPEG novo; a foto original não é alterada.
+ */
+export async function carimbarFoto(foto: Blob, linhas: string[], quando = momentoDaFoto.get(foto) ?? new Date()): Promise<Blob> {
+  const url = URL.createObjectURL(foto);
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = url; });
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    const base = Math.max(14, Math.round(Math.min(c.width, c.height) * 0.034));
+    const pad = Math.round(base * 0.8);
+    const textos = [{ t: dataHoraBR(quando), px: Math.round(base * 1.45), peso: 700 }, ...linhas.filter(Boolean).map((t) => ({ t, px: base, peso: 600 }))];
+    const alt = textos.reduce((s, x) => s + x.px * 1.3, 0) + pad * 2;
+    const grad = ctx.createLinearGradient(0, c.height - alt * 1.4, 0, c.height);
+    grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.3, 'rgba(0,0,0,0.55)'); grad.addColorStop(1, 'rgba(0,0,0,0.7)');
+    ctx.fillStyle = grad; ctx.fillRect(0, c.height - alt * 1.4, c.width, alt * 1.4);
+    let y = c.height - alt + pad;
+    ctx.textBaseline = 'top';
+    for (const x of textos) {
+      ctx.font = `${x.peso} ${x.px}px Figtree, system-ui, sans-serif`;
+      ctx.lineWidth = Math.max(2, x.px / 8); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.fillStyle = x === textos[0] ? '#FFD54F' : '#FFFFFF';
+      ctx.strokeText(x.t, pad, y, c.width - pad * 2); ctx.fillText(x.t, pad, y, c.width - pad * 2);
+      y += x.px * 1.3;
+    }
+    return await new Promise<Blob>((ok, falha) => c.toBlob((b) => (b ? ok(b) : falha(new Error('foto inválida'))), 'image/jpeg', 0.85));
+  } finally { URL.revokeObjectURL(url); }
+}
+
 export function useEnviarFoto() {
   const api = useApi();
   return async (alvo: 'desvio' | 'restricao' | 'linha', alvoId: number, foto: Blob, extra?: { data?: string; legenda?: string }) => {
@@ -55,8 +90,10 @@ export function Miniatura({ id, tamanho = 64 }: { id: number; tamanho?: number }
 }
 
 /** Botão "Foto da frente": abre a câmera, mostra as fotos escolhidas (ainda não enviadas) e devolve os blobs já reduzidos. */
-export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 'Vira prova no pleito, se precisar' }: {
+export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 'Vira prova no pleito, se precisar', carimbo }: {
   fotos: Blob[]; onChange: (f: Blob[]) => void; rotulo?: string; dica?: string;
+  /** Linhas do carimbo (frente, obra…): mostra na miniatura o que vai entrar na foto ao registrar. */
+  carimbo?: string[];
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [urls, setUrls] = useState<string[]>([]);
@@ -71,14 +108,22 @@ export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 
         onChange={async (e) => {
           const arq = e.target.files?.[0]; e.target.value = '';
           if (!arq) return;
-          try { onChange([...fotos, await reduzirFoto(arq)]); } catch { toast.error('Não consegui ler a foto'); }
+          try { const b = await reduzirFoto(arq); momentoDaFoto.set(b, new Date()); onChange([...fotos, b]); } catch { toast.error('Não consegui ler a foto'); }
         }} />
+      {carimbo && fotos.length > 0 && (
+        <span className="text-[12px] leading-4 text-m-text-muted">Carimbo na foto: data e hora{carimbo.filter(Boolean).length ? ` · ${carimbo.filter(Boolean).join(' · ')}` : ''}</span>
+      )}
       {urls.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {urls.map((u, k) => (
             <span key={u} className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={u} alt={`Foto ${k + 1}`} className="h-16 w-16 rounded-[10px] object-cover" />
+              {carimbo && (
+                <span className="absolute inset-x-0 bottom-0 truncate rounded-b-[10px] bg-black/60 px-1 text-[8px] font-semibold leading-3 text-[#FFD54F]">
+                  {dataHoraBR(momentoDaFoto.get(fotos[k]) ?? new Date())}
+                </span>
+              )}
               <button type="button" aria-label={`Tirar a foto ${k + 1}`} onClick={() => onChange(fotos.filter((_, j) => j !== k))} className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-m-surface-raised text-m-text-secondary shadow"><X size={14} /></button>
             </span>
           ))}

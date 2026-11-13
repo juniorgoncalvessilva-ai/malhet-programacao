@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { dataLonga } from '@/components/Mobile/campo';
-import { Miniatura, TirarFotos, useEnviarFoto } from '@/components/Mobile/Fotos';
+import { Miniatura, TirarFotos, carimbarFoto, useEnviarFoto } from '@/components/Mobile/Fotos';
 import { FAROL, SEIS_M, corpoRestricao, useRestricoes } from '@/components/Mobile/restricoes';
 import { CampoM, ChipsM, RodapeM, TextoM, TopoM, botaoPrimarioM, botaoSecundarioM, cartaoM } from '@/components/Mobile/ui';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -16,7 +16,7 @@ export default function RestricaoCampo() {
   const id = Number(useParams<{ id: string }>().id);
   const api = useApi();
   const qc = useQueryClient();
-  const { pode } = useObra();
+  const { pode, obra } = useObra();
   const q = useRestricoes();
   const a = q.data?.find((x) => x.id === id);
   const enviarFoto = useEnviarFoto();
@@ -58,8 +58,8 @@ export default function RestricaoCampo() {
             <TextoM rotulo={`Anotar (entra com a data de hoje)`} rows={2} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ex.: material chegou, falta liberar a área" />
             <button type="button" disabled={!nota.trim() || ocupado} onClick={() => fazer('Anotado', async () => { await api.put(`/restricoes/${a.id}`, corpoRestricao(a, { nova_observacao: nota })); setNota(''); })}
               className="h-12 rounded-full border border-m-stroke text-[15px] font-semibold text-m-accent disabled:opacity-40">Salvar anotação</button>
-            <TirarFotos fotos={fotos} onChange={setFotos} rotulo="Foto da restrição" dica="Mostra como está a frente hoje" />
-            {fotos.length > 0 && <button type="button" disabled={ocupado} onClick={() => fazer('Foto(s) enviada(s)', async () => { for (const f of fotos) await enviarFoto('restricao', a.id, f); setFotos([]); })}
+            <TirarFotos fotos={fotos} onChange={setFotos} rotulo="Foto da restrição" dica="Mostra como está a frente hoje" carimbo={[a.area_texto ?? '', obra?.nome ?? '']} />
+            {fotos.length > 0 && <button type="button" disabled={ocupado} onClick={() => fazer('Foto(s) enviada(s)', async () => { for (const f of fotos) await enviarFoto('restricao', a.id, await carimbarFoto(f, [a.area_texto ? `Frente: ${a.area_texto}` : '', `Restrição Nº ${a.numero}`, obra?.nome ?? ''])); setFotos([]); })}
               className="h-12 rounded-full bg-m-accent-strong text-[15px] font-semibold text-m-on-accent disabled:opacity-40">Enviar {fotos.length} foto(s)</button>}
           </section>
           {repro && (

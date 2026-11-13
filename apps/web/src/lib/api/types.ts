@@ -293,7 +293,7 @@ export interface GrupoGrafico { rotulo: string; valores: Record<string, { n: num
 /** Campo (mobile): o dia do encarregado. Spec 035. */
 export interface LinhaCampo {
   id: number; n: number; codigo_simova: string; descricao: string; grupo: string; unidade: string | null; area: string;
-  equipe: string | null; encarregado: string | null;
+  local?: string; cwp?: string | null; equipe: string | null; encarregado: string | null;
 }
 export interface DiaCampo {
   data: string; hoje: string; dia_semana?: string; anterior?: string; seguinte?: string; so_minha_equipe: boolean;

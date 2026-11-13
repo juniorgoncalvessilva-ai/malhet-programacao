@@ -82,6 +82,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   atividades alternadas C5D9F1, spec 059) no Excel do cliente, na tela e na impressão; Gantt com "Classificar por" e "Agrupar por"
   (frente/encarregado, linha-resumo). Spec 055. Excluir revisão emitida só pelo super admin (`DELETE /programacoes/{pid}/emissoes/{rev}`,
   `excluir_emissao`; a anterior volta a vigente; última de concluída não sai; `RevisoesProgramacao`). Spec 060.
+- App de campo (`src/app/[locale]/m`): aba Programação (`m/vigente`) com `DetalheAtividade` (frente, quantitativo, efetivo,
+  atalhos Lançar/Ocorrência com `?data=&linha=`); Lançar com setas/arrastar e frente em destaque; ocorrência com várias
+  causas (um desvio por causa, fotos por causa); área da restrição em lista com busca; carimbo de data/hora + frente nas
+  fotos da restrição (`carimbarFoto`). Spec 061.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

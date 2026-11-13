@@ -11,7 +11,7 @@ import { useObra } from '@/lib/obra/ObraProvider';
 
 const NAV = [
   { href: '/m', rotulo: 'Início', icone: House },
-  { href: '/m/vigente', rotulo: 'Vigente', icone: Eye },
+  { href: '/m/vigente', rotulo: 'Programação', icone: Eye },
   { href: '/m/lancar', rotulo: 'Lançar', icone: Plus },
   { href: '/m/ocorrencias', rotulo: 'Ocorrências', icone: AlertTriangle },
   { href: '/m/restricoes', rotulo: 'Restrições', icone: Fish },

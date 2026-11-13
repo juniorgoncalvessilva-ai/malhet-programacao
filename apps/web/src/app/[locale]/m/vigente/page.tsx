@@ -7,10 +7,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { hojeIso, num } from '@/components/Mobile/campo';
 import { TopoM, cartaoM } from '@/components/Mobile/ui';
+import { DetalheAtividade } from '@/components/Mobile/DetalheAtividade';
+import type { LinhaVisao } from '@/lib/api/types';
 import { useProgramacao } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 
-/** Programação vigente no celular: a última emissão, dia a dia (previsto × realizado). Aberta para todo mundo da obra. */
+/** Programação vigente no celular: a última emissão, dia a dia (previsto × realizado). Aberta para todo mundo da obra.
+ * Tocar na atividade abre o detalhe (frente, quantitativo, efetivo) com os atalhos Lançar produção e Ocorrência (spec 061). */
 export default function VigenteCampoPage() {
   const api = useApi();
   const [nomes] = useModoNomes();
@@ -28,16 +31,17 @@ export default function VigenteCampoPage() {
     setDia(k >= 0 ? k : 0);
   }, [v, dia]);
   useEffect(() => { if (dia != null) document.getElementById(`dia-${dia}`)?.scrollIntoView({ inline: 'center', block: 'nearest' }); }, [dia]);
+  const [aberta, setAberta] = useState<{ ln: LinhaVisao; local: string; area: string } | null>(null);
   const areas = useMemo(() => (v?.locais ?? []).flatMap((l) => l.areas.map((a) => ({ local: l, area: a }))), [v]);
 
   if (vig.isLoading || prog.isLoading) return <p className="pt-10 text-center text-sm text-m-text-muted">Carregando…</p>;
-  if (!vig.data?.id || !v) return (<><TopoM titulo="Programação vigente" /><p className={`${cartaoM} text-center text-sm text-m-text-secondary`}>Nenhuma programação emitida ainda.</p></>);
+  if (!vig.data?.id || !v) return (<><TopoM titulo="Programação" /><p className={`${cartaoM} text-center text-sm text-m-text-secondary`}>Nenhuma programação emitida ainda.</p></>);
   const k = dia ?? 0;
   const baixar = () => api.download(`/programacoes/${id}/excel${rev != null ? `?revisao=${rev}` : ''}`, `${v.titulo.split(' · ')[0]}${rev != null ? ` rev${rev}` : ''}.xlsx`).catch((e) => toast.error(e.message));
 
   return (
     <>
-      <TopoM titulo="Programação vigente" sub={`${v.titulo}${rev != null ? ` · rev. ${rev}` : ' · rascunho'}`}
+      <TopoM titulo="Programação" sub={`${v.titulo}${rev != null ? ` · rev. ${rev}` : ' · rascunho'}`}
         acao={<button type="button" onClick={baixar} aria-label="Baixar Excel" className="grid h-11 w-11 place-items-center rounded-full border border-m-stroke text-m-accent"><FileSpreadsheet size={20} /></button>} />
       <div role="tablist" aria-label="Dia" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
         {v.dias.map((d, i) => (
@@ -60,7 +64,8 @@ export default function VigenteCampoPage() {
               const p = ln.previsto[k] ?? 0;
               const r = ln.realizado[k];
               return (
-                <div key={ln.id} className="flex items-start justify-between gap-3 border-t border-m-stroke-subtle pt-3">
+                <button key={ln.id} type="button" onClick={() => setAberta({ ln, local: `${local.codigo} · ${local.descricao}`, area: `${area.codigo} · ${area.descricao}` })}
+                  className="flex items-start justify-between gap-3 border-t border-m-stroke-subtle pt-3 text-left active:bg-m-surface-hover">
                   <div className="min-w-0">
                     <div className="text-[14px] font-medium leading-5">{nomeLinha(ln, nomes)}</div>
                     {ln.cwp && <div className="text-[11.5px] font-semibold text-m-info">CWP {ln.cwp.texto}</div>}
@@ -70,12 +75,13 @@ export default function VigenteCampoPage() {
                     <div>P <b>{num(p)}</b> {ln.unidade ?? ''}</div>
                     <div className={r == null ? 'text-m-text-muted' : r + 0.005 < p ? 'text-m-warning' : 'text-m-success'}>R <b>{num(r)}</b></div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </section>
         );
       })}
+      {aberta && <DetalheAtividade {...aberta} data={v.dias[k].data} k={k} nomes={nomes} onFechar={() => setAberta(null)} />}
       {!areas.some(({ area }) => area.linhas.some((ln) => ln.previsto[k] || ln.realizado[k])) && <p className={`${cartaoM} text-center text-sm text-m-text-secondary`}>Nada programado neste dia.</p>}
     </>
   );

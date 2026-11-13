@@ -61,6 +61,7 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
                 prev, real = ln["previsto"][i], ln["realizado"][i]
                 comum = {"id": ln["id"], "n": ln["n"], "codigo_simova": ln["codigo_simova"], "descricao": ln["descricao"],
                          "grupo": ln["grupo"]["descricao"], "unidade": ln["unidade"], "area": f"{a['codigo']} · {a['descricao']}",
+                         "local": f"{loc['codigo']} · {loc['descricao']}", "cwp": (ln.get("cwp") or {}).get("texto"),
                          "equipe": ln["equipe"], "encarregado": ln["encarregado"]}
                 if prev or real is not None:
                     linhas.append({**comum, "previsto": prev, "realizado": real,
