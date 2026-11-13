@@ -3,7 +3,8 @@
 import { TituloAba } from '@/components/Obra/LogosObra';
 import { SincronizarDados } from '@/lib/tempo-real';
 
-import { AlertTriangle, ClipboardCheck, Eye, Fish, House, Plus } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Eye, Fish, House, Plus, ScanFace } from 'lucide-react';
+import { SincronizarPresenca } from '@/lib/presenca/SincronizarPresenca';
 import type { ReactNode } from 'react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { OfertaInstalar } from '@/components/Mobile/OfertaInstalar';
@@ -13,6 +14,7 @@ const NAV = [
   { href: '/m', rotulo: 'Início', icone: House },
   { href: '/m/vigente', rotulo: 'Programação', icone: Eye },
   { href: '/m/lancar', rotulo: 'Lançar', icone: Plus },
+  { href: '/m/presenca', rotulo: 'Presença', icone: ScanFace, destaque: true },
   { href: '/m/ocorrencias', rotulo: 'Ocorrências', icone: AlertTriangle },
   { href: '/m/restricoes', rotulo: 'Restrições', icone: Fish },
   { href: '/m/pendencias', rotulo: 'Pendências', icone: ClipboardCheck },
@@ -29,11 +31,19 @@ export function MobileShell({ children }: { children: ReactNode }) {
           <OfertaInstalar />
           <TituloAba />
           <SincronizarDados />
+          {obra && <SincronizarPresenca />}
           {obra ? children : <p className="pt-10 text-center text-sm text-m-text-muted">{carregando ? 'Carregando obra…' : 'Sem acesso a nenhuma obra.'}</p>}
         </main>
-        <nav aria-label="Navegação do campo" className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-6 border-t border-m-stroke-subtle bg-m-surface-raised pb-[max(env(safe-area-inset-bottom),10px)] pt-2">
-          {NAV.map(({ href, rotulo, icone: Icone }) => {
+        <nav aria-label="Navegação do campo" className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-7 border-t border-m-stroke-subtle bg-m-surface-raised pb-[max(env(safe-area-inset-bottom),10px)] pt-2">
+          {NAV.map(({ href, rotulo, icone: Icone, ...x }) => {
             const ativo = href === '/m' ? pathname === '/m' : pathname.startsWith(href);
+            if ('destaque' in x) return (
+              <Link key={href} href={href} aria-current={ativo ? 'page' : undefined} aria-label="Presença: ler crachá ou rosto"
+                className="-mt-6 flex flex-col items-center gap-1 text-[10.5px] font-semibold text-m-accent">
+                <span className={`grid h-14 w-14 place-items-center rounded-full bg-m-accent-strong text-m-on-accent shadow-lg ring-4 ring-m-surface-raised ${ativo ? 'scale-105' : ''}`}><Icone size={28} strokeWidth={2} aria-hidden="true" /></span>
+                {rotulo}
+              </Link>
+            );
             return (
               <Link key={href} href={href} aria-current={ativo ? 'page' : undefined} 
                 className={`flex min-h-[48px] flex-col items-center justify-center gap-1 text-[10.5px] ${ativo ? 'font-semibold text-m-accent' : 'font-medium text-m-text-muted'}`}>

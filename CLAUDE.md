@@ -44,7 +44,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - SSMA/PTO: RAC/PTS/ART/ATA/PTO são listas na linha (JSONB, `lista_da_linha`) e aceitam arquivos (`anexo_ssma`,
   `validar_anexo`). Spec 014.
 - Efetivo (`efetivo/`): planilha do DP com **matrícula como chave** (reimportar não apaga; `no_ultimo_arquivo`),
-  situação de mobilização, movimentos, sem dados pessoais sensíveis. De-para função do efetivo → recurso da CPU
+  situação de mobilização, movimentos, sem dados pessoais sensíveis (exceção: descritor facial da presença, com consentimento — spec 063). De-para função do efetivo → recurso da CPU
   (`de_para_funcao`, gateway `funcoes_por_cracha` usado em `composicao_efetiva`). Equipes a partir do efetivo e
   exportação no layout Simova (`equipes/domain/simova_equipe.py::linha_simova`). Organograma em
   `efetivo/domain/organograma.py`. Spec 015. Aba "Resumo por função" (`ResumoEfetivo`, `src/lib/efetivo/resumo.ts`):
@@ -86,6 +86,14 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   atalhos Lançar/Ocorrência com `?data=&linha=`); Lançar com setas/arrastar e frente em destaque; ocorrência com várias
   causas (um desvio por causa, fotos por causa); área da restrição em lista com busca; carimbo de data/hora + frente nas
   fotos da restrição (`carimbarFoto`). Spec 061.
+- Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
+  atividade ou data, impressão com logos. Spec 062.
+- Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
+  descritor, nunca a foto) e `presenca_leitura` (`id_local` idempotente); `/presenca/base|leituras|dia|identificacoes`;
+  capacidade com os presentes (`capacidade_com_presentes`). Celular `/m/presenca` (botão central), offline em IndexedDB
+  (`src/lib/presenca/`), service worker `public/sw.js` (campo rede-primeiro, estáticos e `/models/face` em cache), sessão e
+  obras lembradas no aparelho. Web: `/app/presenca` e `/app/efetivo/identificacao`. Modelos copiados do npm no build
+  (`scripts/copiar-modelos-face.mjs`, fora do git). Câmera/NFC/SW exigem HTTPS. Spec 063.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Images, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -20,6 +20,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'PTO (planejamento)', url: '/app/pto', icone: ClipboardList, minimo: 'planejador' },
       { titulo: 'SSMA da programação', url: '/app/ssma', icone: HardHat, ssma: true },
       { titulo: 'Desvios (Pareto)', url: '/app/desvios', icone: AlertTriangle },
+      { titulo: 'Book de fotos', url: '/app/fotos', icone: Images },
       { titulo: 'Indicadores', url: '/app/indicadores', icone: BarChart3 },
     ],
   },
@@ -28,6 +29,8 @@ export const MENU: GrupoMenu[] = [
     cor: 'var(--m-proc-executar)',
     itens: [
       { titulo: 'Efetivo e mobilização', url: '/app/efetivo', icone: IdCard },
+      { titulo: 'Presença do dia', url: '/app/presenca', icone: ScanFace },
+      { titulo: 'Crachá e rosto', url: '/app/efetivo/identificacao', icone: Fingerprint, minimo: 'planejador' },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
       { titulo: 'Setores da obra', url: '/app/efetivo/setores', icone: Network },
       { titulo: 'Organograma', url: '/app/efetivo/organograma', icone: GitFork },

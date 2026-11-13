@@ -76,6 +76,16 @@ def listar(alvo: str, alvo_id: int, s: Session = Depends(get_session), c: Contex
         .order_by(FotoCampoModel.id))]
 
 
+@router.get("/book")
+def book(de: date | None = None, ate: date | None = None, tipo: str | None = None, area_id: int | None = None,
+         s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Book de fotos (spec 062): fotos das atividades (frente, atividade, dia de execução), das ocorrências e das
+    restrições, mais novas primeiro."""
+    from app.modules.campo.application.book import montar_book
+
+    return montar_book(s, c.obra_id, de, ate, tipo, area_id)
+
+
 def _foto(s: Session, c: ContextoObra, fid: int) -> FotoCampoModel:
     f = s.get(FotoCampoModel, fid)
     if f is None or f.obra_id != c.obra_id:

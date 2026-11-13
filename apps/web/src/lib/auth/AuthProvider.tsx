@@ -37,6 +37,11 @@ interface AuthCtx {
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
+/** Último usuário que entrou neste aparelho (sem token): o app de campo abre sem internet com ele (spec 063).
+ * Nada é liberado no servidor por isso — cada chamada à API continua exigindo a sessão válida. */
+const CHAVE_USUARIO = 'malhet.usuario';
+const lembrar = (u: Usuario | null) => { try { if (u) localStorage.setItem(CHAVE_USUARIO, JSON.stringify(u)); else localStorage.removeItem(CHAVE_USUARIO); } catch { /* sem storage */ } };
+const lembrado = (): Usuario | null => { try { return JSON.parse(localStorage.getItem(CHAVE_USUARIO) ?? 'null') as Usuario | null; } catch { return null; } };
 export const AUTH_DESABILITADO = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
 const DEV: Usuario = { id: 'dev', email: 'dev@local', roles: ['admin'], admin: true };
 
@@ -62,7 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const r = await chamar<Usuario>('/me', { headers: { Authorization: `Bearer ${t}` } });
     if (r.ok && r.data) {
       const roles = (r.data.roles as string[]) ?? [];
-      setUsuario({ ...r.data, roles, admin: roles.includes('admin') });
+      const u = { ...r.data, roles, admin: roles.includes('admin') };
+      setUsuario(u);
+      lembrar(u);
     }
   }, []);
 
@@ -81,7 +88,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (AUTH_DESABILITADO) return;
     renovar()
       .then((t) => (t ? carregarMe(t) : undefined))
+      // sem internet: abre com o último usuário deste aparelho; quando a rede voltar, renova a sessão
+      .catch(() => { const u = lembrado(); if (u) setUsuario(u); })
       .finally(() => setCarregado(true));
+    const voltou = () => { if (!token.current) renovar().then((t) => (t ? carregarMe(t) : undefined)).catch(() => undefined); };
+    window.addEventListener('online', voltou);
+    return () => window.removeEventListener('online', voltou);
   }, [renovar, carregarMe]);
 
   const getToken = useCallback(async () => {
@@ -109,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sair = useCallback(async () => {
     if (!AUTH_DESABILITADO) await chamar('/logout', { method: 'POST', headers: { 'X-CSRF-Token': csrf() } });
     token.current = null;
+    lembrar(null);
     setUsuario(AUTH_DESABILITADO ? DEV : null);
   }, []);
 

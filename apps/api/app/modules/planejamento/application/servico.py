@@ -121,6 +121,33 @@ def calculo_linha(par: ParametrosCpu | None, equipe: EquipeModel | None, previst
             "alertas": alertas}
 
 
+def capacidade_com_presentes(s: Session, p: ProgramacaoModel, presentes: set[str]) -> dict[int, float | None]:
+    """Capacidade (un/dia) de cada linha contando só os membros presentes da equipe (crachás) — a mesma conta da
+    equipe completa (spec 063). Equipe sem membros cadastrados: não dá para saber (None); ninguém presente: 0."""
+    from types import SimpleNamespace
+
+    vig = ResolvedorReferencias(s, p.obra_id).versoes_vigentes()
+    equipes = {e.id: e for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == p.obra_id))}
+    cpu = CpuGateway(s, p.obra_id, vig).por_itens({ln.item_pq for ln in p.linhas if ln.item_pq})
+    funcao_de = funcoes_por_cracha(s, p.obra_id)
+    out: dict[int, float | None] = {}
+    for ln in p.linhas:
+        eq = equipes.get(ln.equipe_id) if ln.equipe_id else None
+        if eq is None or not ln.item_pq or not eq.membros:
+            out[ln.id] = None
+            continue
+        aqui = [m for m in eq.membros if m.cracha in presentes]
+        if not aqui:
+            out[ln.id] = 0.0
+            continue
+        if not any(m.funcao or funcao_de.get(m.cracha) for m in aqui):
+            out[ln.id] = None  # presentes sem função: a conta cairia na composição digitada
+            continue
+        parcial = SimpleNamespace(composicao=eq.composicao, membros=aqui, jornada_horas=eq.jornada_horas)
+        out[ln.id] = calculo_linha(cpu.get(ln.item_pq), parcial, [], [], funcao_de, p.base_capacidade or "equipe")["capacidade_un_dia"]
+    return out
+
+
 def pessoas_da_equipe(eq: EquipeModel | None, funcao_de: dict[str, str]) -> float | None:
     """Pessoas de mão de obra da equipe (composição efetiva); sem função informada, o nº de membros."""
     if eq is None:

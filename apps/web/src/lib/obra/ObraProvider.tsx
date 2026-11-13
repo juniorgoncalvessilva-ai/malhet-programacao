@@ -25,19 +25,24 @@ interface ObraCtx {
 const NIVEL: Record<PapelObra, number> = { leitor: 0, seguranca: 0, encarregado: 1, planejador: 2, admin: 3 };
 const CHAVE = 'malhet.obra';
 const Ctx = createContext<ObraCtx | null>(null);
+const guardar = <T,>(k: string, v: T): T => { try { localStorage.setItem(`malhet.cache.${k}`, JSON.stringify(v)); } catch { /* sem storage */ } return v; };
+const guardado = <T,>(k: string): T | undefined => { try { const v = localStorage.getItem(`malhet.cache.${k}`); return v ? (JSON.parse(v) as T) : undefined; } catch { return undefined; } };
 
 export function ObraProvider({ children }: { children: React.ReactNode }) {
   const { getToken, usuario } = useSessao();
   const qc = useQueryClient();
+  // guardadas no aparelho: sem internet o app de campo abre com a última lista (spec 063)
   const eu = useQuery({
     queryKey: ['eu', usuario?.id],
-    queryFn: () => apiFetch<{ superadmin: boolean }>('/eu', getToken),
+    queryFn: async () => guardar(`eu:${usuario?.id}`, await apiFetch<{ superadmin: boolean }>('/eu', getToken)),
     enabled: !!usuario,
+    initialData: () => guardado<{ superadmin: boolean }>(`eu:${usuario?.id}`), initialDataUpdatedAt: 0,
   });
   const lista = useQuery({
     queryKey: ['obras-minhas', usuario?.id],
-    queryFn: () => apiFetch<MinhaObra[]>('/obras/minhas', getToken),
+    queryFn: async () => guardar(`obras:${usuario?.id}`, await apiFetch<MinhaObra[]>('/obras/minhas', getToken)),
     enabled: !!usuario,
+    initialData: () => guardado<MinhaObra[]>(`obras:${usuario?.id}`), initialDataUpdatedAt: 0,
   });
   const [obraId, setObraId] = useState<number | null>(null);
 
