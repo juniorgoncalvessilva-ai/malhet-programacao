@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { AcoesCrachas } from '@/components/Obra/CrachasLink';
 import { Botao, Cabecalho, Campo, Indicador, Painel, Selecao } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
@@ -24,7 +25,7 @@ interface Ident {
  */
 export default function IdentificacaoPage() {
   const api = useApi();
-  const { pode } = useObra();
+  const { pode, obra } = useObra();
   const confirmar = useConfirmar();
   const q = useQuery({ queryKey: ['presenca', 'identificacoes'], queryFn: () => api.get<Ident[]>('/presenca/identificacoes') });
   const [busca, setBusca] = useState('');
@@ -68,6 +69,7 @@ export default function IdentificacaoPage() {
         <ul className="flex flex-col gap-1.5 text-[13px] text-m-text-secondary">
           <li><b className="text-m-text-primary">Código / QR:</b> a matrícula e o crachá do efetivo já valem; informe um código só se o crachá tiver outro número impresso.</li>
           <li><b className="text-m-text-primary">NFC:</b> aproxime o crachá do celular (Chrome no Android, em HTTPS) para gravar o número dele.</li>
+          <li><b className="text-m-text-primary">iPhone:</b> o navegador do iPhone não lê NFC. Grave o <b>link</b> no crachá (Android, botão abaixo): o iPhone lê o link sozinho e abre a Presença já registrando. Ou imprima as <b>etiquetas QR</b>: a câmera da Presença lê no iPhone e no Android.</li>
           <li className="flex items-start gap-1.5"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-m-success" /><span><b className="text-m-text-primary">Rosto:</b> só com a autorização da pessoa (LGPD). Guardamos um código numérico do rosto, nunca a foto, e dá para apagar a qualquer hora.</span></li>
         </ul>
       </Painel>
@@ -82,6 +84,7 @@ export default function IdentificacaoPage() {
             <option value="">Todos</option><option value="face">Sem rosto</option><option value="nfc">Sem NFC</option>
           </Selecao>
           <span className="ml-auto text-[12.5px] text-m-text-muted">{filtrada.length} pessoa(s)</span>
+          {editar && <AcoesCrachas pessoas={filtrada} obra={obra?.nome ?? ''} />}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-[13px]">

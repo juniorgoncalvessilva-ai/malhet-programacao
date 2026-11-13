@@ -95,7 +95,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   obras lembradas no aparelho. Web: `/app/presenca` e `/app/efetivo/identificacao`. Modelos copiados do npm no build
   (`scripts/copiar-modelos-face.mjs`, fora do git). Câmera/NFC/SW exigem HTTPS. Spec 063. Crachá não cadastrado → cadastro rápido
   (`CadastroRapido`): vincular à pessoa do efetivo (`/presenca/vincular`, fila offline) ou cadastro simplificado nome + função
-  do de-para (`/presenca/pessoa-simplificada`, `colaborador.cadastro_pendente`) com alerta `CadastrosPendentes`. Spec 065.
+  do de-para (`/presenca/pessoa-simplificada`, `colaborador.cadastro_pendente`) com alerta `CadastrosPendentes`. Spec 065. iPhone (sem Web NFC):
+  link `/m/presenca?c=&m=` gravado no crachá (`gravarCracha`, Android) ou em etiqueta QR (`CrachasLink.tsx`), QR/código pela
+  câmera com ZXing quando não há `BarcodeDetector` (`leitores.ts`, `codigoLido`). Spec 067.
 - Auditorias por modelo (`auditorias/`: `auditoria_modelo` com tipos/registros/campos, Segurança padrão; `auditoria_registro`
   com VER E AGIR — SIM pede foto do depois, NÃO abre ação 5W2H; texto do WhatsApp `texto_envio`) e plano de ação 5W2H
   (`acoes/`: `acao_5w2h`, eventos andamento/concluir com evidência/verificar eficácia/cancelar, `candidatas` e `de-origem`

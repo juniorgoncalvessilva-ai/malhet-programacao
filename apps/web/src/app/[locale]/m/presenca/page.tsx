@@ -4,7 +4,7 @@ import { CheckCircle2, CloudOff, Keyboard, List, Nfc, RefreshCw, ScanFace, ScanL
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TopoM, cartaoM } from '@/components/Mobile/ui';
 import { carregarFace, lerRosto, maisProximo } from '@/lib/presenca/face';
-import { abrirCamera, avisar, escutarCodigos, escutarNfc, temCamera, temCodigoDeBarras, temNfc } from '@/lib/presenca/leitores';
+import { abrirCamera, avisar, ehIos, escutarCodigos, escutarNfc, temCamera, temNfc } from '@/lib/presenca/leitores';
 import type { PessoaBase } from '@/lib/presenca/offline';
 import { type Resultado, usePresenca } from '@/lib/presenca/usePresenca';
 
@@ -19,12 +19,13 @@ const MEIO = { nfc: 'NFC', qr: 'QR', codigo: 'Código', facial: 'Facial', manual
  */
 export default function PresencaPage() {
   const pr = usePresenca();
-  const [modo, setModo] = useState<Modo>(() => (temNfc() ? 'nfc' : 'codigo'));
+  const [modo, setModo] = useState<Modo>(() => (temNfc() ? 'nfc' : 'codigo')); // iPhone abre em Código (câmera)
   const [ultimo, setUltimo] = useState<Resultado | null>(null);
   const [equipe, setEquipe] = useState<string>('');
   const [novo, setNovo] = useState<Extract<Resultado, { tipo: 'desconhecido' }> | null>(null);
   const limpar = useRef<ReturnType<typeof setTimeout> | null>(null);
   const equipes = useMemo(() => new Map((pr.base?.equipes ?? []).map((e) => [e.id, e])), [pr.base]);
+
 
   const mostrar = useCallback((r: Resultado) => {
     setUltimo(r);
@@ -33,6 +34,20 @@ export default function PresencaPage() {
     limpar.current = setTimeout(() => setUltimo(null), 4000);
     if (r.tipo === 'desconhecido') setNovo(r); // crachá sem cadastro: já abre o cadastro rápido (spec 065)
   }, []);
+
+  // crachá gravado com o link (NFC no iPhone, QR pela câmera do celular): /m/presenca?c=CODIGO&m=nfc|qr (spec 067)
+  const doLink = useRef(false);
+  useEffect(() => {
+    if (!pr.base || doLink.current || typeof window === 'undefined') return;
+    const u = new URL(window.location.href);
+    const c = u.searchParams.get('c');
+    if (!c) return;
+    doLink.current = true;
+    const meio = u.searchParams.get('m') === 'qr' ? 'qr' : 'nfc';
+    u.searchParams.delete('c'); u.searchParams.delete('m');
+    window.history.replaceState(null, '', u.pathname + (u.search || ''));
+    (meio === 'nfc' ? pr.porNfc(null, [c]) : pr.porCodigo(c, 'qr')).then((r) => mostrar(r));
+  }, [pr.base]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pessoasEquipe = useMemo(() => {
     const todas = (pr.base?.pessoas ?? []).filter((p) => p.equipe_id != null);
@@ -140,7 +155,16 @@ function LeitorNfc({ onLer }: { onLer: (serial: string | null, textos: string[])
   const [msg, setMsg] = useState('');
   const parar = useRef<(() => void) | null>(null);
   useEffect(() => () => parar.current?.(), []);
-  if (!temNfc()) return <p className={`${cartaoM} text-[14px] text-m-text-secondary`}>Este celular/navegador não lê NFC. A leitura NFC funciona no Chrome do Android, com o site em HTTPS. Use <b>Código</b> ou <b>Rosto</b>.</p>;
+  if (!temNfc()) return ehIos() ? (
+    <section className={`${cartaoM} text-[14px] text-m-text-secondary`}>
+      <b className="text-m-text-primary">No iPhone o navegador não lê NFC</b> (a Apple não libera o NFC para sites, nem no Chrome nem no Safari). Funciona assim:
+      <ul className="list-disc pl-5">
+        <li><b>Crachá com link gravado</b>: aproxime o crachá da parte de cima do iPhone, toque na notificação e a presença entra aqui sozinha. O link é gravado uma vez por um Android em Efetivo › Crachá e rosto.</li>
+        <li><b>Código</b>: lê o QR ou o código de barras do crachá pela câmera, um atrás do outro — o mais rápido no iPhone.</li>
+        <li><b>Rosto</b>: reconhecimento pela câmera.</li>
+      </ul>
+    </section>
+  ) : <p className={`${cartaoM} text-[14px] text-m-text-secondary`}>Este navegador não lê NFC. A leitura NFC funciona no Chrome do Android, com o site em HTTPS. Use <b>Código</b> ou <b>Rosto</b>.</p>;
   const comecar = async () => {
     try {
       parar.current = await escutarNfc((s, t) => onLer(s, t), (m) => { setMsg(m); avisar('erro'); });
@@ -186,7 +210,7 @@ function LeitorCodigo({ onLer }: { onLer: (codigo: string, meio: 'qr' | 'codigo'
         <button type="submit" className="h-12 rounded-full bg-m-accent-strong px-4 text-[15px] font-semibold text-m-on-accent">OK</button>
       </form>
       <span className="text-[12px] text-m-text-muted">Leitor de código de barras Bluetooth/USB também funciona aqui: cada leitura entra sozinha.</span>
-      {temCodigoDeBarras() && temCamera() ? (
+      {temCamera() ? (
         camera ? (
           <div className="relative overflow-hidden rounded-[14px] bg-black">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -197,7 +221,7 @@ function LeitorCodigo({ onLer }: { onLer: (codigo: string, meio: 'qr' | 'codigo'
         ) : (
           <button type="button" onClick={() => { setErro(''); setCamera(true); }} className="flex h-[52px] items-center justify-center gap-2 rounded-full border border-m-stroke text-[15px] font-semibold text-m-accent"><ScanLine size={18} /> Ler QR / código pela câmera</button>
         )
-      ) : <span className="text-[12px] text-m-text-muted">Este navegador não lê código pela câmera (use o Chrome no Android, em HTTPS) — digite ou use um leitor.</span>}
+      ) : <span className="text-[12px] text-m-text-muted">Sem acesso à câmera neste navegador (precisa do site em HTTPS) — digite ou use um leitor.</span>}
       {erro && <span className="text-[13px] text-m-danger">{erro}</span>}
     </section>
   );

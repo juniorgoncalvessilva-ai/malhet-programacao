@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/programacao/useApi';
+import { codigoLido } from '@/lib/presenca/leitores';
 import { useObra } from '@/lib/obra/ObraProvider';
 import {
   type BasePresenca, type LeituraLocal, type Meio, type PessoaBase, guardarLeitura, guardarVinculo, hojeLocal, idLocal, leiturasDoDia,
@@ -94,8 +95,9 @@ export function usePresenca() {
   }, [presentes, obraId, data, enviar]);
 
   const porCodigo = useCallback((codigo: string, meio: Meio) => {
-    const p = indice.cod.get(normalizarCodigo(codigo));
-    return p ? registrar(p, meio) : Promise.resolve<Resultado>({ tipo: 'desconhecido', codigo, meio });
+    const c = codigoLido(codigo);
+    const p = indice.cod.get(normalizarCodigo(c));
+    return p ? registrar(p, meio) : Promise.resolve<Resultado>({ tipo: 'desconhecido', codigo: c, meio });
   }, [indice, registrar]);
 
   const porNfc = useCallback((serial: string | null, textos: string[]) => {
