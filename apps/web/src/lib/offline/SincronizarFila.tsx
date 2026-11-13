@@ -10,7 +10,7 @@ import { itensDaFila, processarFila } from '@/lib/offline/fila';
 
 /** Telas do campo que precisam abrir sem internet (spec 072): o service worker guarda a página e os arquivos dela. */
 const TELAS_OFFLINE = ['/m', '/m/vigente', '/m/lancar', '/m/presenca', '/m/ocorrencias', '/m/ocorrencias/nova', '/m/restricoes',
-  '/m/auditorias', '/m/auditorias/nova', '/m/acoes', '/m/preventivos', '/m/preventivos/etilometro', '/m/lgpd'];
+  '/m/auditorias', '/m/auditorias/nova', '/m/acoes', '/m/preventivos', '/m/preventivos/etilometro', '/m/lgpd', '/m/perfil', '/m/notificacoes'];
 
 /** Uma vez por dia (e a cada versão do app), com internet, pede ao service worker para guardar as telas do campo. */
 function aquecerTelas() {

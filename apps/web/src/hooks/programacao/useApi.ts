@@ -27,7 +27,8 @@ export function useApi() {
     get: useCallback(<T,>(p: string) => apiFetch<T>(p, getToken, h()), [getToken, h]),
     post: useCallback(<T,>(p: string, body?: unknown) =>
       depois(apiFetch<T>(p, getToken, h({ method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }))), [getToken, h, depois]),
-    put: useCallback(<T,>(p: string, body: unknown) => depois(apiFetch<T>(p, getToken, h({ method: 'PUT', body: JSON.stringify(body) }))), [getToken, h, depois]),
+    put: useCallback(<T,>(p: string, body: unknown) =>
+      depois(apiFetch<T>(p, getToken, h({ method: 'PUT', body: body instanceof FormData ? body : JSON.stringify(body) }))), [getToken, h, depois]),
     del: useCallback(<T = void,>(p: string) => depois(apiFetch<T>(p, getToken, h({ method: 'DELETE' }))), [getToken, h, depois]),
     download: useCallback((p: string, nome: string) => apiDownload(p, getToken, nome, obraId), [getToken, obraId]),
     blob: useCallback((p: string) => apiBlob(p, getToken, obraId), [getToken, obraId]),

@@ -20,3 +20,5 @@ from app.modules.acoes.infra import models as _acoes  # noqa: F401
 from app.modules.auditorias.infra import models as _auditorias  # noqa: F401
 from app.modules.preventivos.infra import models as _preventivos  # noqa: F401
 from app.modules.lgpd.infra import models as _lgpd  # noqa: F401
+from app.modules.perfil.infra import models as _perfil  # noqa: F401
+from app.modules.notificacoes.infra import models as _notificacoes  # noqa: F401

@@ -73,3 +73,14 @@ async function aquecer(urls) {
 self.addEventListener('message', (e) => {
   if (e.data && e.data.tipo === 'aquecer' && Array.isArray(e.data.urls)) e.waitUntil(aquecer(e.data.urls.filter((u) => ehCampo(new URL(u, self.location.origin)))));
 });
+
+// toque no aviso de notificação (spec 076): abre o app de campo nas notificações
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const abertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const campo = abertas.find((c) => /\/m(\/|$)/.test(new URL(c.url).pathname));
+    if (campo) { await campo.focus(); return campo.navigate('/pt-BR/m/notificacoes'); }
+    return self.clients.openWindow('/pt-BR/m/notificacoes');
+  })());
+});

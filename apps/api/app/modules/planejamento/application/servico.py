@@ -486,6 +486,11 @@ def emitir(s: Session, p: ProgramacaoModel, usuario: str) -> EmissaoModel:
     from app.modules.indicadores.application.registrar import na_emissao
 
     na_emissao(s, p.obra_id, p.id, p.revisao, foto)
+    from app.modules.notificacoes.application import TODOS, notificar
+
+    notificar(s, p.obra_id, tipo="programacao", titulo=f"Programação emitida: {p.titulo} (rev. {p.revisao})",
+              texto="Nova revisão vigente — confira as atividades da sua equipe.", papeis=TODOS, url=f"/app/programacoes/{p.id}",
+              url_mobile="/m/vigente", autor_id=usuario, chave=f"emissao-{p.id}-{p.revisao}")
     p.revisao += 1
     s.flush()
     return e

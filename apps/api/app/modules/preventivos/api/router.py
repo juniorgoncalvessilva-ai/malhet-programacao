@@ -265,6 +265,14 @@ def registrar_teste(d: TesteIn, s: Session = Depends(get_session), c: ContextoOb
         assinatura=validar_assinatura(d.assinatura.model_dump()) if d.assinatura else None, registrado_por=c.usuario.id)
     s.add(t)
     s.flush()
+    if t.recusa or (t.tentativa == 2 and t.resultado == "reprovado"):
+        from app.modules.notificacoes.application import SEGURANCA, notificar
+
+        notificar(s, c.obra_id, tipo="etilometro", gravidade="critico",
+                  titulo=f"Etilômetro: {t.nome} — {'recusou o teste' if t.recusa else 'reprovado na contraprova'}",
+                  texto=f"{t.faixa}{f' · {float(t.valor):.2f} mg/L'.replace('.', ',') if t.valor is not None else ''} · evento Nº {e.numero}"
+                        f"{f' · {t.penalidade}' if t.penalidade else ''}",
+                  papeis=SEGURANCA, url="/app/preventivos", url_mobile="/m/preventivos", autor_id=c.usuario.id, chave=f"etil-{t.id}")
     return {"teste": _evento_out(s, e, [t], detalhe=True)["testes"][0],
             "contraprova": pede_contraprova(t.tentativa, t.resultado, t.recusa), "repetido": False}
 

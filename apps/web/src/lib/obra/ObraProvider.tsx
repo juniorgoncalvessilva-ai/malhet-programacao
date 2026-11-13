@@ -23,6 +23,11 @@ interface ObraCtx {
   podeVer: (url: string) => boolean;
   /** Tela do app de campo liberada (spec 066): pelo papel e, se houver lista, só as marcadas; Início e Programação sempre. */
   podeVerMobile: (url: string) => boolean;
+  /** Spec 077: super admin "testando como" outro perfil — só a tela muda; o servidor continua tratando como super admin. */
+  simulando: PapelObra | null;
+  simular: (p: PapelObra | null) => void;
+  /** É super admin de verdade (mesmo testando como outro perfil). */
+  superadminReal: boolean;
 }
 
 const NIVEL: Record<PapelObra, number> = { leitor: 0, seguranca: 0, encarregado: 1, planejador: 2, admin: 3 };
@@ -48,6 +53,11 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
     initialData: () => guardado<MinhaObra[]>(`obras:${usuario?.id}`), initialDataUpdatedAt: 0,
   });
   const [obraId, setObraId] = useState<number | null>(null);
+  const [simulando, setSimulando] = useState<PapelObra | null>(() => { try { return (sessionStorage.getItem('malhet.simular') as PapelObra) || null; } catch { return null; } });
+  const simular = useCallback((p: PapelObra | null) => {
+    setSimulando(p);
+    try { if (p) sessionStorage.setItem('malhet.simular', p); else sessionStorage.removeItem('malhet.simular'); } catch { /* ok */ }
+  }, []);
 
   useEffect(() => {
     if (!lista.data) return;
@@ -64,30 +74,38 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
     qc.removeQueries({ predicate: (q) => !['eu', 'obras-minhas', 'admin-obras', 'admin-usuarios'].includes(String(q.queryKey[0])) });
   }, [qc]);
 
-  const obra = lista.data?.find((o) => o.id === obraId) ?? null;
+  const obraReal = lista.data?.find((o) => o.id === obraId) ?? null;
+  const real = !!eu.data?.superadmin;
+  const teste = real && simulando ? simulando : null;
+  // testando como outro perfil: a obra "vira" daquele papel, sem listas de páginas — o que o perfil vê por padrão
+  const obra = obraReal && teste ? { ...obraReal, papel: teste, paginas: null, paginas_mobile: null } : obraReal;
+  const sa = real && !teste;
   const valor = useMemo<ObraCtx>(() => ({
     obras: lista.data ?? [],
     obra,
     papel: obra?.papel ?? null,
-    superadmin: !!eu.data?.superadmin,
+    superadmin: sa,
+    superadminReal: real,
+    simulando: teste,
+    simular,
     carregando: lista.isLoading || eu.isLoading,
     escolher,
     pode: (m) => !!obra && NIVEL[obra.papel] >= NIVEL[m],
     editaSsma: !!obra && ['seguranca', 'planejador', 'admin'].includes(obra.papel),
-    podeVer: (url) => !!eu.data?.superadmin || !obra?.paginas?.length || url === '/app/vigente'
+    podeVer: (url) => sa || !obra?.paginas?.length || url === '/app/vigente'
       || (obra.papel === 'admin' && url === '/app/acessos') || obra.paginas.includes(url),
     podeVerMobile: (url) => {
       const item = MENU_MOBILE.find((i) => i.url === url);
-      if (!obra || !item) return !!item || !!eu.data?.superadmin;
-      if (item.fixo || eu.data?.superadmin) return true;
+      if (!obra || !item) return !!item || sa;
+      if (item.fixo || sa) return true;
       const peloPapel = !item.minimo || NIVEL[obra.papel] >= NIVEL[item.minimo] || (!!item.seguranca && obra.papel === 'seguranca');
       return peloPapel && (!obra.paginas_mobile?.length || obra.paginas_mobile.includes(url));
     },
-  }), [lista.data, lista.isLoading, eu.data, eu.isLoading, obra, escolher]);
+  }), [lista.data, lista.isLoading, eu.isLoading, obra, escolher, sa, real, teste, simular]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useCorDaObra(obra?.cor ?? null);
   // key: trocar de obra remonta as telas (nenhum estado/consulta da obra anterior sobrevive)
-  return <Ctx.Provider value={valor}><Fragment key={obra?.id ?? 'sem-obra'}>{children}</Fragment></Ctx.Provider>;
+  return <Ctx.Provider value={valor}><Fragment key={`${obra?.id ?? 'sem-obra'}-${teste ?? ''}`}>{children}</Fragment></Ctx.Provider>;
 }
 
 export function useObra(): ObraCtx {

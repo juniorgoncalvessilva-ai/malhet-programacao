@@ -163,6 +163,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   aberta). Cabeçalhos sem descrição (espaço). Acessos e usuários unificados em `/app/acessos`. Spec 033. Celular por pessoa: `acesso_obra.paginas_mobile`,
   `podeVerMobile`, telas em `src/components/Mobile/menu.ts` (`MENU_MOBILE`; Início e Programação sempre). Spec 066. Liberar acesso de
   conta existente com senha = redefine (`redefinir_senha`; admin da obra só de quem está só nas obras dele). Spec 068.
+  Barra do celular (`BarraCampo`): 4 atalhos + destaque + Mais; vale o ajuste da pessoa (`menu_mobile_pessoal`) → o padrão do
+  perfil na obra (`menu_mobile_perfil`, `/app/menu-celular`) → `MENU_PADRAO`. Perfil da conta (`perfil_usuario`, sem obra_id:
+  é da conta) com avatar em `/m/perfil` e `/app/perfil` (`FormPerfil`, `MeuMenu`, `EditorMenu`, `Avatar`). Spec 075. Notificações
+  (`notificacoes/`, `notificar(...)` por papéis/pessoas, autor não recebe; sino `Sino`, `/app|m/notificacoes`). Spec 076. Super
+  admin vê tudo e "Testar como perfil" (`useObra().simular`, só a tela muda). Spec 077.
   `useApi()` já manda o `X-Obra-Id`; trocar de obra remonta as telas. Esconda ações que o papel não permite.
 - **Memória de cálculo**: todo número calculado na tela usa `<Calculado>` (`components/Obra/Calculado.tsx`) e abre a
   conta + fontes (origem e linha/campo). Backend: `app/shared/memoria.py` (`Memoria`, `Fonte`, `pacote`); CPU com linha do

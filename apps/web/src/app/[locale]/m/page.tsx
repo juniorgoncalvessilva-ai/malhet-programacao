@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Camera, Check, ChevronRight, ListChecks, Plus, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Bell, Camera, Check, ChevronRight, ListChecks, Plus, ShieldAlert } from 'lucide-react';
 import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
@@ -9,6 +9,11 @@ import { usePendentesCadastro } from '@/components/Obra/CadastrosPendentes';
 import type { AcaoRestricao } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useSessao } from '@/lib/auth/AuthProvider';
+import { Avatar } from '@/components/Perfil/Avatar';
+import { nomeDe, usePerfil } from '@/lib/perfil';
+import { useContagemNotificacoes } from '@/lib/notificacoes';
+
+const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 
 /** Início do encarregado: meta do dia (atividades programadas), quanto já foi lançado e o que fazer agora. */
 export default function CampoInicio() {
@@ -24,17 +29,20 @@ export default function CampoInicio() {
   const lancadas = linhas.filter((l) => l.realizado != null).length;
   const pct = linhas.length ? lancadas / linhas.length : 0;
   const pendRestr = (restr.data ?? []).filter((a) => a.status1 === 'Pendente').length;
-  const nome = (usuario?.email ?? '').split('@')[0].split(/[._]/)[0];
-  const iniciais = (usuario?.email ?? '?').slice(0, 2).toUpperCase();
+  const perfil = usePerfil();
+  const nome = nomeDe(perfil.data, usuario?.email).split(' ')[0];
 
   return (
     <>
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-[13px] leading-[18px] text-m-text-muted">{dataLonga(hoje)} · {obra?.nome}</span>
-          <h1 className="text-[24px] font-semibold leading-[30px]">Bom dia{nome ? `, ${nome.charAt(0).toUpperCase()}${nome.slice(1)}` : ''}</h1>
+          <h1 className="text-[24px] font-semibold leading-[30px]">{saudacao()}{nome ? `, ${nome}` : ''}</h1>
         </div>
-        <span aria-hidden="true" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-m-accent-strong text-[15px] font-semibold text-m-on-accent">{iniciais}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <SinoCampo />
+          <Link href="/m/perfil" aria-label="Meu perfil"><Avatar tamanho={44} /></Link>
+        </div>
       </header>
 
       {!!meusPend.data?.length && (
@@ -128,5 +136,15 @@ export default function CampoInicio() {
         ))}
       </div>
     </>
+  );
+}
+
+function SinoCampo() {
+  const n = useContagemNotificacoes();
+  return (
+    <Link href="/m/notificacoes" aria-label={n ? `Notificações: ${n} não lidas` : 'Notificações'} className="relative grid h-11 w-11 place-items-center rounded-full border border-m-stroke-subtle bg-m-surface-raised text-m-text-secondary">
+      <Bell size={21} />
+      {n > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-m-danger px-1 text-[10.5px] font-bold text-white">{n > 99 ? '99+' : n}</span>}
+    </Link>
   );
 }

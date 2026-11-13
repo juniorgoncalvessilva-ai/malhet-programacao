@@ -352,6 +352,11 @@ def pessoa_simplificada(d: PessoaSimplesIn, s: Session = Depends(get_session), c
     s.flush()
     if d.codigo or d.nfc:
         _ligar(s, c.obra_id, p.id, d.codigo, d.nfc, c.usuario.id)
+    from app.modules.notificacoes.application import GESTAO, notificar
+
+    notificar(s, c.obra_id, tipo="cadastro", gravidade="atencao", titulo=f"Cadastro para completar: {p.nome}",
+              texto=f"Cadastrado no campo só com nome e função ({p.funcao}) por {c.usuario.email}. Inclua a matrícula no efetivo.",
+              papeis=GESTAO, url="/app/efetivo", autor_id=c.usuario.id, chave=f"cadastro-{p.id}")
     return _pessoa_base(s, p)
 
 

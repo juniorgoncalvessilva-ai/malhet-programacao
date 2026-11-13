@@ -194,6 +194,12 @@ def registrar_aceite(d: AceiteIn, s: Session = Depends(get_session), c: Contexto
     if escolhas.get("biometria") is False:
         _apagar_rosto(s, c.obra_id, p.id)
     s.flush()
+    if not any(escolhas.values()):
+        from app.modules.notificacoes.application import notificar
+
+        notificar(s, c.obra_id, tipo="lgpd", gravidade="atencao", titulo=f"LGPD: {p.nome} recusou o termo v{t.versao}",
+                  texto="Segue com crachá ou assinatura na tela, sem foto nem localização.", papeis=["seguranca", "admin"],
+                  url="/app/lgpd", autor_id=c.usuario.id, chave=f"lgpd-recusa-{a.id}")
     return {**_aceite_out(a), "consentimento": consentimento_de(s, c.obra_id, p.id), "repetido": False}
 
 
@@ -224,6 +230,10 @@ def revogar(aid: int, d: RevogarIn, s: Session = Depends(get_session), c: Contex
     a.motivo_revogacao = " ".join((d.motivo or "").split())[:300] or "a pedido do colaborador"
     rosto = _apagar_rosto(s, c.obra_id, a.colaborador_id)
     s.flush()
+    from app.modules.notificacoes.application import notificar
+
+    notificar(s, c.obra_id, tipo="lgpd", gravidade="atencao", titulo=f"LGPD: consentimento de {a.nome} revogado",
+              texto=a.motivo_revogacao, papeis=["seguranca", "admin"], url="/app/lgpd", autor_id=c.usuario.id, chave=f"lgpd-revoga-{a.id}")
     return {**_aceite_out(a), "rosto_apagado": rosto, "consentimento": consentimento_de(s, c.obra_id, a.colaborador_id)}
 
 

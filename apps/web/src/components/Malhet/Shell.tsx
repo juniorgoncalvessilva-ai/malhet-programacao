@@ -4,7 +4,10 @@ import { TituloAba } from '@/components/Obra/LogosObra';
 import { SincronizarDados } from '@/lib/tempo-real';
 import { SincronizarFila } from '@/lib/offline/SincronizarFila';
 
-import { Check, ChevronsUpDown, LayoutGrid, LogOut, Menu as MenuIcon, Moon, Sun, X } from 'lucide-react';
+import { Check, ChevronsUpDown, FlaskConical, LayoutGrid, LogOut, Menu as MenuIcon, Moon, Sun, UserRound, X } from 'lucide-react';
+import { Avatar } from '@/components/Perfil/Avatar';
+import { Sino } from '@/components/Notificacoes/Sino';
+import { nomeDe, usePerfil } from '@/lib/perfil';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { Link, usePathname } from '@/i18n/navigation';
@@ -152,37 +155,54 @@ function Tema() {
 
 function Usuario() {
   const { usuario, sair, desabilitado } = useSessao();
-  const { superadmin, papel } = useObra();
+  const { superadmin, superadminReal, simulando, simular, papel } = useObra();
+  const perfil = usePerfil();
   const [aberto, setAberto] = useState(false);
-  const iniciais = (usuario?.email ?? '?').slice(0, 2).toUpperCase();
   return (
     <div className="relative">
-      <button
-        type="button"
-        aria-label="Conta"
-        aria-expanded={aberto}
-        onClick={() => setAberto(!aberto)}
-        className="grid h-9 w-9 place-items-center rounded-full bg-m-accent-strong text-[13px] font-semibold text-m-on-accent"
-      >
-        {iniciais}
+      <button type="button" aria-label="Conta" aria-expanded={aberto} onClick={() => setAberto(!aberto)} className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-m-accent">
+        <Avatar tamanho={36} />
       </button>
       {aberto && (
-        <div className="absolute right-0 top-11 z-50 w-64 rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised p-2 shadow-m-md">
-          <div className="px-3 py-2">
-            <div className="truncate text-sm font-semibold">{usuario?.email}</div>
-            <div className="text-xs text-m-text-muted">
-              {superadmin ? 'Super Admin' : papel ? PAPEL[papel] : 'Sem obra'}{desabilitado ? ' · modo dev' : ''}
+        <div className="absolute right-0 top-11 z-50 w-72 rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised p-2 shadow-m-md">
+          <div className="flex items-center gap-3 px-3 py-2">
+            <Avatar tamanho={40} />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold">{nomeDe(perfil.data, usuario?.email)}</div>
+              <div className="truncate text-xs text-m-text-muted">{usuario?.email}</div>
+              <div className="text-xs text-m-text-muted">{superadmin ? 'Super Admin' : papel ? PAPEL[papel] : 'Sem obra'}{desabilitado ? ' · modo dev' : ''}</div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => { setAberto(false); sair(); }}
-            className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-m-text-secondary hover:bg-m-surface-hover"
-          >
+          <Link href="/app/perfil" onClick={() => setAberto(false)} className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-m-text-secondary hover:bg-m-surface-hover">
+            <UserRound size={16} /> Meu perfil
+          </Link>
+          {superadminReal && (
+            <label className="flex flex-col gap-1 px-3 py-2 text-xs font-semibold text-m-accent">
+              <span className="flex items-center gap-1.5"><FlaskConical size={14} /> Testar como perfil</span>
+              <select value={simulando ?? ''} onChange={(e) => { simular((e.target.value || null) as never); setAberto(false); }}
+                className="h-9 rounded-[10px] border border-m-stroke bg-m-surface-field px-2 text-sm font-normal text-m-text-primary">
+                <option value="">Super admin (vê tudo)</option>
+                {(['admin', 'planejador', 'encarregado', 'seguranca', 'leitor'] as const).map((p) => <option key={p} value={p}>{PAPEL[p]}</option>)}
+              </select>
+            </label>
+          )}
+          <button type="button" onClick={() => { setAberto(false); sair(); }}
+            className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-m-text-secondary hover:bg-m-surface-hover">
             <LogOut size={16} /> Sair
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function FaixaTeste() {
+  const { simulando, simular } = useObra();
+  if (!simulando) return null;
+  return (
+    <div role="status" className="flex items-center justify-center gap-3 bg-m-warning-subtle px-4 py-1.5 text-[13px] text-m-warning print:hidden">
+      <FlaskConical size={15} /> Testando como <b>{PAPEL[simulando]}</b> — menu e telas desse perfil; o servidor continua te tratando como super admin.
+      <button type="button" onClick={() => simular(null)} className="font-semibold underline">sair do teste</button>
     </div>
   );
 }
@@ -221,9 +241,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <Tema />
+            {obra && <Sino />}
             <Usuario />
           </div>
         </header>
+        <FaixaTeste />
         <main className="flex flex-col gap-5 px-4 pb-10 pt-7 sm:px-8 print:p-0">
           {obra || telaAdmin || carregando ? children : <SemObra superadmin={superadmin} />}
         </main>

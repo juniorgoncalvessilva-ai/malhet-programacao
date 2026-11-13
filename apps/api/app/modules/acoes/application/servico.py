@@ -25,6 +25,12 @@ def criar(s: Session, obra_id: int, por: str, dados: dict, origem: str = "manual
     _anotar(a, por, f"Ação aberta{f' a partir de {origem_texto}' if origem_texto else ''}")
     s.add(a)
     s.flush()
+    from app.modules.notificacoes.application import GESTAO, notificar
+
+    notificar(s, obra_id, tipo="acao", gravidade="atencao", titulo=f"Nova ação 5W2H Nº {a.numero}",
+              texto=f"{a.o_que}{f' — {a.quem}' if a.quem else ''}{f' até {a.quando:%d/%m/%Y}' if a.quando else ''}"
+                    f"{f' (de {origem_texto})' if origem_texto else ''}",
+              papeis=[*GESTAO, "seguranca"], url="/app/acoes", url_mobile="/m/acoes", autor_id=por, chave=f"acao-{a.id}")
     return a
 
 
