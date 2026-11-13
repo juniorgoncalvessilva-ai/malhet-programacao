@@ -1,4 +1,4 @@
-import { AlertTriangle, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, ShieldAlert, Wind, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, ShieldAlert, ShieldCheck, Wind, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 /**
@@ -21,6 +21,7 @@ export const MENU_MOBILE: ItemMobile[] = [
   { url: '/m/pendencias', titulo: 'Pendências', icone: ClipboardCheck, barra: true, minimo: 'encarregado', descricao: 'Dias sem lançamento' },
   { url: '/m/auditorias', titulo: 'Auditorias', icone: ShieldAlert, minimo: 'encarregado', seguranca: true, descricao: 'Auditoria de segurança e envio no WhatsApp' },
   { url: '/m/acoes', titulo: 'Ações 5W2H', icone: ListChecks, minimo: 'encarregado', seguranca: true, descricao: 'Concluir ações com foto e verificar' },
+  { url: '/m/lgpd', titulo: 'Termo LGPD', icone: ShieldCheck, minimo: 'encarregado', seguranca: true, descricao: 'Colher o aceite LGPD do colaborador' },
   { url: '/m/preventivos', titulo: 'Controle preventivo', icone: Wind, minimo: 'encarregado', seguranca: true, descricao: 'Etilômetro: teste, contraprova e assinatura' },
 ];
 

@@ -37,6 +37,7 @@ from app.modules.presenca.api.router import router as presenca
 from app.modules.acoes.api.router import router as acoes
 from app.modules.auditorias.api.router import router as auditorias
 from app.modules.preventivos.api.router import router as preventivos
+from app.modules.lgpd.api.router import router as lgpd
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -106,5 +107,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd):
     app.include_router(r, prefix="/api")

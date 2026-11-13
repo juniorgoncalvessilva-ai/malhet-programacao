@@ -85,7 +85,20 @@ export function LeitorCodigo({ onLer }: { onLer: (codigo: string, meio: 'qr' | '
   );
 }
 
-export function LeitorFacial({ pessoas, limite, onLer }: { pessoas: PessoaBase[]; limite: number; onLer: (p: PessoaBase) => void }) {
+/** Foto do rosto no momento da leitura (recorte em volta da caixa, até 360 px, JPEG) — evidência da assinatura (spec 074). */
+async function fotoDoRosto(v: HTMLVideoElement, caixa: { x: number; y: number; w: number; h: number }): Promise<Blob | null> {
+  const m = 0.6; const x = Math.max(0, caixa.x - caixa.w * m); const y = Math.max(0, caixa.y - caixa.h * m);
+  const w = Math.min(v.videoWidth - x, caixa.w * (1 + 2 * m)); const h = Math.min(v.videoHeight - y, caixa.h * (1 + 2 * m));
+  if (w <= 0 || h <= 0) return null;
+  const k = Math.min(1, 360 / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext('2d')!.drawImage(v, x, y, w, h, 0, 0, c.width, c.height);
+  return new Promise((ok) => c.toBlob((b) => ok(b), 'image/jpeg', 0.82));
+}
+
+export function LeitorFacial({ pessoas, limite, onLer, capturar = false }: {
+  pessoas: PessoaBase[]; limite: number; onLer: (p: PessoaBase, extra: { foto: Blob | null; distancia: number }) => void; capturar?: boolean;
+}) {
   const video = useRef<HTMLVideoElement>(null);
   const [frente, setFrente] = useState<'environment' | 'user'>('environment');
   const [estado, setEstado] = useState<'carregando' | 'pronto' | 'erro'>('carregando');
@@ -115,7 +128,7 @@ export function LeitorFacial({ pessoas, limite, onLer }: { pessoas: PessoaBase[]
             setCaixa({ x: r.caixa.x * k, y: r.caixa.y * k, w: r.caixa.w * k, h: r.caixa.h * k, nome: m?.pessoa.nome });
             // duas leituras seguidas da mesma pessoa = confirmada; a mesma pessoa só de novo depois de 5 s
             if (m && anterior === m.pessoa.id && (ultimo.get(m.pessoa.id) ?? 0) + 5000 < Date.now()) {
-              ultimo.set(m.pessoa.id, Date.now()); ler.current(m.pessoa);
+              ultimo.set(m.pessoa.id, Date.now()); ler.current(m.pessoa, { foto: capturar ? await fotoDoRosto(v, r.caixa) : null, distancia: m.dist });
             }
             anterior = m?.pessoa.id ?? null;
           } else { setCaixa(null); anterior = null; await new Promise((x) => setTimeout(x, 120)); }
@@ -123,7 +136,7 @@ export function LeitorFacial({ pessoas, limite, onLer }: { pessoas: PessoaBase[]
       } catch (e) { if (vivo) { setEstado('erro'); setMsg((e as Error).message || 'Não consegui abrir a câmera'); } }
     })();
     return () => { vivo = false; fechar?.(); };
-  }, [frente, comRosto, limite]);
+  }, [frente, comRosto, limite, capturar]);
 
   return (
     <section className="flex flex-col gap-2">

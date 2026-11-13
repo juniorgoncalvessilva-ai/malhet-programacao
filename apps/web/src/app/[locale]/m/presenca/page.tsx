@@ -87,7 +87,7 @@ export default function PresencaPage() {
 
           {modo === 'nfc' && <LeitorNfc onLer={async (s, t) => mostrar(await pr.porNfc(s, t))} />}
           {modo === 'codigo' && <LeitorCodigo onLer={async (c, meio) => mostrar(await pr.porCodigo(c, meio))} />}
-          {modo === 'facial' && <LeitorFacial pessoas={pr.base.pessoas} limite={pr.base.distancia_max} onLer={async (p) => mostrar(await pr.registrar(p, 'facial'))} />}
+          {modo === 'facial' && <LeitorFacial pessoas={pr.base.pessoas.filter((p) => p.lgpd?.biometria !== false)} limite={pr.base.distancia_max} onLer={async (p) => mostrar(await pr.registrar(p, 'facial'))} />}
 
           <section className={cartaoM}>
             <div className="flex items-center justify-between gap-2">

@@ -10,12 +10,17 @@ import { loja, req } from '@/lib/offline/db';
 export interface PessoaBase {
   id: number; nome: string; matricula: string | null; cracha: string | null; funcao: string | null; situacao: string;
   equipe_id: number | null; codigos: string[]; nfc: string | null; face: number[] | null;
+  /** Consentimento LGPD que vale hoje (spec 074): o aparelho decide sem internet se usa rosto, foto e localização. */
+  lgpd?: ConsentimentoLgpd;
 }
+export interface ConsentimentoLgpd { biometria: boolean; foto_assinatura: boolean; localizacao: boolean; versao: number | null; situacao: 'pendente' | 'aceito' | 'recusado' | 'revogado' | 'desatualizado' }
+export interface TermoLgpd { versao: number; titulo: string; texto: string; hash: string; finalidades: { chave: 'biometria' | 'foto_assinatura' | 'localizacao'; rotulo: string; descricao: string }[] }
 export interface BasePresenca {
   gerado_em: string; distancia_max: number; pessoas: PessoaBase[];
   equipes: { id: number; nome: string; encarregado: string | null }[];
   /** Funções de contratação do de-para (cadastro simplificado já ligado à CPU) — spec 065. */
   funcoes?: { funcao_chave: string; funcao: string; recurso: string | null }[];
+  termo_lgpd?: TermoLgpd;
 }
 /** Crachá ligado a uma pessoa no celular, esperando internet para ir ao servidor (spec 065). */
 export interface VinculoLocal { colaborador_id: number; codigo?: string | null; nfc?: string | null }
@@ -34,6 +39,14 @@ export async function lerBase(obraId: number): Promise<BasePresenca | null> {
 }
 export async function salvarBase(obraId: number, b: BasePresenca): Promise<void> {
   await req((await loja('kv', 'readwrite')).put(b, `base:${obraId}`));
+}
+/** Muda uma pessoa da base guardada no aparelho (ex.: aceite LGPD colhido sem internet vale na hora). */
+export async function mudarPessoaBase(obraId: number, id: number, m: Partial<PessoaBase>): Promise<BasePresenca | null> {
+  const b = await lerBase(obraId);
+  if (!b) return null;
+  const nova = { ...b, pessoas: b.pessoas.map((p) => (p.id === id ? { ...p, ...m } : p)) };
+  await salvarBase(obraId, nova);
+  return nova;
 }
 
 export async function guardarLeitura(l: LeituraLocal): Promise<void> {

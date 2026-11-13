@@ -45,5 +45,8 @@ export function useBasePessoas() {
   const porNfc = useCallback((serial: string | null, textos: string[]) =>
     (serial && indice.nfc.get(normalizarCodigo(serial))) || textos.map((t) => indice.cod.get(normalizarCodigo(codigoLido(t)))).find(Boolean) || null, [indice]);
 
-  return { base, erro, baixando, baixar, indice, porCodigo, porNfc };
+  /** Troca uma pessoa na base em memória (o aparelho já gravou a mudança, ex.: aceite LGPD). */
+  const trocarPessoa = useCallback((p: PessoaBase) => setBase((b) => (b ? { ...b, pessoas: b.pessoas.map((x) => (x.id === p.id ? p : x)) } : b)), []);
+
+  return { base, erro, baixando, baixar, indice, porCodigo, porNfc, trocarPessoa };
 }

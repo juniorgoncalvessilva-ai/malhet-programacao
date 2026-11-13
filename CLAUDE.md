@@ -44,7 +44,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - SSMA/PTO: RAC/PTS/ART/ATA/PTO são listas na linha (JSONB, `lista_da_linha`) e aceitam arquivos (`anexo_ssma`,
   `validar_anexo`). Spec 014.
 - Efetivo (`efetivo/`): planilha do DP com **matrícula como chave** (reimportar não apaga; `no_ultimo_arquivo`),
-  situação de mobilização, movimentos, sem dados pessoais sensíveis (exceção: descritor facial da presença, com consentimento — spec 063). De-para função do efetivo → recurso da CPU
+  situação de mobilização, movimentos, sem dados pessoais sensíveis (exceções com aceite LGPD por finalidade: descritor facial —
+  spec 063 — e foto do rosto no momento da assinatura + coordenadas — spec 074). De-para função do efetivo → recurso da CPU
   (`de_para_funcao`, gateway `funcoes_por_cracha` usado em `composicao_efetiva`). Equipes a partir do efetivo e
   exportação no layout Simova (`equipes/domain/simova_equipe.py::linha_simova`). Organograma em
   `efetivo/domain/organograma.py`. Spec 015. Aba "Resumo por função" (`ResumoEfetivo`, `src/lib/efetivo/resumo.ts`):
@@ -112,6 +113,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   calibração, evento (fotos aparelho/calibração, responsável assina com crachá no início e no fim) e testes assinados pelo
   colaborador (rosto/crachá/tela, `components/Preventivos/Assinar.tsx`), contraprova com cronômetro; tudo offline pela fila
   (tipo `etilometro`). Celular `/m/preventivos/etilometro`, web `/app/preventivos`. Leitores em `components/Mobile/Leitores.tsx`.
+- LGPD (`lgpd/`, spec 074): termo versionado por obra (`lgpd_termo`, `domain/termo.py`: finalidades biometria/foto_assinatura/
+  localizacao, SIM/NÃO cada), aceite/recusa colhido no celular (`/m/lgpd`, `ColetaTermo`, fila `lgpd`; base do celular traz `lgpd`
+  por pessoa), revogação apaga o rosto. Evidência de cada assinatura (`assinatura_evidencia`, fila `evidencia`, `guardarEvidencia`):
+  foto do rosto só com aceite, coordenadas só com aceite, hash SHA-256 conferido. Relatório com logos e mapa em `/app/lgpd`;
+  cada foto aberta/relatório gerado vai para `assinatura_acesso`.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

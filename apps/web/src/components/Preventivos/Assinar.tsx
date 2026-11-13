@@ -46,7 +46,7 @@ export function IdentificarPessoa({ pessoas, limite, busca, onPessoa, rosto = tr
       <Abas modos={rosto ? ['nfc', 'codigo', 'rosto', 'lista'] : ['nfc', 'codigo', 'lista']} modo={modo} onTrocar={setModo} />
       {modo === 'nfc' && <LeitorNfc onLer={(s, tx) => achou(busca.porNfc(s, tx), 'nfc', s ?? tx[0] ?? '?')} />}
       {modo === 'codigo' && <LeitorCodigo onLer={(c, meio) => achou(busca.porCodigo(c), meio, c)} />}
-      {modo === 'rosto' && <LeitorFacial pessoas={pessoas} limite={limite} onLer={(p) => achou(p, 'facial', p.nome)} />}
+      {modo === 'rosto' && <LeitorFacial pessoas={pessoas.filter((p) => p.lgpd?.biometria !== false)} limite={limite} onLer={(p) => achou(p, 'facial', p.nome)} />}
       {modo === 'lista' && (
         <div className="flex flex-col rounded-[16px] border border-m-stroke-subtle bg-m-surface-raised p-3">
           <input autoFocus aria-label="Buscar colaborador" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Nome ou matrícula (2 letras ou mais)"
@@ -67,9 +67,11 @@ export function IdentificarPessoa({ pessoas, limite, busca, onPessoa, rosto = tr
  * (tem de ser o crachá dela) ou desenhando na tela. `meios` limita as formas (o responsável assina só com o crachá).
  */
 export function Assinar({ pessoa, limite, busca, meios = ['rosto', 'nfc', 'codigo', 'tela'], onAssinar }: {
-  pessoa: PessoaBase; limite: number; busca: Busca; meios?: ModoLeitura[]; onAssinar: (a: Assinatura) => void;
+  pessoa: PessoaBase; limite: number; busca: Busca; meios?: ModoLeitura[]; onAssinar: (a: Assinatura, foto?: Blob | null) => void;
 }) {
-  const disponiveis = meios.filter((m) => m !== 'rosto' || pessoa.face);
+  // rosto só com o rosto cadastrado e sem recusa/revogação no termo LGPD; a foto do momento só com o aceite dela (spec 074)
+  const podeRosto = !!pessoa.face && !(pessoa.lgpd && ['recusado', 'revogado'].includes(pessoa.lgpd.situacao)) && pessoa.lgpd?.biometria !== false;
+  const disponiveis = meios.filter((m) => m !== 'rosto' || podeRosto);
   const [modo, setModo] = useState<ModoLeitura>(() => disponiveis.find((m) => m === 'rosto') ?? (temNfc() && disponiveis.includes('nfc') ? 'nfc' : disponiveis.find((m) => m !== 'nfc') ?? disponiveis[0]));
   const agora = () => new Date().toISOString();
   const conferir = (p: PessoaBase | null, meio: 'nfc' | 'qr' | 'codigo', codigo: string) => {
@@ -79,8 +81,9 @@ export function Assinar({ pessoa, limite, busca, meios = ['rosto', 'nfc', 'codig
   return (
     <div className="flex flex-col gap-2.5">
       {disponiveis.length > 1 && <Abas modos={disponiveis} modo={modo} onTrocar={setModo} />}
-      {!pessoa.face && meios.includes('rosto') && <span className="text-[12px] text-m-text-muted">{pessoa.nome.split(' ')[0]} não tem rosto cadastrado — assine com o crachá ou na tela.</span>}
-      {modo === 'rosto' && <LeitorFacial pessoas={[pessoa]} limite={limite} onLer={() => { avisar('ok'); onAssinar({ meio: 'facial', hora: agora() }); }} />}
+      {!podeRosto && meios.includes('rosto') && <span className="text-[12px] text-m-text-muted">{pessoa.nome.split(' ')[0]} {pessoa.face ? 'não autorizou o reconhecimento facial' : 'não tem rosto cadastrado'} — assine com o crachá ou na tela.</span>}
+      {modo === 'rosto' && <LeitorFacial pessoas={[pessoa]} limite={limite} capturar={!!pessoa.lgpd?.foto_assinatura}
+        onLer={(_, x) => { avisar('ok'); onAssinar({ meio: 'facial', hora: agora(), distancia: x.distancia }, x.foto); }} />}
       {modo === 'nfc' && <LeitorNfc onLer={(s, t) => conferir(busca.porNfc(s, t), 'nfc', s ?? t[0] ?? '')} />}
       {modo === 'codigo' && <LeitorCodigo onLer={(c, meio) => conferir(busca.porCodigo(c), meio, c)} />}
       {modo === 'tela' && <AssinaturaTela onPronto={(d) => onAssinar({ meio: 'desenho', hora: agora(), desenho: d })} />}

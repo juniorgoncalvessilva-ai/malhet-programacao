@@ -12,7 +12,7 @@ import { loja, req } from '@/lib/offline/db';
  * - enviado: confirmado; a cópia (com as fotos, para reenviar no WhatsApp) é apagada do aparelho depois de 7 dias.
  * As fotos ficam como bytes (ArrayBuffer): Blob no IndexedDB falha em alguns iPhones.
  */
-export type TipoFila = 'auditoria' | 'etilometro';
+export type TipoFila = 'auditoria' | 'etilometro' | 'lgpd' | 'evidencia';
 export type EstadoFila = 'pendente' | 'enviado' | 'recusado';
 export interface FotoFila { bytes: ArrayBuffer; tipo: string; momento: string }
 export interface ItemFila<D = Record<string, unknown>, R = unknown> {

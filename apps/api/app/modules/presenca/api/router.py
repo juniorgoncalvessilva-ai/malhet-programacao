@@ -52,6 +52,11 @@ def base(s: Session = Depends(get_session), c: ContextoObra = Depends(campo)):
     """Tudo o que o celular precisa para ler sem internet: pessoas (com equipe, códigos e rosto) e equipes."""
     por, equipes = _equipe_por_pessoa(s, c.obra_id)
     ids = {i.colaborador_id: i for i in s.scalars(select(IdentificacaoModel).where(IdentificacaoModel.obra_id == c.obra_id))}
+    from app.modules.lgpd.api.router import consentimentos, termo_vigente
+    from app.modules.lgpd.domain.termo import consentimento as _cons
+
+    cons, sem = consentimentos(s, c.obra_id), _cons([], None).como_dict()  # o celular decide sem internet (spec 074)
+    t = termo_vigente(s, c.obra_id)
     pessoas = []
     for p in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.situacao.not_in(FORA))
                        .order_by(ColaboradorModel.nome)):
@@ -61,8 +66,10 @@ def base(s: Session = Depends(get_session), c: ContextoObra = Depends(campo)):
                         "situacao": p.situacao, "equipe_id": eq.id if eq else None,
                         "codigos": sorted({x for x in (normalizar_codigo(p.matricula), normalizar_codigo(p.cracha),
                                                        i.codigo if i else None) if x}),
-                        "nfc": i.nfc_serial if i else None, "face": i.face_descritor if i else None})
+                        "nfc": i.nfc_serial if i else None, "face": i.face_descritor if i else None,
+                        "lgpd": cons.get(p.id, sem)})
     return {"gerado_em": datetime.now(timezone.utc).isoformat(), "distancia_max": DISTANCIA_MAX, "pessoas": pessoas,
+            "termo_lgpd": {"versao": t.versao, "titulo": t.titulo, "texto": t.texto, "finalidades": t.finalidades, "hash": t.hash},
             "funcoes": _funcoes(s, c.obra_id),
             "equipes": [{"id": e.id, "nome": e.nome, "encarregado": e.encarregado_nome} for e in equipes]}
 
@@ -445,6 +452,12 @@ def identificar(cid: int, d: IdentificacaoIn, s: Session = Depends(get_session),
         i.nfc_serial = nfc
     if "face" in d.campos:
         face = validar_descritor(d.face)
+        if face is not None:
+            from app.modules.lgpd.api.router import consentimento_de
+
+            sit = consentimento_de(s, c.obra_id, cid)
+            if sit["situacao"] in ("recusado", "revogado") or (sit["situacao"] != "pendente" and not sit["biometria"]):
+                raise DomainError("o colaborador não autorizou o reconhecimento facial no termo LGPD", "consentimento")
         if face is not None and not d.consentimento:
             raise DomainError("registre o consentimento da pessoa para usar o rosto (LGPD)", "consentimento")
         i.face_descritor = face

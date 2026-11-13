@@ -33,6 +33,7 @@ export const MENU: GrupoMenu[] = [
     itens: [
       { titulo: 'Efetivo e mobilização', url: '/app/efetivo', icone: IdCard },
       { titulo: 'Presença do dia', url: '/app/presenca', icone: ScanFace },
+      { titulo: 'LGPD e assinaturas', url: '/app/lgpd', icone: ShieldCheck, ssma: true },
       { titulo: 'Crachá e rosto', url: '/app/efetivo/identificacao', icone: Fingerprint, minimo: 'planejador' },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
       { titulo: 'Setores da obra', url: '/app/efetivo/setores', icone: Network },

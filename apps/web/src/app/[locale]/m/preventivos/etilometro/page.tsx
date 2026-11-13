@@ -6,14 +6,16 @@ import { toast } from 'sonner';
 import { carimbarFoto, TirarFotos } from '@/components/Mobile/Fotos';
 import { CampoM, TopoM, botaoPrimarioM, botaoSecundarioM, cartaoM } from '@/components/Mobile/ui';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { ColetaTermo } from '@/components/Lgpd/ColetaTermo';
 import { Assinar, IdentificarPessoa } from '@/components/Preventivos/Assinar';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useRouter } from '@/i18n/navigation';
+import { type Geo, guardarEvidencia, precisaColher, SITUACAO, useLocalizacao } from '@/lib/lgpd';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { idLocal } from '@/lib/offline/db';
 import { enfileirar, fotoParaFila, processarFila, useFila } from '@/lib/offline/fila';
 import { avisar } from '@/lib/presenca/leitores';
-import { hojeLocal, type PessoaBase } from '@/lib/presenca/offline';
+import { hojeLocal, type PessoaBase, type TermoLgpd } from '@/lib/presenca/offline';
 import { useBasePessoas } from '@/lib/presenca/useBase';
 import {
   type Aparelho, type Assinatura, type SessaoEtilometro, type TesteLocal, aguardandoContraprova, classificar, lerSessao, mgL, pedeContraprova,
@@ -44,6 +46,7 @@ export default function EtilometroPage() {
   const [etapa, setEtapa] = useState<Etapa>({ e: 'fila' });
   const fila = useFila(obraId, 'etilometro').filter((x) => x.estado !== 'enviado');
   const post = api.post as <T>(p: string, b: unknown) => Promise<T>;
+  const local = useLocalizacao(); // GPS do aparelho (só entra na evidência de quem autorizou — spec 074)
 
   useEffect(() => { if (obraId) lerSessao(obraId).then((s) => setSessao(s)).catch(() => setSessao(null)); }, [obraId]);
   const gravar = useCallback(async (s: SessaoEtilometro | null) => { setSessao(s); await salvarSessao(obraId, s); }, [obraId]);
@@ -65,10 +68,10 @@ export default function EtilometroPage() {
     </>
   );
 
-  if (!sessao) return <Inicio obraId={obraId} pessoas={pessoas} limite={limite} busca={pb} selo={selo}
+  if (!sessao) return <Inicio obraId={obraId} pessoas={pessoas} limite={limite} busca={pb} selo={selo} local={local}
     onIniciar={async (s, item) => { await enfileirar(item); await gravar(s); subir(); toast.success('Evento iniciado — pode chamar o primeiro'); }} />;
 
-  const registrar = async (et: Extract<Etapa, { e: 'resultado' }>, ass: Assinatura | null) => {
+  const registrar = async (et: Extract<Etapa, { e: 'resultado' }>, ass: Assinatura | null, foto?: Blob | null) => {
     const cls = classificar(sessao.config, et.valor, et.recusa);
     const t: TesteLocal = {
       id_local: idLocal(), colaborador_id: et.pessoa.id, nome: et.pessoa.nome, matricula: et.pessoa.matricula, funcao: et.pessoa.funcao,
@@ -80,6 +83,8 @@ export default function EtilometroPage() {
       dados: { acao: 'teste', id_local: t.id_local, evento_id_local: sessao.id_local, colaborador_id: t.colaborador_id, tentativa: t.tentativa,
         valor: t.valor, recusa: t.recusa, hora: t.hora, leitura: t.leitura, assinatura: ass }, fotos: [], estado: 'pendente', tentativas: 0,
     });
+    if (ass) await guardarEvidencia(obraId, et.pessoa, { origem: 'etilometro_teste', origem_id_local: t.id_local, meio: ass.meio, hora: ass.hora,
+      distancia: ass.distancia, desenho: ass.desenho, foto, geo: local(), documento: `Etilômetro · ${t.tentativa === 2 ? 'contraprova' : '1º teste'}` });
     await gravar({ ...sessao, testes: [...sessao.testes, t] });
     subir();
     setEtapa({ e: 'fila' });
@@ -99,12 +104,16 @@ export default function EtilometroPage() {
   };
 
   if (etapa.e === 'valor') return <Valor et={etapa} onVoltar={() => setEtapa({ e: 'fila' })} onAvancar={(valor, recusa) => setEtapa({ ...etapa, e: 'resultado', valor, recusa })} />;
-  if (etapa.e === 'resultado') return <Resultado sessao={sessao} et={etapa} limite={limite} busca={pb} onVoltar={() => setEtapa({ ...etapa, e: 'valor' })} onAssinar={(a) => registrar(etapa, a)} />;
+  if (etapa.e === 'resultado') return <Resultado sessao={sessao} et={etapa} limite={limite} busca={pb} onVoltar={() => setEtapa({ ...etapa, e: 'valor' })}
+    onAssinar={(a, foto) => registrar(etapa, a, foto)} obraId={obraId} termo={pb.base.termo_lgpd} local={local}
+    onPessoa={(p) => { pb.trocarPessoa(p); setEtapa({ ...etapa, pessoa: p }); }} />;
   if (etapa.e === 'encerrar') return <Encerrar sessao={sessao} pessoas={pessoas} limite={limite} busca={pb} onVoltar={() => setEtapa({ e: 'fila' })}
     onEncerrar={async (a, obs) => {
       const agora = new Date().toISOString();
       await enfileirar({ id_local: idLocal(), obra_id: obraId, tipo: 'etilometro', rotulo: 'Encerramento do evento', criado_em: agora,
         dados: { acao: 'encerrar', id_local_evento: sessao.id_local, assinatura: a, encerrado_em: agora, observacao: obs || null }, fotos: [], estado: 'pendente', tentativas: 0 });
+      const resp = pessoas.find((p) => p.id === sessao.responsavel.id);
+      if (resp) await guardarEvidencia(obraId, resp, { origem: 'etilometro_fim', origem_id_local: sessao.id_local, meio: a.meio, hora: a.hora, geo: local(), documento: 'Etilômetro · encerramento (responsável)' });
       await gravar(null); subir(); setEtapa({ e: 'fila' });
       toast.success('Evento encerrado. O histórico sobe sozinho para o sistema.');
     }} />;
@@ -113,8 +122,8 @@ export default function EtilometroPage() {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-function Inicio({ obraId, pessoas, limite, busca, selo, onIniciar }: {
-  obraId: number; pessoas: PessoaBase[]; limite: number; busca: ReturnType<typeof useBasePessoas>; selo: React.ReactNode;
+function Inicio({ obraId, pessoas, limite, busca, selo, local: gps, onIniciar }: {
+  obraId: number; pessoas: PessoaBase[]; limite: number; busca: ReturnType<typeof useBasePessoas>; selo: React.ReactNode; local: () => Geo | null;
   onIniciar: (s: SessaoEtilometro, item: Parameters<typeof enfileirar>[0]) => Promise<void>;
 }) {
   const { obra } = useObra();
@@ -151,6 +160,7 @@ function Inicio({ obraId, pessoas, limite, busca, selo, onIniciar }: {
       await onIniciar(s, { id_local: id, obra_id: obraId, tipo: 'etilometro', rotulo: `Início · ${ap.marca} ${ap.modelo}`, criado_em: agora,
         dados: { acao: 'abrir', id_local: id, data: hoje, aparelho_id: ap.id, responsavel_id: resp.id, assinatura: a, iniciado_em: agora, local: s.local },
         fotos, estado: 'pendente', tentativas: 0 });
+      await guardarEvidencia(obraId, resp, { origem: 'etilometro_inicio', origem_id_local: id, meio: a.meio, hora: a.hora, geo: gps(), documento: 'Etilômetro · início (responsável)' });
     } catch (e) { toast.error((e as Error).message); } finally { setSalvando(false); }
   };
 
@@ -308,15 +318,21 @@ function Valor({ et, onVoltar, onAvancar }: { et: Extract<Etapa, { e: 'valor' }>
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-function Resultado({ sessao, et, limite, busca, onVoltar, onAssinar }: {
+function Resultado({ sessao, et, limite, busca, onVoltar, onAssinar, obraId, termo, local, onPessoa }: {
   sessao: SessaoEtilometro; et: Extract<Etapa, { e: 'resultado' }>; limite: number; busca: ReturnType<typeof useBasePessoas>;
-  onVoltar: () => void; onAssinar: (a: Assinatura | null) => void;
+  onVoltar: () => void; onAssinar: (a: Assinatura | null, foto?: Blob | null) => Promise<void>;
+  obraId: number; termo?: TermoLgpd; local: () => Geo | null; onPessoa: (p: PessoaBase) => void;
 }) {
+  const [termoAberto, setTermoAberto] = useState(false);
   const cls = classificar(sessao.config, et.valor, et.recusa);
   const aprovado = cls.resultado === 'aprovado';
   const contra = pedeContraprova(et.tentativa, cls.resultado, et.recusa);
   const [salvando, setSalvando] = useState(false);
-  const fim = async (a: Assinatura | null) => { if (salvando) return; setSalvando(true); try { await onAssinar(a); } finally { setSalvando(false); } };
+  const fim = async (a: Assinatura | null, foto?: Blob | null) => { if (salvando) return; setSalvando(true); try { await onAssinar(a, foto); } finally { setSalvando(false); } };
+  if (termoAberto && termo) return (
+    <ColetaTermo obraId={obraId} pessoa={et.pessoa} termo={termo} limite={limite} busca={busca} local={local}
+      onConcluir={(p) => { onPessoa(p); setTermoAberto(false); }} onCancelar={() => setTermoAberto(false)} />
+  );
   return (
     <>
       <section className={`flex flex-col items-center gap-2 rounded-[22px] p-6 text-center ${aprovado ? 'bg-m-success-subtle text-m-success' : 'bg-m-danger-subtle text-m-danger'}`}>
@@ -330,7 +346,13 @@ function Resultado({ sessao, et, limite, busca, onVoltar, onAssinar }: {
       </section>
       <section className={cartaoM}>
         <span className="text-[15px] font-semibold">{et.pessoa.nome.split(' ')[0]}, confira e assine</span>
-        <Assinar pessoa={et.pessoa} limite={limite} busca={busca} onAssinar={(a) => fim(a)} />
+        {termo && precisaColher(et.pessoa) && (
+          <button type="button" onClick={() => setTermoAberto(true)} className="flex min-h-[48px] items-center justify-between gap-2 rounded-[14px] border border-m-warning/50 bg-m-warning-subtle px-3 text-left text-[13px] text-m-warning">
+            <span><b>Termo LGPD: {SITUACAO[et.pessoa.lgpd?.situacao ?? 'pendente'].rotulo.toLowerCase()}</b> — sem o aceite, assina pelo crachá ou na tela, sem foto</span>
+            <span className="shrink-0 font-semibold underline">Colher agora</span>
+          </button>
+        )}
+        <Assinar key={`${et.pessoa.id}-${et.pessoa.lgpd?.situacao ?? ''}`} pessoa={et.pessoa} limite={limite} busca={busca} onAssinar={(a, foto) => fim(a, foto)} />
         {et.recusa && <button type="button" disabled={salvando} onClick={() => fim(null)} className="h-12 rounded-full border border-m-stroke text-[14px] font-semibold">Recusou assinar — registrar pelo responsável</button>}
       </section>
       <button type="button" onClick={onVoltar} className={`${botaoSecundarioM} mb-4 flex-none`}>Corrigir o valor</button>
