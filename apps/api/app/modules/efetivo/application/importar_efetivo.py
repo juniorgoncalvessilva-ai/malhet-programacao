@@ -75,6 +75,7 @@ def importar_efetivo(s: Session, obra_id: int, arquivo: BinaryIO, *, nome_arquiv
             if m is not None:
                 del existentes[m.chave]
                 m.chave = c.chave
+                m.cadastro_pendente = False  # cadastro simplificado do campo completado pela planilha do DP
                 existentes[c.chave] = m
         if m is None:
             m = ColaboradorModel(obra_id=obra_id, chave=c.chave, origem="efetivo", situacao=c.situacao.value,

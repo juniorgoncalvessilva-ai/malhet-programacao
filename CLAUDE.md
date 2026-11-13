@@ -93,7 +93,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   capacidade com os presentes (`capacidade_com_presentes`). Celular `/m/presenca` (botão central), offline em IndexedDB
   (`src/lib/presenca/`), service worker `public/sw.js` (campo rede-primeiro, estáticos e `/models/face` em cache), sessão e
   obras lembradas no aparelho. Web: `/app/presenca` e `/app/efetivo/identificacao`. Modelos copiados do npm no build
-  (`scripts/copiar-modelos-face.mjs`, fora do git). Câmera/NFC/SW exigem HTTPS. Spec 063.
+  (`scripts/copiar-modelos-face.mjs`, fora do git). Câmera/NFC/SW exigem HTTPS. Spec 063. Crachá não cadastrado → cadastro rápido
+  (`CadastroRapido`): vincular à pessoa do efetivo (`/presenca/vincular`, fila offline) ou cadastro simplificado nome + função
+  do de-para (`/presenca/pessoa-simplificada`, `colaborador.cadastro_pendente`) com alerta `CadastrosPendentes`. Spec 065.
 - Auditorias por modelo (`auditorias/`: `auditoria_modelo` com tipos/registros/campos, Segurança padrão; `auditoria_registro`
   com VER E AGIR — SIM pede foto do depois, NÃO abre ação 5W2H; texto do WhatsApp `texto_envio`) e plano de ação 5W2H
   (`acoes/`: `acao_5w2h`, eventos andamento/concluir com evidência/verificar eficácia/cancelar, `candidatas` e `de-origem`

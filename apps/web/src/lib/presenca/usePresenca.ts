@@ -4,14 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
 import {
-  type BasePresenca, type LeituraLocal, type Meio, type PessoaBase, guardarLeitura, hojeLocal, idLocal, leiturasDoDia,
+  type BasePresenca, type LeituraLocal, type Meio, type PessoaBase, guardarLeitura, guardarVinculo, hojeLocal, idLocal, leiturasDoDia,
   lerBase, limparAntigas, normalizarCodigo, pendentes, salvarBase, sincronizar,
 } from '@/lib/presenca/offline';
 
 export type Resultado =
   | { tipo: 'ok'; pessoa: PessoaBase; hora: string; meio: Meio }
   | { tipo: 'repetido'; pessoa: PessoaBase; hora: string }
-  | { tipo: 'desconhecido'; codigo: string; meio: Meio };
+  | { tipo: 'desconhecido'; codigo: string; meio: Meio; nfc?: string | null };
 
 /** Estado da presença do dia no aparelho: base offline, leituras de hoje, fila e sincronização (spec 063). */
 export function usePresenca() {
@@ -100,8 +100,33 @@ export function usePresenca() {
 
   const porNfc = useCallback((serial: string | null, textos: string[]) => {
     const p = (serial && indice.nfc.get(normalizarCodigo(serial))) || textos.map((t) => indice.cod.get(normalizarCodigo(t))).find(Boolean);
-    return p ? registrar(p, 'nfc') : Promise.resolve<Resultado>({ tipo: 'desconhecido', codigo: serial ?? textos[0] ?? '?', meio: 'nfc' });
+    return p ? registrar(p, 'nfc') : Promise.resolve<Resultado>({ tipo: 'desconhecido', codigo: serial ?? textos[0] ?? '?', meio: 'nfc', nfc: serial });
   }, [indice, registrar]);
 
-  return { obraId, base, baixando, erroBase, baixarBase, hoje, presentes, fila, online, enviar, registrar, porCodigo, porNfc, indice, data };
+  // crachá desconhecido (spec 065): liga à pessoa já no aparelho (funciona sem internet) e registra a presença
+  const atualizarPessoa = useCallback(async (p: PessoaBase) => {
+    if (!base) return;
+    const nova = { ...base, pessoas: base.pessoas.some((x) => x.id === p.id) ? base.pessoas.map((x) => (x.id === p.id ? p : x)) : [...base.pessoas, p] };
+    setBase(nova); await salvarBase(obraId, nova);
+  }, [base, obraId]);
+
+  const vincular = useCallback(async (p: PessoaBase, r: Extract<Resultado, { tipo: 'desconhecido' }>): Promise<Resultado> => {
+    const nfc = r.meio === 'nfc' ? (r.nfc ?? null) : null;
+    const codigo = nfc ? null : r.codigo;
+    await guardarVinculo(obraId, { colaborador_id: p.id, codigo, nfc });
+    const atual: PessoaBase = { ...p, nfc: nfc ? normalizarCodigo(nfc) : p.nfc, codigos: codigo ? [...new Set([...p.codigos, normalizarCodigo(codigo)])] : p.codigos };
+    await atualizarPessoa(atual);
+    const res = await registrar(atual, r.meio);
+    if (navigator.onLine !== false) enviar();
+    return res;
+  }, [obraId, atualizarPessoa, registrar, enviar]);
+
+  const cadastrar = useCallback(async (nome: string, funcaoChave: string, r: Extract<Resultado, { tipo: 'desconhecido' }>): Promise<Resultado> => {
+    const nfc = r.meio === 'nfc' ? (r.nfc ?? null) : null;
+    const p = await post<PessoaBase>('/presenca/pessoa-simplificada', { nome, funcao_chave: funcaoChave, nfc, codigo: nfc ? null : r.codigo });
+    await atualizarPessoa(p);
+    return registrar(p, r.meio);
+  }, [post, atualizarPessoa, registrar]);
+
+  return { vincular, cadastrar, obraId, base, baixando, erroBase, baixarBase, hoje, presentes, fila, online, enviar, registrar, porCodigo, porNfc, indice, data };
 }

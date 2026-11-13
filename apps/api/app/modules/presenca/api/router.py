@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,7 @@ def base(s: Session = Depends(get_session), c: ContextoObra = Depends(programar)
                                                        i.codigo if i else None) if x}),
                         "nfc": i.nfc_serial if i else None, "face": i.face_descritor if i else None})
     return {"gerado_em": datetime.now(timezone.utc).isoformat(), "distancia_max": DISTANCIA_MAX, "pessoas": pessoas,
+            "funcoes": _funcoes(s, c.obra_id),
             "equipes": [{"id": e.id, "nome": e.nome, "encarregado": e.encarregado_nome} for e in equipes]}
 
 
@@ -169,6 +170,139 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
             "presentes": len(lt), "nas_equipes": tot, "presentes_nas_equipes": pres,
             "hh_disponivel": round(sum(e["hh_disponivel"] for e in saida_eq), 2),
             "equipes": saida_eq, "sem_equipe": sorted(avulsos, key=lambda x: x["nome"])}
+
+
+def _funcoes(s: Session, obra_id: int) -> list[dict]:
+    """Funções de contratação do de-para (como o DP escreve → função da CPU): a pessoa nova já nasce ligada à composição."""
+    from app.modules.efetivo.infra.models import DeParaFuncaoModel
+
+    return [{"funcao_chave": d.funcao_chave, "funcao": d.funcao, "recurso": d.recurso}
+            for d in s.scalars(select(DeParaFuncaoModel).where(DeParaFuncaoModel.obra_id == obra_id, DeParaFuncaoModel.ignorar.is_(False))
+                               .order_by(DeParaFuncaoModel.funcao))]
+
+
+def _ligar(s: Session, obra_id: int, cid: int, codigo: str | None, nfc: str | None, por: str) -> IdentificacaoModel:
+    """Grava o crachá lido (código/QR ou NFC) na pessoa; o mesmo crachá não serve para duas pessoas."""
+    i = s.scalar(select(IdentificacaoModel).where(IdentificacaoModel.obra_id == obra_id, IdentificacaoModel.colaborador_id == cid))
+    if i is None:
+        i = IdentificacaoModel(obra_id=obra_id, colaborador_id=cid)
+        s.add(i)
+    for campo, valor, rot in (("codigo", normalizar_codigo(codigo), "este código de crachá"), ("nfc_serial", normalizar_codigo(nfc), "este crachá NFC")):
+        if valor is None:
+            continue
+        outro = s.scalar(select(IdentificacaoModel).where(IdentificacaoModel.obra_id == obra_id, getattr(IdentificacaoModel, campo) == valor,
+                                                          IdentificacaoModel.colaborador_id != cid))
+        if outro is not None:
+            dono = s.get(ColaboradorModel, outro.colaborador_id)
+            raise DomainError(f"{rot} já é de {dono.nome if dono else 'outra pessoa'}", campo)
+        setattr(i, campo, valor)
+    i.atualizado_por = por
+    s.flush()
+    return i
+
+
+def _pessoa_base(s: Session, p: ColaboradorModel) -> dict:
+    por, _ = _equipe_por_pessoa(s, p.obra_id)
+    eq = next((por[k] for k in _chaves(p) if k in por), None)
+    i = s.scalar(select(IdentificacaoModel).where(IdentificacaoModel.obra_id == p.obra_id, IdentificacaoModel.colaborador_id == p.id))
+    return {"id": p.id, "nome": p.nome, "matricula": p.matricula, "cracha": p.cracha, "funcao": p.funcao, "situacao": p.situacao,
+            "equipe_id": eq.id if eq else None,
+            "codigos": sorted({x for x in (normalizar_codigo(p.matricula), normalizar_codigo(p.cracha), i.codigo if i else None) if x}),
+            "nfc": i.nfc_serial if i else None, "face": i.face_descritor if i else None, "cadastro_pendente": p.cadastro_pendente}
+
+
+class VincularIn(BaseModel):
+    colaborador_id: int
+    codigo: str | None = None
+    nfc: str | None = None
+
+
+@router.post("/vincular")
+def vincular(d: VincularIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Crachá lido e não cadastrado → liga à pessoa do efetivo, direto do celular (spec 065)."""
+    p = s.get(ColaboradorModel, d.colaborador_id)
+    if p is None or p.obra_id != c.obra_id:
+        raise NotFoundError("Pessoa", d.colaborador_id)
+    if not (d.codigo or d.nfc):
+        raise DomainError("leia o crachá (código ou NFC)")
+    _ligar(s, c.obra_id, p.id, d.codigo, d.nfc, c.usuario.id)
+    return _pessoa_base(s, p)
+
+
+class PessoaSimplesIn(BaseModel):
+    nome: str
+    funcao_chave: str
+    codigo: str | None = None
+    nfc: str | None = None
+
+
+@router.post("/pessoa-simplificada", status_code=201)
+def pessoa_simplificada(d: PessoaSimplesIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Pessoa que não está no efetivo: nome + função de contratação do de-para (já ligada à composição/CPU). Fica pendente
+    para o DP/RH completar; quando a planilha do DP trouxer a matrícula com o mesmo nome, o cadastro se completa sozinho."""
+    from app.modules.efetivo.domain.efetivo import EMPRESA_PROPRIA, Situacao, chave_provisoria
+    from app.modules.efetivo.infra.models import DeParaFuncaoModel
+
+    nome = " ".join(d.nome.split()).upper()
+    if len(nome) < 5 or len(nome.split()) < 2:
+        raise DomainError("informe nome e sobrenome", "nome")
+    dp = s.scalar(select(DeParaFuncaoModel).where(DeParaFuncaoModel.obra_id == c.obra_id, DeParaFuncaoModel.funcao_chave == d.funcao_chave))
+    if dp is None:
+        raise DomainError("escolha a função da lista do de-para de funções", "funcao_chave")
+    chave = chave_provisoria(EMPRESA_PROPRIA, nome)
+    igual = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, (ColaboradorModel.chave == chave)
+                                                    | (func.upper(ColaboradorModel.nome) == nome)))
+    if igual is not None:
+        raise DomainError(f"{igual.nome} já está no efetivo: vincule o crachá a ele", "nome")
+    p = ColaboradorModel(obra_id=c.obra_id, chave=chave, empresa=EMPRESA_PROPRIA, nome=nome[:150], funcao=dp.funcao,
+                         funcao_chave=dp.funcao_chave, situacao=Situacao.MOBILIZADO.value, origem="campo",
+                         no_ultimo_arquivo=False, cadastro_pendente=True, cadastrado_por=c.usuario.email or c.usuario.id,
+                         cadastrado_em=datetime.now(timezone.utc))
+    s.add(p)
+    s.flush()
+    if d.codigo or d.nfc:
+        _ligar(s, c.obra_id, p.id, d.codigo, d.nfc, c.usuario.id)
+    return _pessoa_base(s, p)
+
+
+@router.get("/cadastros-pendentes")
+def cadastros_pendentes(meus: bool = False, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Alerta para completar o cadastro: quem cadastrou (meus=true) e o DP/RH (planejamento/admin) veem a lista."""
+    q = select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.cadastro_pendente.is_(True))
+    if meus:
+        q = q.where(ColaboradorModel.cadastrado_por == (c.usuario.email or c.usuario.id))
+    return [{"id": p.id, "nome": p.nome, "funcao": p.funcao, "empresa": p.empresa, "cadastrado_por": p.cadastrado_por,
+             "cadastrado_em": p.cadastrado_em.isoformat() if p.cadastrado_em else None}
+            for p in s.scalars(q.order_by(ColaboradorModel.cadastrado_em.desc()))]
+
+
+class CompletarIn(BaseModel):
+    matricula: str | None = None
+    nome: str | None = None
+    concluido: bool = True
+
+
+@router.put("/cadastros-pendentes/{cid}")
+def completar(cid: int, d: CompletarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """DP/RH completa: matrícula (vira a chave e o crachá do Simova) e o nome certo; tira o alerta."""
+    from app.modules.efetivo.domain.efetivo import normalizar_matricula
+
+    p = s.get(ColaboradorModel, cid)
+    if p is None or p.obra_id != c.obra_id:
+        raise NotFoundError("Pessoa", cid)
+    if d.nome and len(" ".join(d.nome.split())) >= 5:
+        p.nome = " ".join(d.nome.split()).upper()[:150]
+    if d.matricula:
+        mat = normalizar_matricula(d.matricula)
+        if not mat:
+            raise DomainError("matrícula inválida", "matricula")
+        outro = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.chave == mat, ColaboradorModel.id != cid))
+        if outro is not None:
+            raise DomainError(f"a matrícula {mat} já é de {outro.nome}", "matricula")
+        p.matricula, p.cracha, p.chave = mat, mat, mat
+    p.cadastro_pendente = not d.concluido
+    s.flush()
+    return {"id": p.id, "nome": p.nome, "matricula": p.matricula, "cadastro_pendente": p.cadastro_pendente}
 
 
 @router.get("/identificacoes")

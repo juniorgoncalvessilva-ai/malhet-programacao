@@ -22,6 +22,7 @@ export default function PresencaPage() {
   const [modo, setModo] = useState<Modo>(() => (temNfc() ? 'nfc' : 'codigo'));
   const [ultimo, setUltimo] = useState<Resultado | null>(null);
   const [equipe, setEquipe] = useState<string>('');
+  const [novo, setNovo] = useState<Extract<Resultado, { tipo: 'desconhecido' }> | null>(null);
   const limpar = useRef<ReturnType<typeof setTimeout> | null>(null);
   const equipes = useMemo(() => new Map((pr.base?.equipes ?? []).map((e) => [e.id, e])), [pr.base]);
 
@@ -30,6 +31,7 @@ export default function PresencaPage() {
     avisar(r.tipo === 'ok' ? 'ok' : r.tipo === 'repetido' ? 'repetido' : 'erro');
     if (limpar.current) clearTimeout(limpar.current);
     limpar.current = setTimeout(() => setUltimo(null), 4000);
+    if (r.tipo === 'desconhecido') setNovo(r); // crachá sem cadastro: já abre o cadastro rápido (spec 065)
   }, []);
 
   const pessoasEquipe = useMemo(() => {
@@ -63,6 +65,10 @@ export default function PresencaPage() {
           </div>
 
           <Retorno r={ultimo} equipes={equipes} />
+          {novo && <CadastroRapido r={novo} pessoas={pr.base.pessoas} funcoes={pr.base.funcoes ?? []} online={pr.online} equipes={equipes}
+            onFechar={() => setNovo(null)}
+            onVincular={async (p) => { const res = await pr.vincular(p, novo); setNovo(null); mostrar(res); }}
+            onCadastrar={async (nome, f) => { const res = await pr.cadastrar(nome, f, novo); setNovo(null); mostrar(res); }} />}
 
           {modo === 'nfc' && <LeitorNfc onLer={async (s, t) => mostrar(await pr.porNfc(s, t))} />}
           {modo === 'codigo' && <LeitorCodigo onLer={async (c, meio) => mostrar(await pr.porCodigo(c, meio))} />}
@@ -114,7 +120,7 @@ function Retorno({ r, equipes }: { r: Resultado | null; equipes: Map<number, { n
       {r.tipo === 'desconhecido' ? <XCircle size={30} /> : <CheckCircle2 size={30} />}
       <div className="flex min-w-0 flex-col">
         {r.tipo === 'desconhecido' ? (
-          <><span className="text-[16px] font-bold">Não cadastrado</span><span className="truncate text-[13px] opacity-90">{r.codigo} · cadastre em Efetivo › Crachá e rosto</span></>
+          <><span className="text-[16px] font-bold">Não cadastrado</span><span className="truncate text-[13px] opacity-90">{r.codigo} · abrindo o cadastro rápido</span></>
         ) : (
           <>
             <span className="truncate text-[17px] font-bold">{r.pessoa.nome}</span>
@@ -277,6 +283,72 @@ function ListaEquipe({ pessoas, presentes, onMarcar }: { pessoas: PessoaBase[]; 
         );
       })}
       {!lista.length && <span className="py-2 text-[13px] text-m-text-muted">Ninguém nesta equipe.</span>}
+    </div>
+  );
+}
+
+/** Crachá lido sem cadastro (spec 065): liga a uma pessoa do efetivo (vale sem internet) ou cadastra a pessoa de forma
+ * simplificada (nome + função do de-para) — o DP/RH recebe o alerta para completar o cadastro. */
+function CadastroRapido({ r, pessoas, funcoes, online, equipes, onFechar, onVincular, onCadastrar }: {
+  r: Extract<Resultado, { tipo: 'desconhecido' }>; pessoas: PessoaBase[]; funcoes: { funcao_chave: string; funcao: string; recurso: string | null }[];
+  online: boolean; equipes: Map<number, { nome: string }>; onFechar: () => void; onVincular: (p: PessoaBase) => Promise<void>; onCadastrar: (nome: string, funcaoChave: string) => Promise<void>;
+}) {
+  const [aba, setAba] = useState<'efetivo' | 'novo'>('efetivo');
+  const [busca, setBusca] = useState('');
+  const [nome, setNome] = useState('');
+  const [funcao, setFuncao] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState('');
+  const sem = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const termos = sem(busca).split(/\s+/).filter(Boolean);
+  const achadas = termos.length ? pessoas.filter((p) => termos.every((x) => sem(`${p.nome} ${p.matricula ?? ''} ${p.funcao ?? ''}`).includes(x))).slice(0, 30) : [];
+  const fazer = async (fn: () => Promise<void>) => { setOcupado(true); setErro(''); try { await fn(); } catch (e) { setErro((e as Error).message); } finally { setOcupado(false); } };
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/45" onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}>
+      <div role="dialog" aria-modal="true" aria-label="Cadastrar crachá" className="flex max-h-[90dvh] w-full max-w-[480px] flex-col gap-3 overflow-y-auto rounded-t-[24px] bg-m-surface-raised p-4 pb-[max(env(safe-area-inset-bottom),16px)]">
+        <div className="flex items-start justify-between gap-2">
+          <div><p className="text-[11px] font-semibold uppercase tracking-[0.4px] text-m-danger">Crachá não cadastrado</p>
+            <h2 className="text-[17px] font-semibold">{r.meio === 'nfc' ? 'NFC' : 'Código'} {r.codigo}</h2></div>
+          <button type="button" onClick={onFechar} className="h-10 rounded-full border border-m-stroke px-3 text-[13px] font-semibold">Agora não</button>
+        </div>
+        <div role="tablist" aria-label="Quem é" className="grid grid-cols-2 gap-1 rounded-full border border-m-stroke p-1">
+          {([['efetivo', 'Pessoa do efetivo'], ['novo', 'Não está no efetivo']] as const).map(([v, t]) => (
+            <button key={v} type="button" role="tab" aria-selected={aba === v} onClick={() => setAba(v)} className={`h-10 rounded-full text-[13.5px] font-semibold ${aba === v ? 'bg-m-accent-strong text-m-on-accent' : 'text-m-text-secondary'}`}>{t}</button>
+          ))}
+        </div>
+        {aba === 'efetivo' ? (
+          <>
+            <input autoFocus aria-label="Buscar no efetivo" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome ou matrícula"
+              className="h-12 rounded-[14px] border-2 border-m-accent-strong bg-m-surface-field px-3.5 text-[16px] outline-none" />
+            <div className="flex flex-col">
+              {achadas.map((p) => (
+                <button key={p.id} type="button" disabled={ocupado} onClick={() => fazer(() => onVincular(p))} className="flex min-h-[54px] items-center justify-between gap-2 border-b border-m-stroke-subtle text-left last:border-0">
+                  <span className="min-w-0"><span className="block truncate text-[15px] font-medium">{p.nome}</span>
+                    <span className="block truncate text-[12px] text-m-text-muted">{[p.matricula, p.funcao, p.equipe_id ? equipes.get(p.equipe_id)?.nome : 'sem equipe'].filter(Boolean).join(' · ')}</span></span>
+                  <span className="shrink-0 rounded-full bg-m-accent-strong px-3 py-1.5 text-[12.5px] font-semibold text-m-on-accent">É esta</span>
+                </button>
+              ))}
+              {termos.length > 0 && !achadas.length && <button type="button" onClick={() => { setAba('novo'); setNome(busca); }} className="py-3 text-left text-[13.5px] text-m-accent underline">Ninguém com “{busca}” no efetivo: cadastrar como nova pessoa</button>}
+              {!termos.length && <span className="py-2 text-[13px] text-m-text-muted">Digite o nome ou a matrícula; o crachá fica ligado à pessoa e a presença já entra{online ? '' : ' (sem internet: sobe depois)'}.</span>}
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium text-m-text-secondary">Nome completo
+              <input autoFocus value={nome} onChange={(e) => setNome(e.target.value)} className="h-12 rounded-[14px] border border-m-stroke bg-m-surface-field px-3.5 text-[16px]" /></label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-medium text-m-text-secondary">Função de contratação (de-para de funções)
+              <select value={funcao} onChange={(e) => setFuncao(e.target.value)} className="h-12 rounded-[14px] border border-m-stroke bg-m-surface-field px-3 text-[15px]">
+                <option value="">— escolha —</option>
+                {funcoes.map((f) => <option key={f.funcao_chave} value={f.funcao_chave}>{f.funcao}{f.recurso ? ` → ${f.recurso}` : ''}</option>)}
+              </select></label>
+            {!funcoes.length && <span className="text-[12.5px] text-m-warning">Nenhuma função no de-para ainda: o planejamento cadastra em Efetivo › De-para de funções.</span>}
+            <span className="text-[12.5px] text-m-text-muted">A pessoa entra no efetivo como cadastro simplificado e o DP/RH recebe o alerta para completar (matrícula). Quando a planilha do DP trouxer a matrícula, o cadastro se completa sozinho.</span>
+            <button type="button" disabled={ocupado || !online || nome.trim().split(/\s+/).length < 2 || !funcao} onClick={() => fazer(() => onCadastrar(nome, funcao))}
+              className="h-[52px] rounded-full bg-m-accent-strong text-[15px] font-semibold text-m-on-accent disabled:opacity-40">{online ? 'Cadastrar e registrar presença' : 'Precisa de internet para cadastrar'}</button>
+          </>
+        )}
+        {erro && <span className="text-[13px] text-m-danger">{erro}</span>}
+      </div>
     </div>
   );
 }

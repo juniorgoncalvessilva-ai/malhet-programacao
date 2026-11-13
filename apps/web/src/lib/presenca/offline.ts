@@ -12,7 +12,11 @@ export interface PessoaBase {
 export interface BasePresenca {
   gerado_em: string; distancia_max: number; pessoas: PessoaBase[];
   equipes: { id: number; nome: string; encarregado: string | null }[];
+  /** Funções de contratação do de-para (cadastro simplificado já ligado à CPU) — spec 065. */
+  funcoes?: { funcao_chave: string; funcao: string; recurso: string | null }[];
 }
+/** Crachá ligado a uma pessoa no celular, esperando internet para ir ao servidor (spec 065). */
+export interface VinculoLocal { colaborador_id: number; codigo?: string | null; nfc?: string | null }
 export type Meio = 'nfc' | 'qr' | 'codigo' | 'facial' | 'manual';
 export interface LeituraLocal {
   id_local: string; obra_id: number; colaborador_id: number; nome: string; data: string; hora: string; meio: Meio;
@@ -85,6 +89,26 @@ export async function limparAntigas(): Promise<void> {
   for (const l of (await req(st.getAll())) as LeituraLocal[]) if (l.enviada && l.data < limite) await req(st.delete(l.id_local));
 }
 
+export async function vinculosPendentes(obraId: number): Promise<VinculoLocal[]> {
+  return ((await req((await loja('kv', 'readonly')).get(`vinculos:${obraId}`))) as VinculoLocal[] | undefined) ?? [];
+}
+export async function guardarVinculo(obraId: number, v: VinculoLocal): Promise<void> {
+  const lista = await vinculosPendentes(obraId);
+  await req((await loja('kv', 'readwrite')).put([...lista, v], `vinculos:${obraId}`));
+}
+async function enviarVinculos(post: Post, obraId: number): Promise<void> {
+  const lista = await vinculosPendentes(obraId);
+  const resta: VinculoLocal[] = [];
+  for (const v of lista) {
+    try { await post('/presenca/vincular', v); } catch (e) {
+      // sem rede: tenta depois; recusado pelo servidor (crachá de outra pessoa…): descarta para não travar a fila
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) resta.push(v);
+      else if (!(e instanceof Error) || !/já é de|não encontrad|inválid/i.test(e.message)) resta.push(v);
+    }
+  }
+  await req((await loja('kv', 'readwrite')).put(resta, `vinculos:${obraId}`));
+}
+
 export const idLocal = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 export const hojeLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 export const normalizarCodigo = (v: string) => v.replace(/[\s:\-]/g, '').toUpperCase();
@@ -97,6 +121,7 @@ export function sincronizar(post: Post, obraId: number): Promise<number> {
   enviando ??= (async () => {
     let ok = 0;
     try {
+      if (typeof navigator === 'undefined' || navigator.onLine !== false) await enviarVinculos(post, obraId);
       for (;;) {
         const fila = (await pendentes(obraId)).slice(0, 200);
         if (!fila.length || (typeof navigator !== 'undefined' && navigator.onLine === false)) break;

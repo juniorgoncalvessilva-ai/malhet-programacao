@@ -5,6 +5,7 @@ import { AlertTriangle, Camera, Check, ChevronRight, ListChecks, Plus, ShieldAle
 import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
+import { usePendentesCadastro } from '@/components/Obra/CadastrosPendentes';
 import type { AcaoRestricao } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useSessao } from '@/lib/auth/AuthProvider';
@@ -17,6 +18,7 @@ export default function CampoInicio() {
   const { obra } = useObra();
   const { usuario } = useSessao();
   const restr = useQuery({ queryKey: ['restricoes'], queryFn: () => api.get<AcaoRestricao[]>('/restricoes') });
+  const meusPend = usePendentesCadastro(true);
   const d = dia.data;
   const linhas = d?.linhas ?? [];
   const lancadas = linhas.filter((l) => l.realizado != null).length;
@@ -34,6 +36,13 @@ export default function CampoInicio() {
         </div>
         <span aria-hidden="true" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-m-accent-strong text-[15px] font-semibold text-m-on-accent">{iniciais}</span>
       </header>
+
+      {!!meusPend.data?.length && (
+        <section className="flex flex-col gap-1 rounded-[16px] border border-m-warning/40 bg-m-warning-subtle p-3.5">
+          <span className="flex items-center gap-1.5 text-[14px] font-semibold text-m-warning"><AlertTriangle size={16} /> {meusPend.data.length} cadastro(s) seu(s) para completar</span>
+          <span className="text-[12.5px] text-m-text-secondary">Pessoas que você cadastrou pelo crachá, só com nome e função. Avise o DP/RH para incluir a matrícula: {meusPend.data.slice(0, 3).map((p) => p.nome).join(', ')}{meusPend.data.length > 3 ? '…' : ''}.</span>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3 rounded-[20px] bg-m-accent-strong p-5 text-m-on-accent">
         <span className="text-[12px] font-medium uppercase leading-4 tracking-[0.48px] opacity-80">Meta de hoje</span>

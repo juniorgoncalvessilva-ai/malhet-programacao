@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Abas } from '@/components/Obra/Abas';
 import { ResumoEfetivo } from '@/components/Obra/ResumoEfetivo';
+import { CadastrosPendentes } from '@/components/Obra/CadastrosPendentes';
 import { Botao, Cabecalho, Campo, Chip, Erro, Indicador, Painel, Pilula, Selecao, UploadForm, dataBR } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { k, useEfetivo, useMovimentosEfetivo, useResumoEfetivo } from '@/hooks/programacao/planejamento';
@@ -99,6 +100,8 @@ export default function EfetivoPage() {
         titulo={r ? `${r.ativos} pessoas no efetivo ativo, ${r.em_mobilizacao} em mobilização` : 'Efetivo da obra'}
         acoes={<Link href="/app/efetivo/organograma"><Botao variante="secundario"><Users size={16} /> Organograma</Botao></Link>}
       />
+
+      <CadastrosPendentes />
 
       <Abas rotulo="Seções do efetivo" ativa={aba} onTrocar={setAba}
         abas={[{ chave: 'efetivo', titulo: 'Efetivo' }, { chave: 'resumo', titulo: 'Resumo por função' }, { chave: 'importar', titulo: 'Importar e histórico' }]} />
