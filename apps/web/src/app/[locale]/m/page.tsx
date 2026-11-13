@@ -15,7 +15,7 @@ export default function CampoInicio() {
   const hoje = hojeIso();
   const dia = useDiaCampo(hoje);
   const api = useApi();
-  const { obra } = useObra();
+  const { obra, podeVerMobile: ver } = useObra();
   const { usuario } = useSessao();
   const restr = useQuery({ queryKey: ['restricoes'], queryFn: () => api.get<AcaoRestricao[]>('/restricoes') });
   const meusPend = usePendentesCadastro(true);
@@ -63,19 +63,23 @@ export default function CampoInicio() {
       </section>
 
       <div className="grid grid-cols-2 gap-2.5">
+        {ver('/m/pendencias') && (
         <Link href="/m/pendencias" className="flex flex-col gap-1 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised p-3.5">
           <span className="text-[12px] leading-4 text-m-text-muted">Dias sem lançar</span>
           <span className="text-[26px] font-semibold leading-8 tabular-nums">{d ? d.pendentes.length : '—'}</span>
         </Link>
+        )}
+        {ver('/m/restricoes') && (
         <Link href="/m/restricoes" className="flex flex-col gap-1 rounded-[14px] border border-m-warning/30 bg-m-warning-subtle p-3.5">
           <span className="text-[12px] leading-4 text-m-warning">Restrições abertas</span>
           <span className="text-[26px] font-semibold leading-8 tabular-nums">{restr.data ? pendRestr : '—'}</span>
         </Link>
+        )}
       </div>
 
       <h2 className="mt-0.5 text-[13px] font-semibold leading-[18px] text-m-text-secondary">O que fazer agora</h2>
       <div className="flex flex-col gap-2">
-        {d?.programacao && (
+        {d?.programacao && ver('/m/lancar') && (
           <Link href="/m/lancar" className={`flex min-h-[60px] items-center gap-3 rounded-[14px] bg-m-surface-raised px-3.5 ${lancadas < linhas.length ? 'border-2 border-m-accent-strong' : 'border border-m-stroke-subtle'}`}>
             <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] ${lancadas < linhas.length ? 'bg-m-accent-strong text-m-on-accent' : 'bg-m-success-subtle text-m-success'}`}>{lancadas < linhas.length ? <Plus size={18} /> : <Check size={18} />}</span>
             <span className="flex flex-1 flex-col"><span className="text-[15px] font-semibold leading-5">{lancadas < linhas.length ? 'Lançar o dia' : 'Dia lançado'}</span>
@@ -83,7 +87,7 @@ export default function CampoInicio() {
             <ChevronRight size={18} className="text-m-accent" aria-hidden="true" />
           </Link>
         )}
-        {!!d?.pendentes.length && (
+        {!!d?.pendentes.length && ver('/m/pendencias') && (
           <Link href="/m/pendencias" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-warning-subtle text-m-warning"><AlertTriangle size={18} /></span>
             <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Dias anteriores sem realizado</span>
@@ -91,26 +95,32 @@ export default function CampoInicio() {
             <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
           </Link>
         )}
+        {ver('/m/auditorias') && (
         <Link href="/m/auditorias/nova" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-danger-subtle text-m-danger"><ShieldAlert size={18} /></span>
           <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Auditoria de segurança</span>
             <span className="text-[12px] leading-4 text-m-text-muted">Notificação, interdição, inspeção, N3 · envia no WhatsApp</span></span>
           <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
         </Link>
+        )}
+        {ver('/m/acoes') && (
         <Link href="/m/acoes" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-info-subtle text-m-info"><ListChecks size={18} /></span>
           <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Ações 5W2H</span>
             <span className="text-[12px] leading-4 text-m-text-muted">Concluir com foto e verificar a eficácia</span></span>
           <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
         </Link>
+        )}
+        {ver('/m/ocorrencias') && (
         <Link href="/m/ocorrencias/nova" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-warning-subtle text-m-warning"><Camera size={18} /></span>
           <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Registrar ocorrência</span>
             <span className="text-[12px] leading-4 text-m-text-muted">Foto, local e causa</span></span>
           <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
         </Link>
+        )}
         {linhas.map((l) => (
-          <Link key={l.id} href={`/m/lancar?linha=${l.id}`} className="flex min-h-[56px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5 py-2">
+          <Link key={l.id} href={ver('/m/lancar') ? `/m/lancar?linha=${l.id}` : '/m/vigente'} className="flex min-h-[56px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5 py-2">
             <span className="flex flex-1 flex-col"><span className="line-clamp-1 text-[14px] font-medium leading-5">{l.codigo_simova} · {l.descricao}</span>
               <span className="text-[12px] leading-4 text-m-text-muted">{l.area.split(' · ')[0]} · previsto {num(l.previsto)} {l.unidade ?? ''}</span></span>
             <span className={`text-[13px] font-semibold tabular-nums ${l.realizado == null ? 'text-m-text-muted' : (l.realizado ?? 0) >= (l.previsto ?? 0) ? 'text-m-success' : 'text-m-warning'}`}>{l.realizado == null ? '—' : num(l.realizado)}</span>

@@ -21,7 +21,7 @@ const SITUACAO: Partial<Record<SituacaoEfetivo, string>> = {
 export function DetalheAtividade({ ln, local, area, data, k, nomes, onFechar }: {
   ln: LinhaVisao; local: string; area: string; data: string; k: number; nomes: ModoNomes; onFechar: () => void;
 }) {
-  const { pode } = useObra();
+  const { pode, podeVerMobile: ver } = useObra();
   const equipes = useEquipes();
   const eq = equipes.data?.find((e) => e.id === ln.equipe_id);
   useEffect(() => {
@@ -65,10 +65,10 @@ export function DetalheAtividade({ ln, local, area, data, k, nomes, onFechar }: 
             <span className="text-[12.5px] capitalize text-m-text-muted">{dataLonga(data)}</span>
           </div>
 
-          {pode('encarregado') && (
+          {pode('encarregado') && (ver('/m/lancar') || ver('/m/ocorrencias')) && (
             <div className="grid grid-cols-2 gap-2.5">
-              <Link href={`/m/lancar${q}`} className="flex h-[52px] items-center justify-center gap-1.5 rounded-full bg-m-accent-strong text-[15px] font-semibold text-m-on-accent"><Plus size={18} /> Lançar produção</Link>
-              <Link href={`/m/ocorrencias/nova${q}`} className="flex h-[52px] items-center justify-center gap-1.5 rounded-full border-2 border-m-warning text-[15px] font-semibold text-m-warning"><AlertTriangle size={18} /> Ocorrência</Link>
+              {ver('/m/lancar') && <Link href={`/m/lancar${q}`} className="flex h-[52px] items-center justify-center gap-1.5 rounded-full bg-m-accent-strong text-[15px] font-semibold text-m-on-accent"><Plus size={18} /> Lançar produção</Link>}
+              {ver('/m/ocorrencias') && <Link href={`/m/ocorrencias/nova${q}`} className="flex h-[52px] items-center justify-center gap-1.5 rounded-full border-2 border-m-warning text-[15px] font-semibold text-m-warning"><AlertTriangle size={18} /> Ocorrência</Link>}
             </div>
           )}
 

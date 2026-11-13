@@ -6,6 +6,7 @@ import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, u
 import { apiFetch } from '@/lib/api/client';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import type { MinhaObra, PapelObra } from '@/lib/api/types';
+import { MENU_MOBILE } from '@/components/Mobile/menu';
 
 interface ObraCtx {
   obras: MinhaObra[];
@@ -20,6 +21,8 @@ interface ObraCtx {
   /** Página liberada para a pessoa nesta obra (url do menu). Sem lista = todas as do papel; a programação vigente fica
    * sempre aberta e o admin nunca perde os acessos. */
   podeVer: (url: string) => boolean;
+  /** Tela do app de campo liberada (spec 066): pelo papel e, se houver lista, só as marcadas; Início e Programação sempre. */
+  podeVerMobile: (url: string) => boolean;
 }
 
 const NIVEL: Record<PapelObra, number> = { leitor: 0, seguranca: 0, encarregado: 1, planejador: 2, admin: 3 };
@@ -73,6 +76,13 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
     editaSsma: !!obra && ['seguranca', 'planejador', 'admin'].includes(obra.papel),
     podeVer: (url) => !!eu.data?.superadmin || !obra?.paginas?.length || url === '/app/vigente'
       || (obra.papel === 'admin' && url === '/app/acessos') || obra.paginas.includes(url),
+    podeVerMobile: (url) => {
+      const item = MENU_MOBILE.find((i) => i.url === url);
+      if (!obra || !item) return !!item || !!eu.data?.superadmin;
+      if (item.fixo || eu.data?.superadmin) return true;
+      const peloPapel = !item.minimo || NIVEL[obra.papel] >= NIVEL[item.minimo] || (!!item.seguranca && obra.papel === 'seguranca');
+      return peloPapel && (!obra.paginas_mobile?.length || obra.paginas_mobile.includes(url));
+    },
   }), [lista.data, lista.isLoading, eu.data, eu.isLoading, obra, escolher]);
 
   useCorDaObra(obra?.cor ?? null);

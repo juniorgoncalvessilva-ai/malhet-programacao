@@ -32,6 +32,7 @@ class AcessoObraModel(Base):
     cracha: Mapped[str | None] = mapped_column(String(20))  # crachá Simova quando for encarregado
     # páginas do app liberadas para a pessoa nesta obra (url do menu); vazio = todas as que o papel permite
     paginas: Mapped[list | None] = mapped_column(JSONB)
+    paginas_mobile: Mapped[list | None] = mapped_column(JSONB)  # telas do app de campo (/m/...) — spec 066; vazio = todas do papel
     concedido_por: Mapped[str] = mapped_column(String(80))
     concedido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

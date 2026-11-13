@@ -10,6 +10,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import type { Acesso, PapelObra } from '@/lib/api/types';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { MENU_MOBILE } from '@/components/Mobile/menu';
 
 export const PAPEIS: { valor: PapelObra; rotulo: string; descricao: string }[] = [
   { valor: 'admin', rotulo: 'Admin da obra', descricao: 'carrega versões, importa do Simova, envia a FT e dá acesso' },
@@ -50,9 +51,10 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
     onError: (e) => toast.error(e.message),
   });
   const lista = acessos.data ?? [];
-  const [paginas, setPaginas] = useState<{ id: number; sel: Set<string> } | null>(null);
+  const [paginas, setPaginas] = useState<{ id: number; sel: Set<string>; mob: Set<string> } | null>(null);
   const salvarPaginas = useMutation({
-    mutationFn: (d: { id: number; paginas: string[] | null }) => api.put(`/obras/${obraId}/acessos/${d.id}/paginas`, { paginas: d.paginas }),
+    mutationFn: (d: { id: number; paginas: string[] | null; paginas_mobile: string[] | null }) =>
+      api.put(`/obras/${obraId}/acessos/${d.id}/paginas`, { paginas: d.paginas, paginas_mobile: d.paginas_mobile ?? [] }),
     onSuccess: () => { toast.success('Páginas salvas'); setPaginas(null); qc.invalidateQueries({ queryKey: chave }); qc.invalidateQueries({ queryKey: ['obras-minhas'] }); },
     onError: (e) => toast.error(e.message),
   });
@@ -68,9 +70,10 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
             <td className={td}><Pilula tom={TOM[a.papel]}>{rotuloPapel(a.papel)}</Pilula></td>
             <td className={td}>{a.cracha ?? '—'}</td>
             <td className={td}>
-              <button type="button" className="text-left font-semibold text-m-accent underline" onClick={() => setPaginas(paginas?.id === a.id ? null : { id: a.id, sel: new Set(a.paginas ?? []) })}>
-                {a.paginas?.length ? `${a.paginas.length} página(s)` : 'todas (pelo papel)'}
+              <button type="button" className="text-left font-semibold text-m-accent underline" onClick={() => setPaginas(paginas?.id === a.id ? null : { id: a.id, sel: new Set(a.paginas ?? []), mob: new Set(a.paginas_mobile ?? []) })}>
+                Web: {a.paginas?.length ? `${a.paginas.length} página(s)` : 'todas'}
               </button>
+              <span className="block text-[12px] text-m-text-muted">Celular: {a.paginas_mobile?.length ? `${a.paginas_mobile.length} tela(s)` : 'todas (pelo papel)'}</span>
             </td>
             <td className={td}>{dataBR(a.concedido_em)}</td>
             <td className={`${td} whitespace-nowrap text-right`}>
@@ -97,10 +100,21 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
                     </div>
                   ))}
                 </div>
+                <div className="mt-4 border-t border-m-stroke-subtle pt-3">
+                  <p className="mb-2 text-[12.5px] text-m-text-secondary"><b className="text-m-text-primary">Celular (app de campo)</b>: telas e itens do menu que aparecem no celular. <b>Início</b> e <b>Programação</b> ficam sempre; nenhuma marcada = todas as que o papel permite.</p>
+                  <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2 xl:grid-cols-4">
+                    {MENU_MOBILE.filter((i) => !i.fixo).map((i) => (
+                      <label key={i.url} className="flex items-start gap-2 text-[13px] text-m-text-primary">
+                        <input type="checkbox" className="mt-0.5" checked={paginas.mob.has(i.url)} onChange={() => setPaginas((p) => { if (!p) return p; const n = new Set(p.mob); if (n.has(i.url)) n.delete(i.url); else n.add(i.url); return { ...p, mob: n }; })} />
+                        <span><i.icone size={14} className="mr-1 inline text-m-accent" aria-hidden="true" />{i.titulo}{i.barra ? '' : ' (atalho do Início)'}<span className="block text-[11.5px] text-m-text-muted">{i.descricao}{i.minimo ? ` · papel ${i.minimo}+${i.seguranca ? ' ou segurança' : ''}` : ''}</span></span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Botao disabled={salvarPaginas.isPending} onClick={() => salvarPaginas.mutate({ id: a.id, paginas: paginas.sel.size ? [...paginas.sel] : null })}>Salvar páginas</Botao>
-                  <Botao variante="secundario" onClick={() => setPaginas({ ...paginas, sel: new Set() })}>Liberar todas (pelo papel)</Botao>
-                  <Botao variante="secundario" onClick={() => setPaginas({ ...paginas, sel: new Set(['/app/vigente']) })}>Só a programação vigente</Botao>
+                  <Botao disabled={salvarPaginas.isPending} onClick={() => salvarPaginas.mutate({ id: a.id, paginas: paginas.sel.size ? [...paginas.sel] : null, paginas_mobile: paginas.mob.size ? [...paginas.mob] : null })}>Salvar páginas e telas</Botao>
+                  <Botao variante="secundario" onClick={() => setPaginas({ ...paginas, sel: new Set(), mob: new Set() })}>Liberar todas (pelo papel)</Botao>
+                  <Botao variante="secundario" onClick={() => setPaginas({ ...paginas, sel: new Set(['/app/vigente']), mob: new Set(['/m/vigente']) })}>Só a programação vigente</Botao>
                   <Botao variante="fantasma" onClick={() => setPaginas(null)}>Cancelar</Botao>
                 </div>
               </td>

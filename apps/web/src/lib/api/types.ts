@@ -76,12 +76,12 @@ export type PapelObra = 'admin' | 'planejador' | 'encarregado' | 'leitor' | 'seg
 export interface Obra {
   id: number; codigo: string; nome: string; contrato: string | null; cliente: string | null; ativa: boolean; criado_em: string;
 }
-export interface MinhaObra extends Obra { papel: PapelObra; paginas?: string[] | null; cor?: string | null }
+export interface MinhaObra extends Obra { papel: PapelObra; paginas?: string[] | null; paginas_mobile?: string[] | null; cor?: string | null }
 export interface MarcaObra { cor: string | null; nome_contratada: string | null; nome_contratante: string | null; contratada: boolean; contratante: boolean; versao: number }
 export interface ObraAdmin extends Obra { usuarios: number }
 export interface Acesso {
   id: number; obra_id: number; usuario_id: string; email: string; papel: PapelObra; cracha: string | null;
-  paginas?: string[] | null; concedido_por: string; concedido_em: string;
+  paginas?: string[] | null; paginas_mobile?: string[] | null; concedido_por: string; concedido_em: string;
 }
 export interface ContaAdmin {
   id: string; email: string; roles: string[]; status: string; verificado: boolean; mfa_enabled: boolean;

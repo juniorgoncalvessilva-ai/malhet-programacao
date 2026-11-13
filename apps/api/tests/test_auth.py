@@ -104,3 +104,17 @@ def test_paginas_por_usuario_e_programacao_vigente(client):
     assert r["paginas"] == ["/app/lookahead", "/app/vigente"]
     assert client.put(f"/api/obras/{obra['id']}/acessos/{ac['id']}/paginas", json={"paginas": []}).json()["paginas"] is None
     assert client.get("/api/programacoes/vigente").json() == {"id": None, "revisao": None, "titulo": None}
+
+
+def test_telas_do_celular_por_pessoa(client):
+    """Spec 066: telas do app de campo por pessoa, separadas das páginas do web."""
+    obra = client.get("/api/obras/minhas").json()[0]
+    ac = client.post(f"/api/obras/{obra['id']}/acessos", json={"email": "campo.telas@ex.com", "papel": "encarregado", "cracha": "1",
+                                                                "senha_inicial": "Senha12345abc", "paginas": ["/app/vigente"]}).json()["acesso"]
+    assert ac["paginas_mobile"] is None  # todas as do papel
+    url = f"/api/obras/{obra['id']}/acessos/{ac['id']}/paginas"
+    r = client.put(url, json={"so_mobile": True, "paginas_mobile": ["/m/presenca", "/app/lookahead", "/m/lancar"]}).json()
+    assert r["paginas_mobile"] == ["/m/lancar", "/m/presenca"] and r["paginas"] == ["/app/vigente"]  # o web não mudou
+    r = client.put(url, json={"paginas": ["/app/lookahead"]}).json()
+    assert r["paginas"] == ["/app/lookahead"] and r["paginas_mobile"] == ["/m/lancar", "/m/presenca"]  # o celular não mudou
+    assert client.put(url, json={"so_mobile": True, "paginas_mobile": []}).json()["paginas_mobile"] is None

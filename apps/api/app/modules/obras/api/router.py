@@ -37,6 +37,7 @@ class ObraOut(BaseModel):
 
 class MinhaObraOut(ObraOut):
     paginas: list[str] | None = None  # páginas liberadas (vazio = todas as do papel)
+    paginas_mobile: list[str] | None = None  # telas do celular liberadas (vazio = todas as do papel) — spec 066
     cor: str | None = None  # cor do cliente (marca da obra) no lugar do verde Malhet
     papel: PapelObra
 
@@ -62,6 +63,7 @@ class AcessoOut(BaseModel):
     papel: PapelObra
     cracha: str | None
     paginas: list[str] | None = None
+    paginas_mobile: list[str] | None = None
     concedido_por: str
     concedido_em: datetime
 
@@ -84,10 +86,12 @@ def minhas(s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_
     if u.superadmin:
         obras = s.scalars(select(ObraModel).where(ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
         return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra.ADMIN, cor=cores.get(o.id)) for o in obras]
-    q = (select(ObraModel, AcessoObraModel.papel, AcessoObraModel.paginas).join(AcessoObraModel, AcessoObraModel.obra_id == ObraModel.id)
+    q = (select(ObraModel, AcessoObraModel.papel, AcessoObraModel.paginas, AcessoObraModel.paginas_mobile)
+         .join(AcessoObraModel, AcessoObraModel.obra_id == ObraModel.id)
          .where(AcessoObraModel.usuario_id == u.id, ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
-    return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra(p), paginas=pg or None, cor=cores.get(o.id))
-            for o, p, pg in s.execute(q)]
+    return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra(p), paginas=pg or None, paginas_mobile=pm or None,
+                         cor=cores.get(o.id))
+            for o, p, pg, pm in s.execute(q)]
 
 
 @router.get("/eu")
@@ -158,9 +162,9 @@ async def conceder(obra_id: int, d: AcessoIn, request: Request, s: Session = Dep
     return ConcederResp(acesso=AcessoOut.model_validate(out.acesso), conta_criada=out.conta_criada)
 
 
-def _paginas(paginas: list[str] | None) -> list[str] | None:
-    """Lista de páginas (url do menu, ex.: /app/programacoes). Vazia = todas as do papel."""
-    lista = sorted({p.strip() for p in (paginas or []) if p and p.strip().startswith("/app/")})
+def _paginas(paginas: list[str] | None, prefixo: str = "/app/") -> list[str] | None:
+    """Lista de páginas (url do menu, ex.: /app/programacoes ou /m/lancar). Vazia = todas as do papel."""
+    lista = sorted({p.strip() for p in (paginas or []) if p and p.strip().startswith(prefixo)})
     if len(lista) > 60:
         raise DomainError("páginas demais", "paginas")
     return lista or None
@@ -168,6 +172,8 @@ def _paginas(paginas: list[str] | None) -> list[str] | None:
 
 class PaginasIn(BaseModel):
     paginas: list[str] | None = None
+    paginas_mobile: list[str] | None = None
+    so_mobile: bool = False  # true: muda só as telas do celular (a lista do web fica como está)
 
 
 @router.put("/obras/{obra_id}/acessos/{acesso_id}/paginas", response_model=AcessoOut)
@@ -177,7 +183,12 @@ def paginas(obra_id: int, acesso_id: int, d: PaginasIn, s: Session = Depends(get
     a = s.get(AcessoObraModel, acesso_id)
     if a is None or a.obra_id != obra_id:
         raise NotFoundError("Acesso", acesso_id)
-    a.paginas = _paginas(d.paginas)
+    if d.so_mobile:
+        a.paginas_mobile = _paginas(d.paginas_mobile, "/m/")
+    else:
+        a.paginas = _paginas(d.paginas)
+        if d.paginas_mobile is not None:
+            a.paginas_mobile = _paginas(d.paginas_mobile, "/m/")
     s.flush()
     return a
 
