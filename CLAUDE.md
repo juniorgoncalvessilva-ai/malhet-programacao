@@ -57,7 +57,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e
   soltar/lote (`POST /equipes/membros/lote`), migrar/tirar função, supervisor (líder intermediário, `equipe.supervisor_id`,
   `PUT /equipes/lideranca/definir`) e visibilidade (`src/lib/efetivo/visibilidade.ts`). Spec 052. "+ pessoa"/"+ função" abrem
-  card por cima da tela (`CardIncluir`, `createPortal`, fora do zoom). Spec 056.
+  card por cima da tela (`CardIncluir`, `createPortal`, fora do zoom). Spec 056. Listas de mover/migrar mostram
+  "EQUIPE — Enc. NOME" (`rotuloEquipe`). Spec 057.
 - Setores da obra (`setor_obra`, responsável do efetivo, cor) e `organograma_config` (responsável geral + cores por
   nível); `equipe.setor_id`. Spec 018. Vista por frente (`?vista=frente`): Obra → Setor (dono) → Frente (local) → Área →
   Equipe; frente da equipe = `equipe.frente_codigo` (área/local) ou a área da programação mais recente

@@ -31,13 +31,18 @@ const TIPO_DND = 'application/x-malhet-pessoas';
 
 /** Mexer nas equipes pelo organograma (specs 049 e 052): selecionar, arrastar, mover, tirar e incluir pessoas/funções. */
 export interface EdicaoOrganograma {
-  equipes: { id: number; nome: string }[];
+  equipes: { id: number; nome: string; encarregado?: string | null }[];
   efetivo: Colaborador[];
   selecionadas: Map<string, PessoaRef>;
   alternar: (p: PessoaRef[], marcar?: boolean) => void;
   mover: (itens: PessoaRef[], para: number | null) => Promise<unknown>; // para null = tirar da equipe
   equipesSel: Set<number>;
   alternarEquipe: (id: number) => void;
+}
+
+/** Texto da equipe nas listas de mover/migrar: nome + encarregado, para achar a equipe pelo encarregado (spec 057). */
+export function rotuloEquipe(e: { nome: string; encarregado?: string | null }): string {
+  return e.encarregado ? `${e.nome} — Enc. ${e.encarregado}` : `${e.nome} — sem encarregado`;
 }
 
 /** ids dos nós que, até a profundidade `nivel`, ficam abertos (mostram os filhos). */
@@ -291,10 +296,10 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
       {edicao && refs.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-m-stroke-subtle pt-1 text-left text-[11px]">
           <label className="inline-flex items-center gap-1 text-m-text-secondary"><input type="checkbox" checked={todasMarcadas} onChange={() => edicao.alternar(refs, !todasMarcadas)} /> todas</label>
-          <select aria-label={`${deEquipe ? 'Migrar' : 'Pôr'} a função ${no.titulo}`} value="" className="max-w-[150px] rounded-[6px] border border-m-stroke bg-m-surface-field px-1 py-0.5"
+          <select aria-label={`${deEquipe ? 'Migrar' : 'Pôr'} a função ${no.titulo}`} value="" className="max-w-[190px] rounded-[6px] border border-m-stroke bg-m-surface-field px-1 py-0.5"
             onChange={(e) => { if (e.target.value) edicao.mover(refs, Number(e.target.value)).catch(() => undefined); }}>
             <option value="">{deEquipe ? 'migrar função para…' : 'pôr na equipe…'}</option>
-            {edicao.equipes.filter((x) => !refs.every((r) => r.de === x.id)).map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+            {edicao.equipes.filter((x) => !refs.every((r) => r.de === x.id)).map((x) => <option key={x.id} value={x.id}>{rotuloEquipe(x)}</option>)}
           </select>
           {deEquipe && <button type="button" className="font-semibold text-m-danger" onClick={() => edicao.mover(refs, null).catch(() => undefined)}>tirar função</button>}
         </div>
@@ -449,7 +454,7 @@ function AcoesPessoa({ ref_, edicao }: { ref_: PessoaRef; edicao: EdicaoOrganogr
       <select aria-label={`${ref_.de ? 'Mover' : 'Pôr na equipe'} ${ref_.nome}`} value="" className="w-full rounded-[6px] border border-m-stroke bg-m-surface-field px-1 py-0.5 text-[11px]"
         onChange={(e) => { if (e.target.value) edicao.mover([ref_], Number(e.target.value)).catch(() => undefined); }}>
         <option value="">{ref_.de ? 'mover para…' : 'pôr na equipe…'}</option>
-        {destinos.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+        {destinos.map((e) => <option key={e.id} value={e.id}>{rotuloEquipe(e)}</option>)}
       </select>
       {ref_.de != null && <button type="button" className="font-semibold text-m-danger" onClick={() => edicao.mover([ref_], null).catch(() => undefined)}>Tirar</button>}
     </span>

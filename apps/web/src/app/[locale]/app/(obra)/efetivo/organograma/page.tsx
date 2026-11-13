@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { BuscaEfetivo } from '@/components/Obra/BuscaEfetivo';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
-import { OrganogramaArvore, chavePessoa, type EdicaoOrganograma, type PessoaRef } from '@/components/Obra/OrganogramaArvore';
+import { OrganogramaArvore, chavePessoa, rotuloEquipe, type EdicaoOrganograma, type PessoaRef } from '@/components/Obra/OrganogramaArvore';
 import { Botao, Cabecalho, Campo, Indicador, Painel } from '@/components/Obra/ui';
 import { useEfetivo, useOrganograma } from '@/hooks/programacao/planejamento';
 import { useEquipes } from '@/hooks/programacao/queries';
@@ -64,7 +64,7 @@ export default function OrganogramaPage() {
     } catch (e) { toast.error((e as Error).message); }
   };
   const edicao: EdicaoOrganograma | undefined = editar && pode('planejador') ? {
-    equipes: (equipes.data ?? []).filter((e) => e.ativo).map((e) => ({ id: e.id, nome: e.nome })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true })),
+    equipes: (equipes.data ?? []).filter((e) => e.ativo).map((e) => ({ id: e.id, nome: e.nome, encarregado: e.encarregado_efetivo?.nome || (e.encarregado_nome ?? '').replace(/^\s*\d+\s*::\s*/, '').trim() || null })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true })),
     efetivo: efetivo.data ?? [],
     selecionadas: sel,
     alternar: (ps, marcar) => setSel((m) => {
@@ -148,7 +148,7 @@ export default function OrganogramaPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <b className="text-m-text-primary">{sel.size} pessoa(s) selecionada(s)</b>
                 <select aria-label="Mover as selecionadas para" value={destino} onChange={(e) => setDestino(e.target.value)} className="h-8 rounded-full border border-m-stroke bg-m-surface-field px-3">
-                  <option value="">mover para a equipe…</option>{edicao.equipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                  <option value="">mover para a equipe…</option>{edicao.equipes.map((e) => <option key={e.id} value={e.id}>{rotuloEquipe(e)}</option>)}
                 </select>
                 <Botao disabled={!destino} onClick={() => { mover([...sel.values()], Number(destino)); setDestino(''); }}>Mover</Botao>
                 <Botao variante="secundario" onClick={() => mover([...sel.values()].filter((p) => p.de != null), null)}>Tirar das equipes</Botao>
