@@ -17,6 +17,11 @@
   display: inline-block;
   padding: 1rem;
   transform-origin: top left;
+  /* espessura e cor das linhas (seletor "Linhas"; spec 058) */
+  --linha: 1px;
+  --borda: 1px;
+  --linha-cor: var(--m-stroke);
+  background: var(--m-surface-base);
 }
 
 .arvore,
@@ -47,16 +52,16 @@
   top: 0;
   width: 50%;
   height: 0.75rem;
-  border-top: 1px solid var(--m-stroke);
+  border-top: var(--linha) solid var(--linha-cor);
 }
 
 .no::before {
-  right: 50%;
+  right: calc(50% - var(--linha) / 2);
 }
 
 .no::after {
-  left: 50%;
-  border-left: 1px solid var(--m-stroke);
+  left: calc(50% - var(--linha) / 2);
+  border-left: var(--linha) solid var(--linha-cor);
 }
 
 .no:first-child::before,
@@ -65,8 +70,8 @@
 }
 
 .no:last-child::before {
-  border-top: 1px solid var(--m-stroke);
-  border-right: 1px solid var(--m-stroke);
+  border-top: var(--linha) solid var(--linha-cor);
+  border-right: var(--linha) solid var(--linha-cor);
 }
 
 .no:only-child::before {
@@ -74,10 +79,10 @@
 }
 
 .no:only-child::after {
-  left: 50%;
+  left: calc(50% - var(--linha) / 2);
   width: 0;
   border-top: 0;
-  border-left: 1px solid var(--m-stroke);
+  border-left: var(--linha) solid var(--linha-cor);
 }
 
 .arvore > .no::before,
@@ -86,9 +91,9 @@
 }
 
 .haste {
-  width: 1px;
+  width: var(--linha);
   height: 1.1rem;
-  background: var(--m-stroke);
+  background: var(--linha-cor);
 }
 
 .card {
@@ -96,7 +101,7 @@
   position: relative;
   width: 14rem;
   height: 6.75rem;
-  border: 1px solid var(--m-stroke);
+  border: var(--borda) solid var(--linha-cor);
   border-top: 4px solid var(--cor);
   border-radius: 0.625rem;
   background: color-mix(in srgb, var(--cor) 7%, var(--m-surface-raised));
@@ -187,9 +192,8 @@
 }
 
 .pessoas {
+  /* lista inteira, sem barra de rolagem: a caixa cresce (imprime todos os nomes) */
   margin-top: 0.5rem;
-  max-height: 10rem;
-  overflow-y: auto;
   text-align: left;
 }
 
@@ -208,7 +212,7 @@
 
 .coluna > li + li::before {
   content: "";
-  width: 1px;
+  width: var(--linha);
   height: 0.4rem;
-  background: var(--m-stroke);
+  background: var(--linha-cor);
 }

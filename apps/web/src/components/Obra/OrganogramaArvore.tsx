@@ -1,11 +1,12 @@
 'use client';
 
-import { ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, Minus, Plus, ScanSearch, UserPlus, X } from 'lucide-react';
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, Minus, Plus, ScanSearch, UserPlus, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { Colaborador, CoresOrganograma, NoOrganograma } from '@/lib/api/types';
 import { BuscaEfetivo } from '@/components/Obra/BuscaEfetivo';
+import { ExportarOrganograma, type ConteudoExportacao } from '@/components/Obra/ExportarOrganograma';
 import styles from './OrganogramaArvore.module.css';
 
 const ZOOM_MIN = 0.3;
@@ -28,6 +29,24 @@ const RAMOS_ESPECIAIS = new Set(['Sem equipe', 'Em mobilização', 'Sem setor'])
 export interface PessoaRef { cracha: string; nome: string; de: number | null }
 export const chavePessoa = (p: PessoaRef) => `${p.de ?? 'x'}|${p.cracha}`;
 const TIPO_DND = 'application/x-malhet-pessoas';
+
+/** Espessura das linhas e bordas (tela, apresentação e impressão) — spec 058. */
+const ESPESSURAS = {
+  fina: { rotulo: 'Fina', linha: 1, borda: 1, cor: 'var(--m-stroke)' },
+  media: { rotulo: 'Média', linha: 2, borda: 1.5, cor: 'color-mix(in srgb, var(--m-text-primary) 45%, transparent)' },
+  grossa: { rotulo: 'Grossa', linha: 3, borda: 2, cor: 'color-mix(in srgb, var(--m-text-primary) 60%, transparent)' },
+  extra: { rotulo: 'Extra', linha: 4, borda: 2.5, cor: 'color-mix(in srgb, var(--m-text-primary) 75%, transparent)' },
+} as const;
+type Espessura = keyof typeof ESPESSURAS;
+const CHAVE_ESPESSURA = 'malhet.organograma.linhas';
+
+/** Ids das funções (folhas com pessoas) para abrir os nomes. */
+function folhasComPessoas(raiz: NoOrganograma): Set<string> {
+  const out = new Set<string>();
+  const ir = (no: NoOrganograma) => { if (!no.filhos.length && no.pessoas.length) out.add(no.id); no.filhos.forEach(ir); };
+  ir(raiz);
+  return out;
+}
 
 /** Mexer nas equipes pelo organograma (specs 049 e 052): selecionar, arrastar, mover, tirar e incluir pessoas/funções. */
 export interface EdicaoOrganograma {
@@ -63,9 +82,9 @@ function abertosAte(raiz: NoOrganograma, nivel: number): Set<string> {
  * Árvore do organograma (modelo do Malhet) com ramos recolhíveis, zoom (botões, Ctrl + rolagem, ajustar à tela),
  * arrastar para navegar e tela cheia. Clique numa função para ver as pessoas.
  */
-export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores: coresIn, acoes, porFrente = false, edicao, chaveBusca = '' }: {
+export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores: coresIn, acoes, porFrente = false, edicao, chaveBusca = '', tituloExportacao = 'Organograma da obra' }: {
   raiz: NoOrganograma; ariaLabel: string; expandirTudo?: boolean; cores?: CoresOrganograma; acoes?: React.ReactNode; porFrente?: boolean;
-  edicao?: EdicaoOrganograma; chaveBusca?: string; // nova busca reabre a árvore; recarga dos dados (tempo real) mantém o que está aberto
+  edicao?: EdicaoOrganograma; tituloExportacao?: string; chaveBusca?: string; // nova busca reabre a árvore; recarga dos dados (tempo real) mantém o que está aberto
 }) {
   const cores = { ...CORES_PADRAO, ...coresIn };
   const NIVEIS = porFrente ? NIVEIS_FRENTE : NIVEIS_SETOR;
@@ -80,6 +99,12 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
   const conteudo = useRef<HTMLDivElement>(null);
   const [tam, setTam] = useState({ w: 0, h: 0 });
   const arrasto = useRef<{ x: number; y: number; l: number; t: number } | null>(null);
+  const [menuExpandir, setMenuExpandir] = useState(false);
+  const [espessura, setEspessura] = useState<Espessura>(() => {
+    try { const v = localStorage.getItem(CHAVE_ESPESSURA) as Espessura | null; return v && v in ESPESSURAS ? v : 'fina'; } catch { return 'fina'; }
+  });
+  const trocarEspessura = (v: Espessura) => { setEspessura(v); try { localStorage.setItem(CHAVE_ESPESSURA, v); } catch { /* sem armazenamento */ } };
+  const esp = ESPESSURAS[espessura];
 
   // nova árvore (busca) → reabre no nível escolhido; com busca, abre tudo para mostrar os achados
   useEffect(() => { const n = expandirTudo ? 99 : nivel; setAbertos(abertosAte(raiz, n)); }, [chaveBusca, expandirTudo]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -147,7 +172,20 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
     return () => window.removeEventListener('keydown', esc);
   }, [cheia]);
 
-  const escolherNivel = (n: number) => { setNivel(n); setAbertos(abertosAte(raiz, n)); };
+  const escolherNivel = (n: number) => { setNivel(n); setAbertos(abertosAte(raiz, n)); if (n <= 1) setPessoas(new Set()); };
+  const expandir = (comNomes: boolean) => { escolherNivel(99); setPessoas(comNomes ? folhasComPessoas(raiz) : new Set()); setMenuExpandir(false); };
+  useEffect(() => {
+    if (!menuExpandir) return;
+    const fora = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('[data-menu-expandir]')) setMenuExpandir(false); };
+    window.addEventListener('mousedown', fora);
+    return () => window.removeEventListener('mousedown', fora);
+  }, [menuExpandir]);
+  // exportação: abre a árvore como pedido e devolve como voltar ao que estava na tela
+  const preparar = (c: ConteudoExportacao) => {
+    const antes = { abertos, pessoas };
+    if (c !== 'tela') { setAbertos(abertosAte(raiz, 99)); setPessoas(c === 'nomes' ? folhasComPessoas(raiz) : new Set()); }
+    return () => { setAbertos(antes.abertos); setPessoas(antes.pessoas); };
+  };
   const alternar = (id: string) => setAbertos((a) => { const n = new Set(a); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const alternarPessoas = (id: string) => setPessoas((a) => { const n = new Set(a); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const visiveis = useMemo(() => { let n = 0; const ir = (no: NoOrganograma) => { n++; if (abertos.has(no.id)) no.filhos.forEach(ir); }; ir(raiz); return n; }, [raiz, abertos]);
@@ -162,7 +200,21 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
               className={cn('h-7 rounded-full px-3 text-[12.5px] font-medium', nivel === x.n ? 'bg-m-accent text-white' : 'text-m-text-secondary hover:bg-m-surface-hover')}>{x.rotulo}</button>
           ))}
         </div>
-        <button type="button" className={botao} onClick={() => escolherNivel(99)}><ChevronsUpDown size={14} /> Expandir tudo</button>
+        <div className="relative" data-menu-expandir>
+          <button type="button" className={botao} aria-haspopup="menu" aria-expanded={menuExpandir} onClick={() => setMenuExpandir((m) => !m)}>
+            <ChevronsUpDown size={14} /> Expandir tudo <ChevronDown size={13} />
+          </button>
+          {menuExpandir && (
+            <div role="menu" className="absolute left-0 top-9 z-30 flex w-64 flex-col rounded-m-md border border-m-stroke bg-m-surface-raised p-1 shadow-lg">
+              <button type="button" role="menuitem" className="rounded-[8px] px-3 py-2 text-left text-[12.5px] hover:bg-m-surface-hover" onClick={() => expandir(false)}>
+                <b className="block text-m-text-primary">Só as caixas</b><span className="text-m-text-muted">abre todos os níveis, sem os nomes</span>
+              </button>
+              <button type="button" role="menuitem" className="rounded-[8px] px-3 py-2 text-left text-[12.5px] hover:bg-m-surface-hover" onClick={() => expandir(true)}>
+                <b className="block text-m-text-primary">Com os nomes das pessoas</b><span className="text-m-text-muted">abre tudo e lista as pessoas de cada função</span>
+              </button>
+            </div>
+          )}
+        </div>
         <button type="button" className={botao} onClick={() => escolherNivel(1)}><ChevronsDownUp size={14} /> Recolher tudo</button>
         <span className="text-[12px] text-m-text-muted">{visiveis} caixas visíveis</span>
         <span className="flex items-center gap-2.5 text-[11.5px] text-m-text-secondary" aria-label="Cores dos níveis">
@@ -171,6 +223,13 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
           ))}
         </span>
         {acoes}
+        <label className="inline-flex items-center gap-1.5 text-[12px] text-m-text-secondary">Linhas
+          <select aria-label="Espessura das linhas" value={espessura} onChange={(e) => trocarEspessura(e.target.value as Espessura)}
+            className="h-8 rounded-full border border-m-stroke bg-m-surface-raised px-2 text-[12.5px] text-m-text-primary">
+            {(Object.keys(ESPESSURAS) as Espessura[]).map((k) => <option key={k} value={k}>{ESPESSURAS[k].rotulo} ({ESPESSURAS[k].linha} px)</option>)}
+          </select>
+        </label>
+        <ExportarOrganograma className={botao} alvo={() => conteudo.current} preparar={preparar} tituloPadrao={tituloExportacao} pessoas={raiz.qtd} />
         <div className="ml-auto flex items-center gap-1">
           <button type="button" className={botao} aria-label="Diminuir zoom" disabled={zoom <= ZOOM_MIN} onClick={() => mudarZoom((z) => z - 0.1)}><Minus size={14} /></button>
           <button type="button" className={cn(botao, 'w-16 justify-center tabular-nums')} title="Voltar a 100%" onClick={() => mudarZoom(() => 1)}>{Math.round(zoom * 100)}%</button>
@@ -197,7 +256,8 @@ export function OrganogramaArvore({ raiz, ariaLabel, expandirTudo = false, cores
         onPointerCancel={() => { arrasto.current = null; }}
       >
         <div style={{ width: Math.max(tam.w * zoom, 1), height: Math.max(tam.h * zoom, 1) }} className="mx-auto">
-          <div ref={conteudo} className={styles.conteudo} style={{ transform: `scale(${zoom})` }}>
+          <div ref={conteudo} className={styles.conteudo}
+            style={{ transform: `scale(${zoom})`, '--linha': `${esp.linha}px`, '--borda': `${esp.borda}px`, '--linha-cor': esp.cor } as React.CSSProperties}>
             <ul className={styles.arvore} aria-label={ariaLabel}>
               <Ramo no={raiz} abertos={abertos} alternar={alternar} pessoas={pessoas} alternarPessoas={alternarPessoas} cores={cores} corSetor={null} edicao={edicao} />
             </ul>
@@ -215,6 +275,32 @@ type PropsRamo = {
   edicao?: EdicaoOrganograma;
 };
 
+/** Nomes por coluna dentro da caixa: listas longas viram colunas (a caixa alarga em vez de virar uma tira). */
+const NOMES_POR_COLUNA = 15;
+const colunasDeNomes = (n: number) => Math.min(4, Math.max(1, Math.ceil(n / NOMES_POR_COLUNA)));
+/** Altura aproximada da caixa em "caixas" (uma caixa fechada = 1; cada nome ≈ 0,3). */
+function pesoFolha(f: NoOrganograma, pessoas: Set<string>): number {
+  if (!pessoas.has(f.id) || !f.pessoas.length) return 1;
+  return 1 + Math.ceil(f.pessoas.length / colunasDeNomes(f.pessoas.length)) * 0.3;
+}
+const ALTURA_COLUNA = 10; // até ~10 caixas empilhadas por coluna
+/** Funções empilhadas divididas em colunas de altura parecida, na ordem (ramos longos não viram uma tira). */
+function dividirEmColunas(filhos: NoOrganograma[], pessoas: Set<string>): NoOrganograma[][] {
+  const pesos = filhos.map((f) => pesoFolha(f, pessoas));
+  const total = pesos.reduce((s, x) => s + x, 0);
+  if (total <= ALTURA_COLUNA || filhos.length < 2) return [filhos];
+  const n = Math.min(8, filhos.length, Math.ceil(total / ALTURA_COLUNA));
+  const alvo = total / n;
+  const out: NoOrganograma[][] = [[]];
+  let acc = 0;
+  filhos.forEach((f, i) => {
+    const atual = out[out.length - 1];
+    if (atual.length && acc + pesos[i] / 2 > alvo && out.length < n) { out.push([f]); acc = pesos[i]; return; }
+    atual.push(f); acc += pesos[i];
+  });
+  return out;
+}
+
 function Ramo(props: PropsRamo) {
   const { no, abertos } = props;
   const aberto = abertos.has(no.id);
@@ -230,7 +316,11 @@ function Ramo(props: PropsRamo) {
         <>
           <span className={styles.haste} aria-hidden="true" />
           {empilhar
-            ? <ul className={styles.coluna}>{no.filhos.map((f) => <li key={f.id}><Caixa {...props} corSetor={corFilhos} no={f} /></li>)}</ul>
+            ? (() => {
+              const grupos = dividirEmColunas(no.filhos, props.pessoas);
+              const coluna = (g: NoOrganograma[]) => <ul className={styles.coluna}>{g.map((f) => <li key={f.id}><Caixa {...props} corSetor={corFilhos} no={f} /></li>)}</ul>;
+              return grupos.length === 1 ? coluna(grupos[0]) : <ul>{grupos.map((g) => <li key={g[0].id} className={styles.no}>{coluna(g)}</li>)}</ul>;
+            })()
             : <ul>{no.filhos.map((f) => <Ramo key={f.id} {...props} corSetor={corFilhos} no={f} />)}</ul>}
         </>
       )}
@@ -270,9 +360,10 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
   const refs = edicao && temPessoas ? refsDe(no) : [];
   const deEquipe = refs.length > 0 && refs.every((r) => r.de != null);
   const todasMarcadas = refs.length > 0 && refs.every((r) => edicao!.selecionadas.has(chavePessoa(r)));
+  const colNomes = verPessoas && temPessoas ? colunasDeNomes(no.pessoas.length) : 1;
   return (
     <div className={cn(styles.card, verPessoas && styles.aberta, sobre && 'ring-2 ring-m-accent')} data-tipo={no.tipo}
-      style={{ '--cor': corDaCaixa(no, cores, corSetor) } as React.CSSProperties}
+      style={{ '--cor': corDaCaixa(no, cores, corSetor), ...(colNomes > 1 ? { width: `${14 * colNomes}rem` } : {}) } as React.CSSProperties}
       draggable={refs.length > 0 || undefined}
       onDragStart={refs.length ? (e) => { e.dataTransfer.setData(TIPO_DND, JSON.stringify(refs)); e.dataTransfer.effectAllowed = 'move'; } : undefined}
       onDragOver={recebe ? (e) => { if (e.dataTransfer.types.includes(TIPO_DND)) { e.preventDefault(); setSobre(true); } } : undefined}
@@ -284,7 +375,7 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
         </button>
       ) : <Cartao no={no} />}
       {edicao && no.tipo === 'equipe' && no.ref && (
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-m-stroke-subtle pt-1 text-left text-[11px]">
+        <div data-nao-imprimir className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-m-stroke-subtle pt-1 text-left text-[11px]">
           <label className="inline-flex items-center gap-1 text-m-text-secondary" title="Selecionar a equipe para definir responsável ou supervisor">
             <input type="checkbox" checked={edicao.equipesSel.has(no.ref)} onChange={() => edicao.alternarEquipe(no.ref!)} /> equipe
           </label>
@@ -294,7 +385,7 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
         </div>
       )}
       {edicao && refs.length > 0 && (
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-m-stroke-subtle pt-1 text-left text-[11px]">
+        <div data-nao-imprimir className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-m-stroke-subtle pt-1 text-left text-[11px]">
           <label className="inline-flex items-center gap-1 text-m-text-secondary"><input type="checkbox" checked={todasMarcadas} onChange={() => edicao.alternar(refs, !todasMarcadas)} /> todas</label>
           <select aria-label={`${deEquipe ? 'Migrar' : 'Pôr'} a função ${no.titulo}`} value="" className="max-w-[190px] rounded-[6px] border border-m-stroke bg-m-surface-field px-1 py-0.5"
             onChange={(e) => { if (e.target.value) edicao.mover(refs, Number(e.target.value)).catch(() => undefined); }}>
@@ -305,12 +396,12 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
         </div>
       )}
       {verPessoas && temPessoas && (
-        <ul className={styles.pessoas}>
+        <ul className={styles.pessoas} style={colNomes > 1 ? { columnCount: colNomes, columnGap: '1rem' } : undefined}>
           {no.pessoas.map((p) => {
             const ref = edicao && p.matricula && p.papel !== 'encarregado' ? { cracha: p.matricula, nome: p.nome, de: p.papel === 'membro' ? (p.equipe_id ?? null) : null } : null;
             const marcada = !!ref && edicao!.selecionadas.has(chavePessoa(ref));
             return (
-              <li key={`${p.matricula}-${p.nome}`} className={cn('border-t border-m-stroke-subtle py-1 text-[11px] text-m-text-secondary', ref && 'cursor-grab', marcada && 'bg-m-accent-subtle')}
+              <li key={`${p.matricula}-${p.nome}`} className={cn('break-inside-avoid border-t border-m-stroke-subtle py-1 text-[11px] text-m-text-secondary', ref && 'cursor-grab', marcada && 'bg-m-accent-subtle')}
                 draggable={!!ref || undefined}
                 onDragStart={ref ? (e) => {
                   e.stopPropagation();
@@ -321,8 +412,8 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
                 <span className="flex items-start gap-1.5">
                   {ref && <input type="checkbox" aria-label={`Selecionar ${p.nome}`} className="mt-0.5" checked={marcada} onChange={() => edicao!.alternar([ref], !marcada)} />}
                   <span className="min-w-0">
-                    <span className="block truncate font-medium text-m-text-primary">{p.nome}</span>
-                    <span className="block truncate">{[p.matricula, p.turno, p.papel === 'encarregado' && 'encarregado'].filter(Boolean).join(' · ')}</span>
+                    <span className="block font-medium text-m-text-primary [overflow-wrap:anywhere]">{p.nome}</span>
+                    <span className="block">{[p.matricula, p.turno, p.papel === 'encarregado' && 'encarregado'].filter(Boolean).join(' · ')}</span>
                   </span>
                 </span>
                 {ref && <AcoesPessoa ref_={ref} edicao={edicao!} />}
@@ -332,7 +423,7 @@ function Caixa({ no, abertos, alternar, pessoas, alternarPessoas, cores, corSeto
         </ul>
       )}
       {temFilhos && (
-        <button type="button" className={styles.alternar} aria-expanded={aberto} onClick={() => alternar(no.id)}
+        <button type="button" data-ramo className={styles.alternar} aria-expanded={aberto} onClick={() => alternar(no.id)}
           aria-label={`${aberto ? 'Recolher' : 'Abrir'} ${no.titulo}`} title={aberto ? 'Recolher' : `Abrir ${no.filhos.length} item(ns)`}>
           {aberto ? '−' : `+${no.filhos.length}`}
         </button>
@@ -450,7 +541,7 @@ function Cartao({ no }: { no: NoOrganograma }) {
 function AcoesPessoa({ ref_, edicao }: { ref_: PessoaRef; edicao: EdicaoOrganograma }) {
   const destinos = edicao.equipes.filter((e) => e.id !== ref_.de);
   return (
-    <span className="mt-0.5 flex items-center gap-2 pl-5">
+    <span data-nao-imprimir className="mt-0.5 flex items-center gap-2 pl-5">
       <select aria-label={`${ref_.de ? 'Mover' : 'Pôr na equipe'} ${ref_.nome}`} value="" className="w-full rounded-[6px] border border-m-stroke bg-m-surface-field px-1 py-0.5 text-[11px]"
         onChange={(e) => { if (e.target.value) edicao.mover([ref_], Number(e.target.value)).catch(() => undefined); }}>
         <option value="">{ref_.de ? 'mover para…' : 'pôr na equipe…'}</option>

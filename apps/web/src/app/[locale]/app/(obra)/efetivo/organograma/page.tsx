@@ -171,7 +171,7 @@ export default function OrganogramaPage() {
         {vista === 'frente' && <p className="text-[12.5px] text-m-text-muted">Gerente → dono do setor → responsável → supervisor → frente de trabalho → área → equipes. A frente da equipe vem do cadastro em <Link href="/app/equipes" className="font-semibold text-m-accent underline">Equipes</Link>; sem ela, da área onde a equipe está na programação mais recente.</p>}
         {org.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
         {!org.isLoading && !raiz && <p className="text-sm text-m-text-muted">Ninguém no organograma para essa busca ou visibilidade.</p>}
-        {raiz && <OrganogramaArvore key={vista} chaveBusca={`${q}|${JSON.stringify(filtro)}`} edicao={edicao} porFrente={vista === 'frente'} raiz={raiz} ariaLabel="Organograma da obra" expandirTudo={!!q} cores={org.data?.cores}
+        {raiz && <OrganogramaArvore key={vista} chaveBusca={`${q}|${JSON.stringify(filtro)}`} edicao={edicao} porFrente={vista === 'frente'} raiz={raiz} ariaLabel="Organograma da obra" expandirTudo={!!q} tituloExportacao={vista === 'frente' ? 'Organograma por frente de trabalho' : 'Organograma por setor'} cores={org.data?.cores}
           acoes={<Link href="/app/efetivo/setores" className="inline-flex h-8 items-center gap-1.5 rounded-full border border-m-stroke bg-m-surface-raised px-3 text-[12.5px] font-medium text-m-text-primary hover:bg-m-surface-hover"><Palette size={14} /> Setores e cores</Link>} />}
       </Painel>
     </>
