@@ -118,3 +118,43 @@ def test_telas_do_celular_por_pessoa(client):
     r = client.put(url, json={"paginas": ["/app/lookahead"]}).json()
     assert r["paginas"] == ["/app/lookahead"] and r["paginas_mobile"] == ["/m/lancar", "/m/presenca"]  # o celular não mudou
     assert client.put(url, json={"so_mobile": True, "paginas_mobile": []}).json()["paginas_mobile"] is None
+
+
+def test_conta_que_ja_existia_entra_com_a_senha_do_admin(client, monkeypatch):
+    """Spec 068: conta que já existia (cadastro anterior, sem confirmar o e-mail) recebe a senha digitada no acesso e entra;
+    o admin de uma obra não redefine a senha de quem tem acesso a outra obra; "Alterar" não apaga as páginas."""
+    obra_a = int(client.headers.pop("X-Obra-Id"))
+    monkeypatch.setattr(get_settings(), "auth_disabled", False)
+    contas = ContasAuthKit(app.state.auth)
+    asyncio.run(garantir_superadmin(contas, "super@obra.com", "SuperSenha123"))
+    sa = _login(client, "super@obra.com", "SuperSenha123")
+    # a pessoa se cadastrou sozinha e nunca confirmou o e-mail
+    r = client.post("/api/auth/register", json={"email": "ja.existia@obra.com", "password": "OutraSenha999", "locale": "pt-BR"})
+    assert r.status_code in (200, 201), r.text
+    assert client.post("/api/auth/login", json={"email": "ja.existia@obra.com", "password": "OutraSenha999"}).status_code == 403
+    url = f"/api/obras/{obra_a}/acessos"
+    r = client.post(url, headers=sa, json={"email": "ja.existia@obra.com", "papel": "leitor"})
+    assert r.status_code == 422 and "não confirmou" in r.text
+    r = client.post(url, headers=sa, json={"email": "Ja.Existia@obra.com ", "papel": "leitor", "senha_inicial": "SenhaNova12345",
+                                           "paginas": ["/app/lookahead"]})
+    assert r.status_code == 201, r.text
+    assert r.json()["conta_criada"] is False and r.json()["senha_redefinida"] is True
+    assert client.post("/api/auth/login", json={"email": "ja.existia@obra.com", "password": "SenhaNova12345"}).status_code == 200
+    # "Alterar" (papel) sem mandar páginas mantém as páginas liberadas
+    r = client.post(url, headers=sa, json={"email": "ja.existia@obra.com", "papel": "planejador"}).json()
+    assert r["acesso"]["paginas"] == ["/app/lookahead"] and r["senha_redefinida"] is False
+
+    # admin da obra B não redefine a senha de quem também está na obra A (que ele não administra)
+    obra_b = client.post("/api/admin/obras", headers=sa, json={"codigo": "B2", "nome": "Obra B"}).json()["id"]
+    client.post(f"/api/obras/{obra_b}/acessos", headers=sa, json={"email": "adm.b@obra.com", "papel": "admin", "senha_inicial": "AdminB12345"})
+    adm_b = _login(client, "adm.b@obra.com", "AdminB12345")
+    r = client.post(f"/api/obras/{obra_b}/acessos", headers=adm_b, json={"email": "ja.existia@obra.com", "papel": "leitor", "senha_inicial": "Invasor12345"})
+    assert r.status_code == 422 and "super admin" in r.text
+    assert client.post("/api/auth/login", json={"email": "ja.existia@obra.com", "password": "SenhaNova12345"}).status_code == 200
+    # mas libera o acesso sem mexer na senha
+    assert client.post(f"/api/obras/{obra_b}/acessos", headers=adm_b, json={"email": "ja.existia@obra.com", "papel": "leitor"}).status_code == 201
+    # e redefine a de quem só está nas obras dele
+    client.post(f"/api/obras/{obra_b}/acessos", headers=adm_b, json={"email": "so.b@obra.com", "papel": "leitor", "senha_inicial": "SoB1234567"})
+    r = client.post(f"/api/obras/{obra_b}/acessos", headers=adm_b, json={"email": "so.b@obra.com", "papel": "leitor", "senha_inicial": "SoBNova12345"})
+    assert r.json()["senha_redefinida"] is True
+    assert client.post("/api/auth/login", json={"email": "so.b@obra.com", "password": "SoBNova12345"}).status_code == 200

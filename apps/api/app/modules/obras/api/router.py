@@ -71,6 +71,7 @@ class AcessoOut(BaseModel):
 class ConcederResp(BaseModel):
     acesso: AcessoOut
     conta_criada: bool
+    senha_redefinida: bool = False
 
 
 def _contas(request: Request) -> ContasAuthKit:
@@ -156,10 +157,12 @@ async def conceder(obra_id: int, d: AcessoIn, request: Request, s: Session = Dep
                    u: UsuarioAtual = Depends(usuario_atual)):
     _admin_da_obra(s, u, obra_id)
     out = await conceder_acesso(s, _contas(request), obra_id,
-                                ConcederIn(d.email, d.papel, d.cracha, d.senha_inicial), u.id)
-    out.acesso.paginas = _paginas(d.paginas)
+                                ConcederIn(d.email, d.papel, d.cracha, d.senha_inicial), u.id, superadmin=u.superadmin)
+    if d.paginas is not None:  # "Alterar" (papel/crachá/senha) não apaga as páginas liberadas
+        out.acesso.paginas = _paginas(d.paginas)
     s.flush()
-    return ConcederResp(acesso=AcessoOut.model_validate(out.acesso), conta_criada=out.conta_criada)
+    return ConcederResp(acesso=AcessoOut.model_validate(out.acesso), conta_criada=out.conta_criada,
+                        senha_redefinida=out.senha_redefinida)
 
 
 def _paginas(paginas: list[str] | None, prefixo: str = "/app/") -> list[str] | None:

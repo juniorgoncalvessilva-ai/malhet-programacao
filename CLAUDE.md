@@ -146,7 +146,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Obra corrente: `useObra()` (`src/lib/obra/ObraProvider.tsx`): obras, papel, `pode('planejador')`, superadmin,
   `podeVer(url)` (páginas liberadas por pessoa em `acesso_obra.paginas`; a Programação vigente `/app/vigente` fica sempre
   aberta). Cabeçalhos sem descrição (espaço). Acessos e usuários unificados em `/app/acessos`. Spec 033. Celular por pessoa: `acesso_obra.paginas_mobile`,
-  `podeVerMobile`, telas em `src/components/Mobile/menu.ts` (`MENU_MOBILE`; Início e Programação sempre). Spec 066.
+  `podeVerMobile`, telas em `src/components/Mobile/menu.ts` (`MENU_MOBILE`; Início e Programação sempre). Spec 066. Liberar acesso de
+  conta existente com senha = redefine (`redefinir_senha`; admin da obra só de quem está só nas obras dele). Spec 068.
   `useApi()` já manda o `X-Obra-Id`; trocar de obra remonta as telas. Esconda ações que o papel não permite.
 - **Memória de cálculo**: todo número calculado na tela usa `<Calculado>` (`components/Obra/Calculado.tsx`) e abre a
   conta + fontes (origem e linha/campo). Backend: `app/shared/memoria.py` (`Memoria`, `Fonte`, `pacote`); CPU com linha do

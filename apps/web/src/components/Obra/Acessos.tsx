@@ -34,11 +34,13 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
   const acessos = useQuery({ queryKey: chave, queryFn: () => api.get<Acesso[]>(`/obras/${obraId}/acessos`) });
   const [form, setForm] = useState(vazio);
   const conceder = useMutation({
-    mutationFn: () => api.post<{ conta_criada: boolean }>(`/obras/${obraId}/acessos`, {
+    mutationFn: () => api.post<{ conta_criada: boolean; senha_redefinida: boolean }>(`/obras/${obraId}/acessos`, {
       email: form.email, papel: form.papel, cracha: form.cracha || null, senha_inicial: form.senha_inicial || null,
     }),
     onSuccess: (r) => {
-      toast.success(r.conta_criada ? `Conta criada e acesso liberado para ${form.email}` : `Acesso de ${form.email} atualizado`);
+      toast.success(r.conta_criada ? `Conta criada e acesso liberado para ${form.email}`
+        : r.senha_redefinida ? `Acesso de ${form.email} atualizado e senha redefinida: entra com a senha que você digitou`
+          : `Acesso de ${form.email} atualizado — a conta já existia: entra com a senha que já tinha`, { duration: 8000 });
       setForm(vazio);
       qc.invalidateQueries({ queryKey: chave });
       qc.invalidateQueries({ queryKey: ['admin-usuarios'] });
@@ -134,11 +136,11 @@ export function AcessosDaObra({ obraId, obraNome }: { obraId: number; obraNome: 
         </Selecao>
         <Campo rotulo={form.papel === 'encarregado' ? 'Crachá Simova (obrigatório)' : 'Crachá Simova'} value={form.cracha}
           required={form.papel === 'encarregado'} onChange={(e) => setForm({ ...form, cracha: e.target.value })} />
-        <Campo rotulo="Senha inicial (só para conta nova)" type="password" autoComplete="new-password" placeholder="10+ caracteres, letra e número"
+        <Campo rotulo="Senha (conta nova ou redefinir)" type="password" autoComplete="new-password" placeholder="10+ caracteres, letra e número"
           value={form.senha_inicial} onChange={(e) => setForm({ ...form, senha_inicial: e.target.value })} />
         <div className="flex flex-wrap items-center gap-3 md:col-span-2 xl:col-span-4">
           <Botao type="submit" disabled={conceder.isPending}><UserPlus size={16} /> Liberar acesso</Botao>
-          <span className="text-xs text-m-text-muted">E-mail sem conta: a conta é criada já confirmada com a senha inicial. Passe a senha à pessoa por um canal seguro.</span>
+          <span className="text-xs text-m-text-muted">E-mail sem conta: a conta é criada já confirmada com esta senha. Conta que já existe: com a senha preenchida, ela passa a valer (redefine e libera o e-mail não confirmado); em branco, a pessoa entra com a senha que já tinha. Passe a senha por um canal seguro.</span>
         </div>
         <div className="md:col-span-2 xl:col-span-4"><Erro erro={conceder.error} /></div>
       </form>
