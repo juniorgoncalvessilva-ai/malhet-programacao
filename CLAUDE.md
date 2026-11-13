@@ -108,6 +108,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `/m/acoes` (`components/Auditoria/`, `src/lib/auditorias`). Spec 064.
   Offline (spec 072): fila genérica no aparelho (`src/lib/offline/{db,fila}.ts`, `SincronizarFila`, `registrarEnvio`) — grava tudo
   antes de enviar; `POST /auditorias/registros/completo` (tudo ou nada, `id_local` idempotente); listas com `comCopia`; SW `aquecer`.
+- Controle preventivo — etilômetro (`preventivos/`, spec 073): faixas configuráveis (`domain/etilometro.py`), aparelhos com
+  calibração, evento (fotos aparelho/calibração, responsável assina com crachá no início e no fim) e testes assinados pelo
+  colaborador (rosto/crachá/tela, `components/Preventivos/Assinar.tsx`), contraprova com cronômetro; tudo offline pela fila
+  (tipo `etilometro`). Celular `/m/preventivos/etilometro`, web `/app/preventivos`. Leitores em `components/Mobile/Leitores.tsx`.
 - Cronograma segue a estrutura do Primavera: `atividade_cronograma.wbs_niveis` (nome, código, ordem por nível) e
   `ordem_p6`; listas e linhas da programação ordenam por ela. Spec 013.
 - Previsto pela capacidade × manual (encarregado): `programacao_linha.modo_previsto` (capacidade|manual|ajustado),

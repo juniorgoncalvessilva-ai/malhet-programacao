@@ -19,6 +19,7 @@ export interface Usuario {
 
 interface Resposta<T = Record<string, unknown>> {
   ok: boolean;
+  status?: number;
   message?: string;
   message_key?: string;
   errors?: { key: string; field?: string | null }[];
@@ -54,7 +55,7 @@ async function chamar<T>(path: string, init: RequestInit = {}): Promise<Resposta
   if (init.body) headers.set('Content-Type', 'application/json');
   const res = await fetch(`${API_URL}/auth${path}`, { ...init, headers, credentials: 'include' });
   const body = (await res.json().catch(() => ({ ok: false, message: res.statusText }))) as Resposta<T>;
-  return { ...body, ok: res.ok && body.ok !== false };
+  return { ...body, ok: res.ok && body.ok !== false, status: res.status };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -77,6 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!csrf()) return null;
     renovando.current ??= (async () => {
       const r = await chamar<{ access_token: string }>('/refresh', { method: 'POST', headers: { 'X-CSRF-Token': csrf() } });
+      // servidor fora/reiniciando (5xx, deploy): é como estar sem internet — não derruba a sessão do aparelho (spec 073)
+      if ((r.status ?? 0) >= 500) throw new Error('servidor indisponível');
       token.current = r.ok ? r.data?.access_token ?? null : null;
       if (!token.current) setUsuario(null);
       return token.current;

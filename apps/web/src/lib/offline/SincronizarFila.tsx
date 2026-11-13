@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useApi } from '@/hooks/programacao/useApi';
 import '@/lib/auditorias/fila';
+import '@/lib/preventivos';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { itensDaFila, processarFila } from '@/lib/offline/fila';
 

@@ -9,7 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.core.auth import ContextoObra, ler, planejar, programar
+from app.core.auth import ContextoObra, ler, negar, planejar, programar
+from app.modules.obras.domain.obra import PapelObra
 from app.core.db import get_session
 from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.equipes.infra.models import EquipeModel
@@ -39,8 +40,15 @@ def _chaves(c: ColaboradorModel) -> list[str]:
     return [x for x in (c.cracha, c.matricula) if x]
 
 
+async def campo(c: ContextoObra = Depends(ler)) -> ContextoObra:
+    """Base de pessoas no aparelho: quem lê presença (encarregado+) e a segurança (etilômetro, spec 073)."""
+    if not (c.papel.pode(PapelObra.ENCARREGADO) or c.papel == PapelObra.SEGURANCA):
+        raise negar("seu papel não lê crachás")
+    return c
+
+
 @router.get("/base")
-def base(s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+def base(s: Session = Depends(get_session), c: ContextoObra = Depends(campo)):
     """Tudo o que o celular precisa para ler sem internet: pessoas (com equipe, códigos e rosto) e equipes."""
     por, equipes = _equipe_por_pessoa(s, c.obra_id)
     ids = {i.colaborador_id: i for i in s.scalars(select(IdentificacaoModel).where(IdentificacaoModel.obra_id == c.obra_id))}
