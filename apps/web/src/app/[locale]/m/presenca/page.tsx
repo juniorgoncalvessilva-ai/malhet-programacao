@@ -105,7 +105,8 @@ export default function PresencaPage() {
                 {pr.hoje.slice(0, 30).map((l) => (
                   <li key={l.id_local} className="flex min-h-[48px] items-center gap-3 border-b border-m-stroke-subtle last:border-0">
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-m-accent-strong text-[11px] font-semibold text-m-on-accent">{iniciais(l.nome)}</span>
-                    <span className="min-w-0 flex-1 truncate text-[14px]">{l.nome}</span>
+                    <span className="flex min-w-0 flex-1 flex-col"><span className="truncate text-[14px]">{l.nome}</span>
+                      {l.valida === false && <span className="truncate text-[11.5px] font-semibold text-m-warning">duplicada · vale a de {l.hora_valida ? hora(l.hora_valida) : '—'}{l.outro_celular ? ' (outro celular)' : ''}</span>}</span>
                     <span className="text-[11.5px] text-m-text-muted">{MEIO[l.meio]}</span>
                     <span className={`text-[13px] font-semibold tabular-nums ${l.erro ? 'text-m-danger' : l.enviada ? 'text-m-accent' : 'text-m-warning'}`} title={l.erro ?? (l.enviada ? 'enviada' : 'na fila')}>{hora(l.hora)}{l.enviada ? '' : ' ·'}</span>
                   </li>
@@ -140,7 +141,7 @@ function Retorno({ r, equipes }: { r: Resultado | null; equipes: Map<number, { n
           <>
             <span className="truncate text-[17px] font-bold">{r.pessoa.nome}</span>
             <span className="truncate text-[13px] opacity-90">
-              {r.tipo === 'ok' ? `Presente ${hora(r.hora)}` : `Já registrado às ${hora(r.hora)}`}
+              {r.tipo === 'ok' ? `Presente ${hora(r.hora)}` : `Já registrado às ${hora(r.hora)}${r.outro ? ' por outro celular' : ''}`}
               {r.pessoa.equipe_id ? ` · ${equipes.get(r.pessoa.equipe_id)?.nome ?? ''}` : ' · sem equipe'}{r.pessoa.funcao ? ` · ${r.pessoa.funcao}` : ''}
             </span>
           </>

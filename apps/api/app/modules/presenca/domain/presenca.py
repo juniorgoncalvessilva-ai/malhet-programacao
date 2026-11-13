@@ -61,6 +61,11 @@ class Leitura:
             raise DomainError("hora da leitura fora do dia informado", "hora")
 
 
+def validas(leituras: list[tuple[int, datetime]]) -> int | None:
+    """Entre as leituras de uma pessoa no dia (id, hora), a válida é a mais cedo (empate: a que chegou primeiro)."""
+    return min(leituras, key=lambda x: (x[1], x[0]))[0] if leituras else None
+
+
 def primeiras_do_dia(leituras: list[tuple[int, datetime, str]]) -> dict[int, tuple[datetime, str, int]]:
     """colaborador → (primeira hora, meio dela, nº de leituras) — presença do dia."""
     out: dict[int, tuple[datetime, str, int]] = {}

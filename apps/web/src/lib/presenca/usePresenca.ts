@@ -5,13 +5,14 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { codigoLido } from '@/lib/presenca/leitores';
 import { useObra } from '@/lib/obra/ObraProvider';
 import {
-  type BasePresenca, type LeituraLocal, type Meio, type PessoaBase, guardarLeitura, guardarVinculo, hojeLocal, idLocal, leiturasDoDia,
+  type BasePresenca, type LeituraLocal, type Meio, type PessoaBase, type PresencaRemota, guardarLeitura, guardarVinculo, hojeLocal, idLocal,
+  lerRemotos, leiturasDoDia, salvarRemotos,
   lerBase, limparAntigas, normalizarCodigo, pendentes, salvarBase, sincronizar,
 } from '@/lib/presenca/offline';
 
 export type Resultado =
   | { tipo: 'ok'; pessoa: PessoaBase; hora: string; meio: Meio }
-  | { tipo: 'repetido'; pessoa: PessoaBase; hora: string }
+  | { tipo: 'repetido'; pessoa: PessoaBase; hora: string; outro?: boolean }
   | { tipo: 'desconhecido'; codigo: string; meio: Meio; nfc?: string | null };
 
 /** Estado da presença do dia no aparelho: base offline, leituras de hoje, fila e sincronização (spec 063). */
@@ -25,6 +26,7 @@ export function usePresenca() {
   const [hoje, setHoje] = useState<LeituraLocal[]>([]);
   const [fila, setFila] = useState(0);
   const [online, setOnline] = useState(true);
+  const [remotos, setRemotos] = useState<PresencaRemota[]>([]);
   const data = hojeLocal();
   const post = api.post as <T>(p: string, b: unknown) => Promise<T>;
 
@@ -32,6 +34,7 @@ export function usePresenca() {
     if (!obraId) return;
     setHoje(await leiturasDoDia(obraId, data));
     setFila((await pendentes(obraId)).length);
+    setRemotos(await lerRemotos(obraId, data));
   }, [obraId, data]);
 
   const baixarBase = useCallback(async () => {
@@ -48,8 +51,10 @@ export function usePresenca() {
   const enviar = useCallback(async () => {
     if (!obraId) return;
     await sincronizar(post, obraId);
+    // presenças já lidas por outros celulares (spec 069): avisa na hora e não registra de novo
+    try { await salvarRemotos(obraId, data, await api.get<PresencaRemota[]>(`/presenca/hoje?data=${data}`)); } catch { /* sem rede */ }
     await recarregar();
-  }, [post, obraId, recarregar]);
+  }, [post, api, obraId, data, recarregar]);
 
   useEffect(() => {
     if (!obraId) return;
@@ -79,12 +84,22 @@ export function usePresenca() {
     }
     return { cod, nfc, id };
   }, [base]);
-  const presentes = useMemo(() => new Map(hoje.map((l) => [l.colaborador_id, l])), [hoje]);
+  // presentes = o que já está no servidor (todos os celulares) + as leituras deste celular que não ficaram duplicadas
+  const presentes = useMemo(() => {
+    const m = new Map<number, { hora: string; meio: string; outro: boolean }>();
+    for (const r of remotos) m.set(r.colaborador_id, { hora: r.hora, meio: r.meio, outro: !hoje.some((l) => l.id_local === r.id_local) });
+    for (const l of hoje) {
+      if (l.valida === false) continue;
+      const ja = m.get(l.colaborador_id);
+      if (!ja || l.hora < ja.hora) m.set(l.colaborador_id, { hora: l.hora, meio: l.meio, outro: false });
+    }
+    return m;
+  }, [hoje, remotos]);
   const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const registrar = useCallback(async (p: PessoaBase, meio: Meio): Promise<Resultado> => {
     const ja = presentes.get(p.id);
-    if (ja) return { tipo: 'repetido', pessoa: p, hora: ja.hora };
+    if (ja) return { tipo: 'repetido', pessoa: p, hora: ja.hora, outro: ja.outro };
     const agora = new Date();
     const l: LeituraLocal = { id_local: idLocal(), obra_id: obraId, colaborador_id: p.id, nome: p.nome, data, hora: agora.toISOString(), meio, enviada: false };
     await guardarLeitura(l);

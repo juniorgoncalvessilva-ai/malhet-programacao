@@ -59,3 +59,25 @@ def test_sincronizar_e_presenca_do_dia(client):
     assert not pes[srv]["presente"] and pes[enc]["papel"] == "encarregado"
     assert e["hh_disponivel"] == round(2 * e["jornada"], 2)
     assert client.get("/api/presenca/dia", params={"data": "2026-11-13"}).json()["presentes"] == 0
+
+
+def test_duas_leituras_da_mesma_pessoa_vale_a_mais_cedo(client):
+    """Spec 069: dois celulares leem a mesma pessoa; o que estava sem internet sobe depois, mas leu mais cedo — vale ele."""
+    enc, ped, srv, eq = _montar(client)
+    a = {"id_local": "celA-0000001", "colaborador_id": ped, "data": "2026-11-12", "hora": "2026-11-12T07:05:00-03:00", "meio": "nfc"}
+    r = client.post("/api/presenca/leituras", json={"leituras": [a]}).json()
+    assert r["resultados"] == [{"id_local": "celA-0000001", "valida": True, "hora_valida": r["resultados"][0]["hora_valida"], "outro_celular": False}]
+    assert [x["colaborador_id"] for x in client.get("/api/presenca/hoje", params={"data": "2026-11-12"}).json()] == [ped]
+    # celular B estava sem rede e leu às 07:01: ao sincronizar, a dele vale e a do A vira duplicada
+    b = {**a, "id_local": "celB-0000001", "hora": "2026-11-12T07:01:00-03:00", "meio": "qr"}
+    r = client.post("/api/presenca/leituras", json={"leituras": [b]}).json()
+    assert r["resultados"][0]["valida"] is True and r["resultados"][0]["hora_valida"].startswith("2026-11-12T10:01")
+    # celular C leu às 07:30: duplicada, e ele fica sabendo que a válida é de outro celular
+    c = {**a, "id_local": "celC-0000001", "hora": "2026-11-12T07:30:00-03:00"}
+    r = client.post("/api/presenca/leituras", json={"leituras": [c]}).json()
+    assert r["resultados"] == [{"id_local": "celC-0000001", "valida": False, "hora_valida": r["resultados"][0]["hora_valida"], "outro_celular": True}]
+    hoje = client.get("/api/presenca/hoje", params={"data": "2026-11-12"}).json()
+    assert [(x["colaborador_id"], x["id_local"]) for x in hoje] == [(ped, "celB-0000001")]
+    p = next(x for e in client.get("/api/presenca/dia", params={"data": "2026-11-12"}).json()["equipes"] if e["equipe_id"] == eq
+             for x in e["pessoas"] if x["id"] == ped)
+    assert p["leituras"] == 3 and p["meio"] == "qr" and p["hora"].startswith("2026-11-12T10:01")

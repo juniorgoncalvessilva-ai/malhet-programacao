@@ -21,7 +21,11 @@ export type Meio = 'nfc' | 'qr' | 'codigo' | 'facial' | 'manual';
 export interface LeituraLocal {
   id_local: string; obra_id: number; colaborador_id: number; nome: string; data: string; hora: string; meio: Meio;
   enviada: boolean; erro?: string | null;
+  /** Spec 069: depois de enviada — vale a leitura mais cedo da pessoa no dia (de qualquer celular). */
+  valida?: boolean; hora_valida?: string; outro_celular?: boolean;
 }
+/** Presença já registrada no servidor por qualquer celular (a leitura válida do dia). */
+export interface PresencaRemota { colaborador_id: number; hora: string; meio: Meio; id_local: string }
 
 const NOME = 'malhet-campo';
 let conexao: Promise<IDBDatabase> | null = null;
@@ -109,6 +113,13 @@ async function enviarVinculos(post: Post, obraId: number): Promise<void> {
   await req((await loja('kv', 'readwrite')).put(resta, `vinculos:${obraId}`));
 }
 
+export async function lerRemotos(obraId: number, data: string): Promise<PresencaRemota[]> {
+  return ((await req((await loja('kv', 'readonly')).get(`remotos:${obraId}:${data}`))) as PresencaRemota[] | undefined) ?? [];
+}
+export async function salvarRemotos(obraId: number, data: string, lista: PresencaRemota[]): Promise<void> {
+  await req((await loja('kv', 'readwrite')).put(lista, `remotos:${obraId}:${data}`));
+}
+
 export const idLocal = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 export const hojeLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 export const normalizarCodigo = (v: string) => v.replace(/[\s:\-]/g, '').toUpperCase();
@@ -125,12 +136,14 @@ export function sincronizar(post: Post, obraId: number): Promise<number> {
       for (;;) {
         const fila = (await pendentes(obraId)).slice(0, 200);
         if (!fila.length || (typeof navigator !== 'undefined' && navigator.onLine === false)) break;
-        const r = await post<{ aceitas: number; repetidas: number; erros: { id_local: string; erro: string }[] }>('/presenca/leituras', {
+        const r = await post<{ aceitas: number; repetidas: number; erros: { id_local: string; erro: string }[];
+          resultados?: { id_local: string; valida: boolean; hora_valida: string; outro_celular: boolean }[] }>('/presenca/leituras', {
           leituras: fila.map(({ id_local, colaborador_id, data, hora, meio }) => ({ id_local, colaborador_id, data, hora, meio, dispositivo: navigator.userAgent.slice(0, 120) })),
         });
         const comErro = new Map(r.erros.map((e) => [e.id_local, e.erro]));
         await marcar(fila.filter((l) => !comErro.has(l.id_local)).map((l) => l.id_local), { enviada: true });
         for (const [id, erro] of comErro) await marcar([id], { erro });
+        for (const x of r.resultados ?? []) await marcar([x.id_local], { valida: x.valida, hora_valida: x.hora_valida, outro_celular: x.outro_celular });
         ok += r.aceitas + r.repetidas;
         if (fila.length < 200) break;
       }

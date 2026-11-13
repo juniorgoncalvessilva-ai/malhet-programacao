@@ -8,7 +8,7 @@ import { Cabecalho, Campo, Indicador, Painel, Pilula } from '@/components/Obra/u
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 
-interface PessoaDia { id: number; nome: string; matricula: string | null; funcao: string | null; papel: string; presente: boolean; hora: string | null; meio: string | null }
+interface PessoaDia { id: number; nome: string; matricula: string | null; funcao: string | null; papel: string; presente: boolean; hora: string | null; meio: string | null; leituras?: number }
 interface LinhaDia {
   id: number; codigo: string; atividade: string; area: string; unidade: string | null; previsto: number;
   capacidade_programada: number | null; capacidade_presentes: number | null; capacidade_un_dia_presentes: number | null; fator_dia: number; gargalo: string | null;
@@ -119,7 +119,7 @@ export default function PresencaDiaPage() {
                 {e.pessoas.map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-2 border-b border-m-stroke-subtle py-1">
                     <span className="min-w-0 truncate"><b className={p.presente ? 'text-m-text-primary' : 'text-m-text-muted'}>{p.nome}</b> <span className="text-[12px] text-m-text-muted">{[p.funcao, p.papel === 'encarregado' && 'encarregado'].filter(Boolean).join(' · ')}</span></span>
-                    <span className={`shrink-0 text-[12px] font-semibold ${p.presente ? 'text-m-success' : 'text-m-danger'}`}>{p.presente ? `${new Date(p.hora!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · ${MEIO[p.meio ?? ''] ?? p.meio}` : 'ausente'}</span>
+                    <span className={`shrink-0 text-[12px] font-semibold ${p.presente ? 'text-m-success' : 'text-m-danger'}`}>{p.presente ? `${new Date(p.hora!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · ${MEIO[p.meio ?? ''] ?? p.meio}${(p.leituras ?? 1) > 1 ? ` · ${p.leituras} leituras (vale a 1ª)` : ''}` : 'ausente'}</span>
                   </li>
                 ))}
               </ul>

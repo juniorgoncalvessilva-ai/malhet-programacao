@@ -14,7 +14,7 @@ from app.core.db import get_session
 from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.presenca.domain.presenca import (DISTANCIA_MAX, Leitura, normalizar_codigo, primeiras_do_dia,
-                                                  validar_descritor)
+                                                  validar_descritor, validas)
 from app.modules.presenca.infra.models import IdentificacaoModel, LeituraPresencaModel
 from app.shared.errors import DomainError, NotFoundError
 
@@ -81,6 +81,7 @@ def sincronizar(d: LeiturasIn, s: Session = Depends(get_session), c: ContextoObr
         ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.id.in_({x.colaborador_id for x in d.leituras})))}
     por, _ = _equipe_por_pessoa(s, c.obra_id)
     aceitas, repetidas, erros = 0, 0, []
+    tocadas: set[tuple[int, date]] = set()
     for x in d.leituras:
         try:
             lt = Leitura(x.id_local, x.colaborador_id, x.data, x.hora, x.meio)
@@ -100,8 +101,34 @@ def sincronizar(d: LeiturasIn, s: Session = Depends(get_session), c: ContextoObr
             aceitas += 1
         else:
             repetidas += 1
+        tocadas.add((p.id, lt.data))
     s.flush()
-    return {"aceitas": aceitas, "repetidas": repetidas, "erros": erros}
+    # duplicidade entre celulares (spec 069): por pessoa e dia, só a leitura mais cedo vale
+    resultados = []
+    for cid, dia_ in tocadas:
+        todas = list(s.scalars(select(LeituraPresencaModel).where(LeituraPresencaModel.obra_id == c.obra_id,
+                                                                  LeituraPresencaModel.colaborador_id == cid, LeituraPresencaModel.data == dia_)))
+        vid = validas([(x.id, x.hora) for x in todas])
+        valida = next(x for x in todas if x.id == vid)
+        for x in todas:
+            x.valida = x.id == vid
+        enviados = {y.id_local for y in d.leituras if y.colaborador_id == cid and y.data == dia_}
+        for x in todas:
+            if x.id_local in enviados:
+                resultados.append({"id_local": x.id_local, "valida": x.valida, "hora_valida": valida.hora.isoformat(),
+                                   "outro_celular": valida.id_local not in enviados})
+    s.flush()
+    return {"aceitas": aceitas, "repetidas": repetidas, "erros": erros, "resultados": resultados}
+
+
+@router.get("/hoje")
+def hoje(data: date | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Presenças válidas do dia já no servidor (de todos os celulares): o celular baixa para avisar "já registrado por
+    outro celular" na hora da leitura."""
+    d = data or date.today()
+    return [{"colaborador_id": x.colaborador_id, "hora": x.hora.isoformat(), "meio": x.meio, "id_local": x.id_local}
+            for x in s.scalars(select(LeituraPresencaModel).where(LeituraPresencaModel.obra_id == c.obra_id,
+                                                                  LeituraPresencaModel.data == d, LeituraPresencaModel.valida.is_(True)))]
 
 
 @router.get("/dia")
@@ -109,7 +136,7 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
     """Presença do dia por equipe e a capacidade produtiva com os presentes, linha a linha da programação do dia."""
     d = data or date.today()
     lt = primeiras_do_dia([(x.colaborador_id, x.hora, x.meio) for x in s.scalars(select(LeituraPresencaModel).where(
-        LeituraPresencaModel.obra_id == c.obra_id, LeituraPresencaModel.data == d))])
+        LeituraPresencaModel.obra_id == c.obra_id, LeituraPresencaModel.data == d))])  # 3º item: nº de leituras (duplicadas)
     por, equipes = _equipe_por_pessoa(s, c.obra_id)
     pessoas = {p.id: p for p in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id))}
     por_chave = {k: p for p in pessoas.values() for k in _chaves(p)}
@@ -118,7 +145,8 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
     def pessoa(p: ColaboradorModel, papel: str) -> dict:
         h = lt.get(p.id)
         return {"id": p.id, "nome": p.nome, "matricula": p.matricula, "funcao": p.funcao, "papel": papel,
-                "presente": h is not None, "hora": h[0].isoformat() if h else None, "meio": h[1] if h else None}
+                "presente": h is not None, "hora": h[0].isoformat() if h else None, "meio": h[1] if h else None,
+                "leituras": h[2] if h else 0}
 
     saida_eq, nas_equipes = [], set()
     for e in equipes:

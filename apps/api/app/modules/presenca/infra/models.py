@@ -1,7 +1,7 @@
 """Identificação das pessoas (crachá, NFC, rosto) e as leituras de presença, por obra (spec 063)."""
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,4 +42,6 @@ class LeituraPresencaModel(Base):
     equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
     dispositivo: Mapped[str | None] = mapped_column(String(120))
     registrado_por: Mapped[str] = mapped_column(String(80))
+    # spec 069: dois celulares leram a mesma pessoa no dia → vale a leitura mais cedo; as outras ficam como duplicadas
+    valida: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     recebido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
