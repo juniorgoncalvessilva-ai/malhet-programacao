@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Malhet Campo</string>
+    <string name="title_activity_main">Malhet Campo</string>
+    <string name="package_name">br.com.malhet.campo</string>
+    <string name="custom_url_scheme">br.com.malhet.campo</string>
+</resources>

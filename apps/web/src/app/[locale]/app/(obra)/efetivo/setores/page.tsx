@@ -14,6 +14,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { CoresOrganograma, DisciplinaObra, NivelCor, PessoaRef, SetorObra } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 type FormSetor = { tipo: 'setor' | 'disciplina'; id?: number; setorId?: number; nome: string; cor: string | null; ordem: number; responsavel: PessoaRef | null; equipes: number[] };
 const NIVEIS: { v: NivelCor; rotulo: string }[] = [
@@ -143,7 +144,7 @@ export default function SetoresPage() {
         )}
 
         <Painel titulo={`Setores (${d?.setores.length ?? 0})`} subtitulo={d && d.equipes.length ? `${d.equipes.filter((e) => !e.setor_id).length} de ${d.equipes.length} equipe(s) sem setor` : undefined}>
-          {!d?.setores.length && <p className="text-[13px] text-m-text-muted">{dados.isLoading ? 'Carregando…' : 'Nenhum setor ainda. Enquanto não houver setores, o organograma agrupa as equipes pela frente ou pelo DP do encarregado.'}</p>}
+          {!d?.setores.length && <p className="text-[13px] text-m-text-muted">{dados.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Nenhum setor ainda. Enquanto não houver setores, o organograma agrupa as equipes pela frente ou pelo DP do encarregado.'}</p>}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {d && (
               <div className="flex flex-col gap-2 rounded-[14px] border border-m-stroke bg-m-surface-raised p-4" style={{ borderTop: `4px solid ${d.cores.obra}` }}>

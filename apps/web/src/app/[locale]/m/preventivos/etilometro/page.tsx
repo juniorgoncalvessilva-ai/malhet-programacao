@@ -17,6 +17,7 @@ import { enfileirar, fotoParaFila, processarFila, useFila } from '@/lib/offline/
 import { avisar } from '@/lib/presenca/leitores';
 import { hojeLocal, type PessoaBase, type TermoLgpd } from '@/lib/presenca/offline';
 import { useBasePessoas } from '@/lib/presenca/useBase';
+import { Carregando, Esqueleto } from '@/components/Obra/Esqueleto';
 import {
   type Aparelho, type Assinatura, type SessaoEtilometro, type TesteLocal, aguardandoContraprova, classificar, lerSessao, mgL, pedeContraprova,
   salvarSessao, useAparelhos, useConfigEtilometro,
@@ -55,7 +56,7 @@ export default function EtilometroPage() {
   const limite = pb.base?.distancia_max ?? 0.5;
   const pessoas = pb.base?.pessoas ?? [];
 
-  if (sessao === undefined) return <p className="text-sm text-m-text-muted">Carregando…</p>;
+  if (sessao === undefined) return <Carregando />;
   const selo = (
     <span className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold ${fila.length ? 'bg-m-warning-subtle text-m-warning' : 'bg-m-success-subtle text-m-success'}`}>
       {fila.length ? <><CloudOff size={14} />{fila.length} na fila</> : 'em dia'}
@@ -169,7 +170,7 @@ function Inicio({ obraId, pessoas, limite, busca, selo, local: gps, onIniciar }:
       <TopoM titulo="Iniciar etilômetro" sub="aparelho, fotos e responsável" voltar="/m/preventivos" acao={selo} />
       <section className={cartaoM}>
         <span className="text-[13px] font-medium text-m-text-secondary">Aparelho</span>
-        {!ativos.length && <p className="text-[14px] text-m-text-muted">{aparelhos.isLoading ? 'Carregando…' : 'Nenhum aparelho cadastrado. A segurança cadastra em Controle preventivo › Configuração (web).'}</p>}
+        {!ativos.length && <p className="text-[14px] text-m-text-muted">{aparelhos.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Nenhum aparelho cadastrado. A segurança cadastra em Controle preventivo › Configuração (web).'}</p>}
         {ativos.map((a) => {
           const v = !a.validade || a.validade < hoje;
           return (

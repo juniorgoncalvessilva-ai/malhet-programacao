@@ -14,6 +14,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
 import type { AtividadePeriodo, ItemPlano, NoWbs, PlanoResposta, PreviaMigracao, RecursoP6, SituacaoPlano } from '@/lib/api/types';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 type Aba = '90' | '6' | 'pull' | 'migrar';
 const ROTULO: Record<SituacaoPlano, string> = { analisar: 'A analisar', restricao: 'Com restrição', liberado: 'Liberado', programado: 'Programado' };
@@ -71,7 +72,7 @@ export default function PlanoPage() {
       <Abas rotulo="Horizonte" ativa={aba} onTrocar={(a) => { setAba(a); setSel(null); }} abas={[
         { chave: '90', titulo: '90 dias' }, { chave: '6', titulo: '6 semanas' }, { chave: 'pull', titulo: 'Pull planning' }, { chave: 'migrar', titulo: 'Levar à programação' },
       ]} />
-      {plano.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {plano.isLoading && <Carregando />}
       {(aba === '90' || aba === '6') && plano.data && <Grade dados={plano.data} seis={aba === '6'} sel={sel} onSel={(id) => setSel(sel === id ? null : id)}
         detalhe={item && <Detalhe item={item} marcos={itens.filter((i) => i.marco && i.id !== item.id)} onFechar={() => setSel(null)} />} />}
       {aba === 'pull' && plano.data && <Pull itens={itens} onSel={setSel} />}
@@ -88,6 +89,9 @@ export default function PlanoPage() {
 function Grade({ dados, seis, sel, onSel, detalhe }: { dados: PlanoResposta; seis: boolean; sel: number | null; onSel: (id: number) => void; detalhe?: React.ReactNode }) {
   const { semanas } = dados;
   const h = hoje();
+  // spec 085: recolher pela estrutura (Local → Área → CWP), como na WBS
+  const [fechados, setFechados] = useState<Set<string>>(new Set());
+  const alternar = (k: string) => setFechados((f) => { const n = new Set(f); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const estrutura = useMemo(() => {
     const visiveis = dados.itens.filter((i) => !(i.fim < semanas[0].inicio || i.inicio > semanas[semanas.length - 1].fim));
     const marcos = visiveis.filter((i) => i.marco).sort((a, b) => a.fim.localeCompare(b.fim));
@@ -142,7 +146,18 @@ function Grade({ dados, seis, sel, onSel, detalhe }: { dados: PlanoResposta; sei
       </Fragment>
     );
   };
+  const recolher = (nivel: 'local' | 'area' | null) => setFechados(new Set(nivel === null ? [] : estrutura.locais.flatMap(({ l, areas }) =>
+    nivel === 'local' ? [`L:${l}`] : areas.map(({ a }) => `A:${l}|${a}`))));
+  const total = (areas: { cwps: { itens: ItemPlano[] }[] }[]) => areas.reduce((s, a) => s + a.cwps.reduce((x, c) => x + c.itens.length, 0), 0);
+  const seta = (k: string) => (fechados.has(k) ? '▸' : '▾');
   return (
+    <div className="flex flex-col gap-2">
+    <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+      <span className="text-m-text-muted">Estrutura:</span>
+      <Botao variante="secundario" onClick={() => recolher(null)}>Abrir tudo</Botao>
+      <Botao variante="secundario" onClick={() => recolher('area')}>Até a área</Botao>
+      <Botao variante="secundario" onClick={() => recolher('local')}>Só locais</Botao>
+    </div>
     <div className="overflow-x-auto rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised">
       <table className="w-full border-collapse text-[12.5px]">
         <thead>
@@ -159,14 +174,17 @@ function Grade({ dados, seis, sel, onSel, detalhe }: { dados: PlanoResposta; sei
           </>}
           {estrutura.locais.map(({ l, areas }) => (
             <Fragment key={l}>
-              <tr><td colSpan={colunas} className="bg-[#FF0000] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-white">{l}</td></tr>
-              {areas.map(({ a, cwps }) => (
+              <tr onClick={() => alternar(`L:${l}`)} className="cursor-pointer"><td colSpan={colunas} className="bg-[#FF0000] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-white">
+                <span aria-hidden="true" className="mr-1.5 inline-block w-3">{seta(`L:${l}`)}</span>{l}<span className="ml-2 font-normal normal-case opacity-80">{total(areas)} atividade(s)</span></td></tr>
+              {!fechados.has(`L:${l}`) && areas.map(({ a, cwps }) => (
                 <Fragment key={a}>
-                  <tr><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-[#173761] px-3 py-1.5 text-xs font-semibold text-white">{a}</td></tr>
-                  {cwps.map(({ c, itens }) => (
+                  <tr onClick={() => alternar(`A:${l}|${a}`)} className="cursor-pointer"><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-[#173761] px-3 py-1.5 text-xs font-semibold text-white">
+                    <span aria-hidden="true" className="mr-1.5 inline-block w-3">{seta(`A:${l}|${a}`)}</span>{a}<span className="ml-2 font-normal opacity-80">{total([{ cwps }])}</span></td></tr>
+                  {!fechados.has(`A:${l}|${a}`) && cwps.map(({ c, itens }) => (
                     <Fragment key={c || '—'}>
-                      {c && <tr><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1 text-[11.5px] font-semibold text-m-text-primary">CWP · {c}</td></tr>}
-                      {itens.map(linha)}
+                      {c && <tr onClick={() => alternar(`C:${l}|${a}|${c}`)} className="cursor-pointer"><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1 text-[11.5px] font-semibold text-m-text-primary">
+                        <span aria-hidden="true" className="mr-1.5 inline-block w-3">{seta(`C:${l}|${a}|${c}`)}</span>CWP · {c}<span className="ml-2 font-normal text-m-text-muted">{itens.length}</span></td></tr>}
+                      {!(c && fechados.has(`C:${l}|${a}|${c}`)) && itens.map(linha)}
                     </Fragment>
                   ))}
                 </Fragment>
@@ -175,6 +193,7 @@ function Grade({ dados, seis, sel, onSel, detalhe }: { dados: PlanoResposta; sei
           ))}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
@@ -390,13 +409,29 @@ function Migrar() {
   const { pode } = useObra();
   const progs = useProgramacoes();
   const abertas = (progs.data ?? []).filter((p) => p.status === 'rascunho');
-  const [pid, setPid] = useState<number | null>(null);
+  const [escolhida, setPid] = useState<number | null>(null);
+  // spec 085: sem escolha, vai a programação em rascunho de hoje (semanal antes da mensal)
+  const h = hoje();
+  const distancia = (p: { inicio: string; fim: string }) => (p.inicio <= h && h <= p.fim ? 0 : Math.abs(new Date(p.inicio).getTime() - new Date(h).getTime()));
+  const corrente = abertas.find((p) => p.tipo === 'SEMANAL' && p.inicio <= h && h <= p.fim) ?? abertas.find((p) => p.inicio <= h && h <= p.fim)
+    ?? [...abertas].sort((a, b) => distancia(a) - distancia(b))[0]; // sem a de hoje: a em rascunho mais perto de hoje
+  const pid = escolhida ?? corrente?.id ?? null;
+  const [soCorrente, setSoCorrente] = useState(true);
   const previa = useQuery({ queryKey: ['plano-migrar', pid], enabled: !!pid, queryFn: () => api.get<PreviaMigracao>(`/planos/migrar/${pid}`) });
   const [marcados, setMarcados] = useState<Set<number>>(new Set());
   const [qtd, setQtd] = useState<Record<number, string>>({});
   const [res, setRes] = useState<{ criadas: number; bloqueados: string[]; avisos: string[] } | null>(null);
   const lista = previa.data?.itens ?? [];
   const semanal = previa.data?.programacao.tipo === 'SEMANAL';
+  const semanas = useMemo(() => semanasDoPeriodo(previa.data?.programacao.inicio, previa.data?.programacao.fim), [previa.data]);
+  const semCorrente = semanas.find((s) => s.inicio <= h && h <= s.fim) ?? semanas[0];
+  // cada atividade entra na 1ª semana do período em que ela acontece
+  const porSemana = useMemo(() => semanas.map((s) => ({ ...s, itens: lista.filter((i) => {
+    const ini = i.inicio > (semanas[0]?.inicio ?? '') ? i.inicio : semanas[0]?.inicio ?? i.inicio;
+    return ini >= s.inicio && ini <= s.fim;
+  }) })), [semanas, lista]);
+  const podeLevar = (i: (typeof lista)[number]) => !i.ja_na_programacao && i.migravel && !(semanal && i.pendentes);
+  const marcarSemana = (its: typeof lista) => setMarcados((m) => { const n = new Set(m); its.filter(podeLevar).forEach((i) => n.add(i.id)); return n; });
   const migrar = () => {
     const q: Record<number, number | null> = {};
     for (const id of marcados) if (qtd[id] !== undefined) q[id] = qtd[id].trim() ? Number(qtd[id].replace(',', '.')) : null;
@@ -411,7 +446,9 @@ function Migrar() {
         </Selecao>
         {pid && pode('encarregado') && <Botao disabled={!marcados.size} onClick={migrar}><Send size={16} /> Levar {marcados.size || ''} item(ns)</Botao>}
         {pid && <Link href={`/app/programacoes/${pid}`} className="pb-2.5 text-[13px] font-semibold text-m-accent underline">abrir a programação</Link>}
+        {semanas.length > 1 && <label className="flex items-center gap-1.5 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={soCorrente} onChange={(e) => setSoCorrente(e.target.checked)} /> só a semana corrente</label>}
       </div>
+      {!pid && <p className="text-[13px] text-m-text-muted">Nenhuma programação em rascunho: crie a semanal em Programações para levar as atividades.</p>}
       {semanal && <p className="text-[12.5px] text-m-text-muted">Na semanal só entra atividade sem restrição pendente (limpe no 6WLA ou no detalhe do item). Na mensal entra com aviso.</p>}
       {res && (res.bloqueados.length > 0 || res.avisos.length > 0) && <div className="rounded-m-md border border-m-stroke-subtle p-3 text-[12.5px]">
         {res.bloqueados.map((b) => <p key={b} className="text-m-danger">{b}</p>)}{res.avisos.map((a) => <p key={a} className="text-m-warning">{a}</p>)}
@@ -424,8 +461,14 @@ function Migrar() {
               <th className="px-2 py-2 text-right">Sugerida no período</th><th className="px-2 py-2 text-right">Levar</th>
             </tr></thead>
             <tbody>
-              {lista.map((i) => {
-                const pode_ = !i.ja_na_programacao && i.migravel && !(semanal && i.pendentes);
+              {porSemana.filter((s) => s.itens.length && (!soCorrente || semanas.length < 2 || s.inicio === semCorrente?.inicio)).map((s) => (
+                <Fragment key={s.inicio}>
+                  <tr><td colSpan={6} className={`px-2 py-1.5 text-[12px] font-semibold ${s.inicio === semCorrente?.inicio ? 'bg-m-accent-subtle text-m-accent' : 'bg-m-surface-active text-m-text-primary'}`}>
+                    <span className="flex flex-wrap items-center gap-3">Semana {s.numero} · {dm(s.inicio)} a {dm(s.fim)}{s.inicio === semCorrente?.inicio ? ' · corrente' : ''} · {s.itens.length} atividade(s)
+                      {pode('encarregado') && s.itens.some(podeLevar) && <button type="button" className="font-semibold underline" onClick={() => marcarSemana(s.itens)}>marcar a semana</button>}</span>
+                  </td></tr>
+                  {s.itens.map((i) => {
+                const pode_ = podeLevar(i);
                 return (
                   <tr key={i.id} className="border-b border-m-row">
                     <td className="px-2 py-2"><input type="checkbox" aria-label={`Levar ${i.codigo}`} disabled={!pode_} checked={marcados.has(i.id)}
@@ -439,7 +482,9 @@ function Migrar() {
                       value={qtd[i.id] ?? ''} onChange={(e) => setQtd({ ...qtd, [i.id]: e.target.value })} className="h-8 w-24 rounded-m-sm border border-m-stroke bg-m-surface-field px-2 text-right" /></td>
                   </tr>
                 );
-              })}
+                  })}
+                </Fragment>
+              ))}
               {!lista.length && !previa.isLoading && <tr><td colSpan={6} className="px-2 py-6 text-center text-m-text-muted">Nenhuma atividade do plano cai no período desta programação.</td></tr>}
             </tbody>
           </table>
@@ -572,7 +617,7 @@ function FormDaProgramacao({ onFechar }: { onFechar: () => void }) {
         <Botao disabled={!sel.size} onClick={puxar}><CalendarDays size={16} /> Puxar {sel.size} linha(s)</Botao>
         <span className="text-[12.5px] text-m-text-muted">{lista.length} linha(s) · {novas.length} ainda fora do plano</span>
       </div>
-      {pv.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {pv.isLoading && <Carregando />}
       {pv.error && <p className="text-sm text-m-danger">{(pv.error as Error).message}</p>}
       {lista.length > 0 && (
         <div className="max-h-[420px] overflow-auto rounded-m-md border border-m-stroke-subtle">
@@ -600,4 +645,24 @@ function FormDaProgramacao({ onFechar }: { onFechar: () => void }) {
       )}
     </Painel>
   );
+}
+
+/** Semanas (segunda a domingo) que o período da programação cobre, com o número da semana ISO. */
+function semanasDoPeriodo(ini?: string, fim?: string) {
+  if (!ini || !fim) return [] as { inicio: string; fim: string; numero: number }[];
+  const out: { inicio: string; fim: string; numero: number }[] = [];
+  let d = new Date(`${ini}T12:00:00`);
+  const f = new Date(`${fim}T12:00:00`);
+  while (d <= f) {
+    const seg = new Date(d); seg.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const dom = new Date(seg); dom.setDate(seg.getDate() + 6);
+    const qui = new Date(seg); qui.setDate(seg.getDate() + 3);
+    const jan4 = new Date(qui.getFullYear(), 0, 4);
+    const numero = 1 + Math.round(((qui.getTime() - jan4.getTime()) / 86400000 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+    const s = d.toISOString().slice(0, 10) > ini ? d.toISOString().slice(0, 10) : ini;
+    const e = dom > f ? fim : dom.toISOString().slice(0, 10);
+    out.push({ inicio: s, fim: e, numero });
+    d = new Date(dom); d.setDate(dom.getDate() + 1);
+  }
+  return out;
 }

@@ -8,6 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { nomeLinha, type ModoNomes } from '@/lib/programacao/nomes';
 import type { LinhaVisao, SituacaoEfetivo } from '@/lib/api/types';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 const SITUACAO: Partial<Record<SituacaoEfetivo, string>> = {
   MOBILIZADO: 'mobilizado', AGUARDANDO_CRACHA: 'aguardando crachá', EM_PROCESSO: 'em processo', PREVISTO: 'previsto',
@@ -109,7 +110,7 @@ export function DetalheAtividade({ ln, local, area, data, k, nomes, onFechar }: 
                       {m.efetivo && <span className={`shrink-0 text-[11.5px] font-semibold ${m.efetivo.situacao === 'MOBILIZADO' ? 'text-m-success' : 'text-m-warning'}`}>{SITUACAO[m.efetivo.situacao] ?? m.efetivo.situacao}</span>}
                     </li>
                   ))}
-                  {!membros.length && <li className="text-[13px] text-m-text-muted">{equipes.isLoading ? 'Carregando…' : 'Nenhum membro cadastrado na equipe.'}</li>}
+                  {!membros.length && <li className="text-[13px] text-m-text-muted">{equipes.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Nenhum membro cadastrado na equipe.'}</li>}
                 </ul>
               </>
             )}

@@ -8,6 +8,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import { qs } from '@/lib/api/client';
 import type { PainelIndicadores } from '@/lib/api/types';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${fmt(v * 100, 1)} %`);
 const FILTROS = { de: '', ate: '', encarregado: '', equipe_id: '', grupo: '', item_pq: '', area_id: '', modo: '' };
@@ -70,7 +71,7 @@ export default function IndicadoresPage() {
         </div>
       </Painel>
 
-      {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {k && !k.atividades && <Painel titulo="Sem histórico ainda"><p className="text-[13px] text-m-text-secondary">O histórico começa quando uma programação é emitida (previsto e capacidade) e fica completo quando ela é concluída (realizado). {k.desvios ? `Já há ${k.desvios} desvio(s) registrado(s): o Pareto está abaixo.` : ''}</p></Painel>}
       {k && !k.atividades && paretoPainel}
       {k && k.atividades > 0 && <>

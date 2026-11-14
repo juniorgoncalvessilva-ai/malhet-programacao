@@ -14,6 +14,7 @@ import { useProgramacao } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 /** Formato da obra (Programacao_auxiliar_v5): LOCAL (faixa vermelha) → ÁREA (faixa azul) → linhas P e R por dia.
  * `vigente`: modo consulta (Programação vigente) — sem voltar para montar, sem rascunho, botão "Excel". */
@@ -31,7 +32,7 @@ export function ImpressaoProgramacao({ id, vigente = false }: { id: number; vige
   const rev = escolha === 'viva' ? null : escolha === 'ultima' ? (emissoes.data?.[0]?.revisao ?? null) : Number(escolha);
   const prog = useProgramacao(id, emissoes.isLoading ? undefined : rev);
   const v = prog.data;
-  if (!v) return <p className="text-sm text-m-text-muted">{prog.isLoading || emissoes.isLoading ? 'Carregando…' : 'Programação não encontrada.'}</p>;
+  if (!v) return <p className="text-sm text-m-text-muted">{prog.isLoading || emissoes.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Programação não encontrada.'}</p>;
 
   const rascunho = rev == null;
   const semanal = v.tipo === 'SEMANAL';

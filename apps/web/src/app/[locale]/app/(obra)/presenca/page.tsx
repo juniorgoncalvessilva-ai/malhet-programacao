@@ -9,6 +9,7 @@ import { IndicadoresPresenca } from '@/components/Obra/PresencaIndicadores';
 import { Cabecalho, Campo, Chip, Indicador, Painel } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 interface PessoaDia { id: number; nome: string; matricula: string | null; funcao: string | null; papel: string; presente: boolean; hora: string | null; meio: string | null; leituras?: number }
 interface Setor { id: number; nome: string; cor: string | null }
@@ -114,7 +115,7 @@ function Equipes() {
           <Indicador rotulo="Presentes sem equipe" valor={d.sem_equipe.length} tom={d.sem_equipe.length ? 'atencao' : undefined} />
         </div>
       )}
-      {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {d && !d.presentes && <Painel titulo="Ninguém registrado"><p className="text-[13px] text-m-text-muted">Nenhuma leitura de presença neste dia. As leituras entram pelo app de campo (botão Presença) e sobem quando o celular tem internet.</p></Painel>}
       {d && !grupos.length && d.presentes > 0 && <p className="text-[13px] text-m-text-muted">Nenhuma equipe com esse filtro.</p>}
 

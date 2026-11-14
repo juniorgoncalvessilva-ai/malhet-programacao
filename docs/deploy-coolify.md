@@ -82,3 +82,25 @@ tela **Armazenamento** (`/app/armazenamento`, só administrador). Os que estavam
 Na nuvem, a obra fica em `Malhet/obras/<CODIGO-obra>/` com as pastas `10-programacoes … 90-arquivo-morto`; cada arquivo
 leva um `.md` com os metadados (Zettelkasten). Rosto, evidências LGPD e coordenadas nunca saem do servidor.
 `ARQUIVOS_LIMITE_GB` (padrão 25) é o quanto de originais o disco segura antes de liberar os já enviados.
+
+## Imagens prontas do GitHub Actions (spec 085) — a VPS não compila mais
+
+Com 1 vCPU e 4 GB, compilar o Next na VPS travava o Coolify (deploy parava no meio). Agora:
+1. A cada push em `main`, o workflow **Deploy no Coolify** monta as imagens `malhet-api` e `malhet-web` no GitHub
+   (com cache) e publica em `ghcr.io/juniorgoncalvessilva-ai/` com as tags `latest` e o commit.
+2. Depois dispara o deploy no Coolify. Com `docker-compose.coolify.imagens.yml` a VPS só baixa e sobe as imagens.
+
+**Uma vez só, para ligar:**
+1. Deixe os pacotes públicos (o repositório já é público): github.com → seu perfil → *Packages* → `malhet-api` →
+   *Package settings* → *Change visibility* → **Public**. Repita para `malhet-web`. (Eles aparecem depois do primeiro
+   push com este workflow.) Preferindo privado: na VPS, `docker login ghcr.io -u <usuário>` com um token
+   *read:packages* — o Coolify usa o login do Docker do servidor.
+2. Actions → **Coolify** → Run workflow → `acao = usar-imagens`. Ele troca o *Docker Compose Location* do recurso para
+   `/docker-compose.coolify.imagens.yml`, faz o deploy e testa. Para voltar a compilar na VPS: `acao = usar-build`.
+3. Fixar uma versão (voltar atrás): variável `IMAGEM_TAG=<commit>` no Coolify e redeploy (vazio = `latest`).
+
+**Swap (recomendado na KVM1):** no terminal da VPS, uma vez:
+```bash
+fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab && sysctl vm.swappiness=10 && echo 'vm.swappiness=10' >> /etc/sysctl.conf
+```

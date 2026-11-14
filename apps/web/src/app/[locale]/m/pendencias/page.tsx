@@ -3,6 +3,7 @@
 import { ChevronRight } from 'lucide-react';
 import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
 import { Link } from '@/i18n/navigation';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 /** Dias anteriores da programação com previsto e sem realizado lançado. */
 export default function Pendencias() {
@@ -12,7 +13,7 @@ export default function Pendencias() {
   return (
     <>
       <h1 className="text-[24px] font-semibold leading-[30px]">Pendências</h1>
-      {dia.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {dia.isLoading && <Carregando />}
       {dia.data && !p.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhum dia sem realizado nesta programação.</p>}
       {Object.entries(porDia).map(([data, itens]) => (
         <section key={data} className="flex flex-col gap-2">

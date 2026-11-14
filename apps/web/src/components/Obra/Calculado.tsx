@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApi } from '@/hooks/programacao/useApi';
 import { cn } from '@/lib/utils';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 /** Memória de cálculo devolvida pela API (`app/shared/memoria.py`). */
 export interface MemoriaCalculo {
@@ -62,7 +63,7 @@ function JanelaMemoria({ rota, chave, local, onFechar }: { rota?: string; chave:
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-m-accent-subtle text-m-accent" aria-hidden="true"><Calculator size={20} /></span>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Memória de cálculo</p>
-            <h2 id="memoria-titulo" className="text-[17px] font-semibold leading-6 text-m-text-primary">{m?.titulo ?? (q.isFetching ? 'Carregando…' : 'Sem memória')}</h2>
+            <h2 id="memoria-titulo" className="text-[17px] font-semibold leading-6 text-m-text-primary">{m?.titulo ?? (q.isFetching ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Sem memória')}</h2>
           </div>
           {m && <span className="shrink-0 rounded-[10px] bg-m-accent-subtle px-3 py-1.5 text-[18px] font-semibold tabular-nums text-m-accent">{m.valor}</span>}
           <button type="button" aria-label="Fechar" className="rounded-full p-1.5 text-m-text-muted hover:bg-m-surface-hover" onClick={onFechar}><X size={18} /></button>

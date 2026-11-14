@@ -7,7 +7,21 @@ interface RegistroNdef { recordType: string; data?: DataView; encoding?: string 
 interface EventoNdef { serialNumber?: string; message: { records: RegistroNdef[] } }
 interface LeitorNdef { scan: (o?: { signal?: AbortSignal }) => Promise<void>; onreading: ((e: EventoNdef) => void) | null; onreadingerror: (() => void) | null }
 
-export const temNfc = () => typeof window !== 'undefined' && 'NDEFReader' in window;
+// ---- app nativo (spec 085): dentro do app das lojas o NFC vem do plugin nativo NfcCracha (iPhone e Android) ----
+interface CapacitorRuntime {
+  isNativePlatform?: () => boolean; isPluginAvailable?: (n: string) => boolean; getPlatform?: () => string;
+  nativePromise: <T>(plugin: string, metodo: string, opcoes?: object) => Promise<T>;
+  nativeCallback: (plugin: string, metodo: string, opcoes: object, cb: (r: RespostaNativa | null, erro?: { message?: string }) => void) => string;
+}
+interface RespostaNativa { serial?: string | null; textos?: string[]; fim?: boolean; motivo?: string }
+const capacitor = () => (typeof window === 'undefined' ? undefined : (window as unknown as { Capacitor?: CapacitorRuntime }).Capacitor);
+/** Rodando dentro do app nativo (Capacitor) — iPhone ou Android. */
+export const emAppNativo = () => !!capacitor()?.isNativePlatform?.();
+export const temNfcNativo = () => emAppNativo() && !!capacitor()?.isPluginAvailable?.('NfcCracha');
+const temWebNfc = () => typeof window !== 'undefined' && 'NDEFReader' in window;
+export const temNfc = () => temNfcNativo() || temWebNfc();
+/** Pode gravar o link no crachá: Web NFC (Chrome no Android) ou o app nativo (iPhone/Android). */
+export const podeGravarNfc = () => temNfc();
 /** iPhone/iPad: a Apple não deixa nenhum navegador ler NFC num site (só o próprio iOS lê o link gravado na tag). */
 export const ehIos = () => typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
@@ -27,7 +41,19 @@ export const temCodigoDeBarras = () => typeof window !== 'undefined' && 'Barcode
 export const temCamera = () => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
 /** Começa a escutar crachás NFC; devolve a função que para. `textos` = conteúdo gravado na tag (ex.: a matrícula). */
-export async function escutarNfc(onLer: (serial: string | null, textos: string[]) => void, onErro: (msg: string) => void): Promise<() => void> {
+export async function escutarNfc(onLer: (serial: string | null, textos: string[]) => void, onErro: (msg: string) => void,
+  onFim?: (motivo: string) => void): Promise<() => void> {
+  const cap = capacitor();
+  if (temNfcNativo() && cap) {
+    // iPhone: a janela do iOS fica aberta e lê um crachá atrás do outro (até 60 s por vez); Android: reader mode
+    cap.nativeCallback('NfcCracha', 'ler', { continuo: true, mensagem: 'Aproxime o crachá da parte de cima do iPhone' }, (r, erro) => {
+      if (erro) { onErro(erro.message || 'Não consegui ligar o NFC.'); return; }
+      if (!r) return;
+      if (r.fim) { onFim?.(r.motivo ?? ''); return; }
+      onLer(r.serial || null, (r.textos ?? []).map(codigoLido).filter(Boolean));
+    });
+    return () => { cap.nativePromise('NfcCracha', 'parar').catch(() => undefined); };
+  }
   const Leitor = (window as unknown as { NDEFReader: new () => LeitorNdef }).NDEFReader;
   const ndef = new Leitor();
   const ctrl = new AbortController();
@@ -89,6 +115,12 @@ export function escutarCodigos(video: HTMLVideoElement, onLer: (codigo: string) 
 
 /** Grava no crachá NFC o link da Presença com o código (Chrome no Android): o iPhone lê o link sozinho (spec 067). */
 export async function gravarCracha(url: string, sinal?: AbortSignal): Promise<void> {
+  const cap = capacitor();
+  if (temNfcNativo() && cap) {
+    sinal?.addEventListener('abort', () => { cap.nativePromise('NfcCracha', 'parar').catch(() => undefined); });
+    await cap.nativePromise('NfcCracha', 'gravarUrl', { url });
+    return;
+  }
   const Leitor = (window as unknown as { NDEFReader: new () => { write: (m: unknown, o?: { signal?: AbortSignal; overwrite?: boolean }) => Promise<void> } }).NDEFReader;
   await new Leitor().write({ records: [{ recordType: 'url', data: url }] }, { signal: sinal, overwrite: true });
 }

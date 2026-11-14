@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { type Notificacao, pedirPermissaoAviso, permissaoAviso, quandoFoi, useMarcarLidas, useNotificacoes } from '@/lib/notificacoes';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 const ICONE = { info: Info, atencao: AlertTriangle, critico: ShieldAlert } as const;
 const COR = { info: 'text-m-accent', atencao: 'text-m-warning', critico: 'text-m-danger' } as const;
@@ -35,7 +36,7 @@ export function ListaNotificacoes({ mobile = false, limite, onAbrir }: { mobile?
           {naoLidas > 0 && <button type="button" onClick={() => marcar()} className="flex items-center gap-1 text-[13px] font-semibold text-m-accent"><CheckCheck size={15} /> Marcar todas como lidas</button>}
         </div>
       </div>
-      {q.isLoading && <p className="text-[13px] text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {!q.isLoading && !lista.length && <p className="flex items-center gap-2 py-6 text-[14px] text-m-text-muted"><Bell size={18} /> Nenhuma notificação nos últimos 45 dias.</p>}
       <ul className="flex flex-col">
         {lista.map((n) => {

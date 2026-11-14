@@ -7,6 +7,7 @@ import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Botao, Painel, Pilula } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 type Emissao = { revisao: number; emitida_em: string; emitida_por: string };
 
@@ -42,7 +43,7 @@ export function RevisoesProgramacao({ pid, concluida, emitida }: { pid: number; 
   return (
     <Painel titulo="Revisões emitidas" acoes={<Pilula tom="atencao"><ShieldAlert size={13} className="mr-1 inline" />só super admin</Pilula>}>
       {!lista.length
-        ? <p className="text-[13px] text-m-text-muted">{emissoes.isLoading ? 'Carregando…' : 'Nenhuma revisão emitida.'}</p>
+        ? <p className="text-[13px] text-m-text-muted">{emissoes.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Nenhuma revisão emitida.'}</p>
         : (
           <ul className="flex flex-col divide-y divide-m-stroke-subtle text-[13px]">
             {lista.map((e) => {

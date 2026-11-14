@@ -15,6 +15,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { NoWbs, SincronizacaoWbs, TipoNoWbs, ExportacaoP6 } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 const FILHO: Record<TipoNoWbs, TipoNoWbs | null> = { area: 'cwp', cwp: 'grupo', grupo: 'iwp', iwp: 'etapa', etapa: null };
 const ROTULO: Record<TipoNoWbs, string> = { area: 'Área', cwp: 'CWP', grupo: 'Grupo', iwp: 'IWP', etapa: 'Etapa' };
@@ -445,7 +446,7 @@ export default function WbsPage() {
               <th className="px-2 py-2 text-right">Quantidade</th><th className="px-2 py-2 text-right">Programação</th><th className="px-2 py-2" />
             </tr></thead>
             <tbody>
-              {!arvore.length && <tr><td colSpan={7} className="py-8 text-center text-sm text-m-text-muted">{wbs.isLoading ? 'Carregando…' : 'Comece pela área: + Área.'}</td></tr>}
+              {!arvore.length && (wbs.isLoading ? <LinhasCarregando colunas={7} /> : <tr><td colSpan={7} className="py-8 text-center text-sm text-m-text-muted">{'Comece pela área: + Área.'}</td></tr>)}
               {arvore.map((n) => linhas(n, 0))}
             </tbody>
           </table>

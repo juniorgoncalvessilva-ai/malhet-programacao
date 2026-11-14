@@ -12,6 +12,7 @@ import type { GrupoCatalogo, ItemCatalogo, LinhaPq, TipoCatalogo, UnidadeMedida 
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Calculado, nbr } from '@/components/Obra/Calculado';
+import { LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 type GrupoForm = { id?: number; descricao: string; numero: string; unidade: string; ativo: boolean };
 type TipoForm = { id: number; grupo_id: string; numero: string; ativo: boolean; codigo: string };
@@ -192,7 +193,7 @@ export default function CatalogoPage() {
               <th className={`${th} text-right`}>Qtd. contrato</th><th className={`${th} text-right`}>P. unit.</th><th className={th}>Situação</th><th className={th} />
             </tr></thead>
             <tbody>
-              {!grupos.length && <tr><td colSpan={8} className="py-8 text-center text-sm text-m-text-muted">{cat.isLoading ? 'Carregando…' : 'Crie o primeiro grupo (ex.: Escavação, Concreto, Forma) e vincule os itens da PQ.'}</td></tr>}
+              {!grupos.length && (cat.isLoading ? <LinhasCarregando colunas={8} /> : <tr><td colSpan={8} className="py-8 text-center text-sm text-m-text-muted">{'Crie o primeiro grupo (ex.: Escavação, Concreto, Forma) e vincule os itens da PQ.'}</td></tr>)}
               {grupos.map((g) => (
                 <Fragment key={`g${g.id}`}>
                   <tr>

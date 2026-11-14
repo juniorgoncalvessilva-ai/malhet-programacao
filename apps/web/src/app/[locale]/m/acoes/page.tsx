@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AcaoDetalhe } from '@/components/Auditoria/AcaoDetalhe';
 import { TopoM } from '@/components/Mobile/ui';
 import { FAROL_ACAO, dataBR, useAcoes } from '@/lib/auditorias';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 /** Ações 5W2H abertas no celular: iniciar, concluir com foto (evidência) e verificar a eficácia (spec 064). */
 export default function AcoesCampo() {
@@ -12,7 +13,7 @@ export default function AcoesCampo() {
   return (
     <>
       <TopoM titulo="Ações 5W2H" sub="abertas e aguardando verificação" voltar="/m" />
-      {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {q.data && !q.data.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhuma ação aberta.</p>}
       {(q.data ?? []).map((a) => {
         const f = FAROL_ACAO[a.farol] ?? FAROL_ACAO[a.status];

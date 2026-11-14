@@ -12,6 +12,7 @@ import { comoLista, type CadastroSsma, type LinhaVisao, type Ssma, type TipoCada
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 // PTO saiu daqui: é do Planejamento (montar a programação)
 const CAMPOS: { k: Exclude<keyof Ssma, 'pto'>; tipo: TipoCadastroSsma; rotulo: string; largura: string }[] = [
@@ -89,7 +90,7 @@ export default function SsmaPage() {
               </tr>
             </thead>
             <tbody>
-              {!linhas.length && <tr><td colSpan={10} className="py-8 text-center text-m-text-muted">{prog.isLoading ? 'Carregando…' : 'Programação sem linhas.'}</td></tr>}
+              {!linhas.length && (prog.isLoading ? <LinhasCarregando colunas={10} /> : <tr><td colSpan={10} className="py-8 text-center text-m-text-muted">{'Programação sem linhas.'}</td></tr>)}
               {v?.locais.map((l) => (
                 <Fragment key={l.id}>
                   <tr><td colSpan={10} className="bg-m-accent-strong px-3 py-1.5 text-xs font-bold uppercase text-m-on-accent">{l.codigo} · {l.descricao}</td></tr>

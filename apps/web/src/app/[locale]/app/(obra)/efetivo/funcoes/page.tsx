@@ -10,6 +10,7 @@ import { k, useAcao, useFuncoesEfetivo } from '@/hooks/programacao/planejamento'
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 type Edicao = Record<string, { recurso: string; ignorar: boolean }>;
 
@@ -62,7 +63,7 @@ export default function DeParaFuncoesPage() {
               </tr>
             </thead>
             <tbody>
-              {!visiveis.length && <tr><td colSpan={5} className="py-8 text-center text-m-text-muted">{dados.isLoading ? 'Carregando…' : 'Nada aqui.'}</td></tr>}
+              {!visiveis.length && (dados.isLoading ? <LinhasCarregando colunas={5} /> : <tr><td colSpan={5} className="py-8 text-center text-m-text-muted">{'Nada aqui.'}</td></tr>)}
               {visiveis.map((f) => {
                 const v = valor(f);
                 const mudou = !!ed[f.funcao_chave];

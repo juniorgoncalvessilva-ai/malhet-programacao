@@ -10,6 +10,7 @@ import { Abas } from '@/components/Obra/Abas';
 import { Botao, Cabecalho, Campo, Chip, Indicador, Painel, Pilula, Tabela, td } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 interface Etapa { id?: number; numero: number; nome: string; documento: string | null; percentual: number; sem_avanco: boolean }
 interface Criterio { id: number; codigo: string; item_pq: string | null; descricao: string; origem: string; etapas: Etapa[]; soma: number; itens_pq: number | null; etapas_na_wbs: number }
@@ -213,7 +214,7 @@ function TabelaPq({ linhas, criterios, filtro, busca, edita, aberto, editor, car
     folhas.forEach((ln) => { const p = ln.item.split('.'); for (let i = 1; i <= p.length; i++) quer.add(p.slice(0, i).join('.')); });
     return linhas.filter((ln) => quer.has(ln.item));
   }, [linhas, porId, filtro, busca]);
-  if (!linhas.length) return <p className="text-[13px] text-m-text-muted">{carregando ? 'Carregando…' : 'Sem PQ vigente: importe a PQ em Importações.'}</p>;
+  if (!linhas.length) return <p className="text-[13px] text-m-text-muted">{carregando ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Sem PQ vigente: importe a PQ em Importações.'}</p>;
   return (
     <div className="max-h-[75vh] overflow-auto rounded-[10px] border border-m-stroke-subtle">
       <table className="w-full min-w-[1100px] border-collapse text-[12.5px]">

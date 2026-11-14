@@ -13,6 +13,7 @@ import { useObra } from '@/lib/obra/ObraProvider';
 import { carregarFace, lerRosto, maisProximo, media } from '@/lib/presenca/face';
 import { abrirCamera, escutarNfc, temCamera, temNfc } from '@/lib/presenca/leitores';
 import type { BasePresenca } from '@/lib/presenca/offline';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 interface Ident {
   id: number; nome: string; matricula: string | null; cracha: string | null; funcao: string | null; situacao: string; equipe: string | null;
@@ -129,7 +130,7 @@ export default function IdentificacaoPage() {
               ))}
             </tbody>
           </table>
-          {q.isLoading && <p className="py-3 text-[13px] text-m-text-muted">Carregando…</p>}
+          {q.isLoading && <Carregando />}
           {filtrada.length > 400 && <p className="py-2 text-[12px] text-m-text-muted">Mostrando 400 de {filtrada.length}: use a busca.</p>}
         </div>
       </Painel>

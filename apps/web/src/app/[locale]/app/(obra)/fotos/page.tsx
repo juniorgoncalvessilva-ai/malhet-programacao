@@ -5,10 +5,11 @@ import { Printer, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Abas } from '@/components/Obra/Abas';
 import { LogosObra } from '@/components/Obra/LogosObra';
-import { Botao, Cabecalho, Campo, Painel, Selecao } from '@/components/Obra/ui';
+import { Botao, Chip, Cabecalho, Campo, Painel, Selecao } from '@/components/Obra/ui';
 import { useFrentes2 } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 type Tipo = 'atividade' | 'ocorrencia' | 'restricao' | 'auditoria' | 'acao';
 type Agrupar = 'frente' | 'atividade' | 'data';
@@ -29,6 +30,9 @@ function useFoto(id: number, mini = false) {
     queryFn: async () => URL.createObjectURL(await api.blob(`/fotos/${id}/arquivo${mini ? '?mini=true' : ''}`)) });
 }
 
+/** Largura mínima da miniatura no book (px): a grade cabe quantas couberem na linha. */
+const TAMANHOS = { P: 130, M: 180, G: 240 } as const;
+
 function Cartao({ f, onAbrir }: { f: FotoBook; onAbrir: () => void }) {
   const url = useFoto(f.id, true).data;
   return (
@@ -37,7 +41,7 @@ function Cartao({ f, onAbrir }: { f: FotoBook; onAbrir: () => void }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {url ? <img src={url} alt={f.titulo ?? f.atividade ?? 'Foto de campo'} className="h-full w-full object-cover" /> : <span className="block h-full w-full animate-pulse" />}
       </button>
-      <figcaption className="flex flex-col gap-0.5 p-2.5 text-[12px] leading-4">
+      <figcaption className="flex flex-col gap-0.5 p-1.5 text-[11px] leading-[14px] [&>span]:line-clamp-2">
         <span className="font-semibold text-m-text-primary">{dataBR(f.data)}{f.enviado_em ? ` · ${hora(f.enviado_em)}` : ''}</span>
         {f.causa && <span className="font-semibold uppercase tracking-[0.3px] text-m-warning">{f.causa}{f.momento ? <span className={`ml-1.5 rounded px-1 ${f.momento === 'depois' ? 'bg-m-success-subtle text-m-success' : 'bg-m-danger-subtle text-m-danger'}`}>{f.momento}</span> : null}</span>}
         {f.titulo && <span className="text-m-text-primary">{f.titulo}</span>}
@@ -79,6 +83,10 @@ export default function BookFotosPage() {
   const [area, setArea] = useState('');
   const [busca, setBusca] = useState('');
   const [aberta, setAberta] = useState<FotoBook | null>(null);
+  const [tamanho, setTamanhoEstado] = useState<keyof typeof TAMANHOS>(() => {
+    try { const v = localStorage.getItem('malhet.book.tamanho'); return v && v in TAMANHOS ? (v as keyof typeof TAMANHOS) : 'P'; } catch { return 'P'; }
+  });
+  const setTamanho = (v: keyof typeof TAMANHOS) => { setTamanhoEstado(v); try { localStorage.setItem('malhet.book.tamanho', v); } catch { /* sem localStorage */ } };
   const q = useQuery({
     queryKey: ['fotos', 'book', tipo, de, ate, area],
     queryFn: () => api.get<FotoBook[]>(`/fotos/book?tipo=${tipo}${de ? `&de=${de}` : ''}${ate ? `&ate=${ate}` : ''}${area ? `&area_id=${area}` : ''}`),
@@ -110,7 +118,12 @@ export default function BookFotosPage() {
     <>
       <div className="print:hidden">
         <Cabecalho eyebrow="Campo · evidências" titulo="Book de fotos"
-          acoes={<Botao variante="secundario" onClick={() => window.print()} disabled={!fotos.length}><Printer size={16} /> Imprimir book</Botao>} />
+          acoes={<div className="flex flex-wrap items-center gap-2 print:hidden">
+            <span className="flex items-center gap-1 rounded-full border border-m-stroke-subtle p-1" role="group" aria-label="Tamanho das miniaturas">
+              {(['P', 'M', 'G'] as const).map((k) => <Chip key={k} ativo={tamanho === k} onClick={() => setTamanho(k)}>{{ P: 'Pequena', M: 'Média', G: 'Grande' }[k]}</Chip>)}
+            </span>
+            <Botao variante="secundario" onClick={() => window.print()} disabled={!fotos.length}><Printer size={16} /> Imprimir book</Botao>
+          </div>} />
       </div>
       <div className="print:hidden">
         <Abas rotulo="Tipo de foto" ativa={tipo} onTrocar={setTipo}
@@ -148,7 +161,7 @@ export default function BookFotosPage() {
         </div>
       </header>
 
-      {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {q.data && !fotos.length && <Painel titulo="Nenhuma foto"><p className="text-[13px] text-m-text-muted">Nenhuma foto de {nomeTipo} no período e filtros escolhidos. As fotos entram pelo app de campo (Lançar, Ocorrências, Restrições, Auditorias e Ações 5W2H).</p></Painel>}
       {grupos.map(([k1, sub]) => (
         <section key={k1} className="flex flex-col gap-3 rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised p-4 print:break-inside-auto print:border-0 print:p-0">
@@ -156,7 +169,7 @@ export default function BookFotosPage() {
           {sub.map(([k2, lista]) => (
             <div key={k2} className="flex flex-col gap-2">
               <h3 className="text-[13px] font-semibold text-m-text-secondary">{rot(k2, 2)}</h3>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 print:grid-cols-3">
+              <div className="grid gap-2 print:grid-cols-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${TAMANHOS[tamanho]}px, 1fr))` }}>
                 {lista.map((f) => <Cartao key={f.id} f={f} onAbrir={() => setAberta(f)} />)}
               </div>
             </div>

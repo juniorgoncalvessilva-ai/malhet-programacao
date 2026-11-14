@@ -8,6 +8,7 @@ import { TopoM } from '@/components/Mobile/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { Desvio } from '@/lib/api/types';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 const STATUS = { 1: 'Pendente', 2: 'Em andamento', 3: 'Concluído' } as const;
 
@@ -22,7 +23,7 @@ export default function Ocorrencias() {
     <>
       <TopoM titulo="Ocorrências" sub="últimos 7 dias" acao={<Link href="/m/ocorrencias/nova" aria-label="Registrar ocorrência" className="grid h-11 w-11 place-items-center rounded-full bg-m-accent-strong text-m-on-accent"><Plus size={22} /></Link>} />
       <Link href="/m/ocorrencias/nova" className="flex min-h-[56px] items-center justify-center gap-2 rounded-[14px] border-2 border-m-accent-strong bg-m-surface-raised text-[15px] font-semibold text-m-accent"><Plus size={18} /> Registrar ocorrência</Link>
-      {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {q.data && !lista.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhuma ocorrência nos últimos 7 dias.</p>}
       {Object.entries(porDia).map(([data, itens]) => (
         <section key={data} className="flex flex-col gap-2">

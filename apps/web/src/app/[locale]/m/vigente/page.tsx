@@ -11,6 +11,7 @@ import { DetalheAtividade } from '@/components/Mobile/DetalheAtividade';
 import type { LinhaVisao } from '@/lib/api/types';
 import { useProgramacao } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 /** Programação vigente no celular: a última emissão, dia a dia (previsto × realizado). Aberta para todo mundo da obra.
  * Tocar na atividade abre o detalhe (frente, quantitativo, efetivo) com os atalhos Lançar produção e Ocorrência (spec 061). */
@@ -34,7 +35,7 @@ export default function VigenteCampoPage() {
   const [aberta, setAberta] = useState<{ ln: LinhaVisao; local: string; area: string } | null>(null);
   const areas = useMemo(() => (v?.locais ?? []).flatMap((l) => l.areas.map((a) => ({ local: l, area: a }))), [v]);
 
-  if (vig.isLoading || prog.isLoading) return <p className="pt-10 text-center text-sm text-m-text-muted">Carregando…</p>;
+  if (vig.isLoading || prog.isLoading) return <Carregando />;
   if (!vig.data?.id || !v) return (<><TopoM titulo="Programação" /><p className={`${cartaoM} text-center text-sm text-m-text-secondary`}>Nenhuma programação emitida ainda.</p></>);
   const k = dia ?? 0;
   const baixar = () => api.download(`/programacoes/${id}/excel${rev != null ? `?revisao=${rev}` : ''}`, `${v.titulo.split(' · ')[0]}${rev != null ? ` rev${rev}` : ''}.xlsx`).catch((e) => toast.error(e.message));

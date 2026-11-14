@@ -1,0 +1,93 @@
+# Malhet · Programação × Simova — deploy no Coolify com IMAGENS PRONTAS (spec 085).
+# As imagens são montadas no GitHub Actions (deploy-coolify.yml) e publicadas no ghcr.io; a VPS só baixa e sobe —
+# não compila nada (1 vCPU / 4 GB ficavam sem fôlego no build do Next). Para voltar a compilar na VPS, use
+# docker-compose.coolify.yml (Actions › Coolify › acao=usar-build).
+# Coolify: New Resource › Docker Compose › este arquivo. Só o serviço "web" é publicado (porta 3000).
+# Variáveis marcadas com :? são obrigatórias (defina em Environment Variables no Coolify).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      # usuário/banco/volume exclusivos: não reaproveita banco de outro projeto no mesmo recurso do Coolify
+      POSTGRES_USER: malhet_prog
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      POSTGRES_DB: malhet_prog
+    volumes:
+      - malhet-prog-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U malhet_prog -d malhet_prog && psql -U malhet_prog -d malhet_prog -c 'select 1' >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: ghcr.io/juniorgoncalvessilva-ai/malhet-api:${IMAGEM_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_USER: malhet_prog
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: malhet_prog
+      CORS_ORIGINS: ${APP_URL:-http://localhost:3000}
+      AUTH_DISABLED: "false"
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (64+ caracteres aleatórios)}
+      MFA_CIPHER_KEY: ${MFA_CIPHER_KEY:-}
+      MFA_BACKUP_PEPPER: ${MFA_BACKUP_PEPPER:-}
+      AUTH_ISSUER: Malhet
+      DEFAULT_LOCALE: pt-BR
+      HIBP: ${HIBP:-0}
+      # http puro (IP:porta) exige 0; com domínio https use 1
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      COOKIE_SAMESITE: lax
+      HSTS: ${HSTS:-0}
+      # Super Admin(s) criados/promovidos no boot. Basta um dos pares.
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-console}
+      MAIL_FROM: ${MAIL_FROM:-nao-responder@malhet.app}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      # Arquivos (spec 082): disco = volume abaixo; nuvem por obra (configurada na tela Armazenamento).
+      ARQUIVOS_DIR: /data/arquivos
+      ARQUIVOS_LIMITE_GB: ${ARQUIVOS_LIMITE_GB:-25}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ARMAZENAMENTO_CHAVE: ${ARMAZENAMENTO_CHAVE:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
+      MS_CLIENT_SECRET: ${MS_CLIENT_SECRET:-}
+      DROPBOX_APP_KEY: ${DROPBOX_APP_KEY:-}
+      DROPBOX_APP_SECRET: ${DROPBOX_APP_SECRET:-}
+    volumes:
+      - malhet-prog-arquivos:/data/arquivos
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u,sys; o=u.build_opener(u.ProxyHandler({})); sys.exit(0 if o.open('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 8
+
+  web:
+    image: ghcr.io/juniorgoncalvessilva-ai/malhet-web:${IMAGEM_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+volumes:
+  malhet-prog-pg:
+  malhet-prog-arquivos:

@@ -14,6 +14,7 @@ import { useAcao, useFrentes2 } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { AcaoRestricao, Ishikawa } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { Carregando, LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 const SEIS_M: Record<string, string> = { MDO: 'Mão de Obra', MET: 'Método', MAT: 'Material', MAQ: 'Máquina', MAB: 'Meio Ambiente', MED: 'Medida' };
 const TOM = { Atrasado: 'perigo', Reprogramado: 'atencao', 'No Prazo': 'sucesso', 'Concluído': 'info', Cancelado: 'neutro' } as const;
@@ -44,7 +45,7 @@ const inp = 'h-8 w-full rounded-[8px] border border-m-stroke bg-m-surface-field 
 const th = 'whitespace-nowrap border-b border-m-stroke-subtle px-2 pb-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted';
 
 export default function RestricoesPage() {
-  return <Suspense fallback={<p className="text-sm text-m-text-muted">Carregando…</p>}><Restricoes /></Suspense>;
+  return <Suspense fallback={<Carregando />}><Restricoes /></Suspense>;
 }
 
 function Restricoes() {
@@ -167,7 +168,7 @@ function Restricoes() {
               <thead><tr>{['Nº', 'Atividade', 'Imp.', 'Ação', 'Sem.', 'Área', 'Responsável', 'Gerência', 'Prazo', 'Reprog.', 'Status', '6M', 'Observações', ''].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
               <tbody>
                 {ed && ed.id === null && linhaEdicao(ed)}
-                {!visiveis.length && !ed && <tr><td colSpan={14} className="py-8 text-center text-m-text-muted">{lista.isLoading ? 'Carregando…' : 'Nenhuma ação.'}</td></tr>}
+                {!visiveis.length && !ed && (lista.isLoading ? <LinhasCarregando colunas={14} /> : <tr><td colSpan={14} className="py-8 text-center text-m-text-muted">{'Nenhuma ação.'}</td></tr>)}
                 {visiveis.map((a) => (
                   <Fragment key={a.id}>
                     {ed?.id === a.id ? linhaEdicao(ed) : (
@@ -269,7 +270,7 @@ function Restricoes() {
           </Painel>
         </>
       )}
-      {aba === 'painel' && !i && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {aba === 'painel' && !i && <Carregando />}
 
       {aba === 'importar' && pode('planejador') && (
         <Painel titulo="Importar o Plano de Ação 6WLA">

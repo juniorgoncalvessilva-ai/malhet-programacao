@@ -25,7 +25,9 @@ export function LeitorNfc({ onLer }: { onLer: (serial: string | null, textos: st
   ) : <p className={`${cartaoM} text-[14px] text-m-text-secondary`}>Este navegador não lê NFC. A leitura NFC funciona no Chrome do Android, com o site em HTTPS. Use <b>Código</b> ou <b>Rosto</b>.</p>;
   const comecar = async () => {
     try {
-      parar.current = await escutarNfc((s, t) => onLer(s, t), (m) => { setMsg(m); avisar('erro'); });
+      parar.current = await escutarNfc((s, t) => onLer(s, t), (m) => { setMsg(m); avisar('erro'); },
+        // app nativo no iPhone: a janela do iOS fecha sozinha em 60 s (ou no Cancelar) — volta ao botão para continuar
+        (motivo) => { setEstado('parado'); setMsg(motivo === 'tempo' ? 'A leitura do iPhone fecha a cada 60 s. Toque para continuar.' : ''); });
       setEstado('lendo'); setMsg('');
     } catch (e) { setEstado('erro'); setMsg((e as Error).message || 'Permita o NFC para este site.'); }
   };

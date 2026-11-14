@@ -2,7 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { ExportarQuadro } from '@/components/Obra/ExportarQuadro';
 import { Cabecalho, Chip, Painel, dataBR, fmt } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
@@ -21,6 +23,8 @@ export default function LookaheadPage() {
   const api = useApi();
   const [inicio, setInicio] = useState(() => segunda(new Date()));
   const [origem, setOrigem] = useState<'programacao' | 'plano'>('programacao');
+  const quadro = useRef<HTMLDivElement>(null);
+  const [imprimindo, setImprimindo] = useState(false);
   const [semanas, setSemanas] = useState(6);
   const trocarOrigem = (o: 'programacao' | 'plano') => { setOrigem(o); setSemanas(o === 'plano' ? 13 : 6); setSel(null); };
   const [visao, setVisao] = useState<'equipe' | 'frente'>('equipe');
@@ -29,7 +33,9 @@ export default function LookaheadPage() {
   const ate = iso(somar(inicio, semanas * 7 - 1));
   const q = useQuery({ queryKey: ['lookahead', origem, de, ate], queryFn: () => api.get<Lookahead>(`/lookahead${qs({ de, ate, origem })}`) });
   // 13 semanas (plano de 90 dias) cabem na tela com colunas mais estreitas
-  const DIA_PX = semanas > 8 ? DIA_PX_PLANO : DIA_PX_PADRAO;
+  // na impressão (gestão à vista) os dias alargam para o quadro ficar na proporção da folha (√2) e ocupar a largura toda
+  const [diaPxImpressao, setDiaPxImpressao] = useState<number | null>(null);
+  const DIA_PX = diaPxImpressao ?? (semanas > 8 ? DIA_PX_PLANO : DIA_PX_PADRAO);
   const d = q.data;
   const hoje = iso(new Date());
   const idx = useMemo(() => Object.fromEntries((d?.dias ?? []).map((x, i) => [x.data, i])), [d]);
@@ -92,6 +98,17 @@ export default function LookaheadPage() {
           <button type="button" className="rounded-full border border-m-stroke px-3 py-1.5 text-[12.5px] font-semibold text-m-text-secondary hover:text-m-accent" onClick={() => setInicio(segunda(new Date()))}>Hoje</button>
           <button type="button" aria-label="Próxima semana" className="rounded-full border border-m-stroke p-2 text-m-text-secondary hover:text-m-accent" onClick={() => setInicio(somar(inicio, 7))}><ChevronRight size={16} /></button>
           {(origem === 'plano' ? [6, 9, 13] : [2, 4, 6]).map((n) => <Chip key={n} ativo={semanas === n} onClick={() => setSemanas(n)}>{n} semanas</Chip>)}
+          {d && <ExportarQuadro alvo={() => quadro.current} rotulo="Imprimir A0/A1/A2"
+            preparar={() => {
+              flushSync(() => { setImprimindo(true); setSel(null); });
+              const alto = quadro.current?.offsetHeight ?? 0;
+              const px = Math.max(DIA_PX, Math.floor((alto * Math.SQRT2 - ROTULO_PX) / Math.max(d.dias.length, 1)));
+              flushSync(() => setDiaPxImpressao(Math.min(px, 160)));
+              return () => { setImprimindo(false); setDiaPxImpressao(null); };
+            }}
+            tituloPadrao={`Look-ahead das equipes ${origem === 'plano' ? '(plano de 90 dias) ' : ''}· ${dataBR(d.de)} a ${dataBR(d.ate)}`}
+            detalhe={`${visao === 'equipe' ? 'Por equipe' : 'Por frente'} · ${d.blocos.length} cartão(ões)`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-m-stroke px-3 text-[12.5px] font-semibold text-m-accent hover:bg-m-accent-subtle" />}
         </div>}>
         {d && (
           <>
@@ -101,7 +118,12 @@ export default function LookaheadPage() {
               </div>
             )}
             <div className="-mx-1 overflow-x-auto px-1">
-              <div style={{ width: ROTULO_PX + largura }}>
+              <div ref={quadro} style={{ width: ROTULO_PX + largura }} className="bg-m-surface-raised">
+                {imprimindo && d.equipes.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-x-5 gap-y-1.5 px-2 pt-1 text-[13px] text-m-text-secondary">
+                    {d.equipes.map((e) => <span key={String(e.id)} className="flex items-center gap-1.5"><span className="inline-block h-3.5 w-3.5 rounded-[3px]" style={{ background: e.cor }} />{e.nome}{e.encarregado ? ` · ${e.encarregado}` : ''}</span>)}
+                  </div>
+                )}
                 <div className="flex text-[11px] font-semibold text-m-text-muted">
                   <div className="sticky left-0 z-20 shrink-0 bg-m-surface-raised" style={{ width: ROTULO_PX }} />
                   {semanasCab.map((s, i) => <div key={i} className="border-l border-m-stroke-subtle px-1 py-1 uppercase tracking-[0.4px]" style={{ width: s.n * DIA_PX }}>S{s.semana}</div>)}

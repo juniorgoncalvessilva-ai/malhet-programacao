@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Calculado, type MemoriaCalculo } from '@/components/Obra/Calculado';
 import { Campo, Chip, Indicador, Painel, Tabela, td, tdNum } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 interface PorDia { data: string; presentes: number; efetivo: number; presentes_nas_equipes: number; sem_equipe: number; taxa: number | null; hh: number }
 interface PorEquipe { equipe_id: number; nome: string; setor: string | null; efetivo: number; dias: number; presencas: number; possiveis: number; faltas: number; taxa: number | null; absenteismo: number | null; hh: number }
@@ -93,7 +94,7 @@ export function IndicadoresPresenca() {
           {[7, 15, 30, 90].map((x) => <Chip key={x} ativo={de === menos(x - 1) && ate === iso(new Date())} onClick={() => preset(x)}>{x} dias</Chip>)}
         </div>
       </div>
-      {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {q.error && <p className="text-[13px] text-m-danger">{(q.error as Error).message}</p>}
       {r && (
         <>

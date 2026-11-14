@@ -6,6 +6,7 @@ import { dataLonga } from '@/components/Mobile/campo';
 import { FAROL, useRestricoes } from '@/components/Mobile/restricoes';
 import { TopoM } from '@/components/Mobile/ui';
 import { Link } from '@/i18n/navigation';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 const FILTROS = ['Pendentes', 'Atrasado', 'Reprogramado', 'No Prazo'] as const;
 
@@ -28,7 +29,7 @@ export default function RestricoesCampo() {
           </button>
         ))}
       </div>
-      {q.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {q.isLoading && <Carregando />}
       {q.data && !lista.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhuma restrição aqui.</p>}
       <div className="flex flex-col gap-2">
         {lista.map((a) => (

@@ -16,6 +16,7 @@ import { Link } from '@/i18n/navigation';
 import type { Colaborador, SituacaoEfetivo } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { SITUACOES, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
+import { Carregando, LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 const TOM = TOM_SITUACAO;
 const LIMITE = 300;
@@ -106,7 +107,7 @@ export default function EfetivoPage() {
       <Abas rotulo="Seções do efetivo" ativa={aba} onTrocar={setAba}
         abas={[{ chave: 'efetivo', titulo: 'Efetivo' }, { chave: 'resumo', titulo: 'Resumo por função' }, { chave: 'importar', titulo: 'Importar e histórico' }]} />
 
-      {aba === 'resumo' && (lista.data ? <ResumoEfetivo efetivo={lista.data} /> : <p className="text-sm text-m-text-muted">Carregando…</p>)}
+      {aba === 'resumo' && (lista.data ? <ResumoEfetivo efetivo={lista.data} /> : <Carregando />)}
 
       {aba === 'importar' && <>
       {planejar && (
@@ -206,7 +207,7 @@ export default function EfetivoPage() {
               </tr>
             </thead>
             <tbody>
-              {lista.isLoading && <tr><td colSpan={7} className="py-8 text-center text-m-text-muted">Carregando…</td></tr>}
+              {lista.isLoading && <LinhasCarregando colunas={7} />}
               {!lista.isLoading && !filtrados.length && <tr><td colSpan={7} className="py-8 text-center text-m-text-muted">{todos.length ? 'Ninguém com esses filtros.' : 'Importe a planilha de efetivo.'}</td></tr>}
               {filtrados.slice(0, LIMITE).map((c) => (
                 <tr key={c.id} className={`${sel.has(c.id) ? 'bg-m-accent-subtle' : 'hover:bg-m-surface-hover'} ${c.no_ultimo_arquivo ? '' : 'opacity-60'}`}>

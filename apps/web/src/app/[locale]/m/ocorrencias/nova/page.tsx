@@ -11,9 +11,10 @@ import { TirarFotos, useEnviarFoto } from '@/components/Mobile/Fotos';
 import { CampoM, ChipsM, RodapeM, TextoM, TopoM, botaoPrimarioM, botaoSecundarioM, cartaoM } from '@/components/Mobile/ui';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useRouter } from '@/i18n/navigation';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 export default function NovaOcorrenciaPage() {
-  return <Suspense fallback={<p className="text-sm text-m-text-muted">Carregando…</p>}><NovaOcorrencia /></Suspense>;
+  return <Suspense fallback={<Carregando />}><NovaOcorrencia /></Suspense>;
 }
 
 /** O que foi registrado para cada causa: cada causa vira um item separado no Pareto, com o seu relato, ação e fotos. */

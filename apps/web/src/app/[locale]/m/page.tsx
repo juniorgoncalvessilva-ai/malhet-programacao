@@ -12,6 +12,7 @@ import { useSessao } from '@/lib/auth/AuthProvider';
 import { Avatar } from '@/components/Perfil/Avatar';
 import { nomeDe, usePerfil } from '@/lib/perfil';
 import { useContagemNotificacoes } from '@/lib/notificacoes';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 
@@ -54,7 +55,7 @@ export default function CampoInicio() {
 
       <section className="flex flex-col gap-3 rounded-[20px] bg-m-accent-strong p-5 text-m-on-accent">
         <span className="text-[12px] font-medium uppercase leading-4 tracking-[0.48px] opacity-80">Meta de hoje</span>
-        {dia.isLoading ? <span className="text-[15px] opacity-80">Carregando…</span> : !d?.programacao ? (
+        {dia.isLoading ? <Esqueleto className="h-4 w-48 bg-white/30" /> : !d?.programacao ? (
           <span className="text-[15px]">Nenhuma programação emitida cobre hoje.</span>
         ) : (
           <>

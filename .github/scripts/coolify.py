@@ -165,6 +165,22 @@ def reaproveitar(uuid: str) -> None:
     deploy(uuid)
 
 
+def compose(uuid: str, arquivo: str) -> None:
+    """Troca o arquivo de compose do recurso: imagens prontas do ghcr.io (spec 085) ou build na VPS."""
+    st, a = api("GET", f"/applications/{uuid}")
+    print("ANTES", st, so(a, ("name", "build_pack", "docker_compose_location")) if isinstance(a, dict) else a)
+    st, r = api("PATCH", f"/applications/{uuid}", {"docker_compose_location": arquivo})
+    print("PATCH docker_compose_location ->", arquivo, st, "ok" if st < 300 else r)
+    if st >= 300:
+        sys.exit(1)
+    st, r = api("POST", f"/deploy?uuid={uuid}&force=false")
+    dep = (r or {}).get("deployments", [{}])[0].get("deployment_uuid") if isinstance(r, dict) else None
+    print("DEPLOY", st, dep)
+    if dep and os.environ.get("GITHUB_ENV"):
+        with open(os.environ["GITHUB_ENV"], "a") as f:
+            f.write(f"DEPLOY_UUID={dep}\n")
+
+
 def detalhe(uuid: str) -> None:
     st, a = api("GET", f"/applications/{uuid}")
     if not isinstance(a, dict):
@@ -198,6 +214,10 @@ if __name__ == "__main__":
         if app:
             st, lg = api("GET", f"/applications/{app}/logs?lines=200")
             print("APPLOGS", st, str(lg)[:3000])
+        sys.exit(0)
+    if sys.argv[1] in ("usar-imagens", "usar-build"):
+        compose(sys.argv[2] or os.environ.get("COOLIFY_UUID", ""),
+                "/docker-compose.coolify.imagens.yml" if sys.argv[1] == "usar-imagens" else "/docker-compose.coolify.yml")
         sys.exit(0)
     if sys.argv[1] == "detalhe":
         detalhe(sys.argv[2]); sys.exit(0)

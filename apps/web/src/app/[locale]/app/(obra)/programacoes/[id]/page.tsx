@@ -24,6 +24,7 @@ import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
 import { DesviosDaProgramacao } from '@/components/Obra/DesviosProgramacao';
 import { RevisoesProgramacao } from '@/components/Obra/RevisoesProgramacao';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 interface FormLinha {
   wbs_no_id: string; area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
@@ -225,7 +226,7 @@ export default function MontarPage() {
     } catch (e) { toast.error((e as Error).message); }
   };
 
-  if (!v) return <p className="text-sm text-m-text-muted">{prog.isLoading ? 'Carregando…' : 'Programação não encontrada.'}</p>;
+  if (!v) return <p className="text-sm text-m-text-muted">{prog.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Programação não encontrada.'}</p>;
   const encs = encarregadosDe(v.locais);
   const locaisFiltrados = filtrarEncarregado(v.locais, enc);
   const locaisVis = porEnc ? agruparPorEncarregado(locaisFiltrados) : locaisFiltrados;

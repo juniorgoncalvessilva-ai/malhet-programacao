@@ -6,6 +6,7 @@
  */
 import { cn } from '@/lib/utils';
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import { LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 type Tom = 'neutro' | 'acento' | 'sucesso' | 'atencao' | 'perigo' | 'info';
 
@@ -122,6 +123,9 @@ export function Chip({ ativo, children, ...p }: React.ButtonHTMLAttributes<HTMLB
   );
 }
 
+/** Tabela com `vazio` igual a CARREGANDO mostra linhas-esqueleto (spec 085). */
+export const CARREGANDO = 'Carregando…';
+
 export function Tabela({ cabecalho, children, vazio, direita = [] }: {
   cabecalho: string[]; children: ReactNode; vazio?: boolean | string; direita?: number[];
 }) {
@@ -137,9 +141,9 @@ export function Tabela({ cabecalho, children, vazio, direita = [] }: {
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        <tbody>{vazio === CARREGANDO ? <LinhasCarregando colunas={cabecalho.length} /> : children}</tbody>
       </table>
-      {vazio && <p className="py-8 text-center text-[13px] text-m-text-muted">{typeof vazio === 'string' ? vazio : 'Nada por aqui ainda.'}</p>}
+      {vazio && vazio !== CARREGANDO && <p className="py-8 text-center text-[13px] text-m-text-muted">{typeof vazio === 'string' ? vazio : 'Nada por aqui ainda.'}</p>}
     </div>
   );
 }

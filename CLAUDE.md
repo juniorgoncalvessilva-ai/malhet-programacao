@@ -171,6 +171,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   por obra, acervo Zettelkasten `Malhet/obras/<obra>/NN-pasta/AAAAMMDDhhmm-TIPO-curto.ext` + `.md`): arquivo novo entra por
   `arquivos.application.servico.guardar` (nunca LargeBinary novo); quem usa registra migrador/em-uso em `registro.py`;
   sensível (rosto, evidência LGPD, coordenadas) não vai à nuvem. Tela `/app/armazenamento`.
+- Spec 085: imagens montadas no GitHub Actions (ghcr.io, `docker-compose.coolify.imagens.yml`, `coolify.py usar-imagens`);
+  plano: Levar à programação por semana (corrente) e grade recolhível Local/Área/CWP; look-ahead impresso A0–A3
+  (`ExportarQuadro` + `gerarFolha`); book com miniaturas P/M/G. App nativo em `apps/mobile` (Capacitor, plugin `NfcCracha`
+  Swift/Java; web usa por `emAppNativo`/`temNfcNativo` em `lib/presenca/leitores.ts`; `docs/app-nativo.md`).
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 
@@ -195,6 +199,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - **Memória de cálculo**: todo número calculado na tela usa `<Calculado>` (`components/Obra/Calculado.tsx`) e abre a
   conta + fontes (origem e linha/campo). Backend: `app/shared/memoria.py` (`Memoria`, `Fonte`, `pacote`); CPU com linha do
   arquivo (`cpu_linha`, `cpu_obra.rastrear`, `referencias/application/memoria_cpu.py`). Número novo sem memória = bug. Spec 022.
+- Carregamento = esqueleto, nunca texto: `components/Obra/Esqueleto.tsx` (`Carregando`, `LinhasCarregando`, `Esqueleto`),
+  `Tabela vazio={CARREGANDO}`, `loading.tsx` nas rotas (spec 085).
 - Exclusão/remoção sempre pede confirmação com `useConfirmar()` (`components/Obra/Confirmar.tsx`); nunca
   `window.confirm`. Vários valores de lista: `components/Obra/MultiSelecao.tsx`.
 - Sessão: `useSessao()` (`src/lib/auth/AuthProvider.tsx`). Código antigo do kit usa o shim `src/lib/auth/compat.ts`.

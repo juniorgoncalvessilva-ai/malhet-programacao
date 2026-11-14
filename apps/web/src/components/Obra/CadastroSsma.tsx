@@ -10,6 +10,7 @@ import { useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { CadastroSsma, TipoCadastroSsma } from '@/lib/api/types';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 export const ROTULO_SSMA: Record<TipoCadastroSsma, { curto: string; longo: string; campo: string; exemplo: string }> = {
   TECNICO: { curto: 'Técnicos', longo: 'Técnico de segurança responsável', campo: 'Nome do técnico', exemplo: 'Ana Lima' },
@@ -163,7 +164,7 @@ function TimeSeguranca({ aoFechar }: { aoFechar: () => void }) {
           <Botao disabled={!sel.size || importar.isPending} onClick={() => importar.mutate({ colaboradores: [...sel] }, { onSuccess: ok, onError: (e) => toast.error(e.message) })}>Incluir {sel.size || ''} selecionado(s)</Botao>
         </div>
         <ul className="max-h-60 overflow-y-auto rounded-m-md border border-m-stroke-subtle">
-          {!pessoas.length && <li className="px-3 py-4 text-[13px] text-m-text-muted">{efetivo.isLoading ? 'Carregando…' : 'Ninguém com esse filtro no efetivo.'}</li>}
+          {!pessoas.length && <li className="px-3 py-4 text-[13px] text-m-text-muted">{efetivo.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Ninguém com esse filtro no efetivo.'}</li>}
           {pessoas.map((p) => (
             <li key={p.id} className="border-b border-m-row last:border-0">
               <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[13px] hover:bg-m-surface-hover">

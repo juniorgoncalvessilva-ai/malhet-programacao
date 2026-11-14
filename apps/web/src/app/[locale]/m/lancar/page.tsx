@@ -11,9 +11,10 @@ import { Miniatura, TirarFotos, useEnviarFoto } from '@/components/Mobile/Fotos'
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { Carregando } from '@/components/Obra/Esqueleto';
 
 export default function LancarPage() {
-  return <Suspense fallback={<p className="text-sm text-m-text-muted">Carregando…</p>}><Lancar /></Suspense>;
+  return <Suspense fallback={<Carregando />}><Lancar /></Suspense>;
 }
 
 const CAUSAS_VISIVEIS = 8;
@@ -120,7 +121,7 @@ function Lancar() {
         </div>
       )}
 
-      {dia.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {dia.isLoading && <Carregando />}
       {d && !d.programacao && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhuma programação emitida cobre {dataLonga(data)}.</p>}
       {d?.programacao && !linhas.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nada programado {d.so_minha_equipe ? 'para a sua equipe ' : ''}neste dia.</p>}
 
