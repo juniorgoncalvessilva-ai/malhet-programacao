@@ -12,7 +12,7 @@ COPY app ./app
 COPY vendor ./vendor
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
-RUN useradd -r -u 10001 api && chown -R api /app
+RUN useradd -r -u 10001 api && mkdir -p /data/arquivos && chown -R api /app /data
 USER api
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=8 \

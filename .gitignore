@@ -14,3 +14,6 @@ apps/web/next-env.d.ts
 data/local/
 *.log
 .DS_Store
+# Arquivos da obra no disco (fotos, anexos — spec 082): nunca no git
+apps/api/data/arquivos/
+data/arquivos/

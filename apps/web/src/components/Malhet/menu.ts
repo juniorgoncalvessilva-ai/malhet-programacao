@@ -1,4 +1,4 @@
-import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Smartphone, Percent, Link2 } from 'lucide-react';
+import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Smartphone, Percent, Link2, Cloud } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -60,6 +60,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Acessos e usuários', url: '/app/acessos', icone: KeyRound, minimo: 'admin' },
       { titulo: 'Marca da obra', url: '/app/marca', icone: Palette, minimo: 'admin' },
       { titulo: 'Menu do celular', url: '/app/menu-celular', icone: Smartphone, minimo: 'admin' },
+      { titulo: 'Armazenamento', url: '/app/armazenamento', icone: Cloud, minimo: 'admin' },
     ],
   },
 ];

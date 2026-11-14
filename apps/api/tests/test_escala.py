@@ -77,3 +77,43 @@ def test_json_grande_vai_comprimido_e_imagem_nao(client):
     assert r.json()["paths"]  # o cliente descomprime normalmente
     pequeno = client.get("/health", headers={"Accept-Encoding": "gzip"})
     assert pequeno.headers.get("content-encoding") is None  # abaixo de 1000 bytes não compensa
+
+
+def test_visao_calculada_uma_vez_por_mudanca_e_304(client):
+    from app.shared import cache_leitura
+    from tests.test_excluir_revisao import _programacao
+
+    pid = _programacao(client)
+    antes = cache_leitura.estatistica["calculos"]
+    r1 = client.get(f"/api/programacoes/{pid}")
+    r2 = client.get(f"/api/programacoes/{pid}")
+    assert r1.json() == r2.json() and cache_leitura.estatistica["calculos"] == antes + 1  # a segunda veio pronta
+    etag = r1.headers["etag"]
+    assert client.get(f"/api/programacoes/{pid}", headers={"If-None-Match": etag}).status_code == 304
+    # gravação na obra muda a marca: a próxima leitura recalcula e já traz o dado novo
+    lid = r1.json()["locais"][0]["areas"][0]["linhas"][0]["id"]
+    client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json={"campo": "previsto", "valores": [{"data": "2026-11-10", "valor": 7}]})
+    r3 = client.get(f"/api/programacoes/{pid}", headers={"If-None-Match": etag})
+    assert r3.status_code == 200 and r3.headers["etag"] != etag and cache_leitura.estatistica["calculos"] == antes + 2
+    ln = r3.json()["locais"][0]["areas"][0]["linhas"][0]
+    assert 7 in ln["previsto"]
+    # o dia do campo usa a mesma conta guardada, sem recalcular
+    client.get("/api/campo/dia", params={"data": "2026-11-10"})
+    assert cache_leitura.estatistica["calculos"] == antes + 2
+
+
+def test_muitos_ao_mesmo_tempo_fazem_um_calculo(client):
+    from app.shared import cache_leitura
+    from tests.test_excluir_revisao import _programacao
+
+    pid = _programacao(client)
+    obra = client.headers["X-Obra-Id"]
+    antes = cache_leitura.estatistica["calculos"]
+
+    async def rodar():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t", headers={"X-Obra-Id": obra}) as c:
+            return await asyncio.gather(*[c.get(f"/api/programacoes/{pid}") for _ in range(25)])
+
+    rs = asyncio.run(rodar())
+    assert {x.status_code for x in rs} == {200} and len({x.content for x in rs}) == 1
+    assert cache_leitura.estatistica["calculos"] == antes + 1

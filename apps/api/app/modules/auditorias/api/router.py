@@ -13,7 +13,8 @@ from app.core.db import get_session
 from app.modules.auditorias import application as ap
 from app.modules.auditorias.domain.auditoria import MODELO_SEGURANCA, ROTULO_STATUS, pendencias, texto_envio, validar_config
 from app.modules.auditorias.infra.models import ModeloAuditoriaModel, RegistroAuditoriaModel
-from app.modules.campo.domain.foto import LIMITE, tipo_da_imagem
+from app.modules.campo.application.arquivos import nova_foto
+from app.modules.campo.domain.foto import LIMITE
 from app.modules.campo.infra.models import FotoCampoModel
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
@@ -260,10 +261,7 @@ def registro_completo(dados: str = Form(...), momentos: str = Form("[]"), fotos:
     r, m = _novo(s, c, d)
     r.id_local, r.registrado_em = d.id_local, d.registrado_em
     for arq, momento in zip(fotos, ms):
-        conteudo = arq.file.read(LIMITE + 1)
-        s.add(FotoCampoModel(obra_id=c.obra_id, alvo="auditoria", alvo_id=r.id, data=r.data, legenda=momento,
-                             content_type=tipo_da_imagem(conteudo), tamanho=len(conteudo), conteudo=conteudo,
-                             enviado_por=c.usuario.id))
+        nova_foto(s, c.obra_id, "auditoria", r.id, r.data, momento, arq.file.read(LIMITE + 1), c.usuario.id)
     s.flush()
     ap.finalizar(s, r, m.config, c.usuario.id)
     return {**_saida(s, c.obra_id, [r])[0], "texto": _texto(s, c, r, m), "repetido": False}

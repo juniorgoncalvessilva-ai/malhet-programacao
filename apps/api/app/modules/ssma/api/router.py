@@ -161,9 +161,9 @@ def anexar(cid: int, arquivo: UploadFile = File(...), s: Session = Depends(get_s
 
     conteudo = arquivo.file.read(LIMITE_ANEXO + 1)
     nome, ctype = validar_anexo(tipo, arquivo.filename or "", conteudo)
-    a = AnexoSsmaModel(obra_id=c.obra_id, cadastro_id=m.id, nome=nome, content_type=ctype, tamanho=len(conteudo),
-                       conteudo=conteudo, enviado_por=c.usuario.id)
-    s.add(a)
+    from app.modules.ssma.application.arquivos import novo_anexo
+
+    a = novo_anexo(s, c.obra_id, m.id, nome, ctype, conteudo, c.usuario.id)
     s.flush()
     s.refresh(a)
     return AnexoOut.model_validate(a)
@@ -183,7 +183,9 @@ def baixar_anexo(aid: int, s: Session = Depends(get_session), c: ContextoObra = 
     a = _anexo(s, c, aid)
     ascii_ = a.nome.encode("ascii", "ignore").decode() or "arquivo"
     disp = f"attachment; filename=\"{ascii_}\"; filename*=UTF-8''{quote(a.nome)}"
-    return Response(a.conteudo, media_type=a.content_type, headers={"Content-Disposition": disp})
+    from app.modules.ssma.application.arquivos import conteudo
+
+    return Response(conteudo(s, a), media_type=a.content_type, headers={"Content-Disposition": disp})
 
 
 @router.delete("/anexos/{aid}", status_code=204)

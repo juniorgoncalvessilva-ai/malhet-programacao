@@ -12,6 +12,7 @@ from app.modules.equipes.infra.models import EquipeModel
 from app.modules.obras.domain.obra import PapelObra
 from app.modules.planejamento.application import servico as sv
 from app.modules.planejamento.infra.models import ProgramacaoModel
+from app.shared.cache_leitura import dict_em_cache
 
 router = APIRouter(prefix="/campo", tags=["campo (mobile)"])
 
@@ -34,7 +35,7 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
             "so_minha_equipe": False}
     if p is None:
         return base
-    v = sv.visao(s, p)
+    v = dict_em_cache("visao", c.obra_id, p.id, lambda: sv.visao(s, p))  # spec 082
     datas = [x["data"] for x in v["dias"]]
     i = datas.index(d.isoformat())
     # encarregado vê só as linhas das equipes em que ele é o encarregado (pelo crachá do acesso)

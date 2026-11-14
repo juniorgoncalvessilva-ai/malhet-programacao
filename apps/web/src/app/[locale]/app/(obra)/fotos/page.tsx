@@ -22,13 +22,15 @@ const dataBR = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('
 const hora = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
 const menos = (dias: number) => { const d = new Date(Date.now() - dias * 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-function useFoto(id: number) {
+/** `mini`: miniatura de até 480 px para a grade (o book carrega rápido); o original só na foto ampliada (spec 082). */
+function useFoto(id: number, mini = false) {
   const api = useApi();
-  return useQuery({ queryKey: ['foto', id], queryFn: async () => URL.createObjectURL(await api.blob(`/fotos/${id}/arquivo`)), staleTime: Infinity });
+  return useQuery({ queryKey: ['foto', id, mini ? 'mini' : 'original'], staleTime: Infinity,
+    queryFn: async () => URL.createObjectURL(await api.blob(`/fotos/${id}/arquivo${mini ? '?mini=true' : ''}`)) });
 }
 
 function Cartao({ f, onAbrir }: { f: FotoBook; onAbrir: () => void }) {
-  const url = useFoto(f.id).data;
+  const url = useFoto(f.id, true).data;
   return (
     <figure className="flex break-inside-avoid flex-col overflow-hidden rounded-m-md border border-m-stroke-subtle bg-m-surface-raised">
       <button type="button" onClick={onAbrir} aria-label="Ver a foto ampliada" className="aspect-[4/3] w-full bg-m-surface-active">

@@ -61,3 +61,24 @@ swap antes do primeiro deploy, senão o build morre com `signal SIGKILL`:
 ```bash
 sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
+
+## Armazenamento de arquivos: disco + Google Drive / OneDrive / Dropbox (spec 082)
+
+Fotos e anexos ficam no volume `malhet-prog-arquivos` (`/data/arquivos`) e sobem, por obra, para a nuvem escolhida na
+tela **Armazenamento** (`/app/armazenamento`, só administrador). Os que estavam no banco migram sozinhos, aos poucos.
+
+1. `APP_URL` precisa ser o endereço público **https** (ex.: `https://malhet.com`): é para onde o login do provedor volta.
+2. `ARMAZENAMENTO_CHAVE`: 64+ caracteres aleatórios (cifra os tokens). Se ficar vazia, usa o `JWT_SECRET`; trocar
+   qualquer um dos dois obriga a conectar a nuvem de novo.
+3. Cadastre o app só dos provedores que vai usar (os outros ficam desabilitados na tela). Endereço de retorno de cada um:
+   `<APP_URL>/backend/api/armazenamento/oauth/<google|onedrive|dropbox>/retorno`.
+
+| Provedor | Onde | O que configurar | Variáveis |
+|---|---|---|---|
+| Google Drive | console.cloud.google.com → novo projeto → *APIs e serviços* | Ativar **Google Drive API**; *Tela de consentimento OAuth* (externo, publicar); *Credenciais* → ID do cliente OAuth "Aplicativo da Web" com o retorno acima. Escopo usado: `drive.file` (o app só vê o que ele criou — não exige verificação do Google) | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| OneDrive | portal.azure.com → *Microsoft Entra ID* → *Registros de aplicativo* | Contas "qualquer organização + pessoais"; plataforma Web com o retorno acima; *Certificados e segredos* → novo segredo; permissões delegadas `Files.ReadWrite.AppFolder`, `User.Read`, `offline_access` (na empresa, o admin pode precisar *Conceder consentimento*) | `MS_CLIENT_ID`, `MS_CLIENT_SECRET` |
+| Dropbox | dropbox.com/developers/apps → *Create app* | *Scoped access* + **App folder**; em *Permissions* marcar `files.content.write`, `files.content.read`, `account_info.read`; em *OAuth 2 › Redirect URIs* o retorno acima | `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET` |
+
+Na nuvem, a obra fica em `Malhet/obras/<CODIGO-obra>/` com as pastas `10-programacoes … 90-arquivo-morto`; cada arquivo
+leva um `.md` com os metadados (Zettelkasten). Rosto, evidências LGPD e coordenadas nunca saem do servidor.
+`ARQUIVOS_LIMITE_GB` (padrão 25) é o quanto de originais o disco segura antes de liberar os já enviados.

@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import ContextoObra, ler, negar, ssma
 from app.core.db import get_session
-from app.modules.campo.domain.foto import LIMITE, tipo_da_imagem
+from app.modules.campo.application.arquivos import nova_foto
+from app.modules.campo.domain.foto import LIMITE
 from app.modules.campo.infra.models import FotoCampoModel
 from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.obras.domain.obra import PapelObra
@@ -213,9 +214,7 @@ def abrir_evento(dados: str = Form(...), momentos: str = Form("[]"), fotos: list
     s.add(e)
     s.flush()
     for arq, momento in zip(fotos, ms):
-        conteudo = arq.file.read(LIMITE + 1)
-        s.add(FotoCampoModel(obra_id=c.obra_id, alvo="evento", alvo_id=e.id, data=d.data, legenda=momento,
-                             content_type=tipo_da_imagem(conteudo), tamanho=len(conteudo), conteudo=conteudo, enviado_por=c.usuario.id))
+        nova_foto(s, c.obra_id, "evento", e.id, d.data, momento, arq.file.read(LIMITE + 1), c.usuario.id)
     s.flush()
     return {**_evento_out(s, e, []), "repetido": False}
 

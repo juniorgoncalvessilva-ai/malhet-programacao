@@ -5,6 +5,11 @@ os.environ["DATABASE_URL"] = os.environ.get(
 )
 os.environ.setdefault("AUTH_DISABLED", "true")
 os.environ.setdefault("JWT_SECRET", "segredo-de-teste-com-mais-de-32-caracteres")
+# arquivos (spec 082): disco temporário e sem a tarefa em segundo plano (os testes chamam a fila na mão)
+import tempfile  # noqa: E402
+
+os.environ["ARQUIVOS_DIR"] = tempfile.mkdtemp(prefix="malhet-arquivos-")
+os.environ["ARQUIVOS_FILA"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -18,6 +23,9 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture()
 def client():
+    from app.shared.cache_leitura import limpar
+
+    limpar()  # cada teste recria o banco: nada guardado de um teste vale no outro
     for md in (Base.metadata, AuthBase.metadata):
         md.drop_all(engine)
         md.create_all(engine)

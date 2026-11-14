@@ -1,7 +1,7 @@
 import copy
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
@@ -25,6 +25,7 @@ from app.modules.referencias.infra.cpu_gateway import CpuGateway
 from app.modules.referencias.infra.resolvedor import JORNADA_REFERENCIA, ResolvedorReferencias
 from app.modules.ssma.domain.cadastro import CAMPOS_PLANEJAMENTO, CAMPOS_SEGURANCA
 from app.modules.ssma.infra.gateway import CadastroSsmaGateway
+from app.shared.cache_leitura import resposta_em_cache
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(tags=["programação semanal/mensal"])
@@ -160,8 +161,10 @@ def vigente(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 
 
 @router.get("/programacoes/{pid}")
-def ver(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    return sv.visao(s, sv.obter(s, c.obra_id, pid))
+def ver(pid: int, request: Request, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Calculada uma vez por mudança na obra e servida a todos (spec 082); 304 quando o navegador já tem esta versão."""
+    p = sv.obter(s, c.obra_id, pid)
+    return resposta_em_cache(request, "visao", c.obra_id, pid, lambda: sv.visao(s, p))
 
 
 @router.delete("/programacoes/{pid}", status_code=204)

@@ -23,7 +23,8 @@ class CadastroSsmaModel(Base):
 
 
 class AnexoSsmaModel(Base):
-    """Arquivo do documento (Excel, Word ou PDF). Opcional; vários por item. Guardado no banco (vai no backup)."""
+    """Arquivo do documento (Excel, Word ou PDF). Opcional; vários por item. Conteúdo em `arquivo` (disco + nuvem,
+    spec 082); `conteudo` é o legado que a fila migra."""
 
     __tablename__ = "anexo_ssma"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -32,6 +33,7 @@ class AnexoSsmaModel(Base):
     nome: Mapped[str] = mapped_column(String(200))
     content_type: Mapped[str] = mapped_column(String(120))
     tamanho: Mapped[int] = mapped_column(Integer)
-    conteudo: Mapped[bytes] = deferred(mapped_column(LargeBinary))
+    conteudo: Mapped[bytes | None] = deferred(mapped_column(LargeBinary, nullable=True))
+    arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"), index=True)
     enviado_por: Mapped[str] = mapped_column(String(80))
     enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -23,3 +23,4 @@ from app.modules.lgpd.infra import models as _lgpd  # noqa: F401
 from app.modules.perfil.infra import models as _perfil  # noqa: F401
 from app.modules.notificacoes.infra import models as _notificacoes  # noqa: F401
 from app.modules.criterios.infra import models as _criterios  # noqa: F401
+from app.modules.arquivos.infra import models as _arquivos  # noqa: F401

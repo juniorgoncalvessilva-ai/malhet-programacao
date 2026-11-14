@@ -159,8 +159,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Início do celular só com o que fazer e atalhos (sem lista de atividades). Spec 078.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
-  `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Fases 3–5 (cache da visão, arquivos em Drive/OneDrive/Dropbox)
-  em proposta na spec.
+  `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a
+  marca de mudanças da obra; só em rotas de leitura). Arquivos = módulo `arquivos/` (disco + Google Drive/OneDrive/Dropbox
+  por obra, acervo Zettelkasten `Malhet/obras/<obra>/NN-pasta/AAAAMMDDhhmm-TIPO-curto.ext` + `.md`): arquivo novo entra por
+  `arquivos.application.servico.guardar` (nunca LargeBinary novo); quem usa registra migrador/em-uso em `registro.py`;
+  sensível (rosto, evidência LGPD, coordenadas) não vai à nuvem. Tela `/app/armazenamento`.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

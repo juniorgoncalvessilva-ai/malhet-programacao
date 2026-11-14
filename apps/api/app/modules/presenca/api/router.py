@@ -17,6 +17,7 @@ from app.modules.equipes.infra.models import EquipeModel
 from app.modules.presenca.domain.presenca import (DISTANCIA_MAX, Leitura, normalizar_codigo, primeiras_do_dia,
                                                   validar_descritor, validas)
 from app.modules.presenca.infra.models import IdentificacaoModel, LeituraPresencaModel
+from app.shared.cache_leitura import dict_em_cache
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(prefix="/presenca", tags=["presença (apropriação)"])
@@ -204,7 +205,7 @@ def dia(data: date | None = None, atividades: bool = False, s: Session = Depends
 
     prog = programacao_do_dia(s, c.obra_id, d)
     if prog is not None and atividades:
-        v = sv.visao(s, prog)
+        v = dict_em_cache("visao", c.obra_id, prog.id, lambda: sv.visao(s, prog))  # spec 082
         i = [x["data"] for x in v["dias"]].index(d.isoformat())
         cap_pres = sv.capacidade_com_presentes(s, prog, presentes_chaves)
         idx = {e["equipe_id"]: e for e in saida_eq}

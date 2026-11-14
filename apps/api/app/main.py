@@ -42,6 +42,10 @@ from app.modules.lgpd.api.router import router as lgpd
 from app.modules.perfil.api.router import router as perfil
 from app.modules.notificacoes.api.router import router as notificacoes
 from app.modules.criterios.api.router import router as criterios
+from app.modules.arquivos.api.router import router as armazenamento
+from app.modules.arquivos.application import fila as fila_arquivos
+import app.modules.campo.application.arquivos  # noqa: F401  (registra as fotos na fila de arquivos)
+import app.modules.ssma.application.arquivos  # noqa: F401  (registra os anexos de SSMA)
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -62,6 +66,7 @@ async def lifespan(app: FastAPI):
                 log.warning("Super Admin garantido: %s (%s)", email, var_email)
         except Exception as exc:  # senha fora da regra etc.: não derruba a API
             log.error("Não foi possível garantir o Super Admin %s (%s): %s", email, var_email, exc)
+    fila_arquivos.iniciar()  # spec 082: sobe à nuvem, migra os arquivos do banco e libera o disco
     yield
 
 
@@ -118,5 +123,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento):
     app.include_router(r, prefix="/api")

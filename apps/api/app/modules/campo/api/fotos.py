@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import ContextoObra, ler, programar
 from app.core.db import get_session
-from app.modules.campo.domain.foto import LIMITE, tipo_da_imagem, validar_alvo
+from app.modules.campo.application.arquivos import conteudo as conteudo_da_foto
+from app.modules.campo.application.arquivos import nova_foto
+from app.modules.campo.domain.foto import LIMITE, validar_alvo
 from app.modules.campo.infra.models import FotoCampoModel
 from app.modules.obras.domain.obra import PapelObra
 from app.shared.errors import DomainError, NotFoundError
@@ -65,10 +67,7 @@ def enviar(alvo: str = Form(...), alvo_id: int = Form(...), data: date | None = 
     alvo = validar_alvo(alvo)
     _alvo_existe(s, c.obra_id, alvo, alvo_id)
     conteudo = arquivo.file.read(LIMITE + 1)
-    f = FotoCampoModel(obra_id=c.obra_id, alvo=alvo, alvo_id=alvo_id, data=data,
-                       legenda=" ".join((legenda or "").split())[:300] or None, content_type=tipo_da_imagem(conteudo),
-                       tamanho=len(conteudo), conteudo=conteudo, enviado_por=c.usuario.id)
-    s.add(f)
+    f = nova_foto(s, c.obra_id, alvo, alvo_id, data, " ".join((legenda or "").split())[:300] or None, conteudo, c.usuario.id)
     s.flush()
     s.refresh(f)
     return _out(f)
@@ -100,11 +99,14 @@ def _foto(s: Session, c: ContextoObra, fid: int) -> FotoCampoModel:
 
 
 @router.get("/{fid}/arquivo")
-def arquivo(fid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+def arquivo(fid: int, mini: bool = False, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """`?mini=true`: miniatura de até 480 px (≈30 KB) para listas e o book — o original só ao abrir a foto (spec 082)."""
     f = _foto(s, c, fid)
-    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[f.content_type]
-    return Response(f.conteudo, media_type=f.content_type,
-                    headers={"Content-Disposition": f'inline; filename="foto-{f.id}.{ext}"', "Cache-Control": "private, max-age=86400"})
+    dados = conteudo_da_foto(s, f, mini=mini)
+    tipo = "image/jpeg" if mini else f.content_type
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[tipo]
+    return Response(dados, media_type=tipo, headers={"Content-Disposition": f'inline; filename="foto-{f.id}{"-mini" if mini else ""}.{ext}"',
+                                                     "Cache-Control": "private, max-age=86400"})
 
 
 @router.delete("/{fid}", status_code=204)

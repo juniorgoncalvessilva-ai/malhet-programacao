@@ -18,6 +18,7 @@ class FotoCampoModel(Base):
     legenda: Mapped[str | None] = mapped_column(String(300))
     content_type: Mapped[str] = mapped_column(String(40))
     tamanho: Mapped[int] = mapped_column(Integer)
-    conteudo: Mapped[bytes] = deferred(mapped_column(LargeBinary))  # no banco: vai no backup
+    conteudo: Mapped[bytes | None] = deferred(mapped_column(LargeBinary, nullable=True))  # legado: a fila move para `arquivo`
+    arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"), index=True)  # spec 082
     enviado_por: Mapped[str] = mapped_column(String(80))
     enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

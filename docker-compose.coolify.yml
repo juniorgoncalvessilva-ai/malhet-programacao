@@ -53,6 +53,19 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
+      # Arquivos (spec 082): disco = volume abaixo; nuvem por obra (configurada na tela Armazenamento).
+      ARQUIVOS_DIR: /data/arquivos
+      ARQUIVOS_LIMITE_GB: ${ARQUIVOS_LIMITE_GB:-25}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ARMAZENAMENTO_CHAVE: ${ARMAZENAMENTO_CHAVE:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
+      MS_CLIENT_SECRET: ${MS_CLIENT_SECRET:-}
+      DROPBOX_APP_KEY: ${DROPBOX_APP_KEY:-}
+      DROPBOX_APP_SECRET: ${DROPBOX_APP_SECRET:-}
+    volumes:
+      - malhet-prog-arquivos:/data/arquivos
     expose:
       - "8000"
     healthcheck:
@@ -76,3 +89,4 @@ services:
 
 volumes:
   malhet-prog-pg:
+  malhet-prog-arquivos:

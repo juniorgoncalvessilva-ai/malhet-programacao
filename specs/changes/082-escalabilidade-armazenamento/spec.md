@@ -1,6 +1,7 @@
 # 082 — Escalabilidade na KVM1 e armazenamento em nuvem (Google Drive, OneDrive, Dropbox)
 
-**Status:** fases 1 e 2 FEITAS (14/11/2026). Fases 3 a 5 em proposta — liberar depois de medir em produção.
+**Status:** fases 1 a 4 FEITAS (14/11/2026). Fase 5 só se a medição pedir. As 3 consultas de produção (fim) seguem
+pendentes: os limites ficaram configuráveis (`ARQUIVOS_LIMITE_GB`, dias no disco por obra, `DB_POOL_*`).
 
 ## Restrições
 - Mesma VPS: KVM1 com 1 vCPU, 4 GB de RAM e 50 GB de disco, Coolify, Postgres, API e web no mesmo lugar. A arquitetura também
@@ -58,13 +59,18 @@ risco.
 - Verificado no navegador: 2 consultas em 31 s (antes ~10); mudança de outra pessoa aparece sozinha em ~11 s; 0 consultas
   com a aba escondida.
 
-## Fase 3 — calcular uma vez, servir a todos (risco médio)
+## Fase 3 — calcular uma vez, servir a todos ✅ feita
 - Cache da visão da programação na memória da API, com chave (programação, marca de mudança): 100 pessoas abrindo dão
   1 cálculo e 99 leituras.
 - `ETag`/`304 Not Modified` nas visões grandes, para o navegador não baixar o que já tem.
 - Revisão emitida servida da foto gravada, nunca recalculada.
 
-## Fase 4 — arquivos fora do banco (porta de armazenamento)
+Feito: `app/shared/cache_leitura.py` guarda o JSON pronto com a chave (nome, obra, id, marca de mudanças); trava por
+chave (25 pedidos simultâneos = 1 cálculo), LRU de 48 MB e validade de 10 min. Usado em `GET /programacoes/{pid}` (com
+ETag/304), no dia do campo (`/campo/dia`) e na presença; **nunca** dentro de gravações. Medido (1 núcleo, 200 linhas,
+30 simultâneos): ~8 → **100 req/s**, p95 442 ms, 0 erros.
+
+## Fase 4 — arquivos fora do banco ✅ feita
 ### Porta
 `app/shared/armazenamento.py`:
 - `Armazenamento(Protocol)`: `guardar(chave, bytes, tipo, meta) -> Ref`, `abrir(ref) -> bytes|stream`,
@@ -109,7 +115,25 @@ Malhet/
 - O `00-indice.md` de cada pasta é regerado pela fila.
 
 ### Migração
-Um script move os `LargeBinary` atuais para o disco e a fila, e só depois uma migração Alembic remove as colunas.
+A própria fila move os `LargeBinary` de `foto_campo` e `anexo_ssma` para o disco, 20 por ciclo (verificado na base
+local: 7 fotos + 1 anexo, com miniaturas). As colunas antigas ficam (nulas) até uma próxima spec removê-las.
+
+### Como ficou (código)
+- Módulo `arquivos/`: `domain/zettel.py` (pastas, nomes, `.md`, índices), `domain/provedor.py` (porta + `Credencial`
+  mutável — o OneDrive troca o refresh token), `infra/provedores/{google,onedrive,dropbox}.py`, `infra/disco.py`,
+  `infra/segredo.py` (Fernet), `application/servico.py` (`guardar`, `abrir`, `miniatura`), `application/fila.py`
+  (tarefa em thread no lifespan; `ARQUIVOS_FILA=false` desliga), `application/registro.py` (cada módulo dono registra o
+  migrador e a subconsulta dos arquivos em uso — a fila não lê tabela de outro módulo), `api/router.py` (`/armazenamento`,
+  OAuth com `state` assinado, retorno em `/backend/api/armazenamento/oauth/{prov}/retorno`).
+- Fotos (`campo/application/arquivos.py::nova_foto`, usada por campo, auditorias e etilômetro) e anexos de SSMA
+  (`ssma/application/arquivos.py::novo_anexo`). `GET /fotos/{id}/arquivo?mini=true` = miniatura (≈10 KB contra ≈55 KB);
+  book e app de campo usam a miniatura na lista e o original só ao ampliar.
+- Logos, avatar e evidências LGPD continuam no banco (pequenos; evidência é sensível).
+- Tela `/app/armazenamento` (admin). Volume `malhet-prog-arquivos:/data/arquivos` no compose. Cadastro dos apps:
+  `docs/deploy-coolify.md`.
+- `tests/test_arquivos.py`: nomes/fichas, foto no disco com miniatura, migração, órfãos, ida e volta com o Google Drive
+  simulado (pastas, `.md`, índice, disco liberado e original baixado de volta conferindo o hash), falha com espera, token
+  revogado → reconectar, OneDrive/Dropbox pelo caminho, anexo de SSMA.
 
 ## Fase 5 — só se a medição pedir
 - Mais de um processo da API: trocar o contador de `/mudancas` por LISTEN/NOTIFY do Postgres.

@@ -69,8 +69,10 @@ export function useEnviarFoto() {
 /** Miniatura de uma foto já enviada (abre em tela cheia ao tocar). */
 export function Miniatura({ id, tamanho = 64 }: { id: number; tamanho?: number }) {
   const api = useApi();
-  const q = useQuery({ queryKey: ['foto', id], queryFn: async () => URL.createObjectURL(await api.blob(`/fotos/${id}/arquivo`)), staleTime: Infinity });
+  // miniatura (≈30 KB) na lista; o original só quando abre em tela cheia (spec 082)
+  const q = useQuery({ queryKey: ['foto', id, 'mini'], queryFn: async () => URL.createObjectURL(await api.blob(`/fotos/${id}/arquivo?mini=true`)), staleTime: Infinity });
   const [cheia, setCheia] = useState(false);
+  const original = useQuery({ queryKey: ['foto', id], enabled: cheia, queryFn: async () => URL.createObjectURL(await api.blob(`/fotos/${id}/arquivo`)), staleTime: Infinity });
   if (!q.data) return <span className="inline-block animate-pulse rounded-[10px] bg-m-surface-active" style={{ width: tamanho, height: tamanho }} />;
   return (
     <>
@@ -81,7 +83,7 @@ export function Miniatura({ id, tamanho = 64 }: { id: number; tamanho?: number }
       {cheia && (
         <div role="dialog" aria-label="Foto" className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" onClick={() => setCheia(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={q.data} alt="Foto de campo" className="max-h-full max-w-full rounded-[10px]" />
+          <img src={original.data ?? q.data} alt="Foto de campo" className="max-h-full max-w-full rounded-[10px]" />
           <button type="button" aria-label="Fechar" className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"><X size={22} /></button>
         </div>
       )}
