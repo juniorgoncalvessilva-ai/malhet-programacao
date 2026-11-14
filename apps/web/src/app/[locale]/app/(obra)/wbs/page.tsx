@@ -1,8 +1,10 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, FileUp, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CalendarRange, ChevronDown, ChevronRight, FileUp, Link2, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { Fragment, useMemo, useState } from 'react';
+import { BuscaAtividadeCrono } from '@/components/Obra/AssociarAtividade';
 import { toast } from 'sonner';
 import { Calculado, nbr, type MemoriaCalculo } from '@/components/Obra/Calculado';
 import { useConfirmar } from '@/components/Obra/Confirmar';
@@ -25,6 +27,10 @@ const ESTILO: Record<TipoNoWbs, string> = {
 };
 type Form = { modo: 'novo' | 'editar'; tipo: TipoNoWbs; pai?: NoWbs; no?: NoWbs; area_id: string; elemento: string; complemento: string; grupo_id: string; tipo_id: string; quantidade: string; observacao: string; ativo: boolean; percentual: string; sem_avanco: boolean };
 const vazio = (tipo: TipoNoWbs, pai?: NoWbs): Form => ({ modo: 'novo', tipo, pai, area_id: '', elemento: '', complemento: '', grupo_id: '', tipo_id: '', quantidade: '', observacao: '', ativo: true, percentual: '', sem_avanco: false });
+
+interface Sugestao { id_crono: string; atividade: string; ja_usada: boolean }
+interface NoAssoc { id: number; area_id: number | null; id_crono: string | null; atividade: string | null; no_cronograma: boolean | null; sugestoes: Sugestao[] }
+interface RespAssoc { nos: NoAssoc[]; total: number; ligados: number; atividades: number; atividades_sem_wbs: number }
 
 /** % digitado (40) → fração (0,4) que a API guarda; sem avanço = 0. */
 const pctDe = (f: Form) => (f.tipo !== 'etapa' ? null : f.sem_avanco ? 0 : f.percentual.trim() === '' ? 0 : Number(f.percentual.replace(',', '.')) / 100);
@@ -73,6 +79,14 @@ export default function WbsPage() {
   const [destino, setDestino] = useState('');
   const [envio, setEnvio] = useState<{ equipe_id: string; natureza: string; qtd: Record<number, string> } | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // spec 084: associar o cronograma aqui mesmo (antes era uma tela à parte) e enviar ao plano de 90 dias
+  const params = useSearchParams();
+  const [associar, setAssociar] = useState(params.get('associar') === '1');
+  const [soSemId, setSoSemId] = useState(params.get('associar') === '1');
+  const [buscando, setBuscando] = useState<number | null>(null);
+  const assoc = useQuery({ queryKey: ['wbs', 'associacao'], enabled: associar, queryFn: () => api.get<RespAssoc>('/wbs/associacao') });
+  const assocPorId = useMemo(() => new Map((assoc.data?.nos ?? []).map((x) => [x.id, x])), [assoc.data]);
+  const [plano, setPlano] = useState<{ inicio: string; fim: string; equipe_id: string } | null>(null);
   const porId = useMemo(() => { const m = new Map<number, NoWbs>(); const ir = (n: NoWbs) => { m.set(n.id, n); n.filhos.forEach(ir); }; arvore.forEach(ir); return m; }, [arvore]);
   const iwpsSel = useMemo(() => {
     const out = new Map<number, NoWbs>();
@@ -98,6 +112,33 @@ export default function WbsPage() {
       toast.success(`${r.criadas} linha(s) enviada(s) para ${prog.titulo}${r.ja_estavam ? ` · ${r.ja_estavam} já estavam lá` : ''}`);
       r.avisos.slice(0, 3).forEach((a) => toast.warning(a));
       setEnvio(null); setSel(new Set()); atualizar();
+    } catch (e) { toast.error((e as Error).message); } finally { setEnviando(false); }
+  };
+  const ligar = async (n: { id: number; codigo: string }, id: string | null, quieto = false) => {
+    try {
+      const r = await api.put<{ linhas_atualizadas: number }>(`/wbs/nos/${n.id}/atividade`, { id_crono: id });
+      if (!quieto) toast.success(id ? `${n.codigo} ligado a ${id}${r.linhas_atualizadas ? ` · ${r.linhas_atualizadas} linha(s) em programações em rascunho` : ''}` : `${n.codigo} desligado`);
+      setBuscando(null); atualizar();
+      return true;
+    } catch (e) { toast.error((e as Error).message); return false; }
+  };
+  const aceitarSugestoes = async () => {
+    const alvos = (assoc.data?.nos ?? []).filter((x) => !x.id_crono && x.sugestoes[0] && !x.sugestoes[0].ja_usada);
+    let ok = 0;
+    for (const x of alvos) if (await ligar({ id: x.id, codigo: porId.get(x.id)?.codigo ?? String(x.id) }, x.sugestoes[0].id_crono, true)) ok++;
+    toast.success(`${ok} IWP/etapa(s) ligados à 1ª sugestão`);
+  };
+  const enviarAoPlano = async () => {
+    if (!plano) return;
+    setEnviando(true);
+    try {
+      const r = await api.post<{ criados: number; ja_estavam: number; sem_data: number }>('/planos/itens/da-wbs', {
+        nos: [...sel], inicio: plano.inicio || null, fim: plano.fim || null, equipe_id: plano.equipe_id ? Number(plano.equipe_id) : null,
+      });
+      toast.success(`${r.criados} atividade(s) no plano de 90 dias${r.ja_estavam ? ` · ${r.ja_estavam} já estavam` : ''}`);
+      if (r.sem_data) toast.warning(`${r.sem_data} sem data: informe início e fim (não estão ligadas a uma atividade do cronograma com datas)`, { duration: 9000 });
+      if (r.criados) { setPlano(null); setSel(new Set()); }
+      qc.invalidateQueries({ queryKey: ['planos'] });
     } catch (e) { toast.error((e as Error).message); } finally { setEnviando(false); }
   };
   const conta = useMemo(() => {
@@ -159,8 +200,20 @@ export default function WbsPage() {
   };
   // busca: mostra o nó que casa e os pais dele (abertos)
   const termo = busca.trim().toLowerCase();
+  const semIdVisiveis = useMemo(() => {
+    if (!associar || !soSemId) return null;
+    const vis = new Set<number>();
+    const ir = (n: NoWbs, pais: number[]): boolean => {
+      const eu = (n.tipo === 'iwp' || n.tipo === 'etapa') && n.ativo && !n.id_crono && !(n.tipo === 'iwp' && n.filhos.some((f) => f.tipo === 'etapa' && f.ativo));
+      const algum = n.filhos.map((f) => ir(f, [...pais, n.id])).some(Boolean);
+      if (eu || algum) { vis.add(n.id); pais.forEach((p) => vis.add(p)); }
+      return eu || algum;
+    };
+    arvore.forEach((n) => ir(n, []));
+    return vis;
+  }, [arvore, associar, soSemId]);
   const casa = useMemo(() => {
-    if (!termo) return null;
+    if (!termo) return semIdVisiveis;
     const vis = new Set<number>();
     const ir = (n: NoWbs, pais: number[]): boolean => {
       const eu = [n.codigo, n.titulo, n.detalhe, n.id_crono ?? '', n.atividade_p6 ?? '', n.item_pq ?? ''].join(' ').toLowerCase().includes(termo);
@@ -170,8 +223,8 @@ export default function WbsPage() {
       return eu || algum;
     };
     arvore.forEach((n) => ir(n, []));
-    return vis;
-  }, [arvore, termo]);
+    return semIdVisiveis ? new Set([...vis].filter((x) => semIdVisiveis.has(x))) : vis;
+  }, [arvore, termo, semIdVisiveis]);
   const todosIds = useMemo(() => { const ids: number[] = []; const ir = (n: NoWbs) => { if (n.filhos.length) ids.push(n.id); n.filhos.forEach(ir); }; arvore.forEach(ir); return ids; }, [arvore]);
 
   const formInline = (f: Form) => {
@@ -239,7 +292,9 @@ export default function WbsPage() {
             {n.codigo_p6 && <span className="ml-2 text-[10.5px] font-normal text-m-text-muted" title="Código WBS no Primavera">WBS {n.codigo_p6}</span>}
             {n.origem === 'p6' && <span className="ml-2 rounded-[5px] bg-m-info-subtle px-1.5 py-px text-[10px] font-semibold text-m-info" title="Veio da WBS do cronograma (P6)">P6</span>}
             {n.fora_cronograma && <span className="ml-1"><Pilula tom="atencao">fora do cronograma</Pilula></span>}
-            {n.id_crono && <div className="text-[11px] font-normal text-m-text-muted">atividade {n.id_crono}{n.atividade_p6 ? ` · ${n.atividade_p6}` : ''}</div>}
+            {n.id_crono && !associar && <div className="text-[11px] font-normal text-m-text-muted">atividade {n.id_crono}{n.atividade_p6 ? ` · ${n.atividade_p6}` : ''}</div>}
+            {associar && (n.tipo === 'iwp' || n.tipo === 'etapa') && <CelulaCronograma n={n} a={assocPorId.get(n.id)} edita={editar}
+              onLigar={(id) => ligar(n, id)} onBuscar={() => setBuscando(buscando === n.id ? null : n.id)} />}
             {n.observacao && <div className="text-[11px] font-normal opacity-80">{n.observacao}</div>}
             {n.tipo === 'iwp' && n.na_pq_vigente === false && <div className="text-[11px] text-m-warning">item fora da PQ vigente</div>}
             {n.tipo === 'etapa' && n.sem_avanco && <span className="ml-1"><Pilula tom="atencao">sem avanço</Pilula></span>}</td>
@@ -258,6 +313,13 @@ export default function WbsPage() {
           </td>
         </tr>
         {editandoAqui && form && <tr><td colSpan={7} className="px-2 py-2" style={{ paddingLeft: 8 + (nivel + 1) * 16 }}>{formInline(form)}</td></tr>}
+        {buscando === n.id && <tr><td colSpan={7} className="px-2 py-2" style={{ paddingLeft: 8 + (nivel + 1) * 16 }}>
+          <div className="flex max-w-[640px] flex-col gap-2 rounded-[12px] border border-m-accent bg-m-accent-subtle/30 p-3">
+            <b className="text-[13px]">Atividade do cronograma para {n.codigo}</b>
+            <BuscaAtividadeCrono areaId={assocPorId.get(n.id)?.area_id} autoFocus onEscolher={(a) => ligar(n, a.id_crono)} />
+            <div className="flex gap-2">{n.id_crono && <Botao variante="secundario" onClick={() => ligar(n, null)}>Desligar</Botao>}<Botao variante="secundario" onClick={() => setBuscando(null)}>Fechar</Botao></div>
+          </div>
+        </td></tr>}
         {aberto && n.filhos.map((f) => linhas(f, nivel + 1))}
       </Fragment>
     );
@@ -335,8 +397,36 @@ export default function WbsPage() {
           </div>
         </Painel>
       )}
+      {plano && (
+        <Painel titulo={`Enviar ${iwpsSel.length} atividade(s) ao plano de 90 dias`}
+          subtitulo="Datas vazias = as da atividade do cronograma ligada ao IWP. O que já está no plano não duplica.">
+          <div className="flex flex-wrap items-end gap-3">
+            <Campo rotulo="Início" type="date" value={plano.inicio} onChange={(e) => setPlano({ ...plano, inicio: e.target.value })} className="w-[170px]" />
+            <Campo rotulo="Fim" type="date" value={plano.fim} onChange={(e) => setPlano({ ...plano, fim: e.target.value })} className="w-[170px]" />
+            <Selecao rotulo="Equipe" value={plano.equipe_id} onChange={(e) => setPlano({ ...plano, equipe_id: e.target.value })} className="min-w-[300px]">
+              <option value="">— escolher depois —</option>
+              {equipes.data?.filter((e) => e.ativo).map((e) => <option key={e.id} value={e.id}>{e.nome} · {e.encarregado_nome ?? ''}</option>)}
+            </Selecao>
+            <Botao disabled={!iwpsSel.length || enviando} onClick={enviarAoPlano}><CalendarRange size={16} /> {enviando ? 'Enviando…' : 'Confirmar'}</Botao>
+            <Botao variante="secundario" onClick={() => setPlano(null)}>Cancelar</Botao>
+            <Link href="/app/plano" className="text-sm font-semibold text-m-accent">Abrir o plano de 90 dias</Link>
+          </div>
+          <ul className="flex flex-wrap gap-1.5 text-[12px]">{iwpsSel.slice(0, 40).map((n) => <li key={n.id} className="rounded-full bg-m-surface-active px-2 py-0.5">{n.codigo} · {n.titulo.slice(0, 40)}{n.id_crono ? '' : ' · sem ID'}</li>)}
+            {iwpsSel.length > 40 && <li className="text-m-text-muted">+{iwpsSel.length - 40}</li>}</ul>
+        </Painel>
+      )}
+      {associar && assoc.data && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-m-stroke-subtle bg-m-surface-raised px-4 py-2.5 text-[13px]">
+          <Link2 size={16} className="text-m-accent" />
+          <span><b>{assoc.data.ligados}</b> de {assoc.data.total} IWP/etapas ligados ao cronograma · {assoc.data.atividades_sem_wbs} atividade(s) do cronograma sem WBS</span>
+          <label className="flex items-center gap-1.5"><input type="checkbox" checked={soSemId} onChange={(e) => setSoSemId(e.target.checked)} /> só os sem ID</label>
+          {editar && <Botao variante="secundario" onClick={aceitarSugestoes} disabled={!assoc.data.nos.some((x) => !x.id_crono && x.sugestoes[0] && !x.sugestoes[0].ja_usada)}>Aceitar a 1ª sugestão de todos</Botao>}
+        </div>
+      )}
       <Painel titulo="Estrutura"
         acoes={<div className="flex flex-wrap items-end gap-2">
+          <Botao variante={associar ? 'primario' : 'secundario'} onClick={() => setAssociar(!associar)} title="Mostra em cada IWP/etapa a atividade do cronograma ligada e as sugestões"><Link2 size={16} /> Associar cronograma</Botao>
+          {editar && <Botao variante="secundario" disabled={!sel.size} title={!sel.size ? 'Marque áreas, CWPs ou IWPs' : undefined} onClick={() => setPlano({ inicio: '', fim: '', equipe_id: '' })}><CalendarRange size={16} /> Enviar ao plano 90 dias</Botao>}
           {programar && <>
             <Selecao rotulo="Enviar para" value={destino} onChange={(e) => setDestino(e.target.value)} className="min-w-[260px]">
               <option value="">Escolha a programação…</option>
@@ -362,5 +452,31 @@ export default function WbsPage() {
         </div>
       </Painel>
     </>
+  );
+}
+
+/** ID do cronograma do IWP/etapa na própria WBS (spec 084): o ligado, ou as sugestões para ligar com um clique. */
+function CelulaCronograma({ n, a, edita, onLigar, onBuscar }: { n: NoWbs; a?: NoAssoc; edita: boolean; onLigar: (id: string | null) => void; onBuscar: () => void }) {
+  if (n.tipo === 'iwp' && n.filhos.some((f) => f.tipo === 'etapa' && f.ativo) && !n.id_crono) return <div className="text-[11px] font-normal text-m-text-muted">a atividade vai nas etapas abaixo</div>;
+  if (n.id_crono) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] font-normal">
+        <span className="rounded-full bg-m-success-subtle px-2 py-0.5 font-semibold text-m-success">{n.id_crono}</span>
+        <span className="text-m-text-muted">{a?.atividade ?? n.atividade_p6 ?? ''}</span>
+        {a?.no_cronograma === false && <Pilula tom="atencao">não está no cronograma vigente</Pilula>}
+        {edita && <button type="button" className="font-semibold text-m-accent hover:underline" onClick={onBuscar}>trocar</button>}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] font-normal">
+      <span className="text-m-warning">sem ID do cronograma</span>
+      {a?.sugestoes.map((s) => (
+        <button key={s.id_crono} type="button" disabled={!edita} onClick={() => onLigar(s.id_crono)} title={s.ja_usada ? 'já ligada a outro IWP' : 'ligar'}
+          className={`rounded-full border px-2 py-0.5 text-left ${s.ja_usada ? 'border-m-stroke text-m-text-muted' : 'border-m-accent text-m-accent hover:bg-m-accent-subtle'}`}>
+          <b>{s.id_crono}</b> · {s.atividade.slice(0, 48)}</button>
+      ))}
+      {edita && <button type="button" className="font-semibold text-m-accent hover:underline" onClick={onBuscar}>buscar…</button>}
+    </div>
   );
 }

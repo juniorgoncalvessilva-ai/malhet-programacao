@@ -1,4 +1,4 @@
-import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Smartphone, Percent, Link2, Cloud } from 'lucide-react';
+import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Smartphone, Percent, Cloud } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -14,7 +14,6 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Cronograma', url: '/app/cronograma', icone: GanttChart },
       { titulo: 'WBS de execução', url: '/app/wbs', icone: ListTree },
       { titulo: 'Critério de avanço', url: '/app/criterios', icone: Percent },
-      { titulo: 'Associar cronograma ↔ WBS', url: '/app/wbs/associacao', icone: Link2, minimo: 'planejador' },
       { titulo: 'Plano de 90 dias', url: '/app/plano', icone: CalendarClock },
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
       { titulo: 'Look-ahead das equipes', url: '/app/lookahead', icone: Columns3 },

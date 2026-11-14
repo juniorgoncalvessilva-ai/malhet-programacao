@@ -116,3 +116,94 @@ def pu_da_etapa(pu: float | None, pct: float | None, sem_avanco: bool) -> float 
     if sem_avanco:
         return 0.0
     return round(pu * (pct if pct is not None else 1), 6)
+
+
+# ---- vínculo item da PQ → critério (spec 083) ---------------------------------------------------------------------
+# O número do item na planilha de critérios é o do CATÁLOGO de critérios (8.1 MOBILIZAÇÃO…), não o da PQ da obra
+# (8.1 Montagem de cabo…). O que liga os dois é o código CMS que a PQ traz em cada item.
+_CMS = re.compile(r"([A-Z])\s*\.?\s*(\d+)\s*\.\s*(\d+)(?:\s*\.\s*(\d+))?")
+COMO = {"vinculo": "escolhido na linha", "cms": "pelo código CMS", "item": "pelo item da PQ", "cms_grupo": "pelo grupo do código CMS"}
+
+
+def cms_chave(codigo: str | None) -> tuple | None:
+    """'CMS C.05.05.001' · 'CMS.C05.05.001' · 'CMS. E.00.00.015' → ('C', 5, 5, 1). Sem código reconhecível → None."""
+    t = (codigo or "").upper().replace("CMS", " ", 1)
+    m = _CMS.search(t)
+    if not m:
+        return None
+    return (m.group(1), int(m.group(2)), int(m.group(3)), int(m.group(4) or 0))
+
+
+def cms_grupos(chave: tuple) -> list[tuple]:
+    """Do mais específico ao mais geral, sem a própria chave: C.45.12.001 → C.45.12.000 → C.45.00.000."""
+    letra, a, b, c = chave
+    out = []
+    if c:
+        out.append((letra, a, b, 0))
+    if b:
+        out.append((letra, a, 0, 0))
+    return out
+
+
+@dataclass(frozen=True)
+class CriterioRef:
+    """O mínimo de um critério para resolver o vínculo (sem banco)."""
+    id: int
+    codigo: str
+    item_pq: str | None
+    origem: str  # planilha | manual
+
+
+def resolver_criterio(item_pq: str | None, cms_do_item: str | None, criterios: list[CriterioRef],
+                      vinculo: int | None = None) -> tuple[int | None, str | None, int]:
+    """(id do critério, como casou, quantos critérios disputavam) para um item da PQ. Ordem:
+    1. vínculo escolhido na linha; 2. código CMS exato (vários com o mesmo código: o primeiro, e avisa);
+    3. critério cadastrado à mão para o item (ou um item acima dele); 4. grupo do código CMS (…000).
+    Critério da planilha não casa pelo número do item (é numeração do catálogo, não da PQ)."""
+    por_id = {c.id: c for c in criterios}
+    if vinculo and vinculo in por_id:
+        return vinculo, "vinculo", 1
+    chave = cms_chave(cms_do_item)
+    por_cms: dict[tuple, list[CriterioRef]] = {}
+    for c in criterios:
+        k = cms_chave(c.codigo)
+        if k:
+            por_cms.setdefault(k, []).append(c)
+    if chave and por_cms.get(chave):
+        xs = por_cms[chave]
+        return xs[0].id, "cms", len(xs)
+    manuais = [c for c in criterios if c.origem == "manual" and c.item_pq]
+    p = criterio_do_item(item_pq, [c.item_pq for c in manuais])
+    if p:
+        return next(c.id for c in manuais if c.item_pq == p), "item", 1
+    for g in cms_grupos(chave) if chave else []:
+        if por_cms.get(g):
+            return por_cms[g][0].id, "cms_grupo", len(por_cms[g])
+    return None, None, 0
+
+
+_VAZIAS = {"para", "com", "sem", "dos", "das", "de", "da", "do", "e", "em", "inclusive", "qualquer", "tipo", "fornecimento", "execucao"}
+
+
+def palavras(texto: str | None) -> set[str]:
+    import unicodedata
+
+    t = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode().lower()
+    return {w for w in re.findall(r"[a-z0-9]+", t) if len(w) > 2 and w not in _VAZIAS}
+
+
+def sugerir_por_descricao(descricao: str, titulos: list[str], criterios: list[tuple[int, str]], minimo: float = 0.6) -> int | None:
+    """Sugestão (nunca vínculo automático) para item sem critério: o critério cuja descrição mais se parece com a do
+    item ou a dos títulos acima dele na PQ — pelo menos 2 palavras em comum e 60% das palavras do critério."""
+    alvos = [palavras(descricao)] + [palavras(t) for t in titulos]
+    melhor, nota = None, 0.0
+    for cid, desc in criterios:
+        p = palavras(desc)
+        if len(p) < 2:
+            continue
+        for a in alvos:
+            comuns = len(p & a)
+            n = comuns / len(p) if comuns >= 2 else 0
+            if n > nota:
+                melhor, nota = cid, n
+    return melhor if nota >= minimo else None

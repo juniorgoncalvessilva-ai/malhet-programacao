@@ -154,8 +154,15 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   etapa **sem avanço** = só esforço. WBS ganha o nível Etapa abaixo do IWP (`wbs_no.etapa_id/percentual/sem_avanco`, código
   `…-E1`, botão "critério" = `aplicar-criterio`); IWP com etapas vai à programação/plano como as etapas
   (`programacao_linha.etapa_*`): `pu` = PU × %, sem avanço = 0 (não fatura nem soma quantidade; HH/capacidade continuam).
-- Associar cronograma ↔ WBS (spec 080): `/app/wbs/associacao` (`GET /wbs/associacao` com sugestões, `PUT /wbs/nos/{id}/atividade`
-  leva o ID às programações em rascunho) e na linha da programação (`PUT …/linhas/{lid}/atividade`, `AssociarAtividadeLinha`).
+- Associar cronograma ↔ WBS (spec 080): `GET /wbs/associacao` com sugestões, `PUT /wbs/nos/{id}/atividade` (leva o ID às
+  programações em rascunho) e na linha da programação (`PUT …/linhas/{lid}/atividade`, `AssociarAtividadeLinha`). Desde a
+  spec 084 é feito na própria WBS (botão "Associar cronograma", `CelulaCronograma`; `/app/wbs/associacao` só redireciona).
+- Critério pela PQ (spec 083): vínculo item da PQ → critério por `resolver_criterio` (vínculo na linha `criterio_item_pq` →
+  código CMS da PQ → critério manual do item → grupo do CMS; a numeração da planilha de critérios é do catálogo, não da PQ);
+  sugestão pela descrição nunca vincula sozinha. Tela "Pela PQ" (`GET /criterios/pq`, `PUT /criterios/pq/{item}/vinculo`).
+- Ciclo do plano (spec 084): WBS → "Enviar ao plano 90 dias" (`/planos/itens/da-wbs`); plano puxa da programação corrente
+  (`/planos/programacao/previa`, `/planos/itens/da-programacao`, liga `programacao_linha.plano_item_id`); restrições abrem
+  abaixo da atividade; look-ahead `?origem=plano` (`dias_do_plano`).
 - Início do celular só com o que fazer e atalhos (sem lista de atividades). Spec 078.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por

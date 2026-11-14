@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import ContextoObra, ler, planejar
 from app.core.db import get_session
-from app.modules.criterios.domain.criterio import COLUNAS, Etapa, criterio_do_item, ler_planilha, percentual, soma
-from app.modules.criterios.infra.models import CriterioModel, EtapaCriterioModel
+from app.modules.criterios.domain.criterio import COLUNAS, COMO, CriterioRef, Etapa, ler_planilha, percentual, resolver_criterio, soma, sugerir_por_descricao
+from app.modules.criterios.infra.models import CriterioModel, EtapaCriterioModel, VinculoCriterioModel
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(prefix="/criterios", tags=["critério de avanço"])
@@ -29,32 +29,109 @@ def _todos(s: Session, obra_id: int) -> list[CriterioModel]:
     return list(s.scalars(select(CriterioModel).where(CriterioModel.obra_id == obra_id).order_by(CriterioModel.item_pq, CriterioModel.codigo)))
 
 
+def _refs(cs: list[CriterioModel]) -> list[CriterioRef]:
+    return [CriterioRef(x.id, x.codigo, x.item_pq, x.origem) for x in cs]
+
+
+def _vinculos(s: Session, obra_id: int) -> dict[str, int]:
+    return dict(s.execute(select(VinculoCriterioModel.item_pq, VinculoCriterioModel.criterio_id)
+                          .where(VinculoCriterioModel.obra_id == obra_id)).all())
+
+
+def _pq(s: Session, obra_id: int, so_folhas: bool = False) -> list:
+    from app.modules.referencias.infra.models import ItemPqModel
+    from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
+
+    vpq = ResolvedorReferencias(s, obra_id).versoes_vigentes().get("PQ")
+    if not vpq:
+        return []
+    q = select(ItemPqModel).where(ItemPqModel.versao_id == vpq)
+    if so_folhas:
+        q = q.where(ItemPqModel.folha.is_(True))
+    return list(s.scalars(q.order_by(ItemPqModel.ordem, ItemPqModel.id)))
+
+
+def _resolvidos(s: Session, obra_id: int, cs: list[CriterioModel]) -> dict[str, tuple[int | None, str | None, int]]:
+    refs, vin = _refs(cs), _vinculos(s, obra_id)
+    return {f.item: resolver_criterio(f.item, f.criterio, refs, vin.get(f.item)) for f in _pq(s, obra_id, so_folhas=True)}
+
+
 def criterio_para_item(s: Session, obra_id: int, item_pq: str | None) -> CriterioModel | None:
-    """Linguagem publicada para a WBS: o critério do item (o mais específico que o contém)."""
+    """Linguagem publicada para a WBS: o critério do item da PQ — vínculo da linha, código CMS da PQ, critério
+    cadastrado para o item ou o grupo do código CMS (spec 083)."""
+    if not item_pq:
+        return None
     cs = _todos(s, obra_id)
-    p = criterio_do_item(item_pq, [c.item_pq for c in cs if c.item_pq])
-    return next((c for c in cs if c.item_pq == p), None) if p else None
+    pq = next((f for f in _pq(s, obra_id, so_folhas=True) if f.item == item_pq), None)
+    cid, _, _ = resolver_criterio(item_pq, pq.criterio if pq else None, _refs(cs), _vinculos(s, obra_id).get(item_pq))
+    return next((x for x in cs if x.id == cid), None)
+
+
+def _uso_na_wbs(s: Session, obra_id: int) -> dict[int, int]:
+    from app.modules.wbs.infra.models import WbsNoModel
+
+    return dict(s.execute(select(EtapaCriterioModel.criterio_id, func.count()).join(WbsNoModel, WbsNoModel.etapa_id == EtapaCriterioModel.id)
+                          .where(EtapaCriterioModel.obra_id == obra_id).group_by(EtapaCriterioModel.criterio_id)).all())
 
 
 @router.get("")
 def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    from app.modules.referencias.infra.models import ItemPqModel
-    from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
-    from app.modules.wbs.infra.models import WbsNoModel
-
     cs = _todos(s, c.obra_id)
-    vpq = ResolvedorReferencias(s, c.obra_id).versoes_vigentes().get("PQ")
-    folhas = list(s.scalars(select(ItemPqModel.item).where(ItemPqModel.versao_id == vpq, ItemPqModel.folha.is_(True)))) if vpq else []
-    prefixos = [x.item_pq for x in cs if x.item_pq]
-    cobre: dict[str, int] = {}
-    for f in folhas:
-        p = criterio_do_item(f, prefixos)
-        if p:
-            cobre[p] = cobre.get(p, 0) + 1
-    uso = dict(s.execute(select(EtapaCriterioModel.criterio_id, func.count()).join(WbsNoModel, WbsNoModel.etapa_id == EtapaCriterioModel.id)
-                         .where(EtapaCriterioModel.obra_id == c.obra_id).group_by(EtapaCriterioModel.criterio_id)).all())
-    return {"criterios": [_out(x, cobre.get(x.item_pq or "", 0), uso.get(x.id, 0)) for x in cs],
-            "itens_pq": len(folhas), "itens_cobertos": sum(cobre.values())}
+    res = _resolvidos(s, c.obra_id, cs)
+    cobre: dict[int, int] = {}
+    for cid, _, _ in res.values():
+        if cid:
+            cobre[cid] = cobre.get(cid, 0) + 1
+    uso = _uso_na_wbs(s, c.obra_id)
+    return {"criterios": [_out(x, cobre.get(x.id, 0), uso.get(x.id, 0)) for x in cs],
+            "itens_pq": len(res), "itens_cobertos": sum(1 for cid, _, _ in res.values() if cid)}
+
+
+@router.get("/pq")
+def pela_pq(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """A PQ vigente na ordem dela (títulos e itens) com o critério de cada item e como ele foi achado (spec 083)."""
+    cs = _todos(s, c.obra_id)
+    refs, vin = _refs(cs), _vinculos(s, c.obra_id)
+    linhas, titulos = [], {}
+    descs = [(x.id, x.descricao) for x in cs]
+    for f in _pq(s, c.obra_id):
+        ln = {"item": f.item, "descricao": f.descricao, "unid": f.unid, "nivel": f.nivel, "folha": f.folha, "cms": f.criterio}
+        if not f.folha:
+            titulos[f.item] = f.descricao
+        else:
+            cid, como, opcoes = resolver_criterio(f.item, f.criterio, refs, vin.get(f.item))
+            ln |= {"criterio_id": cid, "como": como, "como_texto": COMO.get(como or ""), "opcoes": opcoes, "vinculado": f.item in vin,
+                   "sugestao_id": None}
+            if cid is None and descs:
+                partes = f.item.split(".")
+                acima = [titulos[".".join(partes[:k])] for k in range(len(partes) - 1, 0, -1) if ".".join(partes[:k]) in titulos][:2]
+                ln["sugestao_id"] = sugerir_por_descricao(f.descricao, acima, descs)
+        linhas.append(ln)
+    return {"linhas": linhas}
+
+
+class VinculoIn(BaseModel):
+    criterio_id: int | None = None
+
+
+@router.put("/pq/{item}/vinculo")
+def vincular(item: str, d: VinculoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Escolhe à mão o critério do item da PQ (vazio = volta ao casamento automático pelo código CMS)."""
+    item = item.strip()
+    if not any(f.item == item for f in _pq(s, c.obra_id, so_folhas=True)):
+        raise DomainError(f"o item {item} não é um item (folha) da PQ vigente", "item")
+    v = s.scalar(select(VinculoCriterioModel).where(VinculoCriterioModel.obra_id == c.obra_id, VinculoCriterioModel.item_pq == item))
+    if d.criterio_id is None:
+        if v is not None:
+            s.delete(v)
+        return {"item": item, "criterio_id": None}
+    _criterio(s, c.obra_id, d.criterio_id)
+    if v is None:
+        s.add(VinculoCriterioModel(obra_id=c.obra_id, item_pq=item, criterio_id=d.criterio_id, definido_por=c.usuario.id))
+    else:
+        v.criterio_id, v.definido_por = d.criterio_id, c.usuario.id
+    s.flush()
+    return {"item": item, "criterio_id": d.criterio_id}
 
 
 @router.get("/do-item")

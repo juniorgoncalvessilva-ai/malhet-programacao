@@ -22,29 +22,57 @@ router = APIRouter(prefix="/lookahead", tags=["look-ahead das equipes"])
 PALETA = ("#2F6F73", "#B5651D", "#5B5EA6", "#8A6D1F", "#9B4D6B", "#3D7A3A", "#6B6B6B", "#A33E3E")
 
 
+def dias_do_plano(itens, de: date, ate: date) -> list[DiaEquipe]:
+    """Spec 084: cada atividade do plano de 90 dias (com área) ocupa a equipe nos dias úteis da janela dela; a
+    quantidade é repartida igual pelos dias. Marcos não ocupam equipe."""
+    out = []
+    for it in itens:
+        if it.marco or not it.area_id:
+            continue
+        uteis = [it.inicio + timedelta(days=k) for k in range((it.fim - it.inicio).days + 1)]
+        uteis = [d for d in uteis if d.weekday() < 5] or [it.inicio]
+        por_dia = round((it.quantidade or 0) / len(uteis), 4)
+        for d in uteis:
+            if de <= d <= ate:
+                out.append(DiaEquipe(it.equipe_id or 0, it.area_id, (it.tipo_id or 0, 0, f"P{it.id}"), d, por_dia, None, 0, it.id, it.inicio))
+    return out
+
+
 @router.get("")
-def lookahead(de: date | None = None, ate: date | None = None, s: Session = Depends(get_session),
+def lookahead(de: date | None = None, ate: date | None = None, origem: str = "programacao", s: Session = Depends(get_session),
               c: ContextoObra = Depends(ler)):
-    """Janela padrão: da segunda desta semana até 6 semanas à frente (6WLA)."""
+    """Janela padrão: da segunda desta semana até 6 semanas à frente (6WLA); com `origem=plano`, 13 semanas do plano
+    de 90 dias (o caminhar das equipes previsto no plano)."""
+    from app.modules.planos.domain.plano import codigo_item
+    from app.modules.planos.infra.models import PlanoItemModel
+
+    if origem not in ("programacao", "plano"):
+        raise DomainError("origem: programacao ou plano", "origem")
     hoje = date.today()
     de = de or hoje - timedelta(days=hoje.weekday())
-    ate = ate or de + timedelta(days=6 * 7 - 1)
+    ate = ate or de + timedelta(days=(13 if origem == "plano" else 6) * 7 - 1)
     if ate < de or (ate - de).days > 120:
         raise DomainError("janela inválida: até 120 dias", "ate")
-    progs = {p.id: p for p in s.scalars(select(ProgramacaoModel).where(
-        ProgramacaoModel.obra_id == c.obra_id, ProgramacaoModel.inicio <= ate, ProgramacaoModel.fim >= de))}
-    linhas = {ln.id: ln for ln in s.scalars(select(LinhaProgramacaoModel).where(
-        LinhaProgramacaoModel.programacao_id.in_(list(progs) or [0])))}
-    valores = s.scalars(select(ValorDiaModel).where(ValorDiaModel.linha_id.in_(list(linhas) or [0]),
-                                                    ValorDiaModel.data >= de, ValorDiaModel.data <= ate))
-    dias = []
-    for v in valores:
-        ln = linhas[v.linha_id]
-        if not ((v.previsto or 0) > 0 or (v.realizado or 0) > 0):
-            continue
-        p = progs[ln.programacao_id]
-        dias.append(DiaEquipe(ln.equipe_id or 0, ln.area_id, (ln.tipo_id, ln.item_simova_id, ln.item_pq), v.data,
-                              float(v.previsto or 0), v.realizado, p.id, ln.id, p.inicio))
+    progs, itens_plano = {}, {}
+    if origem == "plano":
+        itens_plano = {i.id: i for i in s.scalars(select(PlanoItemModel).where(
+            PlanoItemModel.obra_id == c.obra_id, PlanoItemModel.inicio <= ate, PlanoItemModel.fim >= de))}
+        dias = dias_do_plano(itens_plano.values(), de, ate)
+    else:
+        progs = {p.id: p for p in s.scalars(select(ProgramacaoModel).where(
+            ProgramacaoModel.obra_id == c.obra_id, ProgramacaoModel.inicio <= ate, ProgramacaoModel.fim >= de))}
+        linhas = {ln.id: ln for ln in s.scalars(select(LinhaProgramacaoModel).where(
+            LinhaProgramacaoModel.programacao_id.in_(list(progs) or [0])))}
+        valores = s.scalars(select(ValorDiaModel).where(ValorDiaModel.linha_id.in_(list(linhas) or [0]),
+                                                        ValorDiaModel.data >= de, ValorDiaModel.data <= ate))
+        dias = []
+        for v in valores:
+            ln = linhas[v.linha_id]
+            if not ((v.previsto or 0) > 0 or (v.realizado or 0) > 0):
+                continue
+            p = progs[ln.programacao_id]
+            dias.append(DiaEquipe(ln.equipe_id or 0, ln.area_id, (ln.tipo_id, ln.item_simova_id, ln.item_pq), v.data,
+                                  float(v.previsto or 0), v.realizado, p.id, ln.id, p.inicio))
     bs = blocos(dias)
     # cadastros para rotular
     tipos = {t.id: t for t in s.scalars(select(TipoAtividadeModel).where(TipoAtividadeModel.obra_id == c.obra_id))}
@@ -86,9 +114,10 @@ def lookahead(de: date | None = None, ate: date | None = None, s: Session = Depe
                                                                 AcaoRestricaoModel.status1 == "Pendente")))
 
     def restricoes_do_bloco(b) -> dict:
-        """Pendente da própria linha, ou da área (sem linha) com prazo até o fim do cartão."""
+        """Pendente da própria linha (ou do item do plano), ou da área (sem linha) com prazo até o fim do cartão."""
         linhas_b = {d.linha_id for d in b.dias}
-        rs = [r for r in pendentes if (r.linha_id in linhas_b) or (
+        do_item = (lambda r: r.plano_item_id in linhas_b) if origem == "plano" else (lambda r: r.linha_id in linhas_b)
+        rs = [r for r in pendentes if do_item(r) or (
             r.linha_id is None and r.area_id == b.area_id
             and (data_da_semana(r.prazo_termino, r.reprogramado) or b.fim) <= b.fim)]
         hoje = date.today()
@@ -101,13 +130,16 @@ def lookahead(de: date | None = None, ate: date | None = None, s: Session = Depe
         t = tipos.get(tipo_id)
         g = grupos.get(t.grupo_id) if t else None
         it = itens.get(item_id) if item_id else None
-        p = progs[b.programacao_id]
+        pi = itens_plano.get(b.linha_id) if origem == "plano" else None
+        p = progs.get(b.programacao_id)
         saida_blocos.append({
-            "id": i, "equipe_id": b.equipe_id or None, "area_id": b.area_id, "linha_id": b.linha_id,
-            "programacao_id": b.programacao_id, "programacao": p.titulo.split(" · ")[0], "status": p.status,
+            "id": i, "equipe_id": b.equipe_id or None, "area_id": b.area_id, "linha_id": None if pi else b.linha_id,
+            "plano_item_id": pi.id if pi else None,
+            "programacao_id": b.programacao_id or None, "programacao": codigo_item(pi.numero) if pi else p.titulo.split(" · ")[0],
+            "status": "plano" if pi else p.status,
             "codigo_simova": cat.codigo_item(g.numero, t.numero, it.numero if it else None) if t and g else None,
-            "descricao": cat.descricao_item(t.descricao, it.complemento if it else None) if t else "?",
-            "grupo": g.descricao if g else None, "item_pq": item_pq, "unidade": t.unidade if t else None,
+            "descricao": pi.descricao if pi else (cat.descricao_item(t.descricao, it.complemento if it else None) if t else "?"),
+            "grupo": g.descricao if g else None, "item_pq": t.item_pq if pi and t else (None if pi else item_pq), "unidade": t.unidade if t else None,
             "inicio": b.inicio.isoformat(), "fim": b.fim.isoformat(),
             "total_previsto": b.total_previsto, "total_realizado": b.total_realizado,
             "dias": [{"data": d.data.isoformat(), "previsto": d.previsto, "realizado": d.realizado} for d in b.dias],
@@ -115,9 +147,9 @@ def lookahead(de: date | None = None, ate: date | None = None, s: Session = Depe
     eq_out = []
     for eid in sorted(usadas, key=lambda x: (equipes[x].nome if x in equipes else "~")):
         e = equipes.get(eid)
-        cr, origem = cor(e)
+        cr, origem_cor = cor(e)
         eq_out.append({"id": eid or None, "nome": e.nome if e else "Sem equipe", "encarregado": e.encarregado_nome if e else None,
-                       "cor": cr, "origem_cor": origem, "turno": e.turno if e else None,
+                       "cor": cr, "origem_cor": origem_cor, "turno": e.turno if e else None,
                        "faixas": max([fx_eq[i] for i, b in enumerate(bs) if b.equipe_id == eid], default=0) + 1})
     ar_out = []
     for aid in sorted({b.area_id for b in bs}, key=lambda x: (locais[areas[x].local_id].ordem if areas[x].local_id in locais else 0,
@@ -132,6 +164,6 @@ def lookahead(de: date | None = None, ate: date | None = None, s: Session = Depe
     while d <= ate:
         dias_out.append({"data": d.isoformat(), "dia": DIAS[d.weekday()], "semana": numero_semana(d)})
         d += timedelta(days=1)
-    return {"de": de.isoformat(), "ate": ate.isoformat(), "dias": dias_out, "equipes": eq_out, "areas": ar_out,
+    return {"de": de.isoformat(), "ate": ate.isoformat(), "origem": origem, "dias": dias_out, "equipes": eq_out, "areas": ar_out,
             "blocos": saida_blocos,
             "programacoes": [{"id": p.id, "titulo": p.titulo, "status": p.status} for p in sorted(progs.values(), key=lambda x: x.inicio)]}

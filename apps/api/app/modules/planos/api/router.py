@@ -513,6 +513,90 @@ def do_cronograma(d: DoCronogramaIn, s: Session = Depends(get_session), c: Conte
     return {"novos": novos, "atualizados": atualizados, "concluidas_excluidas": concluidas}
 
 
+# ---- puxar da programação corrente (spec 084) ----
+class DaProgramacaoIn(BaseModel):
+    programacao_id: int | None = None  # vazio = a corrente (a semanal de hoje; senão a mensal de hoje; senão a mais recente)
+    linhas: list[int] | None = None  # vazio = todas
+    marco_id: int | None = None
+
+
+def programacao_corrente(s: Session, obra_id: int) -> ProgramacaoModel | None:
+    hoje = date.today()
+    progs = list(s.scalars(select(ProgramacaoModel).where(ProgramacaoModel.obra_id == obra_id).order_by(ProgramacaoModel.inicio.desc())))
+    return (next((p for p in progs if p.tipo == "SEMANAL" and p.inicio <= hoje <= p.fim), None)
+            or next((p for p in progs if p.tipo == "MENSAL" and p.inicio <= hoje <= p.fim), None)
+            or next((p for p in progs if p.inicio <= hoje), None) or (progs[0] if progs else None))
+
+
+def _da_programacao(s: Session, c: ContextoObra, pid: int | None) -> tuple[ProgramacaoModel, list[dict]]:
+    """Linhas da programação com a janela (dias com previsto; sem previsto = o período) e se já estão no plano."""
+    from app.modules.planejamento.application import servico as sv
+
+    p = sv.obter(s, c.obra_id, pid) if pid else programacao_corrente(s, c.obra_id)
+    if p is None:
+        raise DomainError("não há programação na obra", "programacao_id")
+    modelos = {ln.id: ln for ln in p.linhas}
+    no_plano_wbs = {w: i for w, i in s.execute(select(PlanoItemModel.wbs_no_id, PlanoItemModel.id).where(
+        PlanoItemModel.obra_id == c.obra_id, PlanoItemModel.wbs_no_id.is_not(None)))}
+    no_plano_txt = {(a, t, d.lower()): i for a, t, d, i in s.execute(select(PlanoItemModel.area_id, PlanoItemModel.tipo_id,
+                                                                            PlanoItemModel.descricao, PlanoItemModel.id)
+                                                                     .where(PlanoItemModel.obra_id == c.obra_id))}
+    out = []
+    for loc in sv.visao(s, p)["locais"]:
+        for a in loc["areas"]:
+            for ln in a["linhas"]:
+                m = modelos.get(ln["id"])
+                ini, fim = (date.fromisoformat(ln["janela"][0]), date.fromisoformat(ln["janela"][1])) if ln.get("janela") else (p.inicio, p.fim)
+                desc = (ln.get("descricao_completa") or ln.get("descricao") or "?")[:300]
+                ja = (m.plano_item_id if m and m.plano_item_id else None) or (no_plano_wbs.get(ln["wbs_no_id"]) if ln.get("wbs_no_id") else None) \
+                    or no_plano_txt.get((ln["area_id"], ln["tipo_id"], desc.lower()))
+                out.append({"linha_id": ln["id"], "descricao": desc, "area_id": ln["area_id"], "area": f"{a.get('codigo', '')} · {a.get('descricao', '')}",
+                            "tipo_id": ln["tipo_id"], "wbs_no_id": ln.get("wbs_no_id"), "equipe_id": ln.get("equipe_id"), "equipe": ln.get("equipe"),
+                            "id_crono": ln.get("id_crono"), "inicio": ini, "fim": fim, "quantidade": ln.get("qtd_periodo"),
+                            "unidade": ln.get("unidade"), "no_plano": ja})
+    return p, out
+
+
+@router.get("/programacao/previa")
+def previa_programacao(pid: int | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    p, linhas = _da_programacao(s, c, pid)
+    return {"programacao": {"id": p.id, "titulo": p.titulo, "tipo": p.tipo, "status": p.status, "inicio": p.inicio.isoformat(), "fim": p.fim.isoformat()},
+            "linhas": [{**x, "inicio": x["inicio"].isoformat(), "fim": x["fim"].isoformat()} for x in linhas]}
+
+
+@router.post("/itens/da-programacao", status_code=201)
+def da_programacao(d: DaProgramacaoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Cada linha da programação vira atividade do plano (janela, equipe, quantidade do período) e fica ligada a ela
+    (`programacao_linha.plano_item_id`): o item já nasce "programado" e o ciclo plano → programação fecha. Linha já
+    ligada, ou o mesmo IWP / atividade já no plano, só é ligada (não duplica)."""
+    p, linhas = _da_programacao(s, c, d.programacao_id)
+    quer = set(d.linhas or [])
+    modelos = {ln.id: ln for ln in p.linhas}
+    novos = ligados = 0
+    for x in linhas:
+        if quer and x["linha_id"] not in quer:
+            continue
+        m = modelos[x["linha_id"]]
+        if x["no_plano"]:
+            if not m.plano_item_id:
+                m.plano_item_id = x["no_plano"]
+                ligados += 1
+            continue
+        it = PlanoItemModel(obra_id=c.obra_id, numero=_proximo(s, c.obra_id), criado_por=c.usuario.id)
+        _preencher(s, c, it, ItemIn(descricao=x["descricao"], wbs_no_id=x["wbs_no_id"], area_id=x["area_id"], tipo_id=x["tipo_id"],
+                                    equipe_id=x["equipe_id"], inicio=x["inicio"], fim=x["fim"], quantidade=x["quantidade"], marco_id=d.marco_id))
+        if not x["wbs_no_id"]:
+            it.id_crono = x["id_crono"]
+        it.analisado = False
+        s.add(it)
+        s.flush()
+        m.plano_item_id = it.id
+        novos += 1
+    s.flush()
+    return {"programacao": p.titulo, "novos": novos, "ligados": ligados,
+            "ja_estavam": sum(1 for x in linhas if x["no_plano"] and (not quer or x["linha_id"] in quer)) - ligados}
+
+
 @router.post("/tirar-concluidas")
 def tirar_concluidas(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Exclui do plano as atividades concluídas no cronograma vigente. Fica quem já foi para a programação ou tem

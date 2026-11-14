@@ -262,14 +262,15 @@ export interface PainelIndicadores {
 
 /** Look-ahead das equipes (spec 029): blocos equipe × atividade × área no tempo. */
 export interface BlocoLookahead {
-  id: number; equipe_id: number | null; area_id: number; linha_id: number; programacao_id: number; programacao: string;
+  id: number; equipe_id: number | null; area_id: number; linha_id: number | null; programacao_id: number | null; programacao: string;
+  plano_item_id?: number | null;
   status: string; codigo_simova: string | null; descricao: string; grupo: string | null; item_pq: string | null; unidade: string | null;
   inicio: string; fim: string; total_previsto: number; total_realizado: number | null;
   dias: { data: string; previsto: number; realizado: number | null }[]; faixa_equipe: number; faixa_area: number;
   restricoes?: { pendentes: number; vencidas: number; ids?: number[] };
 }
 export interface Lookahead {
-  de: string; ate: string; dias: { data: string; dia: string; semana: number }[];
+  de: string; ate: string; origem?: 'programacao' | 'plano'; dias: { data: string; dia: string; semana: number }[];
   equipes: { id: number | null; nome: string; encarregado: string | null; cor: string; origem_cor: string; turno: string | null; faixas: number }[];
   areas: { id: number; codigo: string; descricao: string; local: string | null; faixas: number }[];
   blocos: BlocoLookahead[]; programacoes: { id: number; titulo: string; status: string }[];

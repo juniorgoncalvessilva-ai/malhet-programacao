@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarSearch, CheckCircle2, Diamond, Eraser, GanttChart, ListTree, Plus, Send, ShieldAlert, Trash2, X } from 'lucide-react';
+import { CalendarDays, CalendarSearch, CheckCircle2, Diamond, Eraser, GanttChart, ListTree, Plus, Send, ShieldAlert, Trash2, X } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Abas } from '@/components/Obra/Abas';
@@ -38,6 +38,7 @@ export default function PlanoPage() {
   const [novo, setNovo] = useState(false);
   const [daWbs, setDaWbs] = useState(false);
   const [doCrono, setDoCrono] = useState(false);
+  const [daProg, setDaProg] = useState(false);
   const api = useApi();
   const atualizar = useAtualizar();
   const confirmar = useConfirmar();
@@ -54,7 +55,8 @@ export default function PlanoPage() {
     <>
       <Cabecalho eyebrow="Programar · plano de 90 dias" titulo="Plano de 90 dias"
         acoes={pode('planejador') && <div className="flex flex-wrap gap-2">
-          <Botao variante="secundario" onClick={() => { setDoCrono(true); setDaWbs(false); setNovo(false); }}><GanttChart size={16} /> Puxar do cronograma</Botao>
+          <Botao variante="secundario" onClick={() => { setDaProg(true); setDoCrono(false); setDaWbs(false); setNovo(false); }} title="As linhas da programação corrente viram atividades do plano (e ficam ligadas a elas)"><CalendarDays size={16} /> Puxar da programação</Botao>
+          <Botao variante="secundario" onClick={() => { setDoCrono(true); setDaProg(false); setDaWbs(false); setNovo(false); }} title="Melhor quando o cronograma muda pouco"><GanttChart size={16} /> Puxar do cronograma</Botao>
           <Botao variante="secundario" onClick={() => { setDaWbs(true); setNovo(false); setDoCrono(false); }}><ListTree size={16} /> Inserir pela WBS</Botao>
           <Botao variante="secundario" onClick={tirarConcluidas}><Eraser size={16} /> Excluir concluídas</Botao>
           <Botao onClick={() => { setNovo(true); setDaWbs(false); }}><Plus size={16} /> Atividade ou marco</Botao>
@@ -63,16 +65,18 @@ export default function PlanoPage() {
         {(Object.keys(ROTULO) as SituacaoPlano[]).map((k) => <Indicador key={k} rotulo={ROTULO[k]} valor={r?.[k] ?? '—'} tom={k === 'restricao' && r?.[k] ? 'perigo' : k === 'liberado' ? 'sucesso' : undefined} />)}
       </div>
       {novo && <FormItem onFechar={() => setNovo(false)} marcos={itens.filter((i) => i.marco)} />}
+      {daProg && <FormDaProgramacao onFechar={() => setDaProg(false)} />}
       {doCrono && <FormDoCronograma onFechar={() => setDoCrono(false)} marcos={itens.filter((i) => i.marco)} />}
       {daWbs && <FormDaWbs onFechar={() => setDaWbs(false)} marcos={itens.filter((i) => i.marco)} />}
       <Abas rotulo="Horizonte" ativa={aba} onTrocar={(a) => { setAba(a); setSel(null); }} abas={[
         { chave: '90', titulo: '90 dias' }, { chave: '6', titulo: '6 semanas' }, { chave: 'pull', titulo: 'Pull planning' }, { chave: 'migrar', titulo: 'Levar à programação' },
       ]} />
       {plano.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
-      {(aba === '90' || aba === '6') && plano.data && <Grade dados={plano.data} seis={aba === '6'} sel={sel} onSel={setSel} />}
+      {(aba === '90' || aba === '6') && plano.data && <Grade dados={plano.data} seis={aba === '6'} sel={sel} onSel={(id) => setSel(sel === id ? null : id)}
+        detalhe={item && <Detalhe item={item} marcos={itens.filter((i) => i.marco && i.id !== item.id)} onFechar={() => setSel(null)} />} />}
       {aba === 'pull' && plano.data && <Pull itens={itens} onSel={setSel} />}
       {aba === 'migrar' && <Migrar />}
-      {item && aba !== 'migrar' && <Detalhe item={item} marcos={itens.filter((i) => i.marco && i.id !== item.id)} onFechar={() => setSel(null)} />}
+      {item && aba === 'pull' && <Detalhe item={item} marcos={itens.filter((i) => i.marco && i.id !== item.id)} onFechar={() => setSel(null)} />}
     </>
   );
 }
@@ -81,7 +85,7 @@ export default function PlanoPage() {
  * 90 dias / 6 semanas no padrão da programação mensal (spec 081): Local (faixa vermelha) → Área (azul) → CWP → atividades
  * em linhas alternadas, com WBS, etapa, item da PQ, equipe e quantidade, e as semanas do horizonte à direita.
  */
-function Grade({ dados, seis, sel, onSel }: { dados: PlanoResposta; seis: boolean; sel: number | null; onSel: (id: number) => void }) {
+function Grade({ dados, seis, sel, onSel, detalhe }: { dados: PlanoResposta; seis: boolean; sel: number | null; onSel: (id: number) => void; detalhe?: React.ReactNode }) {
   const { semanas } = dados;
   const h = hoje();
   const estrutura = useMemo(() => {
@@ -113,7 +117,8 @@ function Grade({ dados, seis, sel, onSel }: { dados: PlanoResposta; seis: boolea
   const linha = (i: ItemPlano) => {
     n += 1;
     return (
-      <tr key={i.id} onClick={() => onSel(i.id)} style={n % 2 === 0 ? { background: 'var(--m-zebra-programacao)' } : undefined}
+      <Fragment key={i.id}>
+      <tr onClick={() => onSel(i.id)} style={n % 2 === 0 ? { background: 'var(--m-zebra-programacao)' } : undefined}
         className={`cursor-pointer border-b border-m-row align-top hover:outline hover:outline-1 hover:outline-m-accent ${sel === i.id ? 'outline outline-2 outline-m-accent' : ''}`}>
         <td className="px-2 py-1.5 text-m-text-muted">{n}</td>
         <td className="min-w-[420px] px-2 py-1.5">
@@ -132,6 +137,9 @@ function Grade({ dados, seis, sel, onSel }: { dados: PlanoResposta; seis: boolea
         {seis && <td className="whitespace-nowrap px-2 py-1.5 text-[12px]">{i.marco ? '' : i.pendentes ? <span className="text-m-danger">{i.pendentes} pendente(s)</span> : i.analisado ? 'nenhuma' : <span className="text-m-text-muted">não analisado</span>}</td>}
         {semanas.map((s) => <td key={s.inicio} className="px-0.5 py-2">{barra(i, s)}</td>)}
       </tr>
+      {/* spec 084: restrições e detalhes abrem logo abaixo da atividade clicada */}
+      {sel === i.id && detalhe && <tr><td colSpan={colunas} className="border-b border-m-accent bg-m-accent-subtle/20 px-2 py-2"><div className="sticky left-2 max-w-[min(1100px,calc(100vw-80px))]">{detalhe}</div></td></tr>}
+      </Fragment>
     );
   };
   return (
@@ -530,6 +538,66 @@ function FormDoCronograma({ marcos, onFechar }: { marcos: ItemPlano[]; onFechar:
         </div>
         <div className="flex gap-2"><Botao disabled={!marcadas.size} onClick={puxar}><GanttChart size={16} /> Puxar {marcadas.size} atividade(s)</Botao></div>
       </>}
+    </Painel>
+  );
+}
+
+interface LinhaDaProgramacao { linha_id: number; descricao: string; area: string; equipe: string | null; id_crono: string | null; wbs_no_id: number | null;
+  inicio: string; fim: string; quantidade: number | null; unidade: string | null; no_plano: number | null }
+
+/** Spec 084: as linhas da programação corrente (ou de outra) viram atividades do plano e ficam ligadas a elas. */
+function FormDaProgramacao({ onFechar }: { onFechar: () => void }) {
+  const api = useApi();
+  const atualizar = useAtualizar();
+  const progs = useProgramacoes();
+  const [pid, setPid] = useState('');
+  const pv = useQuery({ queryKey: ['plano', 'da-programacao', pid], queryFn: () => api.get<{ programacao: { id: number; titulo: string; status: string }; linhas: LinhaDaProgramacao[] }>(
+    `/planos/programacao/previa${pid ? `?pid=${pid}` : ''}`) });
+  const [marcadas, setMarcadas] = useState<Set<number> | null>(null);
+  const lista = pv.data?.linhas ?? [];
+  const sel = marcadas ?? new Set(lista.filter((x) => !x.no_plano).map((x) => x.linha_id));
+  const novas = lista.filter((x) => !x.no_plano);
+  const puxar = () => api.post<{ novos: number; ligados: number; ja_estavam: number; programacao: string }>('/planos/itens/da-programacao', {
+    programacao_id: pv.data?.programacao.id, linhas: [...sel] })
+    .then((r) => { toast.success(`${r.novos} atividade(s) no plano a partir de ${r.programacao}${r.ligados ? ` · ${r.ligados} ligada(s) ao que já estava` : ''}`); atualizar(); onFechar(); })
+    .catch((er) => toast.error(er.message));
+  return (
+    <Painel titulo="Puxar da programação" subtitulo="Cada linha vira atividade do plano com a janela dos dias previstos, a equipe e a quantidade do período, e fica ligada a ela (sai como programada). O que já está no plano não duplica."
+      acoes={<Botao variante="fantasma" aria-label="Fechar" onClick={onFechar}><X size={16} /></Botao>}>
+      <div className="flex flex-wrap items-end gap-2">
+        <Selecao rotulo="Programação" value={pid} onChange={(e) => { setPid(e.target.value); setMarcadas(null); }} className="min-w-[340px]">
+          <option value="">Corrente{pv.data && !pid ? ` (${pv.data.programacao.titulo})` : ''}</option>
+          {progs.data?.map((p) => <option key={p.id} value={p.id}>{p.titulo} · {p.status}</option>)}
+        </Selecao>
+        <Botao disabled={!sel.size} onClick={puxar}><CalendarDays size={16} /> Puxar {sel.size} linha(s)</Botao>
+        <span className="text-[12.5px] text-m-text-muted">{lista.length} linha(s) · {novas.length} ainda fora do plano</span>
+      </div>
+      {pv.isLoading && <p className="text-sm text-m-text-muted">Carregando…</p>}
+      {pv.error && <p className="text-sm text-m-danger">{(pv.error as Error).message}</p>}
+      {lista.length > 0 && (
+        <div className="max-h-[420px] overflow-auto rounded-m-md border border-m-stroke-subtle">
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead className="sticky top-0 bg-m-surface-raised"><tr className="text-left text-[11px] uppercase tracking-[0.3px] text-m-text-muted">
+              <th className="px-2 py-2"><input type="checkbox" aria-label="Marcar todas" checked={sel.size === lista.length}
+                onChange={() => setMarcadas(sel.size === lista.length ? new Set() : new Set(lista.map((x) => x.linha_id)))} /></th>
+              <th className="px-2 py-2">Atividade</th><th className="px-2 py-2">Área</th><th className="px-2 py-2">Equipe</th><th className="px-2 py-2">Janela</th><th className="px-2 py-2 text-right">Qtd. do período</th>
+            </tr></thead>
+            <tbody>
+              {lista.map((x) => (
+                <tr key={x.linha_id} className="border-b border-m-row">
+                  <td className="px-2 py-1.5"><input type="checkbox" aria-label={`Puxar ${x.descricao}`} checked={sel.has(x.linha_id)}
+                    onChange={() => { const n = new Set(sel); if (n.has(x.linha_id)) n.delete(x.linha_id); else n.add(x.linha_id); setMarcadas(n); }} /></td>
+                  <td className="px-2 py-1.5"><div className="text-m-text-primary">{x.descricao}</div><div className="text-[11px] text-m-text-muted">{x.id_crono ? `P6 ${x.id_crono}` : ''}{x.wbs_no_id ? ' · IWP' : ''}{x.no_plano ? ' · já no plano (só liga)' : ''}</div></td>
+                  <td className="px-2 py-1.5">{x.area}</td>
+                  <td className="px-2 py-1.5">{x.equipe ?? '—'}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5">{dm(x.inicio)} a {dm(x.fim)}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-right">{x.quantidade != null ? `${fmt(x.quantidade)} ${x.unidade ?? ''}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Painel>
   );
 }

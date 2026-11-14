@@ -9,7 +9,8 @@ import { Link } from '@/i18n/navigation';
 import { qs } from '@/lib/api/client';
 import type { BlocoLookahead, Lookahead } from '@/lib/api/types';
 
-const DIA_PX = 52;
+const DIA_PX_PADRAO = 52;
+const DIA_PX_PLANO = 26;
 const FAIXA_PX = 54;
 const ROTULO_PX = 230;
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -19,12 +20,16 @@ const somar = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDa
 export default function LookaheadPage() {
   const api = useApi();
   const [inicio, setInicio] = useState(() => segunda(new Date()));
+  const [origem, setOrigem] = useState<'programacao' | 'plano'>('programacao');
   const [semanas, setSemanas] = useState(6);
+  const trocarOrigem = (o: 'programacao' | 'plano') => { setOrigem(o); setSemanas(o === 'plano' ? 13 : 6); setSel(null); };
   const [visao, setVisao] = useState<'equipe' | 'frente'>('equipe');
   const [sel, setSel] = useState<number | null>(null);
   const de = iso(inicio);
   const ate = iso(somar(inicio, semanas * 7 - 1));
-  const q = useQuery({ queryKey: ['lookahead', de, ate], queryFn: () => api.get<Lookahead>(`/lookahead${qs({ de, ate })}`) });
+  const q = useQuery({ queryKey: ['lookahead', origem, de, ate], queryFn: () => api.get<Lookahead>(`/lookahead${qs({ de, ate, origem })}`) });
+  // 13 semanas (plano de 90 dias) cabem na tela com colunas mais estreitas
+  const DIA_PX = semanas > 8 ? DIA_PX_PLANO : DIA_PX_PADRAO;
   const d = q.data;
   const hoje = iso(new Date());
   const idx = useMemo(() => Object.fromEntries((d?.dias ?? []).map((x, i) => [x.data, i])), [d]);
@@ -71,17 +76,22 @@ export default function LookaheadPage() {
     <>
       <Cabecalho eyebrow="Programar · look-ahead" titulo="Andar das equipes no tempo e pelas frentes"
         acoes={<>
+          <span className="flex items-center gap-1 rounded-full border border-m-stroke-subtle p-1" role="group" aria-label="De onde vêm os cartões">
+            <Chip ativo={origem === 'programacao'} onClick={() => trocarOrigem('programacao')}>Programação</Chip>
+            <Chip ativo={origem === 'plano'} onClick={() => trocarOrigem('plano')}>Plano 90 dias</Chip>
+          </span>
           <Chip ativo={visao === 'equipe'} onClick={() => setVisao('equipe')}>Por equipe</Chip>
           <Chip ativo={visao === 'frente'} onClick={() => setVisao('frente')}>Por frente</Chip>
         </>} />
 
       <Painel titulo={d ? `${dataBR(d.de)} a ${dataBR(d.ate)} · ${d.blocos.length} cartão(ões)` : 'Carregando…'}
-        subtitulo={d && !d.programacoes.length ? 'Nenhuma programação cobre esta janela.' : d ? `Programações na janela: ${d.programacoes.map((p) => p.titulo.split(' · ')[0]).join(', ')}` : undefined}
+        subtitulo={d && origem === 'plano' ? 'Caminhar das equipes previsto no plano de 90 dias (janela de cada atividade, dias úteis). Atividade sem equipe aparece em "Sem equipe".'
+          : d && !d.programacoes.length ? 'Nenhuma programação cobre esta janela.' : d ? `Programações na janela: ${d.programacoes.map((p) => p.titulo.split(' · ')[0]).join(', ')}` : undefined}
         acoes={<div className="flex flex-wrap items-center gap-2">
           <button type="button" aria-label="Semana anterior" className="rounded-full border border-m-stroke p-2 text-m-text-secondary hover:text-m-accent" onClick={() => setInicio(somar(inicio, -7))}><ChevronLeft size={16} /></button>
           <button type="button" className="rounded-full border border-m-stroke px-3 py-1.5 text-[12.5px] font-semibold text-m-text-secondary hover:text-m-accent" onClick={() => setInicio(segunda(new Date()))}>Hoje</button>
           <button type="button" aria-label="Próxima semana" className="rounded-full border border-m-stroke p-2 text-m-text-secondary hover:text-m-accent" onClick={() => setInicio(somar(inicio, 7))}><ChevronRight size={16} /></button>
-          {[2, 4, 6].map((n) => <Chip key={n} ativo={semanas === n} onClick={() => setSemanas(n)}>{n} semanas</Chip>)}
+          {(origem === 'plano' ? [6, 9, 13] : [2, 4, 6]).map((n) => <Chip key={n} ativo={semanas === n} onClick={() => setSemanas(n)}>{n} semanas</Chip>)}
         </div>}>
         {d && (
           <>
@@ -100,7 +110,7 @@ export default function LookaheadPage() {
                   <div className="sticky left-0 z-20 shrink-0 bg-m-surface-raised px-2 py-1 font-semibold uppercase" style={{ width: ROTULO_PX }}>{visao === 'equipe' ? 'Equipe' : 'Frente (área)'}</div>
                   {d.dias.map((x) => (
                     <div key={x.data} className={`shrink-0 py-1 text-center ${x.data === hoje ? 'font-bold text-m-accent' : ['SÁB', 'DOM'].includes(x.dia) ? 'text-m-text-tertiary' : ''}`} style={{ width: DIA_PX }}>
-                      {x.dia}<div>{x.data.slice(8)}/{x.data.slice(5, 7)}</div>
+                      {DIA_PX < 40 ? <>{x.dia.slice(0, 1)}<div>{x.data.slice(8)}</div></> : <>{x.dia}<div>{x.data.slice(8)}/{x.data.slice(5, 7)}</div></>}
                     </div>
                   ))}
                 </div>
@@ -128,8 +138,10 @@ export default function LookaheadPage() {
         <Painel titulo={`${corEq[String(selecionado.equipe_id)]?.nome ?? 'Sem equipe'} · ${area[selecionado.area_id]?.codigo} ${area[selecionado.area_id]?.descricao}`}
           subtitulo={`${selecionado.codigo_simova ?? ''} ${selecionado.descricao} · ${dataBR(selecionado.inicio)} a ${dataBR(selecionado.fim)}`}
           acoes={<div className="flex flex-wrap gap-3">
-            <Link href={`/app/restricoes?area_id=${selecionado.area_id}&linha_id=${selecionado.linha_id}${selecionado.equipe_id ? `&equipe_id=${selecionado.equipe_id}` : ''}&ref=${encodeURIComponent(selecionado.codigo_simova ?? '')}&ate=${selecionado.inicio}`} className="text-[13px] font-semibold text-m-accent underline">+ Restrição para este cartão</Link>
-            <Link href={`/app/programacoes/${selecionado.programacao_id}`} className="text-[13px] font-semibold text-m-accent underline">Abrir {selecionado.programacao}</Link>
+            {selecionado.plano_item_id ? <Link href="/app/plano" className="text-[13px] font-semibold text-m-accent underline">Abrir {selecionado.programacao} no plano de 90 dias (restrições)</Link> : <>
+              <Link href={`/app/restricoes?area_id=${selecionado.area_id}&linha_id=${selecionado.linha_id}${selecionado.equipe_id ? `&equipe_id=${selecionado.equipe_id}` : ''}&ref=${encodeURIComponent(selecionado.codigo_simova ?? '')}&ate=${selecionado.inicio}`} className="text-[13px] font-semibold text-m-accent underline">+ Restrição para este cartão</Link>
+              <Link href={`/app/programacoes/${selecionado.programacao_id}`} className="text-[13px] font-semibold text-m-accent underline">Abrir {selecionado.programacao}</Link>
+            </>}
           </div>}>
           {(selecionado.restricoes?.pendentes ?? 0) > 0 && <p className="mb-2 text-[12.5px] text-m-warning">{selecionado.restricoes!.pendentes} restrição(ões) pendente(s){selecionado.restricoes!.vencidas ? `, ${selecionado.restricoes!.vencidas} atrasada(s)` : ''} nesta área/atividade até o fim do cartão — veja em <Link href="/app/restricoes" className="font-semibold underline">Restrições (6WLA)</Link>.</p>}
           <div className="flex flex-wrap gap-2 text-[12.5px]">

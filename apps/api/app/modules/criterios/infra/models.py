@@ -31,3 +31,14 @@ class EtapaCriterioModel(Base):
     documento: Mapped[str | None] = mapped_column(Text)  # o que comprova a etapa na medição
     percentual: Mapped[float] = mapped_column(Float, default=0)  # fração do valor do item (0,4 = 40%)
     sem_avanco: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # só esforço/HH
+
+
+class VinculoCriterioModel(Base):
+    """Critério escolhido à mão para um item da PQ (spec 083) — vence o casamento pelo código CMS."""
+    __tablename__ = "criterio_item_pq"
+    __table_args__ = (UniqueConstraint("obra_id", "item_pq", name="uq_criterio_item_pq"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    item_pq: Mapped[str] = mapped_column(String(40))
+    criterio_id: Mapped[int] = mapped_column(ForeignKey("criterio_medicao.id", ondelete="CASCADE"), index=True)
+    definido_por: Mapped[str | None] = mapped_column(String(80))
