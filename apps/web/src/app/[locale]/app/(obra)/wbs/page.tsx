@@ -14,16 +14,20 @@ import { Link } from '@/i18n/navigation';
 import type { NoWbs, SincronizacaoWbs, TipoNoWbs, ExportacaoP6 } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 
-const FILHO: Record<TipoNoWbs, TipoNoWbs | null> = { area: 'cwp', cwp: 'grupo', grupo: 'iwp', iwp: null };
-const ROTULO: Record<TipoNoWbs, string> = { area: 'Área', cwp: 'CWP', grupo: 'Grupo', iwp: 'IWP' };
+const FILHO: Record<TipoNoWbs, TipoNoWbs | null> = { area: 'cwp', cwp: 'grupo', grupo: 'iwp', iwp: 'etapa', etapa: null };
+const ROTULO: Record<TipoNoWbs, string> = { area: 'Área', cwp: 'CWP', grupo: 'Grupo', iwp: 'IWP', etapa: 'Etapa' };
 const ESTILO: Record<TipoNoWbs, string> = {
   area: 'bg-m-accent-strong text-m-on-accent font-bold',
   cwp: 'bg-m-surface-active font-semibold text-m-text-primary',
   grupo: 'bg-m-surface-active/50 font-semibold text-m-text-primary',
   iwp: 'text-m-text-primary',
+  etapa: 'text-m-text-secondary',
 };
-type Form = { modo: 'novo' | 'editar'; tipo: TipoNoWbs; pai?: NoWbs; no?: NoWbs; area_id: string; elemento: string; complemento: string; grupo_id: string; tipo_id: string; quantidade: string; observacao: string; ativo: boolean };
-const vazio = (tipo: TipoNoWbs, pai?: NoWbs): Form => ({ modo: 'novo', tipo, pai, area_id: '', elemento: '', complemento: '', grupo_id: '', tipo_id: '', quantidade: '', observacao: '', ativo: true });
+type Form = { modo: 'novo' | 'editar'; tipo: TipoNoWbs; pai?: NoWbs; no?: NoWbs; area_id: string; elemento: string; complemento: string; grupo_id: string; tipo_id: string; quantidade: string; observacao: string; ativo: boolean; percentual: string; sem_avanco: boolean };
+const vazio = (tipo: TipoNoWbs, pai?: NoWbs): Form => ({ modo: 'novo', tipo, pai, area_id: '', elemento: '', complemento: '', grupo_id: '', tipo_id: '', quantidade: '', observacao: '', ativo: true, percentual: '', sem_avanco: false });
+
+/** % digitado (40) → fração (0,4) que a API guarda; sem avanço = 0. */
+const pctDe = (f: Form) => (f.tipo !== 'etapa' ? null : f.sem_avanco ? 0 : f.percentual.trim() === '' ? 0 : Number(f.percentual.replace(',', '.')) / 100);
 
 function memQtd(n: NoWbs): MemoriaCalculo {
   const un = n.unid ?? 'un';
@@ -72,7 +76,12 @@ export default function WbsPage() {
   const porId = useMemo(() => { const m = new Map<number, NoWbs>(); const ir = (n: NoWbs) => { m.set(n.id, n); n.filhos.forEach(ir); }; arvore.forEach(ir); return m; }, [arvore]);
   const iwpsSel = useMemo(() => {
     const out = new Map<number, NoWbs>();
-    const ir = (n: NoWbs) => { if (n.tipo === 'iwp') { if (n.ativo) out.set(n.id, n); } else n.filhos.forEach(ir); };
+    // IWP com etapas (spec 079) vai como as etapas ativas: cada uma vira uma linha
+    const ir = (n: NoWbs) => {
+      if (n.tipo === 'etapa') { if (n.ativo) out.set(n.id, n); return; }
+      if (n.tipo === 'iwp') { if (!n.ativo) return; const ets = n.filhos.filter((f) => f.tipo === 'etapa' && f.ativo); if (ets.length) ets.forEach((e) => out.set(e.id, e)); else out.set(n.id, n); return; }
+      n.filhos.forEach(ir);
+    };
     sel.forEach((id) => { const n = porId.get(id); if (n) ir(n); });
     return [...out.values()].sort((a, b) => a.codigo.localeCompare(b.codigo, 'pt-BR', { numeric: true }));
   }, [sel, porId]);
@@ -92,7 +101,7 @@ export default function WbsPage() {
     } catch (e) { toast.error((e as Error).message); } finally { setEnviando(false); }
   };
   const conta = useMemo(() => {
-    const c = { cwp: 0, grupo: 0, iwp: 0 } as Record<string, number>;
+    const c = { cwp: 0, grupo: 0, iwp: 0, etapa: 0 } as Record<string, number>;
     const ir = (n: NoWbs) => { if (n.tipo !== 'area') c[n.tipo]++; n.filhos.forEach(ir); };
     arvore.forEach(ir);
     return c;
@@ -104,19 +113,27 @@ export default function WbsPage() {
     const q = form.quantidade.trim() === '' ? null : Number(form.quantidade.replace(',', '.'));
     try {
       if (form.modo === 'editar' && form.no) {
-        await api.put(`/wbs/nos/${form.no.id}`, { tipo: form.tipo, elemento: form.elemento, complemento: form.complemento, quantidade: q, observacao: form.observacao, ativo: form.ativo });
+        await api.put(`/wbs/nos/${form.no.id}`, { tipo: form.tipo, elemento: form.elemento, complemento: form.complemento, quantidade: q, observacao: form.observacao, ativo: form.ativo,
+          percentual: pctDe(form), sem_avanco: form.sem_avanco });
         toast.success('Nó atualizado');
       } else {
         const r = await api.post<{ codigo: string }>('/wbs/nos', {
           tipo: form.tipo, pai_id: form.pai?.id ?? null, area_id: form.area_id ? Number(form.area_id) : null, elemento: form.elemento,
           complemento: form.complemento, grupo_id: form.grupo_id ? Number(form.grupo_id) : null, tipo_id: form.tipo_id ? Number(form.tipo_id) : null,
-          quantidade: q, observacao: form.observacao,
+          quantidade: q, observacao: form.observacao, percentual: pctDe(form), sem_avanco: form.sem_avanco,
         });
         toast.success(`${ROTULO[form.tipo]} ${r.codigo} criado`);
         if (form.pai) setAbertos((f) => new Set(f).add(form.pai!.id));
       }
       setForm(null); setErro(null); atualizar();
     } catch (e) { setErro(e); }
+  };
+  const aplicarCriterio = async (n: NoWbs) => {
+    try {
+      const r = await api.post<{ criterio: string; criadas: number; ja_existiam: number }>(`/wbs/nos/${n.id}/aplicar-criterio`);
+      toast.success(`${r.criadas} etapa(s) do critério ${r.criterio} criada(s)${r.ja_existiam ? ` · ${r.ja_existiam} já existiam` : ''}`);
+      setAbertos((f) => new Set(f).add(n.id)); atualizar();
+    } catch (e) { toast.error((e as Error).message); }
   };
   const excluir = async (n: NoWbs) => {
     if (!(await confirmar({ titulo: `Excluir ${ROTULO[n.tipo]} ${n.codigo}?`, mensagem: <>{n.titulo}<br />Só sai nó sem itens abaixo e sem programação (IWP em programação: inative).</> }))) return;
@@ -185,6 +202,13 @@ export default function WbsPage() {
           </Selecao>
         )}
         {f.tipo === 'iwp' && <Campo rotulo="Quantidade (vazio = take-off)" type="number" step="any" min="0" value={f.quantidade} onChange={(e) => setForm({ ...f, quantidade: e.target.value })} className="w-[170px]" />}
+        {f.tipo === 'etapa' && <>
+          <Campo rotulo="Etapa" required placeholder="Pré-armação (fora do local)" maxLength={120} value={f.elemento} onChange={(e) => setForm({ ...f, elemento: e.target.value })} className="w-[260px]" />
+          <label className="flex items-center gap-2 pb-2.5 text-[13px] text-m-text-secondary" title="Esforço sem avanço físico: conta HH e capacidade, mas vale 0% do item (não fatura)">
+            <input type="checkbox" checked={f.sem_avanco} onChange={(e) => setForm({ ...f, sem_avanco: e.target.checked, percentual: e.target.checked ? '' : f.percentual })} /> Sem avanço (só esforço/HH)</label>
+          {!f.sem_avanco && <Campo rotulo="% do valor do item" type="number" step="any" min="0" max="100" value={f.percentual} onChange={(e) => setForm({ ...f, percentual: e.target.value })} className="w-[140px]" />}
+          <Campo rotulo="Quantidade (vazio = do IWP)" type="number" step="any" min="0" value={f.quantidade} onChange={(e) => setForm({ ...f, quantidade: e.target.value })} className="w-[170px]" />
+        </>}
         <Campo rotulo="Observação" maxLength={300} value={f.observacao} onChange={(e) => setForm({ ...f, observacao: e.target.value })} className="w-[220px]" />
         {f.modo === 'editar' && <label className="flex items-center gap-2 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={f.ativo} onChange={(e) => setForm({ ...f, ativo: e.target.checked })} /> Ativo</label>}
         <Botao type="submit">Salvar</Botao>
@@ -217,7 +241,8 @@ export default function WbsPage() {
             {n.fora_cronograma && <span className="ml-1"><Pilula tom="atencao">fora do cronograma</Pilula></span>}
             {n.id_crono && <div className="text-[11px] font-normal text-m-text-muted">atividade {n.id_crono}{n.atividade_p6 ? ` · ${n.atividade_p6}` : ''}</div>}
             {n.observacao && <div className="text-[11px] font-normal opacity-80">{n.observacao}</div>}
-            {n.tipo === 'iwp' && n.na_pq_vigente === false && <div className="text-[11px] text-m-warning">item fora da PQ vigente</div>}</td>
+            {n.tipo === 'iwp' && n.na_pq_vigente === false && <div className="text-[11px] text-m-warning">item fora da PQ vigente</div>}
+            {n.tipo === 'etapa' && n.sem_avanco && <span className="ml-1"><Pilula tom="atencao">sem avanço</Pilula></span>}</td>
           <td className={td}>{n.unid ?? ''}</td>
           <td className={`${td} whitespace-nowrap text-right`}>{n.tipo === 'iwp' ? (n.quantidade_efetiva != null
             ? <><Calculado chave="qtd" memoria={() => memQtd(n)}>{fmt(n.quantidade_efetiva)}</Calculado>{' '}<Pilula ponto={false} tom={n.origem_qtd === 'digitada' ? 'acento' : 'info'}>{n.origem_qtd}</Pilula></>
@@ -225,8 +250,9 @@ export default function WbsPage() {
           <td className={`${td} text-right`}>{n.linhas ? `${n.linhas} linha(s)` : ''}</td>
           <td className={`${td} whitespace-nowrap text-right`}>
             {editar && <>
+              {n.tipo === 'iwp' && <button type="button" title="Cria as etapas do critério de avanço do item da PQ" className="mr-2 text-[12px] font-semibold text-m-accent underline-offset-2 hover:underline" onClick={() => aplicarCriterio(n)}>critério</button>}
               {filho && <button type="button" className="mr-2 text-[12px] font-semibold underline-offset-2 hover:underline" onClick={() => { setErro(null); setForm(vazio(filho, n)); }}><Plus size={12} className="mr-0.5 inline" />{ROTULO[filho]}</button>}
-              {<button type="button" aria-label={`Editar ${n.codigo}`} className="p-1 opacity-80 hover:opacity-100" onClick={() => { setErro(null); setForm({ ...vazio(n.tipo), modo: 'editar', no: n, elemento: n.elemento ?? '', complemento: n.complemento ?? '', quantidade: n.quantidade != null ? String(n.quantidade) : '', observacao: n.observacao ?? '', ativo: n.ativo }); }}><Pencil size={13} /></button>}
+              {<button type="button" aria-label={`Editar ${n.codigo}`} className="p-1 opacity-80 hover:opacity-100" onClick={() => { setErro(null); setForm({ ...vazio(n.tipo), modo: 'editar', no: n, elemento: n.elemento ?? '', complemento: n.complemento ?? '', quantidade: n.quantidade != null ? String(n.quantidade) : '', observacao: n.observacao ?? '', ativo: n.ativo, percentual: n.percentual != null ? String(+(n.percentual * 100).toFixed(4)) : '', sem_avanco: !!n.sem_avanco }); }}><Pencil size={13} /></button>}
               {!n.filhos.length && !n.linhas && <button type="button" aria-label={`Excluir ${n.codigo}`} className="p-1 opacity-80 hover:text-m-danger hover:opacity-100" onClick={() => excluir(n)}><Trash2 size={13} /></button>}
             </>}
           </td>

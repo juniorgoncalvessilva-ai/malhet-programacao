@@ -45,7 +45,8 @@ export function ResumoProgramacao({ v, nomes }: { v: Visao; nomes: ModoNomes }) 
     <>
       <td className="px-2 py-1.5 text-right text-m-text-muted">{ls.length}</td>
       {unidades.map((u) => {
-        const doU = ls.filter((l) => un(l) === u);
+        // etapa sem avanço (spec 079) é esforço: conta HH, mas não soma quantidade (a do item já está na etapa que mede)
+        const doU = ls.filter((l) => un(l) === u && !l.etapa?.sem_avanco);
         if (!doU.length) return <td key={u} className="px-2 py-1.5 text-right text-m-text-tertiary">—</td>;
         const p = doU.reduce((s, l) => s + (l.total_previsto ?? 0), 0);
         const r = doU.reduce((s, l) => s + (l.total_realizado ?? 0), 0);

@@ -148,6 +148,15 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   "Contratada | Obra" + favicon da contratada (`TituloAba`, `marca_obra.nome_contratada`). Spec 043. Puxar de um período do
   cronograma (`/planos/itens/do-cronograma`, excluir concluídas) com os recursos do P6 (`atividade_cronograma.recursos`
   ← TASKRSRC, copiados em `plano_item.recursos`); `/planos/tirar-concluidas`. Spec 044.
+  Plano no padrão da programação (Local → Área → CWP → atividades, cores S27) e "Inserir pela WBS" em árvore com caixas
+  (inclusive fora do cronograma). Spec 081.
+- Critério de avanço (`criterios/`, spec 079): planilha "Critério de medição" (código CMS + item da PQ → etapas com % do valor),
+  etapa **sem avanço** = só esforço. WBS ganha o nível Etapa abaixo do IWP (`wbs_no.etapa_id/percentual/sem_avanco`, código
+  `…-E1`, botão "critério" = `aplicar-criterio`); IWP com etapas vai à programação/plano como as etapas
+  (`programacao_linha.etapa_*`): `pu` = PU × %, sem avanço = 0 (não fatura nem soma quantidade; HH/capacidade continuam).
+- Associar cronograma ↔ WBS (spec 080): `/app/wbs/associacao` (`GET /wbs/associacao` com sugestões, `PUT /wbs/nos/{id}/atividade`
+  leva o ID às programações em rascunho) e na linha da programação (`PUT …/linhas/{lid}/atividade`, `AssociarAtividadeLinha`).
+- Início do celular só com o que fazer e atalhos (sem lista de atividades). Spec 078.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 

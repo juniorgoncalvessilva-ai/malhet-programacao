@@ -55,7 +55,7 @@ export default function PlanoPage() {
       <Cabecalho eyebrow="Programar · plano de 90 dias" titulo="Plano de 90 dias"
         acoes={pode('planejador') && <div className="flex flex-wrap gap-2">
           <Botao variante="secundario" onClick={() => { setDoCrono(true); setDaWbs(false); setNovo(false); }}><GanttChart size={16} /> Puxar do cronograma</Botao>
-          <Botao variante="secundario" onClick={() => { setDaWbs(true); setNovo(false); setDoCrono(false); }}><ListTree size={16} /> Puxar da WBS</Botao>
+          <Botao variante="secundario" onClick={() => { setDaWbs(true); setNovo(false); setDoCrono(false); }}><ListTree size={16} /> Inserir pela WBS</Botao>
           <Botao variante="secundario" onClick={tirarConcluidas}><Eraser size={16} /> Excluir concluídas</Botao>
           <Botao onClick={() => { setNovo(true); setDaWbs(false); }}><Plus size={16} /> Atividade ou marco</Botao>
         </div>} />
@@ -77,52 +77,91 @@ export default function PlanoPage() {
   );
 }
 
+/**
+ * 90 dias / 6 semanas no padrão da programação mensal (spec 081): Local (faixa vermelha) → Área (azul) → CWP → atividades
+ * em linhas alternadas, com WBS, etapa, item da PQ, equipe e quantidade, e as semanas do horizonte à direita.
+ */
 function Grade({ dados, seis, sel, onSel }: { dados: PlanoResposta; seis: boolean; sel: number | null; onSel: (id: number) => void }) {
   const { semanas } = dados;
-  const grupos = useMemo(() => {
-    const m = new Map<string, ItemPlano[]>();
-    for (const i of dados.itens) {
-      if (i.fim < semanas[0].inicio || i.inicio > semanas[semanas.length - 1].fim) continue; // puxado fora do horizonte
-      const k = i.marco ? '◆ Marcos' : (i.area ?? 'Sem área');
-      m.set(k, [...(m.get(k) ?? []), i]);
-    }
-    return [...m.entries()].sort(([a], [b]) => (a.startsWith('◆') ? -1 : b.startsWith('◆') ? 1 : a.localeCompare(b, 'pt-BR', { numeric: true })));
-  }, [dados, semanas]);
   const h = hoje();
-  if (!grupos.length) return <p className="rounded-m-lg border border-dashed border-m-stroke p-8 text-center text-sm text-m-text-secondary">Nada pensado para este horizonte ainda. Puxe da WBS ou crie a atividade.</p>;
+  const estrutura = useMemo(() => {
+    const visiveis = dados.itens.filter((i) => !(i.fim < semanas[0].inicio || i.inicio > semanas[semanas.length - 1].fim));
+    const marcos = visiveis.filter((i) => i.marco).sort((a, b) => a.fim.localeCompare(b.fim));
+    const locais = new Map<string, Map<string, Map<string, ItemPlano[]>>>();
+    for (const i of visiveis.filter((x) => !x.marco)) {
+      const l = i.local ?? 'Sem local'; const a = i.area ?? 'Sem área'; const c = i.cwp?.texto ?? '';
+      if (!locais.has(l)) locais.set(l, new Map());
+      const ma = locais.get(l)!; if (!ma.has(a)) ma.set(a, new Map());
+      const mc = ma.get(a)!; mc.set(c, [...(mc.get(c) ?? []), i]);
+    }
+    const ord = (x: string, y: string) => x.localeCompare(y, 'pt-BR', { numeric: true });
+    return {
+      marcos,
+      locais: [...locais.entries()].sort(([x], [y]) => ord(x, y)).map(([l, ma]) => ({ l, areas: [...ma.entries()].sort(([x], [y]) => ord(x, y))
+        .map(([a, mc]) => ({ a, cwps: [...mc.entries()].sort(([x], [y]) => ord(x, y)).map(([c, its]) => ({ c, itens: its.sort((x, y) => (x.wbs_codigo ?? x.codigo).localeCompare(y.wbs_codigo ?? y.codigo, 'pt-BR', { numeric: true })) })) })) })),
+    };
+  }, [dados, semanas]);
+  if (!estrutura.locais.length && !estrutura.marcos.length) return <p className="rounded-m-lg border border-dashed border-m-stroke p-8 text-center text-sm text-m-text-secondary">Nada pensado para este horizonte ainda. Insira pela WBS (inclusive o que não está no cronograma) ou crie a atividade.</p>;
+  const colunas = semanas.length + (seis ? 7 : 6);
+  let n = 0;
+  const barra = (i: ItemPlano, s: { inicio: string; fim: string }) => {
+    const dentro = i.inicio <= s.fim && i.fim >= s.inicio;
+    if (!dentro) return null;
+    return i.marco ? <div className="mx-auto h-3 w-3 rotate-45 bg-m-warning" title={`Marco ${dataBR(i.fim)}`} />
+      : <div className={`h-3 ${BARRA[i.situacao]} ${i.inicio >= s.inicio ? 'rounded-l-full' : ''} ${i.fim <= s.fim ? 'rounded-r-full' : ''}`} title={`${dataBR(i.inicio)} a ${dataBR(i.fim)}`} />;
+  };
+  const linha = (i: ItemPlano) => {
+    n += 1;
+    return (
+      <tr key={i.id} onClick={() => onSel(i.id)} style={n % 2 === 0 ? { background: 'var(--m-zebra-programacao)' } : undefined}
+        className={`cursor-pointer border-b border-m-row align-top hover:outline hover:outline-1 hover:outline-m-accent ${sel === i.id ? 'outline outline-2 outline-m-accent' : ''}`}>
+        <td className="px-2 py-1.5 text-m-text-muted">{n}</td>
+        <td className="min-w-[420px] px-2 py-1.5">
+          <span className="font-medium text-m-text-primary">{i.marco && <Diamond size={12} className="mr-1 inline text-m-warning" />}{i.cwp?.texto ? i.descricao.replace(` - (${i.cwp.texto})`, '') : i.descricao}</span>
+          {i.etapa && <span className={`ml-1 rounded-[5px] px-1.5 py-px text-[10px] font-semibold ${i.etapa.sem_avanco ? 'bg-m-warning-subtle text-m-warning' : 'bg-m-accent-subtle text-m-accent'}`}>{i.etapa.sem_avanco ? 'sem avanço' : `etapa ${fmt((i.etapa.percentual ?? 0) * 100, 2)}%`}</span>}
+          <div className="text-[11px] text-m-text-muted">
+            {i.wbs_codigo ? <span className="mr-1 rounded-[5px] bg-m-info-subtle px-1.5 py-px font-semibold text-m-info">WBS {i.wbs_codigo}</span> : <span className="mr-1 rounded-[5px] bg-m-surface-active px-1.5 py-px">livre</span>}
+            {i.codigo} · {dataBR(i.inicio)}{i.fim !== i.inicio ? ` a ${dataBR(i.fim)}` : ''}{i.id_crono ? ` · P6 ${i.id_crono}` : i.wbs_no_id ? ' · fora do cronograma' : ''}{i.recursos.length ? ` · ${i.recursos.length} recurso(s) P6` : ''}
+            {i.status_crono === 'Concluída' && <span className="ml-1.5 font-semibold text-m-success">concluída no cronograma</span>}
+          </div>
+        </td>
+        <td className="px-2 py-1.5 whitespace-nowrap">{i.item_pq ?? '—'}</td>
+        <td className="px-2 py-1.5">{i.equipe ?? <span className="text-m-text-muted">—</span>}</td>
+        <td className="whitespace-nowrap px-2 py-1.5 text-right">{i.quantidade != null ? `${fmt(i.quantidade)} ${i.unidade ?? ''}` : '—'}</td>
+        <td className="px-2 py-1.5">{!i.marco && <Pilula tom={TOM[i.situacao]}>{ROTULO[i.situacao]}</Pilula>}</td>
+        {seis && <td className="whitespace-nowrap px-2 py-1.5 text-[12px]">{i.marco ? '' : i.pendentes ? <span className="text-m-danger">{i.pendentes} pendente(s)</span> : i.analisado ? 'nenhuma' : <span className="text-m-text-muted">não analisado</span>}</td>}
+        {semanas.map((s) => <td key={s.inicio} className="px-0.5 py-2">{barra(i, s)}</td>)}
+      </tr>
+    );
+  };
   return (
     <div className="overflow-x-auto rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised">
       <table className="w-full border-collapse text-[12.5px]">
         <thead>
-          <tr className="text-left text-[11px] uppercase tracking-[0.3px] text-m-text-muted">
-            <th className="sticky left-0 z-10 min-w-[320px] bg-m-surface-raised px-3 py-2">Atividade</th>
-            <th className="px-2 py-2">Situação</th>
-            {seis && <th className="px-2 py-2">Restrições</th>}
-            {semanas.map((s) => (
-              <th key={s.inicio} className={`min-w-[52px] px-1 py-2 text-center ${s.inicio <= h && h <= s.fim ? 'text-m-accent' : ''}`}>{dm(s.inicio)}</th>
-            ))}
+          <tr className="text-left text-[10.5px] uppercase tracking-[0.3px] text-m-text-muted">
+            <th className="px-2 py-2">Nº</th><th className="px-2 py-2">Atividade</th><th className="px-2 py-2">Item PQ</th><th className="px-2 py-2">Equipe</th>
+            <th className="px-2 py-2 text-right">Quantidade</th><th className="px-2 py-2">Situação</th>{seis && <th className="px-2 py-2">Restrições</th>}
+            {semanas.map((s) => <th key={s.inicio} className={`min-w-[48px] px-1 py-2 text-center ${s.inicio <= h && h <= s.fim ? 'text-m-accent' : ''}`}>{dm(s.inicio)}</th>)}
           </tr>
         </thead>
         <tbody>
-          {grupos.map(([g, lista]) => (
-            <Fragment key={g}>
-              <tr><td colSpan={semanas.length + (seis ? 3 : 2)} className="bg-m-surface-hover px-3 py-1.5 text-[12px] font-semibold text-m-text-primary">{g}</td></tr>
-              {lista.map((i) => (
-                <tr key={i.id} onClick={() => onSel(i.id)} className={`cursor-pointer border-b border-m-row hover:bg-m-surface-hover ${sel === i.id ? 'bg-m-accent-subtle' : ''}`}>
-                  <td className="sticky left-0 z-10 bg-inherit px-3 py-2">
-                    <div className="font-medium text-m-text-primary">{i.marco && <Diamond size={12} className="mr-1 inline text-m-warning" />}{i.descricao}</div>
-                    <div className="text-[11px] text-m-text-muted">{i.codigo} · {dataBR(i.inicio)}{i.fim !== i.inicio ? ` a ${dataBR(i.fim)}` : ''}{i.equipe ? ` · ${i.equipe}` : ''}{i.quantidade != null ? ` · ${fmt(i.quantidade)}` : ''}{i.id_crono ? ` · ${i.id_crono}` : ''}{i.recursos.length ? ` · ${i.recursos.length} recurso(s)` : ''}
-                      {i.status_crono === 'Concluída' && <span className="ml-1.5 font-semibold text-m-success">concluída no cronograma</span>}</div>
-                  </td>
-                  <td className="px-2 py-2">{!i.marco && <Pilula tom={TOM[i.situacao]}>{ROTULO[i.situacao]}</Pilula>}</td>
-                  {seis && <td className="whitespace-nowrap px-2 py-2 text-[12px]">{i.marco ? '' : i.pendentes ? <span className="text-m-danger">{i.pendentes} pendente(s){i.restricoes.filter((x) => x.status1 === 'Pendente').map((x) => x.prazo).filter(Boolean).sort()[0] ? ` · até ${dm(i.restricoes.filter((x) => x.status1 === 'Pendente').map((x) => x.prazo!).filter(Boolean).sort()[0])}` : ''}</span> : i.analisado ? 'nenhuma' : <span className="text-m-text-muted">não analisado</span>}</td>}
-                  {semanas.map((s) => {
-                    const dentro = i.inicio <= s.fim && i.fim >= s.inicio;
-                    return <td key={s.inicio} className="px-0.5 py-2">{dentro && (i.marco
-                      ? <div className="mx-auto h-3 w-3 rotate-45 bg-m-warning" title={`Marco ${dataBR(i.fim)}`} />
-                      : <div className={`h-3 ${BARRA[i.situacao]} ${i.inicio >= s.inicio ? 'rounded-l-full' : ''} ${i.fim <= s.fim ? 'rounded-r-full' : ''}`} />)}</td>;
-                  })}
-                </tr>
+          {estrutura.marcos.length > 0 && <>
+            <tr><td colSpan={colunas} className="bg-m-warning-subtle px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-m-warning">◆ Marcos</td></tr>
+            {estrutura.marcos.map(linha)}
+          </>}
+          {estrutura.locais.map(({ l, areas }) => (
+            <Fragment key={l}>
+              <tr><td colSpan={colunas} className="bg-[#FF0000] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.4px] text-white">{l}</td></tr>
+              {areas.map(({ a, cwps }) => (
+                <Fragment key={a}>
+                  <tr><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-[#173761] px-3 py-1.5 text-xs font-semibold text-white">{a}</td></tr>
+                  {cwps.map(({ c, itens }) => (
+                    <Fragment key={c || '—'}>
+                      {c && <tr><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1 text-[11.5px] font-semibold text-m-text-primary">CWP · {c}</td></tr>}
+                      {itens.map(linha)}
+                    </Fragment>
+                  ))}
+                </Fragment>
               ))}
             </Fragment>
           ))}
@@ -276,39 +315,63 @@ function FormItem({ item, marcos, onFechar }: { item?: ItemPlano; marcos: ItemPl
   );
 }
 
-function achatar(nos: NoWbs[], prof = 0, out: { id: number; rotulo: string }[] = []) {
-  for (const n of nos) {
-    out.push({ id: n.id, rotulo: `${'  '.repeat(prof)}${n.codigo} · ${n.titulo}` });
-    if (n.tipo !== 'iwp') achatar(n.filhos, prof + 1, out);
-  }
-  return out;
-}
-
+/** Inserir pela WBS (spec 081): marque áreas, CWPs, grupos, IWPs ou etapas — vão os IWPs (ou as etapas deles) abaixo,
+ * inclusive os que não estão no cronograma (para esses, informe a janela). */
 function FormDaWbs({ marcos, onFechar }: { marcos: ItemPlano[]; onFechar: () => void }) {
   const api = useApi();
   const atualizar = useAtualizar();
   const wbs = useWbs();
   const equipes = useEquipes();
-  const opcoes = useMemo(() => achatar(wbs.data?.arvore ?? []), [wbs.data]);
-  const [f, setF] = useState({ no: '', inicio: '', fim: '', equipe_id: '', marco_id: '' });
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [abertos, setAbertos] = useState<Set<number>>(new Set());
+  const [busca, setBusca] = useState('');
+  const [f, setF] = useState({ inicio: '', fim: '', equipe_id: '', marco_id: '' });
+  const arvore = wbs.data?.arvore ?? [];
+  const marcar = (id: number) => setSel((x) => { const n2 = new Set(x); if (n2.has(id)) n2.delete(id); else n2.add(id); return n2; });
+  const t = busca.trim().toLowerCase();
+  const casa = (n: NoWbs): boolean => !t || [n.codigo, n.titulo, n.detalhe, n.id_crono ?? ''].join(' ').toLowerCase().includes(t) || n.filhos.some(casa);
+  const semCrono = (n: NoWbs): number => (n.tipo === 'iwp' || n.tipo === 'etapa' ? (n.id_crono ? 0 : 1) : 0) + n.filhos.reduce((s, x) => s + semCrono(x), 0);
+  const marcadosSemCrono = [...sel].some((id) => { const ach = (ns: NoWbs[]): NoWbs | undefined => { for (const x of ns) { if (x.id === id) return x; const y = ach(x.filhos); if (y) return y; } return undefined; }; const n2 = ach(arvore); return !!n2 && semCrono(n2) > 0; });
+  const no = (n: NoWbs, nivel: number): React.ReactNode => {
+    if (!casa(n) || !n.ativo) return null;
+    const aberto = !!t || abertos.has(n.id);
+    return (
+      <Fragment key={n.id}>
+        <div className="flex items-center gap-1.5 border-b border-m-stroke-subtle py-1 text-[12.5px]" style={{ paddingLeft: 4 + nivel * 16 }}>
+          {n.filhos.length ? <button type="button" aria-label={aberto ? 'Recolher' : 'Abrir'} onClick={() => setAbertos((x) => { const y = new Set(x); if (y.has(n.id)) y.delete(n.id); else y.add(n.id); return y; })} className="w-4 text-m-text-muted">{aberto ? '▾' : '▸'}</button> : <span className="w-4" />}
+          <input type="checkbox" checked={sel.has(n.id)} onChange={() => marcar(n.id)} aria-label={`Marcar ${n.codigo}`} />
+          <b className="whitespace-nowrap text-m-text-primary">{n.codigo}</b>
+          <span className="min-w-0 truncate">{n.titulo}</span>
+          {n.tipo === 'etapa' && n.sem_avanco && <Pilula tom="atencao">sem avanço</Pilula>}
+          {(n.tipo === 'iwp' || n.tipo === 'etapa') && (n.id_crono ? <span className="text-[11px] text-m-text-muted">P6 {n.id_crono}</span> : <span className="text-[11px] text-m-warning">fora do cronograma</span>)}
+        </div>
+        {aberto && n.filhos.map((x) => no(x, nivel + 1))}
+      </Fragment>
+    );
+  };
   return (
-    <Painel titulo="Puxar atividades da WBS de execução">
-      <form className="grid gap-3 md:grid-cols-6 md:items-end" onSubmit={(e) => {
-        e.preventDefault();
-        api.post<{ criados: number; ja_estavam: number; sem_data: number }>('/planos/itens/da-wbs', { nos: [Number(f.no)], inicio: f.inicio || null, fim: f.fim || null,
-          equipe_id: f.equipe_id ? Number(f.equipe_id) : null, marco_id: f.marco_id ? Number(f.marco_id) : null })
-          .then((r) => { toast.success(`${r.criados} atividade(s) no plano${r.ja_estavam ? ` · ${r.ja_estavam} já estavam` : ''}`); if (r.sem_data) toast.warning(`${r.sem_data} IWP(s) sem datas: informe início e fim`); atualizar(); onFechar(); })
-          .catch((er) => toast.error(er.message));
-      }}>
-        <div className="md:col-span-2"><Selecao rotulo="Nó da WBS (todos os IWPs abaixo)" value={f.no} onChange={(e) => setF({ ...f, no: e.target.value })} required>
-          <option value="">— escolher —</option>{opcoes.map((o) => <option key={o.id} value={o.id}>{o.rotulo}</option>)}
-        </Selecao></div>
-        <Campo rotulo="Início (vazio = do cronograma)" type="date" value={f.inicio} onChange={(e) => setF({ ...f, inicio: e.target.value })} />
-        <Campo rotulo="Fim (vazio = do cronograma)" type="date" value={f.fim} onChange={(e) => setF({ ...f, fim: e.target.value })} />
-        <Selecao rotulo="Equipe" value={f.equipe_id} onChange={(e) => setF({ ...f, equipe_id: e.target.value })}><option value="">—</option>{equipes.data?.filter((e) => e.ativo).map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}</Selecao>
-        <Selecao rotulo="Puxada pelo marco" value={f.marco_id} onChange={(e) => setF({ ...f, marco_id: e.target.value })}><option value="">—</option>{marcos.map((m) => <option key={m.id} value={m.id}>{m.codigo} · {m.descricao}</option>)}</Selecao>
-        <div className="flex gap-2 md:col-span-6"><Botao type="submit">Puxar</Botao><Botao type="button" variante="secundario" onClick={onFechar}>Cancelar</Botao></div>
-      </form>
+    <Painel titulo="Inserir atividades pela WBS" subtitulo="marque o que entra no plano: áreas, CWPs, grupos, IWPs ou etapas (IWP com etapas entra como as etapas)">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex flex-col gap-2">
+          <Campo rotulo="Buscar na WBS" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="código, CWP, item da PQ, atividade do P6" />
+          <div className="max-h-[420px] overflow-y-auto rounded-[10px] border border-m-stroke-subtle px-2">{wbs.isLoading ? <p className="p-3 text-sm text-m-text-muted">Carregando a WBS…</p> : arvore.map((x) => no(x, 0))}</div>
+        </div>
+        <form className="flex flex-col gap-3" onSubmit={(e) => {
+          e.preventDefault();
+          api.post<{ criados: number; ja_estavam: number; sem_data: number; nos_sem_iwp: number[] }>('/planos/itens/da-wbs', { nos: [...sel], inicio: f.inicio || null, fim: f.fim || null,
+            equipe_id: f.equipe_id ? Number(f.equipe_id) : null, marco_id: f.marco_id ? Number(f.marco_id) : null })
+            .then((r) => { toast.success(`${r.criados} atividade(s) no plano${r.ja_estavam ? ` · ${r.ja_estavam} já estavam` : ''}`); if (r.sem_data) toast.warning(`${r.sem_data} fora do cronograma sem datas: informe início e fim e insira de novo`); atualizar(); if (!r.sem_data) onFechar(); })
+            .catch((er) => toast.error(er.message));
+        }}>
+          <span className="text-[13px] text-m-text-secondary">{sel.size} nó(s) marcado(s)</span>
+          <Campo rotulo={`Início${marcadosSemCrono ? '' : ' (vazio = do cronograma)'}`} type="date" value={f.inicio} onChange={(e) => setF({ ...f, inicio: e.target.value })} />
+          <Campo rotulo={`Fim${marcadosSemCrono ? '' : ' (vazio = do cronograma)'}`} type="date" value={f.fim} onChange={(e) => setF({ ...f, fim: e.target.value })} />
+          {marcadosSemCrono && <span className="text-[12px] text-m-warning">Há itens fora do cronograma: sem início e fim eles não entram.</span>}
+          <Selecao rotulo="Equipe" value={f.equipe_id} onChange={(e) => setF({ ...f, equipe_id: e.target.value })}><option value="">—</option>{equipes.data?.filter((e) => e.ativo).map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}</Selecao>
+          <Selecao rotulo="Puxada pelo marco" value={f.marco_id} onChange={(e) => setF({ ...f, marco_id: e.target.value })}><option value="">—</option>{marcos.map((m) => <option key={m.id} value={m.id}>{m.codigo} · {m.descricao}</option>)}</Selecao>
+          <div className="flex gap-2"><Botao type="submit" disabled={!sel.size}>Inserir no plano</Botao><Botao type="button" variante="secundario" onClick={onFechar}>Fechar</Botao></div>
+        </form>
+      </div>
     </Painel>
   );
 }

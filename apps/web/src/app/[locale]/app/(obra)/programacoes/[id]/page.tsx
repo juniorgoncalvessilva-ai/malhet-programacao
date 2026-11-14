@@ -13,6 +13,7 @@ import { Calculado } from '@/components/Obra/Calculado';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
+import { AssociarAtividadeLinha } from '@/components/Obra/AssociarAtividade';
 import { useEquipes } from '@/hooks/programacao/queries';
 import { buscaAtividades, buscaPq, k, useAcao, useCadastrosSsma, useCatalogo, useFrentes2, useProgramacao, useWbs } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -44,18 +45,24 @@ export default function MontarPage() {
   const api = useApi();
   const { pode } = useObra();
   const prog = useProgramacao(id);
+  const podeAssociar = pode('encarregado') && prog.data?.status !== 'concluida';
   const frentes = useFrentes2();
   const catalogo = useCatalogo();
   const wbs = useWbs();
   // IWPs da WBS de execução, com o que cada um define na linha (área, grupo, tipo, CWP → texto complementar, qtd)
   const iwps = useMemo(() => {
     const out: { id: number; codigo: string; caminho: string; area_id: number; grupo_id: number; tipo_id: number; complemento: string; quantidade: number | null }[] = [];
-    const ir = (n: NoWbs, ctx: { area_id?: number; grupo_id?: number; complemento?: string }) => {
+    const ir = (n: NoWbs, ctx: { area_id?: number; grupo_id?: number; complemento?: string; tipo_id?: number; quantidade?: number | null }) => {
       const c = { ...ctx };
       if (n.tipo === 'area') c.area_id = n.area_id ?? undefined;
       if (n.tipo === 'cwp') c.complemento = [n.elemento, n.complemento].filter(Boolean).join(' - ');
       if (n.tipo === 'grupo') c.grupo_id = n.grupo_id ?? undefined;
-      if (n.tipo === 'iwp' && n.ativo && c.area_id && c.grupo_id && n.tipo_id) out.push({ id: n.id, codigo: n.codigo, caminho: n.caminho, area_id: c.area_id, grupo_id: c.grupo_id, tipo_id: n.tipo_id, complemento: c.complemento ?? '', quantidade: n.quantidade ?? null });
+      if (n.tipo === 'iwp' && n.ativo && c.area_id && c.grupo_id && n.tipo_id) {
+        out.push({ id: n.id, codigo: n.codigo, caminho: n.caminho, area_id: c.area_id, grupo_id: c.grupo_id, tipo_id: n.tipo_id, complemento: c.complemento ?? '', quantidade: n.quantidade ?? null });
+        c.tipo_id = n.tipo_id; c.quantidade = n.quantidade ?? null;
+      }
+      // etapa do IWP (spec 079): vira linha com o item do IWP; a API completa o resto pelo nó
+      if (n.tipo === 'etapa' && n.ativo && c.area_id && c.grupo_id && c.tipo_id) out.push({ id: n.id, codigo: n.codigo, caminho: n.caminho, area_id: c.area_id, grupo_id: c.grupo_id, tipo_id: c.tipo_id, complemento: c.complemento ?? '', quantidade: n.quantidade ?? c.quantidade ?? null });
       n.filhos.forEach((f) => ir(f, c));
     };
     (wbs.data?.arvore ?? []).forEach((n) => ir(n, {}));
@@ -442,7 +449,10 @@ export default function MontarPage() {
                           <td className="px-2 py-2 text-m-text-muted">{li + 1}.{ai + 1}.{i + 1}</td>
                           <td className="min-w-[240px] px-2 py-2">
                             <b className="text-m-text-primary">{ln.codigo_simova}</b> <span className="text-m-text-primary">{nomeLinha(ln, nomes)}</span>
-                            <div className="text-xs text-m-text-muted">{ln.wbs_codigo && <span title={ln.wbs_caminho ?? ''} className="mr-1 rounded-[5px] bg-m-info-subtle px-1.5 py-px font-semibold text-m-info">WBS {ln.wbs_codigo}</span>}{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}</div>
+                            {ln.etapa && <span title={ln.etapa.sem_avanco ? 'Etapa sem avanço: conta HH e capacidade, sem avanço físico nem faturamento' : `Etapa: ${fmt((ln.etapa.percentual ?? 0) * 100, 2)}% do valor do item`}
+                              className={`ml-1 rounded-[5px] px-1.5 py-px text-[10.5px] font-semibold ${ln.etapa.sem_avanco ? 'bg-m-warning-subtle text-m-warning' : 'bg-m-accent-subtle text-m-accent'}`}>{ln.etapa.sem_avanco ? 'sem avanço' : `etapa ${fmt((ln.etapa.percentual ?? 0) * 100, 2)}%`}</span>}
+                            <div className="text-xs text-m-text-muted">{ln.wbs_codigo && <span title={ln.wbs_caminho ?? ''} className="mr-1 rounded-[5px] bg-m-info-subtle px-1.5 py-px font-semibold text-m-info">WBS {ln.wbs_codigo}</span>}{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}
+                              {podeAssociar && <span className="ml-1.5"><AssociarAtividadeLinha pid={id} linha={ln} /></span>}</div>
                             <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}{comoLista(ln.ssma?.pto).length ? ` · PTO ${comoLista(ln.ssma?.pto).join(', ')}` : ''}</div>
                             <Calculo ln={ln} pid={id} />
                           </td>

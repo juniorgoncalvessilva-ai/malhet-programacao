@@ -40,7 +40,11 @@ class LinhaProgramacaoModel(Base):
     tipo_id: Mapped[int] = mapped_column(ForeignKey("tipo_atividade.id", ondelete="RESTRICT"), index=True)
     item_simova_id: Mapped[int | None] = mapped_column(ForeignKey("item_simova.id", ondelete="RESTRICT"))
     item_pq: Mapped[str | None] = mapped_column(String(40))
-    wbs_no_id: Mapped[int | None] = mapped_column(ForeignKey("wbs_no.id", ondelete="SET NULL"), index=True)  # IWP
+    wbs_no_id: Mapped[int | None] = mapped_column(ForeignKey("wbs_no.id", ondelete="SET NULL"), index=True)  # IWP ou etapa
+    # spec 079: linha de uma etapa do IWP — peso dela no valor do item; sem avanço = só esforço (HH), valor 0
+    etapa_nome: Mapped[str | None] = mapped_column(String(120))
+    etapa_percentual: Mapped[float | None] = mapped_column(Float)
+    sem_avanco: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     id_crono: Mapped[str | None] = mapped_column(String(40))
     plano_item_id: Mapped[int | None] = mapped_column(ForeignKey("plano_item.id", ondelete="SET NULL"), index=True)  # veio do plano de 90 dias
     equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))

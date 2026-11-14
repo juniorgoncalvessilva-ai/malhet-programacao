@@ -1,8 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Bell, Camera, Check, ChevronRight, ListChecks, Plus, ShieldAlert } from 'lucide-react';
-import { dataLonga, hojeIso, num, useDiaCampo } from '@/components/Mobile/campo';
+import { AlertTriangle, Bell, Camera, Check, ChevronRight, Eye, Fish, ListChecks, Plus, ScanFace, ShieldAlert, ShieldCheck, Wind } from 'lucide-react';
+import { dataLonga, hojeIso, useDiaCampo } from '@/components/Mobile/campo';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import { usePendentesCadastro } from '@/components/Obra/CadastrosPendentes';
@@ -15,7 +15,7 @@ import { useContagemNotificacoes } from '@/lib/notificacoes';
 
 const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 
-/** Início do encarregado: meta do dia (atividades programadas), quanto já foi lançado e o que fazer agora. */
+/** Início do campo: meta do dia, o que fazer agora e os atalhos de ações (spec 078 — sem a lista de atividades). */
 export default function CampoInicio() {
   const hoje = hojeIso();
   const dia = useDiaCampo(hoje);
@@ -127,17 +127,32 @@ export default function CampoInicio() {
           <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
         </Link>
         )}
-        {linhas.map((l) => (
-          <Link key={l.id} href={ver('/m/lancar') ? `/m/lancar?linha=${l.id}` : '/m/vigente'} className="flex min-h-[56px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5 py-2">
-            <span className="flex flex-1 flex-col"><span className="line-clamp-1 text-[14px] font-medium leading-5">{l.codigo_simova} · {l.descricao}</span>
-              <span className="text-[12px] leading-4 text-m-text-muted">{l.area.split(' · ')[0]} · previsto {num(l.previsto)} {l.unidade ?? ''}</span></span>
-            <span className={`text-[13px] font-semibold tabular-nums ${l.realizado == null ? 'text-m-text-muted' : (l.realizado ?? 0) >= (l.previsto ?? 0) ? 'text-m-success' : 'text-m-warning'}`}>{l.realizado == null ? '—' : num(l.realizado)}</span>
-          </Link>
-        ))}
+      </div>
+
+      <h2 className="mt-1 text-[13px] font-semibold leading-[18px] text-m-text-secondary">Atalhos</h2>
+      <div className="grid grid-cols-3 gap-2 pb-2">
+        {ATALHOS.filter((a) => ver(a.tela)).map((a) => {
+          const I = a.icone;
+          return (
+            <Link key={a.url} href={a.url} className="flex min-h-[88px] flex-col items-center justify-center gap-1.5 rounded-[16px] border border-m-stroke-subtle bg-m-surface-raised p-2 text-center text-[12.5px] font-medium leading-4">
+              <I size={24} className="text-m-accent" aria-hidden="true" />{a.titulo}
+            </Link>
+          );
+        })}
       </div>
     </>
   );
 }
+
+/** Atalhos de ações do campo (spec 078): o Início concentra o que fazer; as atividades ficam na Programação e no Lançar. */
+const ATALHOS = [
+  { url: '/m/presenca', tela: '/m/presenca', titulo: 'Ler presença', icone: ScanFace },
+  { url: '/m/vigente', tela: '/m/vigente', titulo: 'Programação', icone: Eye },
+  { url: '/m/restricoes/nova', tela: '/m/restricoes', titulo: 'Nova restrição', icone: Fish },
+  { url: '/m/preventivos/etilometro', tela: '/m/preventivos', titulo: 'Etilômetro', icone: Wind },
+  { url: '/m/lgpd', tela: '/m/lgpd', titulo: 'Termo LGPD', icone: ShieldCheck },
+  { url: '/m/notificacoes', tela: '/m/notificacoes', titulo: 'Notificações', icone: Bell },
+];
 
 function SinoCampo() {
   const n = useContagemNotificacoes();

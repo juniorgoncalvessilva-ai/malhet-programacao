@@ -8,9 +8,9 @@ from dataclasses import dataclass
 
 from app.shared.errors import DomainError
 
-TIPOS = ("area", "cwp", "grupo", "iwp")
-PAI_DE = {"area": None, "cwp": "area", "grupo": "cwp", "iwp": "grupo"}
-ROTULO = {"area": "Área", "cwp": "CWP", "grupo": "Grupo", "iwp": "IWP"}
+TIPOS = ("area", "cwp", "grupo", "iwp", "etapa")
+PAI_DE = {"area": None, "cwp": "area", "grupo": "cwp", "iwp": "grupo", "etapa": "iwp"}
+ROTULO = {"area": "Área", "cwp": "CWP", "grupo": "Grupo", "iwp": "IWP", "etapa": "Etapa"}
 
 
 def validar_tipo(tipo: str, tipo_pai: str | None) -> None:
@@ -49,7 +49,22 @@ def validar_quantidade(q: float | None) -> float | None:
 
 
 def seq_texto(tipo: str, seq: int) -> str:
+    if tipo == "etapa":
+        return f"E{seq}"
     return f"{seq:02d}" if tipo in ("cwp", "iwp") else str(seq)
+
+
+def validar_etapa(nome: str | None, percentual: float | None, sem_avanco: bool) -> tuple[str, float]:
+    """Etapa do IWP (spec 079): sem avanço vale 0% do item (só esforço/HH)."""
+    n = _texto(nome)
+    if not n or len(n) > 120:
+        raise DomainError("etapa: escreva o nome (até 120 caracteres)", "elemento")
+    p = 0.0 if sem_avanco else float(percentual or 0)
+    if p > 1.0001:
+        p = p / 100
+    if p < 0 or p > 1.0001:
+        raise DomainError("percentual da etapa entre 0% e 100%", "percentual")
+    return n, round(p, 6)
 
 
 @dataclass(frozen=True)

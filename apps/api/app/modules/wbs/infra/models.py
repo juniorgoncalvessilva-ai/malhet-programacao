@@ -1,4 +1,4 @@
-"""Nó da WBS de execução (Área → CWP → Grupo → IWP). Excluir só nó sem filhos e sem programação."""
+"""Nó da WBS de execução (Área → CWP → Grupo → IWP → Etapa). Excluir só nó sem filhos e sem programação."""
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func
@@ -12,7 +12,7 @@ class WbsNoModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
     pai_id: Mapped[int | None] = mapped_column(ForeignKey("wbs_no.id", ondelete="RESTRICT"), index=True)
-    tipo: Mapped[str] = mapped_column(String(6))  # area | cwp | grupo | iwp
+    tipo: Mapped[str] = mapped_column(String(6))  # area | cwp | grupo | iwp | etapa
     seq: Mapped[int] = mapped_column(Integer, default=1)
     area_id: Mapped[int | None] = mapped_column(ForeignKey("area_frente.id", ondelete="RESTRICT"))
     elemento: Mapped[str | None] = mapped_column(String(80))  # CWP: Radier
@@ -26,6 +26,10 @@ class WbsNoModel(Base):
     chave_p6: Mapped[str | None] = mapped_column(String(400))  # CWP vindo do P6: caminho da WBS abaixo do CWA
     codigo_p6: Mapped[str | None] = mapped_column(String(200), index=True)  # área/CWP: código WBS no P6 (5.4.3.4), sem o projeto
     fora_cronograma: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # sumiu do P6 vigente
+    # etapa do IWP (spec 079): nome em `elemento`; peso no valor do item; sem avanço = só esforço/HH
+    etapa_id: Mapped[int | None] = mapped_column(ForeignKey("criterio_etapa.id", ondelete="SET NULL"), index=True)
+    percentual: Mapped[float | None] = mapped_column(Float)
+    sem_avanco: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     observacao: Mapped[str | None] = mapped_column(String(300))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

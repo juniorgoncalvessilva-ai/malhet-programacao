@@ -29,7 +29,10 @@ class NoIn(BaseModel):
     complemento: str | None = None  # CWP
     grupo_id: int | None = None  # grupo
     tipo_id: int | None = None  # IWP: tipo do catálogo (= item da PQ no grupo)
-    quantidade: float | None = None  # IWP
+    quantidade: float | None = None  # IWP (e etapa, se for diferente do IWP)
+    percentual: float | None = None  # etapa: peso no valor do item (0,4 = 40%)
+    sem_avanco: bool = False  # etapa só de esforço (HH), sem avanço físico nem valor
+    etapa_id: int | None = None  # etapa do critério de avanço (spec 079)
     observacao: str | None = None
     ativo: bool = True
 
@@ -88,6 +91,10 @@ def arvore(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
         elif n.tipo == "grupo":
             g = grupos.get(n.grupo_id)
             d["titulo"], d["detalhe"] = (g.descricao if g else "?"), (f"grupo {g.numero}" if g else "")
+        elif n.tipo == "etapa":
+            d.update({"titulo": n.elemento or "Etapa", "detalhe": "só esforço (HH), não fatura" if n.sem_avanco
+                      else f"{round((n.percentual or 0) * 100, 2):g}% do valor do item", "percentual": n.percentual,
+                      "sem_avanco": n.sem_avanco, "etapa_id": n.etapa_id, "quantidade": n.quantidade})
         else:
             info = pq.get(n.item_pq)
             a = area_de(n)
@@ -168,6 +175,19 @@ def criar(d: NoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(
         if any(x.grupo_id == g.id for x in irmaos):
             raise DomainError(f"o grupo {g.numero} · {g.descricao} já está neste CWP", "grupo_id")
         n.grupo_id, n.seq = g.id, g.numero
+    elif d.tipo == "etapa":  # spec 079: etapa do IWP (do critério de avanço ou criada aqui)
+        from app.modules.criterios.infra.models import EtapaCriterioModel
+
+        ec = s.get(EtapaCriterioModel, d.etapa_id) if d.etapa_id else None
+        if d.etapa_id and (ec is None or ec.obra_id != c.obra_id):
+            raise NotFoundError("Etapa do critério", d.etapa_id)
+        nome = d.elemento or (ec.nome if ec else None)
+        sem = d.sem_avanco if not ec or d.elemento else ec.sem_avanco
+        pct = d.percentual if d.percentual is not None or not ec else ec.percentual
+        n.elemento, n.percentual = dom.validar_etapa(nome, pct, sem)
+        n.sem_avanco, n.etapa_id, n.quantidade = sem, ec.id if ec else None, dom.validar_quantidade(d.quantidade)
+        if any((x.elemento or "").lower() == n.elemento.lower() for x in irmaos):
+            raise DomainError(f"a etapa “{n.elemento}” já existe neste IWP", "elemento")
     else:  # iwp
         t = s.get(TipoAtividadeModel, d.tipo_id or 0)
         if t is None or t.obra_id != c.obra_id or not t.item_pq:
@@ -190,6 +210,9 @@ def editar(nid: int, d: NoIn, s: Session = Depends(get_session), c: ContextoObra
         n.elemento, n.complemento = dom.validar_cwp(d.elemento, d.complemento)
     if n.tipo == "iwp":
         n.quantidade = dom.validar_quantidade(d.quantidade)
+    if n.tipo == "etapa":
+        n.elemento, n.percentual = dom.validar_etapa(d.elemento or n.elemento, d.percentual, d.sem_avanco)
+        n.sem_avanco, n.quantidade = d.sem_avanco, dom.validar_quantidade(d.quantidade)
     n.observacao, n.ativo = (d.observacao or None), d.ativo
     s.flush()
     return {"id": n.id}
@@ -203,3 +226,143 @@ def excluir(nid: int, s: Session = Depends(get_session), c: ContextoObra = Depen
     if s.scalar(select(func.count()).select_from(LinhaProgramacaoModel).where(LinhaProgramacaoModel.wbs_no_id == n.id)):
         raise DomainError("o IWP está em programação: inative em vez de excluir")
     s.delete(n)
+
+
+@router.post("/nos/{nid}/aplicar-criterio")
+def aplicar_criterio(nid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Cria abaixo do IWP as etapas do critério de avanço do item da PQ (as que já existem ficam). Etapas sem avanço
+    criadas à mão no critério (ex.: pré-armação) também vêm."""
+    from app.modules.criterios.api.router import criterio_para_item
+
+    n = _no(s, c, nid)
+    if n.tipo != "iwp":
+        raise DomainError("aplique o critério num IWP (item da PQ)", "tipo")
+    cr = criterio_para_item(s, c.obra_id, n.item_pq)
+    if cr is None:
+        raise DomainError(f"nenhum critério de avanço cobre o item {n.item_pq} — cadastre em Critério de avanço", "item_pq")
+    filhos = list(s.scalars(select(WbsNoModel).where(WbsNoModel.pai_id == n.id)))
+    ja = {f.etapa_id for f in filhos if f.etapa_id} | {(f.elemento or "").lower() for f in filhos}
+    seq = max([f.seq for f in filhos], default=0)
+    criadas = 0
+    for e in sorted(cr.etapas, key=lambda e: e.numero):
+        if e.id in ja or e.nome.lower() in ja:
+            continue
+        seq += 1
+        s.add(WbsNoModel(obra_id=c.obra_id, pai_id=n.id, tipo="etapa", seq=seq, elemento=e.nome, percentual=0 if e.sem_avanco else e.percentual,
+                         sem_avanco=e.sem_avanco, etapa_id=e.id, ativo=True))
+        criadas += 1
+    s.flush()
+    return {"criterio": f"{cr.codigo} · {cr.item_pq}", "criadas": criadas, "ja_existiam": len(cr.etapas) - criadas}
+
+
+# ---- associação com o cronograma (spec 080) ----
+def _palavras(t: str | None) -> set[str]:
+    from app.modules.wbs.domain.cronograma import normalizar_descricao
+
+    return {w for w in normalizar_descricao(t).split() if len(w) > 2}
+
+
+@router.get("/associacao")
+def associacao(area_id: int | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """IWPs e etapas da WBS com a atividade do cronograma vigente ligada a cada um e, para os que não têm, até 3
+    sugestões (mesmo item da PQ, mesma área e palavras da descrição). Também as atividades do cronograma sem WBS."""
+    from app.modules.referencias.infra.models import AtividadeCronogramaModel
+    from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
+
+    todos = nos(s, c.obra_id)
+    cods = codigos(s, c.obra_id, todos)
+    areas = {a.id: a for a in s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == c.obra_id))}
+    vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes().get("CRONOGRAMA")
+    ativs = list(s.scalars(select(AtividadeCronogramaModel).where(AtividadeCronogramaModel.versao_id == vig)
+                           .order_by(AtividadeCronogramaModel.ordem_p6.nulls_last()))) if vig else []
+    por_id = {a.id_crono: a for a in ativs}
+    pq = itens_pq(s, c.obra_id, {n.item_pq for n in todos.values() if n.item_pq})
+
+    def area_de(n: WbsNoModel) -> AreaFrenteModel | None:
+        while n.tipo != "area":
+            n = todos[n.pai_id]
+        return areas.get(n.area_id)
+
+    def na_area(at, a: AreaFrenteModel | None) -> bool:
+        if a is None or not at.area:
+            return False
+        if f"CWA {a.cwa}".lower() in at.area.lower():
+            return True
+        return bool(a.tag and a.tag.count("-") >= 2 and "{1}-{0}-{2}".format(*a.tag.split("-", 2)).lower() in at.area.lower())
+
+    usados = {n.id_crono for n in todos.values() if n.id_crono}
+    out = []
+    for n in todos.values():
+        if n.tipo not in ("iwp", "etapa") or not n.ativo:
+            continue
+        iwp = todos[n.pai_id] if n.tipo == "etapa" else n
+        a = area_de(n)
+        if area_id and (a is None or a.id != area_id):
+            continue
+        info = pq.get(iwp.item_pq)
+        titulo = (info.texto_simova if info else iwp.item_pq or "?") + (f" — {n.elemento}" if n.tipo == "etapa" else "")
+        d = {"id": n.id, "tipo": n.tipo, "codigo": cods[n.id].codigo, "caminho": cods[n.id].caminho, "titulo": titulo,
+             "item_pq": iwp.item_pq, "area": f"{a.codigo} · {a.descricao}" if a else None, "area_id": a.id if a else None,
+             "id_crono": n.id_crono, "atividade": por_id[n.id_crono].atividade if n.id_crono in por_id else None,
+             "no_cronograma": n.id_crono in por_id if n.id_crono else None, "sem_avanco": n.sem_avanco, "sugestoes": []}
+        if not n.id_crono and ativs:
+            alvo = _palavras((info.descricao if info else "") + " " + titulo)
+            notas = []
+            for at in ativs:
+                pts = (3 if at.item_pq and at.item_pq == iwp.item_pq else 0) + (2 if na_area(at, a) else 0)
+                comuns = len(alvo & _palavras(at.atividade))
+                pts += min(comuns, 4) * 0.5
+                if pts >= 2:
+                    notas.append((pts - (1 if at.id_crono in usados else 0), at))
+            notas.sort(key=lambda x: -x[0])
+            d["sugestoes"] = [{"id_crono": at.id_crono, "atividade": at.atividade, "ja_usada": at.id_crono in usados} for _, at in notas[:3]]
+        out.append(d)
+    out.sort(key=lambda x: [int(p) if p.isdigit() else p for p in x["codigo"].replace(".", "-").split("-")])
+    sem_wbs = [{"id_crono": a.id_crono, "atividade": a.atividade, "area": a.area, "inicio": a.inicio, "fim": a.fim}
+               for a in ativs if a.id_crono not in usados]
+    return {"nos": out, "total": len(out), "ligados": sum(1 for x in out if x["id_crono"]),
+            "atividades": len(ativs), "atividades_sem_wbs": len(sem_wbs), "sem_wbs": sem_wbs[:300]}
+
+
+class AtividadeIn(BaseModel):
+    id_crono: str | None = None
+    levar_para_programacoes: bool = True
+
+
+def _conferir_atividade(s: Session, obra_id: int, id_crono: str | None) -> str | None:
+    if not id_crono:
+        return None
+    from app.modules.referencias.infra.models import AtividadeCronogramaModel
+    from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
+
+    vig = ResolvedorReferencias(s, obra_id).versoes_vigentes().get("CRONOGRAMA")
+    cod = id_crono.strip()
+    if not vig or not s.scalar(select(AtividadeCronogramaModel.id).where(AtividadeCronogramaModel.versao_id == vig,
+                                                                           AtividadeCronogramaModel.id_crono == cod)):
+        raise DomainError(f"a atividade {cod} não está no cronograma vigente", "id_crono")
+    return cod
+
+
+def ligar_atividade(s: Session, obra_id: int, n: WbsNoModel, id_crono: str | None, levar: bool = True) -> int:
+    """Liga o nó (IWP ou etapa) à atividade do cronograma e, se pedido, as linhas dele nas programações em rascunho."""
+    from app.modules.planejamento.infra.models import ProgramacaoModel
+
+    n.id_crono = _conferir_atividade(s, obra_id, id_crono)
+    if not levar:
+        return 0
+    linhas = list(s.scalars(select(LinhaProgramacaoModel).join(ProgramacaoModel, ProgramacaoModel.id == LinhaProgramacaoModel.programacao_id)
+                            .where(ProgramacaoModel.obra_id == obra_id, ProgramacaoModel.status == "rascunho",
+                                   LinhaProgramacaoModel.wbs_no_id == n.id)))
+    for ln in linhas:
+        ln.id_crono = n.id_crono
+    return len(linhas)
+
+
+@router.put("/nos/{nid}/atividade")
+def associar(nid: int, d: AtividadeIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    n = _no(s, c, nid)
+    if n.tipo not in ("iwp", "etapa"):
+        raise DomainError("a atividade do cronograma vai no IWP ou na etapa", "tipo")
+    linhas = ligar_atividade(s, c.obra_id, n, d.id_crono, d.levar_para_programacoes)
+    s.flush()
+    return {"id": n.id, "id_crono": n.id_crono, "linhas_atualizadas": linhas}

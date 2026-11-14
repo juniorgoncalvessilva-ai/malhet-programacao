@@ -10,6 +10,7 @@ from openpyxl import Workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.modules.criterios.domain.criterio import pu_da_etapa
 from app.modules.catalogo.domain import catalogo as cat
 from app.modules.catalogo.infra.models import GrupoAtividadeModel, ItemSimovaModel, TipoAtividadeModel
 from app.modules.efetivo.infra.gateway import funcoes_por_cracha
@@ -317,21 +318,25 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
         real = [val[d].realizado if d in val else None for d in datas]
         qtd_tk = qtd_tag.get((ln.item_pq, a.tag)) if ln.item_pq and a.tag else None
         at = cron.get(ln.id_crono) if ln.id_crono else None
+        # etapa do IWP (spec 079): o nome vai junto da descrição e o valor é o PU × peso da etapa (sem avanço = 0)
+        et = (lambda txt: f"{txt} — {ln.etapa_nome}" if ln.etapa_nome else txt)
         por_area.setdefault(a.id, []).append({
             "id": ln.id, "n": n, "area_id": a.id, "tipo_id": t.id, "item_simova_id": ln.item_simova_id,
             "grupo": {"codigo": str(g.numero), "descricao": g.descricao},
             "codigo_simova": cat.codigo_item(g.numero, t.numero, it.numero if it else None),
-            "descricao": cat.descricao_item(t.descricao, it.complemento if it else None),
+            "descricao": et(cat.descricao_item(t.descricao, it.complemento if it else None)),
             "complemento": it.complemento if it else None,
             # nome reduzido (nome simplificado da PQ, senão o do tipo) + complemento: o padrão das telas
-            "descricao_reduzida": cat.descricao_item(nomes_pq.get(ln.item_pq) or t.descricao, it.complemento if it else None),
+            "descricao_reduzida": et(cat.descricao_item(nomes_pq.get(ln.item_pq) or t.descricao, it.complemento if it else None)),
             # descritivo completo da PQ + complemento (opção das telas)
-            "descricao_completa": cat.descricao_item(ipq.descricao if ipq else t.descricao, it.complemento if it else None),
+            "descricao_completa": et(cat.descricao_item(ipq.descricao if ipq else t.descricao, it.complemento if it else None)),
             "cwp": cwp_de.get(ln.wbs_no_id) or ({"id": None, "codigo": None, "texto": it.complemento.strip("() ")}
                                                  if it and it.complemento and it.complemento.strip("() ") else None),
             "unidade": t.unidade or (ipq.unid if ipq else None),
             "item_pq": ln.item_pq, "descricao_pq": ipq.descricao if ipq else None,
-            "pu": ipq.pu if ipq else None,
+            "pu": pu_da_etapa(ipq.pu, ln.etapa_percentual, ln.sem_avanco) if ipq and ln.etapa_nome else (ipq.pu if ipq else None),
+            "pu_item": ipq.pu if ipq else None,
+            "etapa": {"nome": ln.etapa_nome, "percentual": ln.etapa_percentual, "sem_avanco": bool(ln.sem_avanco)} if ln.etapa_nome else None,
             "qtd_takeoff": qtd_tk, "qtd_projeto": ln.qtd_projeto if ln.qtd_projeto is not None else qtd_tk,
             "id_crono": ln.id_crono, "atividade_crono": at.atividade if at else None,
             "wbs_no_id": ln.wbs_no_id, "wbs_codigo": wbs_cod[ln.wbs_no_id].codigo if ln.wbs_no_id in wbs_cod else None,

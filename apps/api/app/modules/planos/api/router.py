@@ -106,7 +106,8 @@ def _preencher(s: Session, c: ContextoObra, it: PlanoItemModel, d: ItemIn) -> No
     if d.wbs_no_id:
         i = _iwp(s, c, d.wbs_no_id)
         it.wbs_no_id, it.area_id, it.tipo_id, it.id_crono = i.id, i.area_id, i.tipo_id, i.id_crono
-        it.descricao = dom.validar_descricao(d.descricao or _texto_iwp(s, c.obra_id, i.item_pq, i.complemento))
+        it.descricao = dom.validar_descricao(d.descricao or (_texto_iwp(s, c.obra_id, i.item_pq, i.complemento)
+                                                           + (f" — {i.etapa_nome}" if i.etapa_nome else "")))
     else:
         it.wbs_no_id, it.id_crono = None, None
         if d.area_id is not None:
@@ -171,6 +172,15 @@ def _saida(s: Session, obra_id: int, itens: list[PlanoItemModel]) -> list[dict]:
     from app.modules.restricoes.domain.acao import situacao as farol
 
     status_crono = _status_no_cronograma(s, obra_id, {i.id_crono for i in itens if i.id_crono})
+    # spec 081: o plano no padrão da programação (Local → Área → CWP → atividades): CWP, código WBS, item e etapa
+    from app.modules.catalogo.infra.models import TipoAtividadeModel
+    from app.modules.planejamento.application.servico import cwps_dos_iwps
+    from app.modules.wbs.infra.gateway import codigos, nos
+
+    nos_wbs = nos(s, obra_id) if any(i.wbs_no_id for i in itens) else {}
+    cods = codigos(s, obra_id, nos_wbs) if nos_wbs else {}
+    cwp_de = cwps_dos_iwps(s, obra_id, {i.wbs_no_id for i in itens if i.wbs_no_id}) if nos_wbs else {}
+    tipos = {t.id: t for t in s.scalars(select(TipoAtividadeModel).where(TipoAtividadeModel.id.in_({i.tipo_id for i in itens if i.tipo_id} or {0})))}
 
     out = []
     for i in itens:
@@ -182,6 +192,12 @@ def _saida(s: Session, obra_id: int, itens: list[PlanoItemModel]) -> list[dict]:
             "area_id": i.area_id, "area": f"{a.codigo} · {a.descricao}" if a else None,
             "local": (f"{locais[a.local_id].codigo} · {locais[a.local_id].descricao}" if a and a.local_id in locais else None),
             "wbs_no_id": i.wbs_no_id, "tipo_id": i.tipo_id, "id_crono": i.id_crono,
+            "wbs_codigo": cods[i.wbs_no_id].codigo if i.wbs_no_id in cods else None,
+            "cwp": cwp_de.get(i.wbs_no_id), "item_pq": tipos[i.tipo_id].item_pq if i.tipo_id in tipos else None,
+            "unidade": tipos[i.tipo_id].unidade if i.tipo_id in tipos else None,
+            "etapa": ({"nome": nos_wbs[i.wbs_no_id].elemento, "sem_avanco": nos_wbs[i.wbs_no_id].sem_avanco,
+                       "percentual": nos_wbs[i.wbs_no_id].percentual}
+                      if i.wbs_no_id in nos_wbs and nos_wbs[i.wbs_no_id].tipo == "etapa" else None),
             "equipe_id": i.equipe_id, "equipe": equipes[i.equipe_id].nome if i.equipe_id in equipes else None,
             "inicio": i.inicio.isoformat(), "fim": i.fim.isoformat(), "quantidade": i.quantidade,
             "responsavel": i.responsavel, "recursos": i.recursos or [], "status_crono": status_crono.get(i.id_crono),

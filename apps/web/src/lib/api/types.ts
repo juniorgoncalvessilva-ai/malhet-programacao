@@ -116,6 +116,8 @@ export interface LinhaVisao {
   seq?: number; ordem?: number; predecessoras?: { de: number; tipo: TipoLigacao; lag: number }[]; janela?: [string, string] | null; alertas_sequencia?: string[];
   grupo: { codigo: string; descricao: string }; codigo_simova: string; descricao: string; complemento: string | null;
   unidade: string | null; item_pq: string | null; descricao_pq: string | null; pu: number | null;
+  /** Spec 079: linha de uma etapa do IWP — pu = PU do item × peso; sem avanço = só esforço (pu 0). */
+  pu_item?: number | null; etapa?: { nome: string; percentual: number | null; sem_avanco: boolean } | null;
   qtd_takeoff: number | null; qtd_projeto: number | null; id_crono: string | null; atividade_crono: string | null;
   equipe_id: number | null; equipe: string | null; encarregado: string | null; cracha: string | null; observacao: string | null;
   previsto: (number | null)[]; realizado: (number | null)[]; total_previsto: number; total_realizado: number;
@@ -208,7 +210,7 @@ export interface SetoresObra {
   responsavel_geral: PessoaRef | null; cores: CoresOrganograma; cores_padrao: CoresOrganograma;
 }
 export interface MovimentoEfetivo { id: number; colaborador_id: number; nome: string; tipo: string; de: string | null; para: string | null; em: string }
-export type TipoNoWbs = 'area' | 'cwp' | 'grupo' | 'iwp';
+export type TipoNoWbs = 'area' | 'cwp' | 'grupo' | 'iwp' | 'etapa';
 export interface NoWbs {
   id: number; pai_id: number | null; tipo: TipoNoWbs; seq: number; codigo: string; caminho: string; titulo: string; detalhe: string;
   ativo: boolean; observacao: string | null; linhas: number; area_id: number | null; elemento: string | null; complemento: string | null;
@@ -217,6 +219,8 @@ export interface NoWbs {
   origem_qtd?: 'digitada' | 'take-off' | null; na_pq_vigente?: boolean; filhos: NoWbs[];
   origem?: 'manual' | 'p6'; fora_cronograma?: boolean; id_crono?: string | null; atividade_p6?: string | null;
   codigo_p6?: string | null;
+  /** Spec 079: etapa do IWP — peso no valor do item; sem avanço = só esforço (HH). */
+  percentual?: number | null; sem_avanco?: boolean; etapa_id?: number | null;
 }
 /** Resumo do .xer devolvido com a WBS de execução acrescentada. Spec 040. */
 export interface ExportacaoP6 {
@@ -314,6 +318,9 @@ export interface ItemPlano {
   inicio: string; fim: string; quantidade: number | null; responsavel: string | null; marco: boolean; marco_id: number | null;
   recursos: RecursoP6[]; status_crono: string | null; analisado: boolean; analisado_em: string | null; observacao: string | null; restricoes: RestricaoPlano[]; pendentes: number;
   impeditivas: number; programacoes: { id: number; titulo: string; tipo: string }[]; situacao: SituacaoPlano;
+  /** Spec 081: no padrão da programação (Local → Área → CWP), com WBS, item da PQ e etapa. */
+  wbs_codigo?: string | null; cwp?: { id: number | null; codigo: string | null; texto: string } | null; item_pq?: string | null; unidade?: string | null;
+  etapa?: { nome: string; sem_avanco: boolean; percentual: number | null } | null;
 }
 export interface PlanoResposta { semanas: { inicio: string; fim: string }[]; itens: ItemPlano[]; resumo: Record<SituacaoPlano, number> }
 export interface PreviaMigracao {

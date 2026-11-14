@@ -21,6 +21,10 @@ class IwpParaLinha:
     complemento: str  # texto do CWP → texto complementar do Simova
     quantidade: float | None  # digitada no IWP (vazio = take-off da TAG, calculado na programação)
     id_crono: str | None = None  # IWP vindo do P6: a linha fica ligada à atividade do cronograma
+    # spec 079: a linha é uma etapa do IWP (pré-armação, montagem…): peso no valor do item; sem avanço = só HH
+    etapa_nome: str | None = None
+    etapa_percentual: float | None = None
+    sem_avanco: bool = False
 
 
 def nos(s: Session, obra_id: int) -> dict[int, WbsNoModel]:
@@ -46,6 +50,8 @@ def codigos(s: Session, obra_id: int, todos: dict[int, WbsNoModel] | None = None
                 parte, nome = (str(g.numero), g.descricao) if g else ("?", "?")
             elif n.tipo == "cwp":
                 parte, nome = dom.seq_texto("cwp", n.seq), dom.texto_cwp(n.elemento, n.complemento)
+            elif n.tipo == "etapa":
+                parte, nome = dom.seq_texto("etapa", n.seq), n.elemento or "etapa"
             else:
                 parte, nome = dom.seq_texto("iwp", n.seq), n.item_pq or "?"
             c = dom.CodigoNo(dom.juntar([pai.codigo, parte]), f"{pai.caminho} › {nome}")
@@ -62,13 +68,18 @@ def iwp_para_linha(s: Session, obra_id: int, no_id: int) -> IwpParaLinha:
     n = todos.get(no_id)
     if n is None:
         raise NotFoundError("Nó da WBS", no_id)
-    if n.tipo != "iwp":
-        raise DomainError("escolha um IWP (item da PQ) da WBS para a linha", "wbs_no_id")
-    grupo = todos[n.pai_id]
+    if n.tipo not in ("iwp", "etapa"):
+        raise DomainError("escolha um IWP (item da PQ) ou uma etapa dele na WBS para a linha", "wbs_no_id")
+    etapa = n if n.tipo == "etapa" else None
+    iwp = todos[n.pai_id] if etapa else n
+    grupo = todos[iwp.pai_id]
     cwp = todos[grupo.pai_id]
     area = todos[cwp.pai_id]
-    return IwpParaLinha(n.id, codigos(s, obra_id, todos)[n.id].codigo, area.area_id, n.tipo_atividade_id, n.item_pq,
-                        dom.texto_cwp(cwp.elemento, cwp.complemento), n.quantidade, n.id_crono)
+    return IwpParaLinha(n.id, codigos(s, obra_id, todos)[n.id].codigo, area.area_id, iwp.tipo_atividade_id, iwp.item_pq,
+                        dom.texto_cwp(cwp.elemento, cwp.complemento),
+                        (etapa.quantidade if etapa and etapa.quantidade is not None else iwp.quantidade),
+                        (etapa.id_crono if etapa and etapa.id_crono else iwp.id_crono),
+                        etapa.elemento if etapa else None, etapa.percentual if etapa else None, bool(etapa and etapa.sem_avanco))
 
 
 def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], list[int]]:
@@ -91,6 +102,12 @@ def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], li
         while pilha:
             x = pilha.pop()
             if x.tipo == "iwp":
+                if x.ativo:
+                    # IWP com etapas (spec 079): vão as etapas ativas, cada uma vira uma linha
+                    ets = [f for f in filhos.get(x.id, []) if f.tipo == "etapa" and f.ativo]
+                    for f in (sorted(ets, key=lambda e: e.seq) if n.tipo != "etapa" else []) or [x]:
+                        achados[f.id] = None
+            elif x.tipo == "etapa":
                 if x.ativo:
                     achados[x.id] = None
             else:

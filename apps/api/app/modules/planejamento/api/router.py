@@ -62,6 +62,10 @@ class LinhaIn(BaseModel):
     responsavel: str | None = None
     pto: list[str] | str | None = None  # Planos de Trabalho de Obra (cadastro do Planejamento), um ou mais
     observacao: str | None = None
+    # preenchidos pela WBS quando a linha é uma etapa (spec 079) — não vêm da tela
+    etapa_nome: str | None = None
+    etapa_percentual: float | None = None
+    sem_avanco: bool = False
 
 
 class ValorIn(BaseModel):
@@ -126,6 +130,7 @@ def nova(d: NovaIn, s: Session = Depends(get_session), c: ContextoObra = Depends
         origem = sv.obter(s, c.obra_id, d.copiar_de)
         p.linhas = [LinhaProgramacaoModel(area_id=x.area_id, tipo_id=x.tipo_id, item_simova_id=x.item_simova_id,
                                           item_pq=x.item_pq, wbs_no_id=x.wbs_no_id, id_crono=x.id_crono, equipe_id=x.equipe_id,
+                                          etapa_nome=x.etapa_nome, etapa_percentual=x.etapa_percentual, sem_avanco=x.sem_avanco,
                                           qtd_projeto=x.qtd_projeto, observacao=x.observacao, ordem=x.ordem,
                                           natureza=x.natureza, responsavel=x.responsavel,
                                           **{f"ssma_{k}": getattr(x, f"ssma_{k}") for k in SSMA_CAMPOS})
@@ -178,6 +183,9 @@ def _validar_linha(s: Session, c: ContextoObra, d: LinhaIn) -> tuple[TipoAtivida
             d.qtd_projeto = iwp.quantidade
         if not d.id_crono and iwp.id_crono:
             d.id_crono = iwp.id_crono
+        d.etapa_nome, d.etapa_percentual, d.sem_avanco = iwp.etapa_nome, iwp.etapa_percentual, iwp.sem_avanco
+    else:
+        d.etapa_nome, d.etapa_percentual, d.sem_avanco = None, None, False
     if not d.area_id or not d.tipo_id:
         raise DomainError("escolha a área e o tipo, ou um IWP da WBS", "area_id")
     a = s.get(AreaFrenteModel, d.area_id)
@@ -219,8 +227,8 @@ def nova_linha(pid: int, d: LinhaIn, s: Session = Depends(get_session), c: Conte
     sv.exigir_rascunho(p)
     _, item_id, aviso = _validar_linha(s, c, d)
     ln = LinhaProgramacaoModel(area_id=d.area_id, tipo_id=d.tipo_id, item_simova_id=item_id, item_pq=d.item_pq or None,
-                               wbs_no_id=d.wbs_no_id or None,
-                               id_crono=d.id_crono or None, equipe_id=d.equipe_id, qtd_projeto=d.qtd_projeto,
+                               wbs_no_id=d.wbs_no_id or None, etapa_nome=d.etapa_nome, etapa_percentual=d.etapa_percentual,
+                               sem_avanco=d.sem_avanco, id_crono=d.id_crono or None, equipe_id=d.equipe_id, qtd_projeto=d.qtd_projeto,
                                qtd_periodo=d.qtd_periodo, natureza=d.natureza, responsavel=(d.responsavel or None),
                                ssma_pto=_pto(s, c, d.pto, None),
                                observacao=d.observacao, ordem=(max([x.ordem for x in p.linhas], default=0) + 1))
@@ -259,6 +267,35 @@ def linhas_da_wbs(pid: int, d: DaWbsIn, s: Session = Depends(get_session), c: Co
             "avisos": avisos[:20]}
 
 
+class AtividadeLinhaIn(BaseModel):
+    id_crono: str | None = None
+    tambem_na_wbs: bool = True
+
+
+@router.put("/programacoes/{pid}/linhas/{lid}/atividade")
+def associar_atividade(pid: int, lid: int, d: AtividadeLinhaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Liga a linha à atividade do cronograma direto na programação (spec 080), sem travar o fluxo: vale também em
+    programação emitida (a revisão já emitida guarda o que estava; a próxima sai com a atividade). Com IWP/etapa da WBS,
+    a WBS e as outras programações em rascunho daquele nó recebem a mesma atividade."""
+    from app.modules.wbs.api.router import _conferir_atividade, ligar_atividade
+    from app.modules.wbs.infra.models import WbsNoModel
+
+    p = sv.obter(s, c.obra_id, pid)
+    if p.status == "concluida":
+        raise DomainError("programação concluída: abra uma revisão para mudar")
+    ln = next((x for x in p.linhas if x.id == lid), None)
+    if ln is None:
+        raise NotFoundError("Linha", lid)
+    ln.id_crono = _conferir_atividade(s, c.obra_id, d.id_crono)
+    outras = 0
+    if d.tambem_na_wbs and ln.wbs_no_id:
+        n = s.get(WbsNoModel, ln.wbs_no_id)
+        if n is not None and n.obra_id == c.obra_id and n.tipo in ("iwp", "etapa"):
+            outras = ligar_atividade(s, c.obra_id, n, ln.id_crono)
+    s.flush()
+    return {"id": ln.id, "id_crono": ln.id_crono, "wbs_atualizada": bool(d.tambem_na_wbs and ln.wbs_no_id), "outras_linhas": outras}
+
+
 @router.put("/programacoes/{pid}/linhas/{lid}")
 def editar_linha(pid: int, lid: int, d: LinhaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
     p = sv.obter(s, c.obra_id, pid)
@@ -270,6 +307,7 @@ def editar_linha(pid: int, lid: int, d: LinhaIn, s: Session = Depends(get_sessio
     ln.area_id, ln.tipo_id, ln.item_simova_id = d.area_id, d.tipo_id, item_id
     ln.item_pq, ln.id_crono, ln.equipe_id = d.item_pq or None, d.id_crono or None, d.equipe_id
     ln.wbs_no_id = d.wbs_no_id or None
+    ln.etapa_nome, ln.etapa_percentual, ln.sem_avanco = d.etapa_nome, d.etapa_percentual, d.sem_avanco
     ln.qtd_projeto, ln.observacao = d.qtd_projeto, d.observacao
     ln.qtd_periodo, ln.natureza, ln.responsavel = d.qtd_periodo, d.natureza, (d.responsavel or None)
     ln.ssma_pto = _pto(s, c, d.pto, ln.ssma_pto)
