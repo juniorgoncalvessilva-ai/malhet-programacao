@@ -157,6 +157,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Associar cronograma ↔ WBS (spec 080): `/app/wbs/associacao` (`GET /wbs/associacao` com sugestões, `PUT /wbs/nos/{id}/atividade`
   leva o ID às programações em rascunho) e na linha da programação (`PUT …/linhas/{lid}/atividade`, `AssociarAtividadeLinha`).
 - Início do celular só com o que fazer e atalhos (sem lista de atividades). Spec 078.
+- Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
+  com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
+  `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Fases 3–5 (cache da visão, arquivos em Drive/OneDrive/Dropbox)
+  em proposta na spec.
 - Fórmulas da planilha auxiliar ficam em `referencias/domain/indice.py` e `programacao/domain/{calendario,gargalo,
   sequenciador,previsto}.py` — qualquer mudança de cálculo começa por um teste em `tests/test_motor_planilha.py`.
 
@@ -187,7 +191,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - API só via `useApi()` + TanStack Query (`queries.ts`), sempre por `/backend/api` (rewrite do Next). Tipos em
   `src/lib/api/types.ts`.
 - Tempo real: `useApi` recarrega as consultas abertas depois de cada post/put/del; `SincronizarDados`
-  (`src/lib/tempo-real`) confere `GET /api/mudancas` (middleware `app/core/mudancas.py`) a cada 3 s e recarrega quando
+  (`src/lib/tempo-real`) confere `GET /api/mudancas` (middleware `app/core/mudancas.py`) a cada 15 s (spec 082) e recarrega quando
   outro usuário alterou a obra; versão do build (`/api/versao`) recarrega a página depois de deploy. POST só de
   consulta termina em `/previa` (não conta como mudança). Spec 045.
 

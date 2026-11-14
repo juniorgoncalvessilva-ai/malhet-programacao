@@ -15,7 +15,7 @@ export interface Contagem { nao_lidas: number; ultima_id: number | null }
 export function useContagemNotificacoes() {
   const api = useApi();
   const { obra, simulando } = useObra();
-  const q = useQuery({ queryKey: ['notificacoes', 'contagem', obra?.id, simulando], enabled: !!obra, refetchInterval: 30000,
+  const q = useQuery({ queryKey: ['notificacoes', 'contagem', obra?.id, simulando], enabled: !!obra, refetchInterval: 120000, // a marca de mudanças já recarrega ao chegar alerta (spec 082)
     queryFn: () => api.get<Contagem>('/notificacoes/contagem') });
   useAvisoDoSistema(q.data);
   return q.data?.nao_lidas ?? 0;

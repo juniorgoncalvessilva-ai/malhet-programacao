@@ -132,12 +132,12 @@ def areas_das_frentes(s: Session = Depends(get_session), c: ContextoObra = Depen
 
 
 @router.post("/exportar-p6")
-async def exportar_p6(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+def exportar_p6(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Recebe o .xer atual do cronograma e devolve o mesmo .xer com a WBS de execução acrescentada (para importar
     no Primavera). Áreas e CWPs ganham o código WBS; IWPs viram atividades com Activity ID EXE-00000."""
     from app.modules.wbs.application.p6 import exportar_xer
 
-    conteudo = await arquivo.read()
+    conteudo = arquivo.file.read()
     if len(conteudo) > 80 * 1024 * 1024:
         raise DomainError("o .xer passa de 80 MB", "arquivo")
     saida, resumo = exportar_xer(s, c.obra_id, conteudo)

@@ -4,9 +4,8 @@
 - Obra: cabeçalho `X-Obra-Id`; o papel do usuário na obra (acesso_obra) decide o que ele faz.
 A infra de auth fica aqui, na borda; casos de uso recebem só ids.
 """
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
@@ -76,8 +75,10 @@ def resolver_contexto(s: Session, usuario: UsuarioAtual, obra_id: int, minimo: P
     return ContextoObra(obra_id, usuario, papel, acesso.cracha)
 
 
-def contexto_obra(minimo: PapelObra) -> Callable[..., Coroutine[Any, Any, ContextoObra]]:
-    async def dep(request: Request, usuario: UsuarioAtual = Depends(usuario_atual),
+def contexto_obra(minimo: PapelObra) -> Callable[..., ContextoObra]:
+    # Síncrona de propósito (spec 082): consulta o banco, então roda numa thread. Como `async def`, a espera por
+    # conexão do pool acontecia dentro do loop e congelava a API inteira com mais de 15 requisições simultâneas.
+    def dep(request: Request, usuario: UsuarioAtual = Depends(usuario_atual),
                   s: Session = Depends(get_session)) -> ContextoObra:
         bruto = request.headers.get("x-obra-id", "")
         if not bruto.isdigit():

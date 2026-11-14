@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import app.core.authkit  # noqa: F401  (antes de qualquer import do kit)
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from fastapi.responses import JSONResponse
 from modules.auth.presentation.container import build_auth
 from modules.auth.presentation.router import router as auth_router
@@ -70,6 +71,13 @@ from fastapi import Depends  # noqa: E402
 
 app = FastAPI(title="Malhet · Programação × Simova", version="0.4.0", lifespan=lifespan)
 app.state.auth = build_auth()
+# Spec 082: JSON grande (visão da programação, listas) vai comprimido — no 4G do campo faz diferença. Nível 5 poupa a
+# vCPU; imagens e arquivos já comprimidos ficam de fora (padrão do Starlette). Fica por dentro do
+# MudancasMiddleware: ele reenvia a resposta em pedaços e o gzip por fora comprimiria até as respostas pequenas.
+_JA_COMPRIMIDOS = ("application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5,
+                   exclude_content_types=DEFAULT_EXCLUDED_CONTENT_TYPES + _JA_COMPRIMIDOS)
 app.add_middleware(MudancasMiddleware)
 app.add_middleware(
     CORSMiddleware, allow_origins=get_settings().cors_list, allow_credentials=True,

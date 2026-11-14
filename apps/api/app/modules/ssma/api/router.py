@@ -151,7 +151,7 @@ def excluir(cid: int, s: Session = Depends(get_session), c: ContextoObra = Depen
 
 # ---- anexos (Excel, Word, PDF) --------------------------------------------------------------------------
 @router.post("/cadastros/{cid}/anexos", response_model=AnexoOut, status_code=201)
-async def anexar(cid: int, arquivo: UploadFile = File(...), s: Session = Depends(get_session),
+def anexar(cid: int, arquivo: UploadFile = File(...), s: Session = Depends(get_session),
                  c: ContextoObra = Depends(ler)):
     """Arquivo do documento (opcional, vários por item): RAC, PTS, ART, ATA e PTO."""
     m = _obter(s, c, cid)
@@ -159,7 +159,7 @@ async def anexar(cid: int, arquivo: UploadFile = File(...), s: Session = Depends
     _pode_editar(c, tipo)
     from app.modules.ssma.domain.cadastro import LIMITE_ANEXO
 
-    conteudo = await arquivo.read(LIMITE_ANEXO + 1)
+    conteudo = arquivo.file.read(LIMITE_ANEXO + 1)
     nome, ctype = validar_anexo(tipo, arquivo.filename or "", conteudo)
     a = AnexoSsmaModel(obra_id=c.obra_id, cadastro_id=m.id, nome=nome, content_type=ctype, tamanho=len(conteudo),
                        conteudo=conteudo, enviado_por=c.usuario.id)

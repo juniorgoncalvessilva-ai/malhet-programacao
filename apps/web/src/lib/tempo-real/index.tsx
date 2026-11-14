@@ -9,10 +9,12 @@ import { useObraOpcional } from '@/lib/obra/ObraProvider';
 /**
  * Tempo real: as telas se atualizam sozinhas, com o dado real, sem recarregar a página.
  * - Quem altera: ao salvar, todas as consultas abertas recarregam na hora (useApi chama `recarregarTudo`).
- * - Os outros: a cada 3 s (aba visível) a marca de mudanças da obra (`GET /mudancas`) é conferida; mudou → recarrega.
+ * - Os outros: a cada 15 s (só com a aba visível), ao voltar para a aba e ao voltar a rede, a marca de mudanças da obra
+ *   (`GET /mudancas`) é conferida; mudou → recarrega as consultas da tela aberta. 15 s (antes 3 s) é a spec 082: com 200
+ *   pessoas, 72% menos chamadas, e a recarga depois de uma edição se espalha nos 15 s em vez de chegar toda junta.
  * - Deploy novo: a versão do build (`/api/versao`) mudou → recarrega a página (ou avisa, se houver formulário em edição).
  */
-const INTERVALO = 3000;
+const INTERVALO = 15000;
 const INTERVALO_VERSAO = 60000;
 const VERSAO = process.env.NEXT_PUBLIC_VERSAO ?? '';
 
@@ -51,7 +53,8 @@ export function SincronizarDados() {
     const t = setInterval(conferir, INTERVALO);
     const voltou = () => { if (document.visibilityState === 'visible') conferir(); };
     document.addEventListener('visibilitychange', voltou);
-    return () => { vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', voltou); };
+    window.addEventListener('online', conferir);
+    return () => { vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', voltou); window.removeEventListener('online', conferir); };
   }, [api, qc, obraId]);
 
   useEffect(() => {

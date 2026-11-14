@@ -1,6 +1,6 @@
 # 082 — Escalabilidade na KVM1 e armazenamento em nuvem (Google Drive, OneDrive, Dropbox)
 
-**Status:** PROPOSTA — só planejamento. Nada construído; cada fase precisa de liberação.
+**Status:** fases 1 e 2 FEITAS (14/11/2026). Fases 3 a 5 em proposta — liberar depois de medir em produção.
 
 ## Restrições
 - Mesma VPS: KVM1 com 1 vCPU, 4 GB de RAM e 50 GB de disco, Coolify, Postgres, API e web no mesmo lugar. A arquitetura também
@@ -37,18 +37,26 @@ risco.
 4. **Arquivos dentro do Postgres** (`LargeBinary`: fotos do campo, anexos SSMA, logos, avatar, evidências): o banco e o
    backup crescem, e todo arquivo passa pela API e pela RAM.
 
-## Fase 1 — não travar (risco baixo, cerca de 1 dia)
+## Fase 1 — não travar ✅ feita
 - `contexto_obra.dep` passa a ser síncrona: o FastAPI a roda numa thread, fora do loop.
 - Rotas de upload: ler o arquivo e fazer o trabalho do banco em `run_in_threadpool` (ou rota síncrona com `arquivo.file`).
-- `create_engine(pool_size=10, max_overflow=10, pool_timeout=10)`. Postgres com `max_connections` folgado e
-  `idle_in_transaction_session_timeout=60s`.
-- Teste de carga automatizado (`tests/test_carga_pool.py` com 30 requisições simultâneas) para o defeito não voltar.
+- `create_engine(pool_size=10, max_overflow=10, pool_timeout=10)` (`DB_POOL_SIZE`, `DB_POOL_OVERFLOW`, `DB_POOL_TIMEOUT`).
+  `idle_in_transaction_session_timeout` ficou de fora: importações longas (XER) poderiam ser cortadas.
+- `tests/test_escala.py`: (1) varre todas as rotas — nenhuma função `async` (rota ou dependência) pode usar a Session
+  (exceção consciente: `POST /obras/{id}/acessos`, rara, de admin, chama o auth-kit async); (2) pool + 20 requisições
+  simultâneas terminam todas em menos de 15 s (com o código antigo a API congela e o teste falha em 30 s).
 
-## Fase 2 — menos chamadas (risco baixo)
-- Consulta de mudanças a cada **15 s**, **pausada com a aba escondida** (`document.visibilityState`) e imediata ao voltar
-  para a aba. As notificações vão junto na mesma resposta, sem consulta própria a cada 30 s.
-- Recarregar só as consultas da área que mudou: a marca passa a indicar o módulo, por exemplo `programacao:12`.
-- Compressão gzip/brotli no proxy do Coolify, cache longo dos estáticos do Next.
+## Fase 2 — menos chamadas ✅ feita
+- Consulta de mudanças a cada **15 s** (antes 3 s), só com a aba visível, e na hora ao voltar para a aba ou à rede
+  (`src/lib/tempo-real`). A recarga depois de uma edição se espalha nos 15 s em vez de chegar toda junta.
+- Contagem de notificações sem consulta própria a cada 30 s: o alerta nasce de uma gravação, que muda a marca e recarrega
+  a contagem; fica uma garantia a cada 2 min.
+- Já era assim: a recarga só refaz as consultas da tela aberta (TanStack `invalidateQueries` = ativas). Recarregar "só o
+  módulo" ficou de fora: as telas cruzam módulos (equipe muda a programação) e daria dado velho na tela.
+- `GZipMiddleware` na API (nível 5, acima de 1000 bytes, sem imagens/PDF/xlsx/docx), por dentro do `MudancasMiddleware`.
+  Programação de teste: 14,8 KB → 2,9 KB pelo proxy do Next.
+- Verificado no navegador: 2 consultas em 31 s (antes ~10); mudança de outra pessoa aparece sozinha em ~11 s; 0 consultas
+  com a aba escondida.
 
 ## Fase 3 — calcular uma vez, servir a todos (risco médio)
 - Cache da visão da programação na memória da API, com chave (programação, marca de mudança): 100 pessoas abrindo dão
@@ -115,7 +123,7 @@ Um script move os `LargeBinary` atuais para o disco e a fila, e só depois uma m
 | Equilíbrio | 60 | 70 | Sem custo de VPS. Custo: tempo e o OAuth de 3 provedores |
 | Verificação | 35 | 65 | Medido localmente. Falta medir na VPS e o tamanho real do banco e das fotos |
 
-Liberado: **fases 1 e 2**, de risco baixo e com o maior ganho medido. Fases 3 e 4: liberar depois de medir em produção
+Liberado e feito: **fases 1 e 2**. Fases 3 e 4: liberar depois de medir em produção
 (ver abaixo), quando Verificação chegar a 70.
 
 ### Medir em produção (terminal do Postgres no Coolify, só leitura)

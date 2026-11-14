@@ -56,11 +56,11 @@ def salvar(d: PerfilIn, s: Session = Depends(get_session), u: UsuarioAtual = Dep
 
 
 @router.put("/perfil/avatar")
-async def avatar(arquivo: UploadFile = File(...), s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_atual)):
+def avatar(arquivo: UploadFile = File(...), s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_atual)):
     """Foto do perfil: recortada quadrada no centro e reduzida para 256 px (JPEG) — leve para o celular."""
     from PIL import Image, ImageOps, UnidentifiedImageError
 
-    bruto = await arquivo.read(AVATAR_MAX + 1)
+    bruto = arquivo.file.read(AVATAR_MAX + 1)
     if len(bruto) > AVATAR_MAX:
         raise DomainError("foto maior que 6 MB", "arquivo")
     try:

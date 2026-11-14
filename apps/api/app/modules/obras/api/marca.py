@@ -71,9 +71,9 @@ def cor(d: CorIn, s: Session = Depends(get_session), c: ContextoObra = Depends(a
 
 
 @router.post("/logo/{qual}")
-async def enviar_logo(qual: Qual, arquivo: UploadFile = File(...), s: Session = Depends(get_session),
+def enviar_logo(qual: Qual, arquivo: UploadFile = File(...), s: Session = Depends(get_session),
                       c: ContextoObra = Depends(administrar)):
-    conteudo = await arquivo.read(LIMITE_LOGO + 1)
+    conteudo = arquivo.file.read(LIMITE_LOGO + 1)
     tipo = validar_logo(conteudo)
     m = _marca(s, c.obra_id, criar=True)
     setattr(m, f"logo_{qual}", conteudo)

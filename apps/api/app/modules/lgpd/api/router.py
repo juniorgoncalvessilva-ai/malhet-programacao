@@ -294,7 +294,7 @@ def _evid_meta(e: EvidenciaAssinaturaModel) -> dict:
 
 
 @router.post("/evidencias", status_code=201)
-async def registrar_evidencia(dados: str = Form(...), foto: UploadFile | None = File(None), s: Session = Depends(get_session),
+def registrar_evidencia(dados: str = Form(...), foto: UploadFile | None = File(None), s: Session = Depends(get_session),
                               c: ContextoObra = Depends(colher)):
     """Prova de uma assinatura feita no aparelho. A foto só é guardada com o aceite "foto da assinatura" e as coordenadas
     só com o aceite "localização" — sem eles o servidor descarta e anota o motivo. Idempotente pelo id_local."""
@@ -316,7 +316,7 @@ async def registrar_evidencia(dados: str = Form(...), foto: UploadFile | None = 
     conteudo, tipo = None, None
     if foto is not None:
         if cons["foto_assinatura"] and d.meio == "facial":
-            conteudo = await foto.read(LIMITE + 1)
+            conteudo = foto.file.read(LIMITE + 1)
             tipo = tipo_da_imagem(conteudo)
         else:
             obs.append("foto descartada: sem aceite para foto da assinatura")

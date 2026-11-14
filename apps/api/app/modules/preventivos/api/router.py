@@ -182,7 +182,7 @@ def _evento_por_local(s: Session, obra_id: int, id_local: str) -> EventoPreventi
 
 
 @router.post("/etilometro/eventos", status_code=201)
-async def abrir_evento(dados: str = Form(...), momentos: str = Form("[]"), fotos: list[UploadFile] = File(default=[]),
+def abrir_evento(dados: str = Form(...), momentos: str = Form("[]"), fotos: list[UploadFile] = File(default=[]),
                        s: Session = Depends(get_session), c: ContextoObra = Depends(aplicar)):
     """Início do evento: aparelho com calibração válida, fotos do aparelho e da calibração (com carimbo) e o responsável
     identificado pelo crachá. Tudo ou nada; repetir o mesmo id_local devolve o evento já aberto."""
@@ -213,7 +213,7 @@ async def abrir_evento(dados: str = Form(...), momentos: str = Form("[]"), fotos
     s.add(e)
     s.flush()
     for arq, momento in zip(fotos, ms):
-        conteudo = await arq.read(LIMITE + 1)
+        conteudo = arq.file.read(LIMITE + 1)
         s.add(FotoCampoModel(obra_id=c.obra_id, alvo="evento", alvo_id=e.id, data=d.data, legenda=momento,
                              content_type=tipo_da_imagem(conteudo), tamanho=len(conteudo), conteudo=conteudo, enviado_por=c.usuario.id))
     s.flush()

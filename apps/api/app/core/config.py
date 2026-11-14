@@ -8,6 +8,10 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://app:app@localhost:5432/programacao"
     cors_origins: str = "http://localhost:3000"
+    # Pool do banco (spec 082): 1 processo da API na KVM1; o Postgres aceita 100 conexões.
+    db_pool_size: int = 10
+    db_pool_overflow: int = 10
+    db_pool_timeout: int = 10
     # Dev/testes: pula a autenticação do auth-kit. Nunca em produção.
     auth_disabled: bool = False
 

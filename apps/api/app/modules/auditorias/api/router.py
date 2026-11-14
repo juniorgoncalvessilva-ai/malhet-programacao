@@ -241,7 +241,7 @@ class RegistroCompletoIn(RegistroIn):
 
 
 @router.post("/registros/completo", status_code=201)
-async def registro_completo(dados: str = Form(...), momentos: str = Form("[]"), fotos: list[UploadFile] = File(default=[]),
+def registro_completo(dados: str = Form(...), momentos: str = Form("[]"), fotos: list[UploadFile] = File(default=[]),
                             s: Session = Depends(get_session), c: ContextoObra = Depends(auditar)):
     """Auditoria feita no celular (com ou sem internet), enviada de uma vez: registro + fotos (antes/depois) + finalizar,
     tudo ou nada. Reenviar o mesmo `id_local` devolve o registro já gravado (`repetido`), sem duplicar."""
@@ -260,7 +260,7 @@ async def registro_completo(dados: str = Form(...), momentos: str = Form("[]"), 
     r, m = _novo(s, c, d)
     r.id_local, r.registrado_em = d.id_local, d.registrado_em
     for arq, momento in zip(fotos, ms):
-        conteudo = await arq.read(LIMITE + 1)
+        conteudo = arq.file.read(LIMITE + 1)
         s.add(FotoCampoModel(obra_id=c.obra_id, alvo="auditoria", alvo_id=r.id, data=r.data, legenda=momento,
                              content_type=tipo_da_imagem(conteudo), tamanho=len(conteudo), conteudo=conteudo,
                              enviado_por=c.usuario.id))

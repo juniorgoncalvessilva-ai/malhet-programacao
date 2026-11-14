@@ -59,12 +59,12 @@ def fotos_de(s: Session, obra_id: int, alvo: str, ids: list[int]) -> dict[int, l
 
 
 @router.post("", status_code=201)
-async def enviar(alvo: str = Form(...), alvo_id: int = Form(...), data: date | None = Form(None),
+def enviar(alvo: str = Form(...), alvo_id: int = Form(...), data: date | None = Form(None),
                  legenda: str | None = Form(None), arquivo: UploadFile = File(...),
                  s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
     alvo = validar_alvo(alvo)
     _alvo_existe(s, c.obra_id, alvo, alvo_id)
-    conteudo = await arquivo.read(LIMITE + 1)
+    conteudo = arquivo.file.read(LIMITE + 1)
     f = FotoCampoModel(obra_id=c.obra_id, alvo=alvo, alvo_id=alvo_id, data=data,
                        legenda=" ".join((legenda or "").split())[:300] or None, content_type=tipo_da_imagem(conteudo),
                        tamanho=len(conteudo), conteudo=conteudo, enviado_por=c.usuario.id)

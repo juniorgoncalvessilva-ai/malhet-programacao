@@ -64,7 +64,7 @@ def do_item(item: str, s: Session = Depends(get_session), c: ContextoObra = Depe
 
 
 @router.post("/importar")
-async def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Planilha de critérios de medição do cliente. Reimportar atualiza (casa por código + item e etapa pelo número),
     sem quebrar as etapas já usadas na WBS. Etapas criadas à mão (sem avanço) ficam."""
     from io import BytesIO
@@ -72,7 +72,7 @@ async def importar(arquivo: UploadFile = File(...), s: Session = Depends(get_ses
     import openpyxl
 
     try:
-        wb = openpyxl.load_workbook(BytesIO(await arquivo.read()), data_only=True, read_only=True)
+        wb = openpyxl.load_workbook(BytesIO(arquivo.file.read()), data_only=True, read_only=True)
     except Exception:  # noqa: BLE001
         raise DomainError("envie a planilha .xlsx/.xltx dos critérios de medição", "arquivo") from None
     ws = next((w for w in wb.worksheets if "CRIT" in w.title.upper()), wb.worksheets[0])

@@ -10,7 +10,10 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+_cfg = get_settings()
+# Espera curta por conexão: com o pool cheio, melhor um erro rápido (a tela tenta de novo) que 30 s de fila.
+engine = create_engine(_cfg.database_url, pool_pre_ping=True, pool_size=_cfg.db_pool_size,
+                       max_overflow=_cfg.db_pool_overflow, pool_timeout=_cfg.db_pool_timeout)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
