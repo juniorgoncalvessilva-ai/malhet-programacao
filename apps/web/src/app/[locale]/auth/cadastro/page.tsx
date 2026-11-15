@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Botao, Campo, Erro } from '@/components/Obra/ui';
 import { TelaAuth } from '@/components/Malhet/TelaAuth';
-import { Link } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
+import { emAppNativo } from '@/lib/presenca/leitores';
 import { useSessao } from '@/lib/auth/AuthProvider';
 
 export default function CadastroPage() {
@@ -12,6 +13,10 @@ export default function CadastroPage() {
   const [senha, setSenha] = useState('');
   const [ok, setOk] = useState<string | null>(null);
   const [erro, setErro] = useState<unknown>(null);
+
+  const router = useRouter();
+  // o app das lojas não tem cadastro aberto (spec 091): volta para o login
+  useEffect(() => { if (emAppNativo()) router.replace('/auth/entrar'); }, [router]);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();

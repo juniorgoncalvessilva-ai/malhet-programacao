@@ -36,11 +36,12 @@ Plugin `NfcCracha` (`ios/App/App/NfcCrachaPlugin.swift`, `android/.../NfcCrachaP
    *Signing & Capabilities*: escolha o time; confira a capacidade *Near Field Communication Tag Reading* (já no
    `App.entitlements`) → *Product › Archive* → *Distribute App › App Store Connect* → TestFlight → revisão.
    (Sem Mac: dá para assinar e enviar pelo GitHub Actions com o certificado e o perfil como secrets — posso montar.)
-3. **Android**: gere a chave de upload (`keytool -genkey -v -keystore malhet-upload.jks -alias malhet -keyalg RSA
+3. **Android** — roteiro completo em **`docs/play-store.md`** (spec 091: .aab assinado no Actions, ícones, política de
+   privacidade, textos e formulários da loja). Resumo: gere a chave de upload (`keytool -genkey -v -keystore malhet-upload.jks -alias malhet -keyalg RSA
    -keysize 2048 -validity 10000`), guarde-a fora do git; `./gradlew bundleRelease` com a assinatura → envie o `.aab`
    na Play Console (teste interno → produção). (Também posso montar no Actions com a chave em secrets.)
-4. **Ícones e splash**: troque `ios/App/App/Assets.xcassets` e `android/app/src/main/res/mipmap-*` pela marca
-   (ou `npx @capacitor/assets generate` a partir de um PNG 1024×1024).
+4. **Ícones e splash**: já com a marca do Malhet (spec 091; fontes em `apps/mobile/assets/`). Para trocar pela marca de
+   um cliente, substitua os PNG mantendo as dimensões.
 
 ## Revisão das lojas — o que pesa
 - **Apple 4.2 (funcionalidade mínima)**: app que só embrulha um site costuma ser recusado. Aqui há recurso nativo real

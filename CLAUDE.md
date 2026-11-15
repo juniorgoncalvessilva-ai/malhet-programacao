@@ -184,6 +184,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`useObra().menuWeb` em `podeVer`). Barra lateral em grupos Planejamento · Campo e qualidade · Segurança (SSMA) · Efetivo
   e mobilização · Cadastros · Administrar, ordenada pelo perfil (`menuDoPerfil`). Tela nova no menu = url em `menu.ts` **e**
   em `TELAS_WEB` (teste confere). Editor: Administrar › Menus por perfil (aba Computador, `MenuComputador.tsx`).
+- Publicação nas lojas (spec 091): `docs/play-store.md`. Workflow *App nativo* gera o .aab (assinado com os secrets
+  `ANDROID_KEYSTORE_*`, versão = execução do workflow) e envia à Play no disparo manual (`PLAY_SERVICE_ACCOUNT_JSON`).
+  Ícones/splash em `apps/mobile/assets` e `apps/mobile/loja`; `allowBackup=false`; app nativo sem cadastro aberto
+  (`emAppNativo` esconde "Criar conta"). Política pública `/[locale]/privacidade` (contato = `NEXT_PUBLIC_CONTATO_PRIVACIDADE`,
+  variável `CONTATO_PRIVACIDADE` do repositório) — ao coletar dado novo, atualize a política e a Data safety.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

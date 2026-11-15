@@ -1,5 +1,7 @@
-# App de campo nativo (Capacitor, spec 085): confere que o Android e o iOS compilam e gera o APK de teste.
-# Publicar nas lojas exige as contas (Apple Developer / Google Play) e as chaves de assinatura — ver docs/app-nativo.md.
+# App de campo nativo (Capacitor, specs 085 e 091): confere que o Android e o iOS compilam, gera o APK de teste e o
+# pacote da Play Store (.aab). Com a chave de upload nos secrets o .aab sai assinado; o envio à Play é manual
+# (Actions › App nativo › Run workflow › publicar) e só roda com a conta de serviço da Play nos secrets.
+# Passo a passo: docs/play-store.md.
 name: App nativo
 
 on:
@@ -7,6 +9,16 @@ on:
     branches: [main]
     paths: ['apps/mobile/**', '.github/workflows/app-nativo.yml']
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Enviar o .aab para a Play Store (precisa dos secrets da Play)'
+        type: boolean
+        default: false
+      faixa:
+        description: 'Faixa da Play: internal (teste interno), alpha (fechado), production'
+        type: choice
+        options: [internal, alpha, production]
+        default: internal
 
 jobs:
   android:
@@ -36,6 +48,50 @@ jobs:
           name: malhet-campo-debug-apk
           path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
+      # ---- pacote da Play Store (.aab) — spec 091 ----
+      - name: Chave de upload (secret ANDROID_KEYSTORE_BASE64)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+            echo "Chave de upload encontrada: o .aab sai assinado."
+          else
+            echo "::notice::Sem ANDROID_KEYSTORE_BASE64: o .aab sai sem assinatura (só confere o build). Ver docs/play-store.md."
+          fi
+      - name: Pacote da Play (.aab)
+        working-directory: apps/mobile/android
+        env:
+          VERSAO_CODIGO: ${{ github.run_number }}
+          VERSAO_NOME: 1.0.${{ github.run_number }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: malhet-campo-play-aab
+          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+      - name: Enviar à Play Store
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publicar }}
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$PLAY_JSON" ] || [ -z "$ANDROID_KEYSTORE_FILE" ]; then
+            echo "::error::Faltam secrets PLAY_SERVICE_ACCOUNT_JSON e/ou ANDROID_KEYSTORE_BASE64 (docs/play-store.md)."; exit 1
+          fi
+          echo "$PLAY_JSON" > "$RUNNER_TEMP/play.json"
+      - name: Enviar à Play Store (upload)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publicar }}
+        uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJson: ${{ runner.temp }}/play.json
+          packageName: br.com.malhet.campo
+          releaseFiles: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ inputs.faixa }}
+          status: ${{ inputs.faixa == 'internal' && 'completed' || 'draft' }}
 
   ios:
     runs-on: macos-15

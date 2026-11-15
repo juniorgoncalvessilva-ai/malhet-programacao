@@ -7,8 +7,9 @@ android {
         applicationId "br.com.malhet.campo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // versão: o Actions passa VERSAO_CODIGO (sobe a cada build — a Play recusa número repetido) e VERSAO_NOME
+        versionCode((System.getenv("VERSAO_CODIGO") ?: "1").toInteger())
+        versionName(System.getenv("VERSAO_NOME") ?: "1.0.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +17,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // assinatura de release (spec 091): chave de upload da Play fora do git — o Actions grava o .jks a partir do secret
+    // ANDROID_KEYSTORE_BASE64 e passa senha/alias por variável de ambiente. Sem a chave, o release sai sem assinatura.
+    def chave = System.getenv("ANDROID_KEYSTORE_FILE")
+    signingConfigs {
+        if (chave && file(chave).exists()) {
+            upload {
+                storeFile file(chave)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (chave && file(chave).exists()) {
+                signingConfig signingConfigs.upload
+            }
+            debuggable false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

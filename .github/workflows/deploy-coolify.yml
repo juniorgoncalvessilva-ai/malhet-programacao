@@ -45,6 +45,7 @@ jobs:
           build-args: |
             API_INTERNAL_URL=http://api:8000
             NEXT_PUBLIC_VERSAO=${{ github.sha }}
+            NEXT_PUBLIC_CONTATO_PRIVACIDADE=${{ vars.CONTATO_PRIVACIDADE }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

@@ -5,6 +5,7 @@ import { Botao, Campo, Erro } from '@/components/Obra/ui';
 import { TelaAuth } from '@/components/Malhet/TelaAuth';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
+import { emAppNativo } from '@/lib/presenca/leitores';
 
 export default function EntrarPage() {
   const { entrar, usuario, carregado } = useSessao();
@@ -17,6 +18,9 @@ export default function EntrarPage() {
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => { if (carregado && usuario) router.replace('/app/programacoes'); }, [carregado, usuario, router]);
+  // no app das lojas não há cadastro aberto (spec 091): conta nova só pelo administrador da obra
+  const [nativo, setNativo] = useState(false);
+  useEffect(() => { setNativo(emAppNativo()); }, []);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,8 +51,9 @@ export default function EntrarPage() {
         <Botao type="submit" disabled={enviando} className="h-11 w-full">{enviando ? 'Entrando…' : 'Continuar'}</Botao>
       </form>
       <p className="text-[13px] text-m-text-muted">
-        Primeiro acesso? <Link href="/auth/cadastro" className="font-semibold text-m-accent hover:text-m-accent-hover">Criar conta</Link>
+        {nativo ? 'Primeiro acesso? Peça ao administrador da obra.' : <>Primeiro acesso? <Link href="/auth/cadastro" className="font-semibold text-m-accent hover:text-m-accent-hover">Criar conta</Link></>}
       </p>
+      <p className="text-[12px] text-m-text-muted"><Link href="/privacidade" className="underline hover:text-m-text-secondary">Política de privacidade</Link></p>
     </TelaAuth>
   );
 }
