@@ -112,7 +112,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Controle preventivo — etilômetro (`preventivos/`, spec 073): faixas configuráveis (`domain/etilometro.py`), aparelhos com
   calibração, evento (fotos aparelho/calibração, responsável assina com crachá no início e no fim) e testes assinados pelo
   colaborador (rosto/crachá/tela, `components/Preventivos/Assinar.tsx`), contraprova com cronômetro; tudo offline pela fila
-  (tipo `etilometro`). Celular `/m/preventivos/etilometro`, web `/app/preventivos`. Leitores em `components/Mobile/Leitores.tsx`.
+  (tipo `etilometro`). Celular `/m/preventivos/etilometro` (aparelho também é cadastrado ali — spec 086), web `/app/preventivos`. Leitores em `components/Mobile/Leitores.tsx`.
 - LGPD (`lgpd/`, spec 074): termo versionado por obra (`lgpd_termo`, `domain/termo.py`: finalidades biometria/foto_assinatura/
   localizacao, SIM/NÃO cada), aceite/recusa colhido no celular (`/m/lgpd`, `ColetaTermo`, fila `lgpd`; base do celular traz `lgpd`
   por pessoa), revogação apaga o rosto. Evidência de cada assinatura (`assinatura_evidencia`, fila `evidencia`, `guardarEvidencia`):

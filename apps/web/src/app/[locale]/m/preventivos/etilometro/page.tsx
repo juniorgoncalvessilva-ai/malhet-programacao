@@ -127,8 +127,10 @@ function Inicio({ obraId, pessoas, limite, busca, selo, local: gps, onIniciar }:
   obraId: number; pessoas: PessoaBase[]; limite: number; busca: ReturnType<typeof useBasePessoas>; selo: React.ReactNode; local: () => Geo | null;
   onIniciar: (s: SessaoEtilometro, item: Parameters<typeof enfileirar>[0]) => Promise<void>;
 }) {
-  const { obra } = useObra();
+  const { obra, pode } = useObra();
   const aparelhos = useAparelhos();
+  // spec 086: quem cuida do SSMA cadastra o aparelho aqui mesmo, sem depender da web
+  const cadastra = !!obra && (obra.papel === 'seguranca' || pode('planejador'));
   const config = useConfigEtilometro();
   const hoje = hojeLocal();
   const ativos = (aparelhos.data ?? []).filter((a) => a.ativo);
@@ -144,7 +146,7 @@ function Inicio({ obraId, pessoas, limite, busca, selo, local: gps, onIniciar }:
   const [salvando, setSalvando] = useState(false);
   const t = busca2.trim().toLowerCase();
   const achados = t.length < 2 ? [] : pessoas.filter((p) => p.nome.toLowerCase().includes(t) || (p.matricula ?? '').includes(t)).slice(0, 20);
-  const falta = !ap ? 'Escolha o aparelho' : vencido ? 'Calibração vencida' : !fotosAp.length ? 'Foto do aparelho' : !fotosCal.length ? 'Foto da calibração' : !resp ? 'Escolha o responsável' : !config.data ? 'Configuração não baixada' : null;
+  const falta = !ap ? (ativos.length ? 'Escolha o aparelho' : 'Cadastre o aparelho') : vencido ? 'Calibração vencida' : !fotosAp.length ? 'Foto do aparelho' : !fotosCal.length ? 'Foto da calibração' : !resp ? 'Escolha o responsável' : !config.data ? 'Configuração não baixada' : null;
 
   const iniciar = async (a: Assinatura) => {
     if (!ap || !resp || !config.data) return;
@@ -170,7 +172,8 @@ function Inicio({ obraId, pessoas, limite, busca, selo, local: gps, onIniciar }:
       <TopoM titulo="Iniciar etilômetro" sub="aparelho, fotos e responsável" voltar="/m/preventivos" acao={selo} />
       <section className={cartaoM}>
         <span className="text-[13px] font-medium text-m-text-secondary">Aparelho</span>
-        {!ativos.length && <p className="text-[14px] text-m-text-muted">{aparelhos.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" /> : 'Nenhum aparelho cadastrado. A segurança cadastra em Controle preventivo › Configuração (web).'}</p>}
+        {!ativos.length && <p className="text-[14px] text-m-text-muted">{aparelhos.isLoading ? <Esqueleto className="h-3.5 w-40 align-middle" />
+          : cadastra ? 'Nenhum aparelho cadastrado ainda: cadastre abaixo.' : 'Nenhum aparelho cadastrado. Peça à segurança para cadastrar (aqui no celular ou em Controle preventivo na web).'}</p>}
         {ativos.map((a) => {
           const v = !a.validade || a.validade < hoje;
           return (
@@ -181,6 +184,7 @@ function Inicio({ obraId, pessoas, limite, busca, selo, local: gps, onIniciar }:
             </button>
           );
         })}
+        {cadastra && !aparelhos.isLoading && <NovoAparelho aberto={!ativos.length} onCriado={(id) => setApId(id)} />}
         <CampoM rotulo="Local (opcional)" value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Ex.: Portaria 1, canteiro central" />
       </section>
       {ap && !vencido && (
@@ -385,5 +389,44 @@ function Encerrar({ sessao, pessoas, limite, busca, onVoltar, onEncerrar }: {
       </section>
       <button type="button" onClick={onVoltar} className={`${botaoPrimarioM} mb-4 flex-none`}>Voltar aos testes</button>
     </>
+  );
+}
+
+/** Cadastro rápido do etilômetro no celular (spec 086): marca, modelo, nº de série e a calibração (data e validade). */
+function NovoAparelho({ aberto: inicial, onCriado }: { aberto: boolean; onCriado: (id: number) => void }) {
+  const api = useApi();
+  const [aberto, setAberto] = useState(inicial);
+  const [f, setF] = useState({ marca: '', modelo: '', numero_serie: '', calibracao_em: '', validade: '' });
+  const [salvando, setSalvando] = useState(false);
+  const pronto = f.marca.trim() && f.modelo.trim() && f.calibracao_em && f.validade;
+  if (!aberto) return <button type="button" onClick={() => setAberto(true)} className="self-start text-[14px] font-semibold text-m-accent underline">+ Cadastrar aparelho</button>;
+  const salvar = async () => {
+    if (navigator.onLine === false) { toast.error('Sem internet: o cadastro do aparelho precisa de conexão.'); return; }
+    setSalvando(true);
+    try {
+      const a = await api.post<Aparelho>('/preventivos/etilometro/aparelhos', { marca: f.marca.trim(), modelo: f.modelo.trim(),
+        numero_serie: f.numero_serie.trim() || null, calibracao_em: f.calibracao_em, validade: f.validade, ativo: true });
+      toast.success(`${a.marca} ${a.modelo} cadastrado`); onCriado(a.id); setAberto(false);
+      setF({ marca: '', modelo: '', numero_serie: '', calibracao_em: '', validade: '' });
+    } catch (e) { toast.error((e as Error).message); } finally { setSalvando(false); }
+  };
+  return (
+    <div className="flex flex-col gap-2.5 rounded-[14px] border border-dashed border-m-accent p-3">
+      <b className="text-[14px]">Novo etilômetro</b>
+      <div className="grid grid-cols-2 gap-2">
+        <CampoM rotulo="Marca" value={f.marca} onChange={(e) => setF({ ...f, marca: e.target.value })} placeholder="Ex.: Alcolizer" />
+        <CampoM rotulo="Modelo" value={f.modelo} onChange={(e) => setF({ ...f, modelo: e.target.value })} placeholder="Ex.: HPLE" />
+      </div>
+      <CampoM rotulo="Nº de série (opcional)" value={f.numero_serie} onChange={(e) => setF({ ...f, numero_serie: e.target.value })} />
+      <div className="grid grid-cols-2 gap-2">
+        <CampoM rotulo="Calibrado em" type="date" value={f.calibracao_em} onChange={(e) => setF({ ...f, calibracao_em: e.target.value })} />
+        <CampoM rotulo="Validade" type="date" value={f.validade} onChange={(e) => setF({ ...f, validade: e.target.value })} />
+      </div>
+      <div className="flex gap-2">
+        <button type="button" disabled={!pronto || salvando} onClick={salvar}
+          className="h-11 flex-1 rounded-full bg-m-accent-strong text-[15px] font-semibold text-m-on-accent disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar aparelho'}</button>
+        <button type="button" onClick={() => setAberto(false)} className="h-11 rounded-full border border-m-stroke px-4 text-[14px] font-semibold">Cancelar</button>
+      </div>
+    </div>
   );
 }
