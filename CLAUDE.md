@@ -164,6 +164,15 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`/planos/programacao/previa`, `/planos/itens/da-programacao`, liga `programacao_linha.plano_item_id`); restrições abrem
   abaixo da atividade; look-ahead `?origem=plano` (`dias_do_plano`).
 - Início do celular só com o que fazer e atalhos (sem lista de atividades). Spec 078.
+- Ficha do colaborador (spec 087): `GET/POST/PUT/DELETE /efetivo/colaboradores` (campos operacionais — nada de CPF, RG,
+  telefone, endereço, nascimento ou saúde; `Ficha`, `chave_cadastro`); excluir só sem prova (presença, LGPD, assinatura,
+  etilômetro). `FichaColaborador.tsx` (abas Dados | Contrato | ASO e treinamentos | Mobilização | Histórico).
+  Mobilização (`mobilizacao/`): funil Solicitação → … → Crachá (`domain/pipeline.py`, ASO apto e treinamentos travam),
+  passagens por etapa, metas por faixa, métricas do esforço com memória (`domain/metricas.py`); a situação do colaborador
+  acompanha o processo. Tela `/app/efetivo/mobilizacao`.
+- ASOs e treinamentos (`treinamentos/`, spec 088): catálogo (validade, impeditivo, todos), exigência por função, ASO (só
+  resultado e datas), turmas, matriz e indicadores; `AptidaoGateway` publica a aptidão. Abas em `/app/ssma/cadastros`
+  (`components/Treinamentos/`).
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

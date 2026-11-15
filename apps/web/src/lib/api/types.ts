@@ -331,3 +331,61 @@ export interface PreviaMigracao {
 }
 
 export type TipoLigacao = 'TI' | 'II' | 'TT' | 'IT';
+
+// ---- spec 087: ficha do colaborador e mobilização --------------------------------------------------------
+type MemoriaCalculo = import('@/components/Obra/Calculado').MemoriaCalculo;
+export interface FichaColaborador extends Colaborador {
+  apelido: string | null; email_corporativo: string | null; centro_custo: string | null;
+  tipo_contrato: string | null; turno: string | null; horas_dia: number | null; alojamento: string | null; folga_campo: string | null;
+  fim_experiencia: string | null; brigadista: boolean; periculosidade: boolean; insalubridade: boolean;
+  cnh_categoria: string | null; cnh_validade: string | null; observacoes: string | null;
+  origem: string; cadastro_pendente: boolean; criado_em: string; atualizado_em: string;
+}
+export type EtapaMobilizacao = 'SOLICITACAO' | 'SELECAO' | 'EXAMES' | 'ASO' | 'CONTRATACAO' | 'TREINAMENTO' | 'DOCUMENTACAO_CLIENTE' | 'APROVACAO' | 'CRACHA';
+export type StatusMobilizacao = 'EM_ANDAMENTO' | 'AGUARDANDO_CRACHA' | 'MOBILIZADO' | 'DESISTENCIA';
+export interface AptidaoResumo { aso_libera: boolean; aso: Validade; pendentes: string[]; funcao_tem_exigencia: boolean; impedimentos: string[] }
+export interface ProcessoMobilizacao {
+  id: number; colaborador_id: number | null; nome: string; funcao: string | null; empresa: string; requisicao: string | null;
+  necessario_em: string | null; treinamento_antes: boolean; status: StatusMobilizacao; status_rotulo: string;
+  etapa_atual: EtapaMobilizacao; etapa_rotulo: string; motivo_desistencia: string | null; observacao: string | null;
+  criado_por: string; criado_em: string;
+  passagens: { etapa: EtapaMobilizacao; rotulo: string; entrou_em: string; saiu_em: string | null; dias: number; concluido_por: string | null; observacao: string | null }[];
+  esforco: Partial<Record<EtapaMobilizacao, number>>; dias_total: number; gargalo: EtapaMobilizacao | null; atrasos: string[];
+  dias_etapa_atual: number | null; atrasado_para_obra: boolean; aptidao: AptidaoResumo | null;
+}
+export interface EtapasMobilizacao {
+  etapas: { etapa: EtapaMobilizacao; rotulo: string }[];
+  metas: { meta: string; rotulo: string; dias: number; etapas: EtapaMobilizacao[] }[];
+}
+export interface MetricasMobilizacao {
+  cards: Record<string, MemoriaCalculo>; processos: number; funcoes_disponiveis: string[];
+  etapas: { etapa: EtapaMobilizacao; rotulo: string; agora: number; alcancaram: number; media_dias: number | null; participacao: string; memoria: MemoriaCalculo }[];
+  metas: { meta: string; rotulo: string; dias_meta: number | null; media_dias: number | null; medidos: number; acima: number }[];
+  funcoes: { funcao: string; processos: number; mobilizados: number; desistencias: number; lead_medio: number | null; gargalo: string | null }[];
+}
+
+// ---- spec 088: ASOs e treinamentos ----------------------------------------------------------------------
+export type Validade = 'VALIDO' | 'VENCENDO' | 'VENCIDO' | 'FALTANDO';
+export interface Treinamento { id: number; nome: string; norma: string | null; validade_meses: number; carga_horaria: number | null; impeditivo: boolean; todos: boolean; ativo: boolean; funcoes: number; registros: number }
+export interface ExigenciaFuncao { funcao_chave: string; funcao: string; pessoas: number; treinamentos: number[] }
+export interface AsoReg {
+  id: number; colaborador_id: number; nome: string | null; tipo: string; tipo_rotulo: string; data_exame: string; valido_ate: string;
+  resultado: 'APTO' | 'APTO_COM_RESTRICAO' | 'INAPTO'; resultado_rotulo: string; clinica: string | null; observacao: string | null;
+  situacao: Validade; dias_para_vencer: number;
+}
+export interface RegistroTreinamento { id: number; colaborador_id: number; nome: string | null; treinamento_id: number; treinamento: string | null; realizado_em: string; valido_ate: string | null; entidade: string | null; observacao: string | null; situacao: Validade }
+export interface CelulaMatriz { situacao: Validade; valido_ate: string | null; realizado_em: string | null; impeditivo: boolean }
+export interface MatrizTreinamentos {
+  treinamentos: { id: number; nome: string; impeditivo: boolean; todos: boolean }[];
+  pessoas: { id: number; nome: string; funcao: string | null; empresa: string; situacao: SituacaoEfetivo; aso: Validade; aso_valido_ate: string | null; impedida: boolean; impedimentos: string[]; celulas: Record<string, CelulaMatriz> }[];
+}
+export interface PessoaSeguranca {
+  colaborador_id: number; nome: string; funcao: string | null; aso: Validade; aso_libera: boolean; impedida: boolean; impedimentos: string[];
+  pendentes: string[]; funcao_tem_exigencia: boolean; exigidos: { id: number; nome: string; impeditivo: boolean; todos: boolean }[];
+  celulas: Record<string, CelulaMatriz>; asos: AsoReg[]; registros: RegistroTreinamento[];
+}
+export interface IndicadoresTreinamentos {
+  memorias: Record<string, MemoriaCalculo>; pessoas: number; janela: number;
+  vencimentos: { colaborador_id: number; nome: string; item: string; valido_ate: string; dias: number }[];
+  por_treinamento: ({ id: number; nome: string; impeditivo: boolean; exigidos: number } & Record<Validade, number>)[];
+}

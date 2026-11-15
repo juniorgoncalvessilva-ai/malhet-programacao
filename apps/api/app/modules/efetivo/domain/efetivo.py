@@ -229,3 +229,47 @@ def sugerir_recurso(funcao: str, recursos: list[str]) -> str | None:
     if candidatos:
         return max(candidatos, key=lambda kr: len(kr[0]))[1]
     return None
+
+
+# ---- ficha do colaborador (spec 087) ------------------------------------------------------------------
+CNH_CATEGORIAS = ("A", "B", "AB", "C", "D", "E", "AC", "AD", "AE")
+TIPOS_CONTRATO = ("CLT", "Temporário", "Experiência", "Terceiro", "PJ", "Aprendiz", "Estágio")
+
+
+def chave_cadastro(empresa: str, matricula: str | None, nome: str) -> str:
+    """Mesma regra da planilha: próprio = matrícula; terceiro = EMPRESA:matrícula; sem matrícula = provisória pelo nome."""
+    mat = normalizar_matricula(matricula)
+    if not mat:
+        return chave_provisoria(empresa, nome)
+    return mat if empresa == EMPRESA_PROPRIA else f"{chave_texto(empresa)}:{mat}"
+
+
+@dataclass(frozen=True)
+class Ficha:
+    """Dados da ficha editados na tela. Só o operacional: nada de CPF, RG, endereço, nascimento, raça ou saúde."""
+    nome: str
+    empresa: str
+    situacao: Situacao
+    email_corporativo: str | None = None
+    horas_dia: float | None = None
+    cnh_categoria: str | None = None
+    tipo_contrato: str | None = None
+    admissao: date | None = None
+    demissao: date | None = None
+
+    def __post_init__(self) -> None:
+        nome = " ".join(self.nome.split())
+        if len(nome) < 3:
+            raise DomainError("informe o nome completo", "nome")
+        if not self.empresa.strip():
+            raise DomainError("informe a empresa", "empresa")
+        if self.email_corporativo and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", self.email_corporativo):
+            raise DomainError("e-mail inválido", "email_corporativo")
+        if self.horas_dia is not None and not 1 <= self.horas_dia <= 24:
+            raise DomainError("horas por dia entre 1 e 24", "horas_dia")
+        if self.cnh_categoria and self.cnh_categoria not in CNH_CATEGORIAS:
+            raise DomainError(f"categoria da CNH: {', '.join(CNH_CATEGORIAS)}", "cnh_categoria")
+        if self.tipo_contrato and self.tipo_contrato not in TIPOS_CONTRATO:
+            raise DomainError(f"tipo de contrato: {', '.join(TIPOS_CONTRATO)}", "tipo_contrato")
+        if self.admissao and self.demissao and self.demissao < self.admissao:
+            raise DomainError("a demissão não pode ser antes da admissão", "demissao")

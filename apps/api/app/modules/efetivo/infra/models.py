@@ -1,7 +1,7 @@
 """Efetivo da obra: colaboradores (chave = matrícula), importações semanais, movimentos e de-para de funções."""
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,6 +38,22 @@ class ColaboradorModel(Base):
     cadastro_pendente: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     cadastrado_por: Mapped[str | None] = mapped_column(String(80))
     cadastrado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # ficha do colaborador (spec 087): só dados operacionais — sem CPF, RG, endereço, nascimento, raça ou saúde (LGPD)
+    apelido: Mapped[str | None] = mapped_column(String(60))
+    email_corporativo: Mapped[str | None] = mapped_column(String(120))
+    centro_custo: Mapped[str | None] = mapped_column(String(60))
+    tipo_contrato: Mapped[str | None] = mapped_column(String(30))
+    turno: Mapped[str | None] = mapped_column(String(30))
+    horas_dia: Mapped[float | None] = mapped_column(Float)
+    alojamento: Mapped[str | None] = mapped_column(String(40))
+    folga_campo: Mapped[str | None] = mapped_column(String(30))
+    fim_experiencia: Mapped[date | None] = mapped_column(Date)
+    brigadista: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    periculosidade: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    insalubridade: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    cnh_categoria: Mapped[str | None] = mapped_column(String(5))
+    cnh_validade: Mapped[date | None] = mapped_column(Date)
+    observacoes: Mapped[str | None] = mapped_column(Text)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
                                                     onupdate=func.now())

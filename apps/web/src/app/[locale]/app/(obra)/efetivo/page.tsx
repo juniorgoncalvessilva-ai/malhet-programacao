@@ -1,13 +1,14 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRightLeft, History, Plus, Upload, UserMinus, Users } from 'lucide-react';
+import { ArrowRightLeft, History, Plus, Route, Upload, UserMinus, UserPlus, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Abas } from '@/components/Obra/Abas';
 import { ResumoEfetivo } from '@/components/Obra/ResumoEfetivo';
 import { CadastrosPendentes } from '@/components/Obra/CadastrosPendentes';
+import { FichaColaborador } from '@/components/Efetivo/FichaColaborador';
 import { Botao, Cabecalho, Campo, Chip, Erro, Indicador, Painel, Pilula, Selecao, UploadForm, dataBR } from '@/components/Obra/ui';
 import { chaves, useEquipes } from '@/hooks/programacao/queries';
 import { k, useEfetivo, useMovimentosEfetivo, useResumoEfetivo } from '@/hooks/programacao/planejamento';
@@ -92,6 +93,7 @@ export default function EfetivoPage() {
     catch (e) { toast.error((e as Error).message); }
   };
   const [aba, setAba] = useState<'efetivo' | 'resumo' | 'importar'>('efetivo');
+  const [ficha, setFicha] = useState<number | 'novo' | null>(null);
   const marcarTodos = () => setSel(sel.size ? new Set() : new Set(filtrados.slice(0, LIMITE).map((c) => c.id)));
 
   return (
@@ -99,7 +101,11 @@ export default function EfetivoPage() {
       <Cabecalho
         eyebrow="Efetivo · mobilização"
         titulo={r ? `${r.ativos} pessoas no efetivo ativo, ${r.em_mobilizacao} em mobilização` : 'Efetivo da obra'}
-        acoes={<Link href="/app/efetivo/organograma"><Botao variante="secundario"><Users size={16} /> Organograma</Botao></Link>}
+        acoes={<>
+          {planejar && <Botao onClick={() => setFicha('novo')}><UserPlus size={16} /> Novo colaborador</Botao>}
+          <Link href="/app/efetivo/mobilizacao"><Botao variante="secundario"><Route size={16} /> Mobilização</Botao></Link>
+          <Link href="/app/efetivo/organograma"><Botao variante="secundario"><Users size={16} /> Organograma</Botao></Link>
+        </>}
       />
 
       <CadastrosPendentes />
@@ -223,7 +229,7 @@ export default function EfetivoPage() {
                         </form>
                       : <div><button type="button" className="text-[11px] font-semibold text-m-accent underline" onClick={() => setCrachaEd({ id: c.id, valor: '' })}>definir crachá</button></div>)}
                   </td>
-                  <td className="border-b border-m-row px-2 py-1.5"><b className="text-m-text-primary">{c.nome}</b>{!c.no_ultimo_arquivo && <div className="text-[11px] text-m-warning">fora do último arquivo</div>}</td>
+                  <td className="border-b border-m-row px-2 py-1.5"><button type="button" className="text-left font-semibold text-m-text-primary hover:text-m-accent hover:underline" title="Abrir a ficha" onClick={() => setFicha(c.id)}>{c.nome}</button>{!c.no_ultimo_arquivo && <div className="text-[11px] text-m-warning">fora do último arquivo</div>}</td>
                   <td className="border-b border-m-row px-2 py-1.5">{c.funcao ?? '—'}<div className="text-[11px] text-m-text-muted">{c.funcao_composicao ? `→ ${c.funcao_composicao}` : 'sem de-para'}</div></td>
                   <td className="border-b border-m-row px-2 py-1.5">{c.empresa}<div className="text-[11px] text-m-text-muted">{[c.dp, c.tipo_mo].filter(Boolean).join(' · ')}</div></td>
                   <td className="whitespace-nowrap border-b border-m-row px-2 py-1.5">
@@ -244,6 +250,7 @@ export default function EfetivoPage() {
       </Painel>
 
       </>}
+      {ficha && <FichaColaborador id={ficha === 'novo' ? null : ficha} onFechar={() => setFicha(null)} onCriado={(id) => setFicha(id)} />}
     </>
   );
 }

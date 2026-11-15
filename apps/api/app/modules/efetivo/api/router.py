@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import ContextoObra, ler, planejar
 from app.core.db import get_session
 from app.modules.efetivo.application.importar_efetivo import importar_efetivo
-from app.modules.efetivo.domain.efetivo import Situacao, chave_texto, sugerir_recurso
+from app.modules.efetivo.domain.efetivo import EMPRESA_PROPRIA, Situacao, chave_texto, sugerir_recurso
 from app.modules.efetivo.domain.organograma import (
     CORES_PADRAO,
     DisciplinaOrg,
@@ -182,6 +182,153 @@ def definir_cracha(cid: int, d: CrachaIn, s: Session = Depends(get_session), c: 
     s.flush()
     membro, enc = _vinculos(s, c.obra_id)
     return _out(m, membro, enc, depara(s, c.obra_id))
+
+
+# ---- ficha do colaborador: criar, editar, excluir (spec 087) ------------------------------------------
+_FICHA = ("apelido", "email_corporativo", "centro_custo", "tipo_contrato", "turno", "horas_dia", "alojamento",
+          "folga_campo", "fim_experiencia", "brigadista", "periculosidade", "insalubridade", "cnh_categoria",
+          "cnh_validade", "observacoes")
+
+
+class FichaIn(BaseModel):
+    nome: str = Field(min_length=3, max_length=150)
+    empresa: str = Field(EMPRESA_PROPRIA, max_length=80)
+    matricula: str | None = Field(None, max_length=20)
+    cracha: str | None = Field(None, max_length=20)
+    funcao: str | None = Field(None, max_length=120)
+    situacao: Situacao = Situacao.EM_PROCESSO
+    dp: str | None = Field(None, max_length=20)
+    tipo_mo: str | None = Field(None, max_length=10)
+    admissao: date | None = None
+    demissao: date | None = None
+    mobilizacao_prevista: date | None = None
+    apelido: str | None = Field(None, max_length=60)
+    email_corporativo: str | None = Field(None, max_length=120)
+    centro_custo: str | None = Field(None, max_length=60)
+    tipo_contrato: str | None = Field(None, max_length=30)
+    turno: str | None = Field(None, max_length=30)
+    horas_dia: float | None = None
+    alojamento: str | None = Field(None, max_length=40)
+    folga_campo: str | None = Field(None, max_length=30)
+    fim_experiencia: date | None = None
+    brigadista: bool = False
+    periculosidade: bool = False
+    insalubridade: bool = False
+    cnh_categoria: str | None = Field(None, max_length=5)
+    cnh_validade: date | None = None
+    observacoes: str | None = Field(None, max_length=2000)
+
+
+def _limpo(v):
+    if isinstance(v, str):
+        v = " ".join(v.split()) if "\n" not in v else v.strip()
+        return v or None
+    return v
+
+
+def _ficha_out(m: ColaboradorModel, s: Session, obra_id: int) -> dict:
+    membro, enc = _vinculos(s, obra_id)
+    base = _out(m, membro, enc, depara(s, obra_id)).model_dump()
+    return {**base, **{k: getattr(m, k) for k in _FICHA}, "origem": m.origem, "cadastro_pendente": m.cadastro_pendente,
+            "criado_em": m.criado_em, "atualizado_em": m.atualizado_em}
+
+
+def _gravar_ficha(s: Session, c: ContextoObra, m: ColaboradorModel, d: FichaIn, novo: bool = False) -> None:
+    from app.modules.efetivo.domain.efetivo import Ficha, chave_cadastro, normalizar_matricula
+
+    nome = " ".join(d.nome.split()).upper()
+    empresa = " ".join(d.empresa.split()) or EMPRESA_PROPRIA
+    Ficha(nome=nome, empresa=empresa, situacao=d.situacao, email_corporativo=_limpo(d.email_corporativo),
+          horas_dia=d.horas_dia, cnh_categoria=_limpo(d.cnh_categoria), tipo_contrato=_limpo(d.tipo_contrato),
+          admissao=d.admissao, demissao=d.demissao)
+    mat = normalizar_matricula(d.matricula) if d.matricula else None
+    chave = chave_cadastro(empresa, mat, nome)
+    outro = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.chave == chave,
+                                                    ColaboradorModel.id != (m.id or 0)))
+    if outro is not None:
+        raise DomainError(f"{outro.nome} já está no efetivo com {'a matrícula ' + mat if mat else 'esse nome'}", "matricula" if mat else "nome")
+    cracha = _limpo(d.cracha) or (mat if empresa == EMPRESA_PROPRIA else None)
+    if cracha and s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.cracha == cracha,
+                                                          ColaboradorModel.id != (m.id or 0))):
+        raise DomainError(f"o crachá {cracha} já é de outra pessoa", "cracha")
+    if not novo:
+        if m.situacao != d.situacao.value:
+            s.add(MovimentoEfetivoModel(obra_id=c.obra_id, colaborador_id=m.id, tipo="SITUACAO", de=_rotulo(m.situacao),
+                                        para=d.situacao.rotulo, por=c.usuario.id))
+        if chave_texto(m.funcao) != chave_texto(d.funcao):
+            s.add(MovimentoEfetivoModel(obra_id=c.obra_id, colaborador_id=m.id, tipo="FUNCAO", de=m.funcao, para=_limpo(d.funcao),
+                                        por=c.usuario.id))
+        if m.cracha and m.cracha != cracha:  # leva o crachá novo para as equipes
+            for mb in s.scalars(select(EquipeMembroModel).where(EquipeMembroModel.cracha == m.cracha)):
+                mb.cracha = cracha
+            for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.encarregado_cracha == m.cracha)):
+                e.encarregado_cracha = cracha
+    m.chave, m.nome, m.empresa, m.matricula, m.cracha = chave, nome[:150], empresa, mat, cracha
+    m.funcao = _limpo(d.funcao)
+    m.funcao_chave = chave_texto(m.funcao) or None
+    m.situacao, m.dp, m.tipo_mo = d.situacao.value, _limpo(d.dp), (_limpo(d.tipo_mo) or "").upper() or None
+    m.admissao, m.demissao, m.mobilizacao_prevista = d.admissao, d.demissao, d.mobilizacao_prevista
+    for k in _FICHA:
+        setattr(m, k, _limpo(getattr(d, k)))
+    if mat:
+        m.cadastro_pendente = False
+    if novo:
+        s.add(m)
+    s.flush()
+    if novo:
+        s.add(MovimentoEfetivoModel(obra_id=c.obra_id, colaborador_id=m.id, tipo="ENTRADA", de=None,
+                                    para=f"{d.situacao.rotulo} (cadastro manual)", por=c.usuario.id))
+        s.flush()
+
+
+@router.get("/colaboradores/{cid}")
+def ficha(cid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    return _ficha_out(_colab(s, c, cid), s, c.obra_id)
+
+
+@router.post("/colaboradores", status_code=201)
+def criar_colaborador(d: FichaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Cadastro manual (quem ainda não veio na planilha do DP). Com matrícula, a próxima importação atualiza o mesmo
+    registro; sem matrícula, a chave é provisória pelo nome e se completa quando a matrícula chegar."""
+    m = ColaboradorModel(obra_id=c.obra_id, origem="manual", no_ultimo_arquivo=False)
+    _gravar_ficha(s, c, m, d, novo=True)
+    return _ficha_out(m, s, c.obra_id)
+
+
+@router.put("/colaboradores/{cid}")
+def atualizar_colaborador(cid: int, d: FichaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    m = _colab(s, c, cid)
+    _gravar_ficha(s, c, m, d)
+    return _ficha_out(m, s, c.obra_id)
+
+
+def historico_que_impede(s: Session, obra_id: int, cid: int) -> list[str]:
+    """Registros que são prova (presença, assinaturas, aceite LGPD, testes): com eles não se exclui, desmobiliza-se."""
+    from app.modules.lgpd.infra.models import AceiteLgpdModel, EvidenciaAssinaturaModel
+    from app.modules.presenca.infra.models import LeituraPresencaModel
+    from app.modules.preventivos.infra.models import TestePreventivoModel
+
+    out = []
+    for modelo, rotulo in ((LeituraPresencaModel, "leituras de presença"), (AceiteLgpdModel, "termos LGPD"),
+                           (EvidenciaAssinaturaModel, "assinaturas"), (TestePreventivoModel, "testes de etilômetro")):
+        n = s.scalar(select(func.count()).select_from(modelo).where(modelo.colaborador_id == cid))
+        if n:
+            out.append(f"{n} {rotulo}")
+    return out
+
+
+@router.delete("/colaboradores/{cid}", status_code=204)
+def excluir_colaborador(cid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Só quem foi cadastrado por engano: com histórico de presença/assinaturas o registro é prova — desmobilize."""
+    m = _colab(s, c, cid)
+    prova = historico_que_impede(s, c.obra_id, cid)
+    if prova:
+        raise DomainError(f"{m.nome} tem {', '.join(prova)}: mude a situação para Desmobilizado em vez de excluir")
+    if m.cracha:
+        if s.scalar(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.encarregado_cracha == m.cracha)):
+            raise DomainError(f"{m.nome} é encarregado de uma equipe: troque o encarregado antes")
+        _tirar_de_equipes(s, c.obra_id, m.cracha)
+    s.delete(m)
 
 
 # ---- equipes montadas pelo efetivo ----------------------------------------------------------------------

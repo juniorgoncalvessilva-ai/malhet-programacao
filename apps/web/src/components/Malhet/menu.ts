@@ -1,4 +1,4 @@
-import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Smartphone, Percent, Cloud } from 'lucide-react';
+import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Smartphone, Percent, Cloud, Route } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -33,6 +33,7 @@ export const MENU: GrupoMenu[] = [
     cor: 'var(--m-proc-executar)',
     itens: [
       { titulo: 'Efetivo e mobilização', url: '/app/efetivo', icone: IdCard },
+      { titulo: 'Mobilização', url: '/app/efetivo/mobilizacao', icone: Route },
       { titulo: 'Presença do dia', url: '/app/presenca', icone: ScanFace },
       { titulo: 'LGPD e assinaturas', url: '/app/lgpd', icone: ShieldCheck, ssma: true },
       { titulo: 'Crachá e rosto', url: '/app/efetivo/identificacao', icone: Fingerprint, minimo: 'planejador' },
