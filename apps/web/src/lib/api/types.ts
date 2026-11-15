@@ -194,7 +194,7 @@ export interface ResumoEfetivo {
   desmobilizados_em_equipe: string[]; funcoes_sem_depara: number;
   ultima_importacao: { arquivo: string; em: string; resumo: Record<string, unknown> } | null;
 }
-export interface FuncaoDePara { funcao_chave: string; funcao: string; total: number; ativos: number; recurso: string | null; ignorar: boolean; definido: boolean; sugestao: string | null }
+export interface FuncaoDePara { funcao_chave: string; funcao: string; total: number; ativos: number; recurso: string | null; ignorar: boolean; definido: boolean; criada_na_obra?: boolean; sugestao: string | null }
 export interface NoOrganograma {
   id: string; tipo: 'obra' | 'setor' | 'responsavel' | 'supervisor' | 'disciplina' | 'frente' | 'area' | 'equipe' | 'funcao'; titulo: string; detalhe: string; qtd: number;
   cor: string | null; responsavel: string | null; ref?: number | null;
@@ -352,6 +352,8 @@ export interface ProcessoMobilizacao {
   passagens: { etapa: EtapaMobilizacao; rotulo: string; entrou_em: string; saiu_em: string | null; dias: number; concluido_por: string | null; observacao: string | null }[];
   esforco: Partial<Record<EtapaMobilizacao, number>>; dias_total: number; gargalo: EtapaMobilizacao | null; atrasos: string[];
   dias_etapa_atual: number | null; atrasado_para_obra: boolean; aptidao: AptidaoResumo | null;
+  vaga_id: number | null; vaga_codigo: string | null;
+  treino: { dias: number | null; previsto_dias: number | null; horas: number | null; previsto_horas: number | null };
 }
 export interface EtapasMobilizacao {
   etapas: { etapa: EtapaMobilizacao; rotulo: string }[];
@@ -362,6 +364,7 @@ export interface MetricasMobilizacao {
   etapas: { etapa: EtapaMobilizacao; rotulo: string; agora: number; alcancaram: number; media_dias: number | null; participacao: string; memoria: MemoriaCalculo }[];
   metas: { meta: string; rotulo: string; dias_meta: number | null; media_dias: number | null; medidos: number; acima: number }[];
   funcoes: { funcao: string; processos: number; mobilizados: number; desistencias: number; lead_medio: number | null; gargalo: string | null }[];
+  treinamento: { funcao: string; processos: number; media_dias: number; previsto_dias: number | null; media_horas: number; previsto_horas: number | null; desvio_dias: number | null; acima: number }[];
 }
 
 // ---- spec 088: ASOs e treinamentos ----------------------------------------------------------------------
@@ -389,3 +392,16 @@ export interface IndicadoresTreinamentos {
   vencimentos: { colaborador_id: number; nome: string; item: string; valido_ate: string; dias: number }[];
   por_treinamento: ({ id: number; nome: string; impeditivo: boolean; exigidos: number } & Record<Validade, number>)[];
 }
+
+// ---- spec 089: funções de contratação, vagas e treinamento previsto em contrato -------------------------
+export interface FuncaoContratacao { funcao_chave: string; funcao: string; recurso: string | null; pessoas: number; criada_na_obra: boolean }
+export type SituacaoVaga = 'ABERTA' | 'EM_ATENDIMENTO' | 'PREENCHIDA' | 'CANCELADA';
+export interface VagaContratacao {
+  id: number; codigo: string; funcao: string; funcao_chave: string; empresa: string; quantidade: number; necessario_em: string | null;
+  destino: string | null; solicitante: string | null; justificativa: string | null; aberta_por: string; aberta_em: string;
+  cancelada_em: string | null; motivo_cancelamento: string | null; situacao: SituacaoVaga; situacao_rotulo: string;
+  mobilizados: number; em_processo: number; desistencias: number; saldo: number; dias_aberta: number; atrasada: boolean;
+  processos: { id: number; nome: string; status: StatusMobilizacao; etapa_atual: EtapaMobilizacao }[];
+}
+export interface VagasResposta { vagas: VagaContratacao[]; memorias: Record<string, MemoriaCalculo> }
+export interface TreinamentoPrevisto { funcao_chave: string; funcao: string; pessoas: number; em_mobilizacao: boolean; dias: number | null; horas: number | null; clausula: string | null; horas_sugeridas: number | null }

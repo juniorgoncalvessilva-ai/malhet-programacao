@@ -1,6 +1,8 @@
 'use client';
 
 import { Plus, Users } from 'lucide-react';
+import { SeletorFuncao } from '@/components/Efetivo/SeletorFuncao';
+import { AbaVagas, TreinamentoPrevistoPainel } from '@/components/Efetivo/Vagas';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Abas } from '@/components/Obra/Abas';
@@ -11,7 +13,7 @@ import { Botao, Cabecalho, Campo, Chip, Erro, Indicador, Painel, Selecao, Tabela
 import { FichaColaborador } from '@/components/Efetivo/FichaColaborador';
 import { Barra, ETAPAS, LinhaProcesso } from '@/components/Efetivo/Mobilizacao';
 import { useEfetivo } from '@/hooks/programacao/planejamento';
-import { useEtapasMobilizacao, useMetricasMobilizacao, useProcessos } from '@/hooks/programacao/treinamentos';
+import { useEtapasMobilizacao, useMetricasMobilizacao, useProcessos, useVagas } from '@/hooks/programacao/treinamentos';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
 import type { Colaborador, StatusMobilizacao } from '@/lib/api/types';
@@ -25,8 +27,9 @@ const STATUS: { v: StatusMobilizacao; rotulo: string }[] = [
 export default function MobilizacaoPage() {
   const { pode } = useObra();
   const planejar = pode('planejador');
-  const [aba, setAba] = useState<'processos' | 'metricas' | 'metas'>('processos');
+  const [aba, setAba] = useState<'vagas' | 'processos' | 'metricas' | 'config'>('processos');
   const [ficha, setFicha] = useState<number | null>(null);
+  const [vagaNova, setVagaNova] = useState<number | null>(null); // "Iniciar contratação" a partir da vaga
   const processos = useProcessos();
   const ativos = (processos.data ?? []).filter((p) => p.status === 'EM_ANDAMENTO' || p.status === 'AGUARDANDO_CRACHA');
   return (
@@ -34,26 +37,27 @@ export default function MobilizacaoPage() {
       <Cabecalho eyebrow="Efetivo · mobilização" titulo={processos.data ? `${ativos.length} pessoa(s) em mobilização` : 'Mobilização do colaborador'}
         acoes={<Link href="/app/efetivo"><Botao variante="secundario"><Users size={16} /> Efetivo</Botao></Link>} />
       <Abas rotulo="Seções da mobilização" ativa={aba} onTrocar={setAba}
-        abas={[{ chave: 'processos', titulo: 'Processos' }, { chave: 'metricas', titulo: 'Métricas do esforço' }, { chave: 'metas', titulo: 'Metas da obra' }]} />
-      {aba === 'processos' && <Processos planejar={planejar} onFicha={setFicha} />}
+        abas={[{ chave: 'vagas', titulo: 'Vagas' }, { chave: 'processos', titulo: 'Processos' }, { chave: 'metricas', titulo: 'Métricas do esforço' }, { chave: 'config', titulo: 'Configurações' }]} />
+      {aba === 'vagas' && <AbaVagas planejar={planejar} onIniciar={(id) => { setVagaNova(id); setAba('processos'); }} />}
+      {aba === 'processos' && <Processos planejar={planejar} onFicha={setFicha} vagaNova={vagaNova} onVagaUsada={() => setVagaNova(null)} />}
       {aba === 'metricas' && <Metricas />}
-      {aba === 'metas' && <Metas planejar={planejar} />}
+      {aba === 'config' && <><Metas planejar={planejar} /><TreinamentoPrevistoPainel planejar={planejar} /></>}
       {ficha && <FichaColaborador id={ficha} onFechar={() => setFicha(null)} />}
     </>
   );
 }
 
-function Processos({ planejar, onFicha }: { planejar: boolean; onFicha: (id: number) => void }) {
+function Processos({ planejar, onFicha, vagaNova, onVagaUsada }: { planejar: boolean; onFicha: (id: number) => void; vagaNova: number | null; onVagaUsada: () => void }) {
   const processos = useProcessos();
   const [fSt, setFSt] = useState<Set<StatusMobilizacao>>(new Set(['EM_ANDAMENTO', 'AGUARDANDO_CRACHA']));
   const [fEtapa, setFEtapa] = useState('');
   const [q, setQ] = useState('');
-  const [novo, setNovo] = useState(false);
+  const [novo, setNovo] = useState(vagaNova != null);
   const todos = processos.data ?? [];
   const lista = useMemo(() => {
     const t = q.trim().toLowerCase();
     return todos.filter((p) => (!fSt.size || fSt.has(p.status)) && (!fEtapa || p.etapa_atual === fEtapa)
-      && (!t || `${p.nome} ${p.funcao ?? ''} ${p.requisicao ?? ''}`.toLowerCase().includes(t)));
+      && (!t || `${p.nome} ${p.funcao ?? ''} ${p.requisicao ?? ''} ${p.vaga_codigo ?? ''}`.toLowerCase().includes(t)));
   }, [todos, fSt, fEtapa, q]);
   const conta = (s: StatusMobilizacao) => todos.filter((p) => p.status === s).length;
   const porEtapa = ETAPAS.map((e) => ({ ...e, n: todos.filter((p) => (p.status === 'EM_ANDAMENTO' || p.status === 'AGUARDANDO_CRACHA') && p.etapa_atual === e.v).length }));
@@ -70,12 +74,12 @@ function Processos({ planejar, onFicha }: { planejar: boolean; onFicha: (id: num
       </div>
       <Painel titulo="Quem está sendo mobilizado e em que etapa?" subtitulo={`${lista.length} de ${todos.length} processo(s)`}
         acoes={planejar && <Botao onClick={() => setNovo(!novo)}><Plus size={16} /> Nova aquisição</Botao>}>
-        {novo && <NovoProcesso onFeito={() => setNovo(false)} />}
+        {novo && <NovoProcesso vagaInicial={vagaNova} onFeito={() => { setNovo(false); onVagaUsada(); }} />}
         <div className="flex flex-wrap items-end gap-2">
           {STATUS.map((s) => (
             <Chip key={s.v} ativo={fSt.has(s.v)} onClick={() => setFSt((x) => { const n = new Set(x); if (n.has(s.v)) n.delete(s.v); else n.add(s.v); return n; })}>{s.rotulo} · {conta(s.v)}</Chip>
           ))}
-          <Campo rotulo="Buscar" placeholder="nome, função ou requisição" value={q} onChange={(e) => setQ(e.target.value)} className="w-[260px]" />
+          <Campo rotulo="Buscar" placeholder="nome, função ou vaga" value={q} onChange={(e) => setQ(e.target.value)} className="w-[260px]" />
         </div>
         {processos.isLoading && <Carregando />}
         {!processos.isLoading && !lista.length && <p className="py-6 text-center text-[13px] text-m-text-muted">{todos.length ? 'Nenhum processo com esses filtros.' : 'Nenhuma aquisição lançada. Use “Nova aquisição”.'}</p>}
@@ -87,11 +91,14 @@ function Processos({ planejar, onFicha }: { planejar: boolean; onFicha: (id: num
   );
 }
 
-function NovoProcesso({ onFeito }: { onFeito: () => void }) {
+function NovoProcesso({ onFeito, vagaInicial }: { onFeito: () => void; vagaInicial?: number | null }) {
   const api = useApi();
   const efetivo = useEfetivo();
+  const vagas = useVagas();
   const [pessoa, setPessoa] = useState<Colaborador | null>(null);
-  const [f, setF] = useState({ nome: '', funcao: '', empresa: 'Própria', requisicao: '', necessario_em: '', iniciado_em: '', treinamento_antes: false, observacao: '' });
+  const [f, setF] = useState({ vaga_id: vagaInicial ? String(vagaInicial) : '', nome: '', funcao: '', empresa: 'Própria', necessario_em: '', iniciado_em: '', treinamento_antes: false, observacao: '' });
+  const abertas = (vagas.data?.vagas ?? []).filter((v) => (v.situacao === 'ABERTA' || v.situacao === 'EM_ATENDIMENTO') && (v.saldo > 0 || String(v.id) === f.vaga_id));
+  const vaga = abertas.find((v) => String(v.id) === f.vaga_id);
   const [erro, setErro] = useState<unknown>(null);
   const [salvando, setSalvando] = useState(false);
   const candidatos = (efetivo.data ?? []).filter((c) => ['PREVISTO', 'EM_PROCESSO', 'AGUARDANDO_CRACHA', 'DESMOBILIZADO', 'DESISTENCIA'].includes(c.situacao));
@@ -99,8 +106,8 @@ function NovoProcesso({ onFeito }: { onFeito: () => void }) {
     setSalvando(true);
     try {
       const r = await api.post<{ nome: string }>('/mobilizacao/processos', {
-        colaborador_id: pessoa?.id ?? null, nome: pessoa ? null : f.nome, funcao: f.funcao || pessoa?.funcao || null, empresa: f.empresa,
-        requisicao: f.requisicao || null, necessario_em: f.necessario_em || null, treinamento_antes: f.treinamento_antes,
+        colaborador_id: pessoa?.id ?? null, vaga_id: vaga?.id ?? null, nome: pessoa ? null : f.nome,
+        funcao: vaga ? null : f.funcao || pessoa?.funcao || null, empresa: f.empresa, necessario_em: f.necessario_em || null, treinamento_antes: f.treinamento_antes,
         observacao: f.observacao || null, iniciado_em: f.iniciado_em ? new Date(f.iniciado_em).toISOString() : null,
       });
       toast.success(`Aquisição de ${r.nome} aberta na Solicitação`);
@@ -109,6 +116,12 @@ function NovoProcesso({ onFeito }: { onFeito: () => void }) {
   };
   return (
     <div className="grid gap-3 rounded-m-lg border border-m-accent/40 bg-m-accent-subtle/40 p-4 md:grid-cols-4" aria-label="Nova aquisição">
+      <Selecao rotulo="Vaga (aberta pelo Planejamento)" className="md:col-span-2" value={f.vaga_id} onChange={(e) => setF({ ...f, vaga_id: e.target.value })}>
+        <option value="">Sem vaga (reposição, previsto do DP…)</option>
+        {abertas.map((v) => <option key={v.id} value={v.id}>{v.codigo} · {v.funcao} · faltam {v.saldo} de {v.quantidade}{v.destino ? ` · ${v.destino}` : ''}</option>)}
+      </Selecao>
+      {vaga ? <p className="self-end pb-2 text-[12.5px] text-m-text-secondary md:col-span-2">Função <b>{vaga.funcao}</b>{vaga.necessario_em ? <> · obra precisa em <b>{new Date(vaga.necessario_em + 'T12:00').toLocaleDateString('pt-BR')}</b></> : ''} · a Solicitação conta desde a abertura da vaga</p>
+        : <SeletorFuncao className="md:col-span-2" valor={f.funcao} onTrocar={(v) => setF({ ...f, funcao: v })} />}
       <div className="md:col-span-4">
         {pessoa ? <p className="text-[13px]">Pessoa do efetivo: <b>{pessoa.nome}</b> · {pessoa.funcao ?? 'sem função'} · {pessoa.situacao_rotulo}
           <button type="button" className="ml-2 text-[12px] font-semibold text-m-accent underline" onClick={() => setPessoa(null)}>trocar</button></p>
@@ -118,8 +131,6 @@ function NovoProcesso({ onFeito }: { onFeito: () => void }) {
         <Campo rotulo="Nome completo" className="md:col-span-2" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} />
         <Campo rotulo="Empresa" value={f.empresa} onChange={(e) => setF({ ...f, empresa: e.target.value })} />
       </>}
-      <Campo rotulo="Função" value={f.funcao} placeholder={pessoa?.funcao ?? ''} onChange={(e) => setF({ ...f, funcao: e.target.value })} />
-      <Campo rotulo="Requisição / vaga" value={f.requisicao} onChange={(e) => setF({ ...f, requisicao: e.target.value })} />
       <Campo rotulo="Obra precisa em" type="date" value={f.necessario_em} onChange={(e) => setF({ ...f, necessario_em: e.target.value })} />
       <Campo rotulo="Solicitação feita em (vazio = agora)" type="datetime-local" value={f.iniciado_em} onChange={(e) => setF({ ...f, iniciado_em: e.target.value })} />
       <Campo rotulo="Observação" value={f.observacao} onChange={(e) => setF({ ...f, observacao: e.target.value })} />
@@ -127,7 +138,7 @@ function NovoProcesso({ onFeito }: { onFeito: () => void }) {
         <input type="checkbox" checked={f.treinamento_antes} onChange={(e) => setF({ ...f, treinamento_antes: e.target.checked })} /> Treinamento antes da contratação
       </label>
       <div className="flex flex-wrap items-center gap-2 md:col-span-4">
-        <Botao disabled={salvando || (!pessoa && f.nome.trim().split(/\s+/).length < 2)} onClick={salvar}>{salvando ? 'Abrindo…' : 'Abrir aquisição'}</Botao>
+        <Botao disabled={salvando || (!pessoa && f.nome.trim().split(/\s+/).length < 2) || (!vaga && !f.funcao && !pessoa?.funcao)} onClick={salvar}>{salvando ? 'Abrindo…' : 'Abrir aquisição'}</Botao>
         <Botao variante="secundario" onClick={onFeito}>Cancelar</Botao>
         <span className="text-[12px] text-m-text-muted">Pessoa nova entra no efetivo como “Em processo”; a matrícula chega na Contratação.</span>
         <Erro erro={erro} />
@@ -177,6 +188,27 @@ function Metricas() {
           </div>
         </Painel>
       </div>
+      <Painel titulo="Quanto tempo o treinamento levou frente ao contrato?" subtitulo="Dias na etapa Treinamentos e horas registradas × o previsto no contrato para a função (Configurações)">
+        <div className="grid grid-cols-2 gap-3 md:max-w-[640px]">
+          {card('treino_dias', 'Dias gastos / previstos')}
+          {card('treino_horas', 'Horas realizadas × contrato')}
+        </div>
+        <Tabela cabecalho={['Função', 'Processos', 'Dias gastos (média)', 'Previsto', 'Desvio', 'Acima do previsto', 'Horas (média)', 'Horas previstas']} direita={[1, 2, 3, 4, 5, 6, 7]}
+          vazio={!d.treinamento.length && 'Nenhum processo passou pela etapa Treinamentos ainda.'}>
+          {d.treinamento.map((x) => (
+            <tr key={x.funcao}>
+              <td className={td}><b className="text-m-text-primary">{x.funcao}</b></td>
+              <td className={tdNum}>{x.processos}</td>
+              <td className={tdNum}>{fmt(x.media_dias, 1)} d</td>
+              <td className={tdNum}>{x.previsto_dias != null ? `${fmt(x.previsto_dias, 1)} d` : <span className="text-m-text-muted">configure</span>}</td>
+              <td className={tdNum}><span className={x.desvio_dias != null && x.desvio_dias > 0 ? 'font-semibold text-m-warning' : ''}>{x.desvio_dias != null ? `${x.desvio_dias > 0 ? '+' : ''}${fmt(x.desvio_dias, 1)} d` : '—'}</span></td>
+              <td className={tdNum}>{x.acima}</td>
+              <td className={tdNum}>{fmt(x.media_horas, 1)} h</td>
+              <td className={tdNum}>{x.previsto_horas != null ? `${fmt(x.previsto_horas, 1)} h` : '—'}</td>
+            </tr>
+          ))}
+        </Tabela>
+      </Painel>
       <Painel titulo="As faixas estão dentro da meta da obra?">
         <Tabela cabecalho={['Faixa', 'Meta', 'Média', 'Medidos', 'Acima da meta']} direita={[1, 2, 3, 4]}>
           {d.metas.map((x) => (

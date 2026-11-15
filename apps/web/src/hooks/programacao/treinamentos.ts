@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/hooks/programacao/useApi';
 import type {
   AsoReg, EtapasMobilizacao, ExigenciaFuncao, FichaColaborador, IndicadoresTreinamentos, MatrizTreinamentos,
-  MetricasMobilizacao, PessoaSeguranca, ProcessoMobilizacao, RegistroTreinamento, Treinamento,
+  FuncaoContratacao, MetricasMobilizacao, PessoaSeguranca, TreinamentoPrevisto, VagasResposta, ProcessoMobilizacao, RegistroTreinamento, Treinamento,
 } from '@/lib/api/types';
 
 /** Consultas da ficha do colaborador e da mobilização (spec 087) e de ASOs/treinamentos (spec 088). */
@@ -54,4 +54,16 @@ export function useIndicadoresTreinamentos(janela: number) {
 export function usePessoaSeguranca(id: number | null) {
   const api = useApi();
   return useQuery({ queryKey: ['treinamentos', 'pessoa', id], queryFn: () => api.get<PessoaSeguranca>(`/treinamentos/pessoa/${id}`), enabled: !!id });
+}
+export function useFuncoesContratacao() {
+  const api = useApi();
+  return useQuery({ queryKey: ['efetivo', 'funcoes-lista'], queryFn: () => api.get<FuncaoContratacao[]>('/efetivo/funcoes/lista') });
+}
+export function useVagas() {
+  const api = useApi();
+  return useQuery({ queryKey: ['mobilizacao', 'vagas'], queryFn: () => api.get<VagasResposta>('/mobilizacao/vagas') });
+}
+export function useTreinamentoPrevisto() {
+  const api = useApi();
+  return useQuery({ queryKey: ['mobilizacao', 'config-treinamentos'], queryFn: () => api.get<TreinamentoPrevisto[]>('/mobilizacao/config/treinamentos') });
 }

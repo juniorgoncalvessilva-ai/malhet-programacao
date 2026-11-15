@@ -173,6 +173,12 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - ASOs e treinamentos (`treinamentos/`, spec 088): catálogo (validade, impeditivo, todos), exigência por função, ASO (só
   resultado e datas), turmas, matriz e indicadores; `AptidaoGateway` publica a aptidão. Abas em `/app/ssma/cadastros`
   (`components/Treinamentos/`).
+- Spec 089: função de contratação criada na obra (`depara_funcao.criada_na_obra`, `POST /efetivo/funcoes/nova`, lista
+  `GET /efetivo/funcoes/lista` = `funcoes_de_contratacao`; vaga/processo exigem função da lista — `funcao_padronizada`;
+  front `SeletorFuncao`). Vagas (`mobilizacao_vaga`, `domain/vaga.py`: RQ-0001, saldo, situação derivada) abertas pelo
+  Planejamento, avisam a gestão e alimentam o processo (`vaga_id`; a Solicitação conta desde a abertura). Configurações:
+  treinamento previsto em contrato por função (`mobilizacao_treinamento_previsto`, dias vira a meta de Treinamentos;
+  horas × carga horária registrada, `cargas_registradas`). Abas Vagas | Processos | Métricas | Configurações.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

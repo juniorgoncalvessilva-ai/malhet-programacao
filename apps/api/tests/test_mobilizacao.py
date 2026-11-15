@@ -122,6 +122,7 @@ def test_ficha_crud_e_exclusao(client):
 def test_mobilizacao_api_ponta_a_ponta(client):
     _montar(client)
     nr = client.post("/api/treinamentos/catalogo", json={"nome": "NR-18", "validade_meses": 24}).json()["id"]
+    assert client.post("/api/mobilizacao/processos", json={"nome": "Maria Nova Silva", "funcao": "Soldador"}).status_code == 422  # fora do cadastro (spec 089)
     client.put("/api/treinamentos/exigencias", json={"funcao_chave": "ARMADOR", "treinamentos": [nr]})
     r = client.post("/api/mobilizacao/processos", json={"nome": "Maria Nova Silva", "funcao": "Armador", "requisicao": "RQ-12",
                                                         "necessario_em": str(date.today() + timedelta(days=20)),

@@ -87,3 +87,42 @@ def setor_da_disciplina(s: Session, obra_id: int, disciplina_id: int | None) -> 
         return None
     d = s.get(SubsetorObraModel, disciplina_id)
     return d.setor_id if d is not None and d.obra_id == obra_id else None
+
+
+@dataclass(frozen=True)
+class FuncaoContratacao:
+    """Função de contratação padronizada da obra (spec 089): de-para (criada na obra ou vinda do DP) + funções do efetivo."""
+    funcao_chave: str
+    funcao: str
+    recurso: str | None
+    pessoas: int
+    criada_na_obra: bool
+
+
+def funcoes_de_contratacao(s: Session, obra_id: int) -> dict[str, FuncaoContratacao]:
+    from sqlalchemy import func as sqlfunc
+
+    out: dict[str, FuncaoContratacao] = {}
+    contagem = dict(s.execute(select(ColaboradorModel.funcao_chave, sqlfunc.count()).where(
+        ColaboradorModel.obra_id == obra_id, ColaboradorModel.funcao_chave.is_not(None)).group_by(ColaboradorModel.funcao_chave)).all())
+    nomes = dict(s.execute(select(ColaboradorModel.funcao_chave, sqlfunc.min(ColaboradorModel.funcao)).where(
+        ColaboradorModel.obra_id == obra_id, ColaboradorModel.funcao_chave.is_not(None)).group_by(ColaboradorModel.funcao_chave)).all())
+    for k, nome in nomes.items():
+        out[k] = FuncaoContratacao(k, nome, None, contagem.get(k, 0), False)
+    for d in depara(s, obra_id).values():
+        out[d.funcao_chave] = FuncaoContratacao(d.funcao_chave, d.funcao, None if d.ignorar else d.recurso,
+                                                contagem.get(d.funcao_chave, 0), d.criada_na_obra)
+    return dict(sorted(out.items(), key=lambda kv: kv[1].funcao))
+
+
+def funcao_padronizada(s: Session, obra_id: int, funcao: str | None) -> FuncaoContratacao | None:
+    """A função escrita precisa estar na lista da obra; devolve o nome padronizado (None se vazio)."""
+    from app.modules.efetivo.domain.efetivo import chave_texto
+    from app.shared.errors import DomainError
+
+    if not (funcao or "").strip():
+        return None
+    f = funcoes_de_contratacao(s, obra_id).get(chave_texto(funcao))
+    if f is None:
+        raise DomainError(f"a função “{funcao.strip()}” não está cadastrada: crie em De-para de funções", "funcao")
+    return f

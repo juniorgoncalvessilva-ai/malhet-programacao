@@ -84,9 +84,11 @@ export function LinhaProcesso({ p, podeEditar, onAbrirFicha }: { p: ProcessoMobi
               {aberta && <span className="text-[12px] text-m-text-secondary">em <b>{p.etapa_rotulo}</b> há {fmt(p.dias_etapa_atual ?? 0, 1)} d</span>}
               {p.atrasos.length > 0 && aberta && <Pilula tom="atencao">fora da meta</Pilula>}
               {p.atrasado_para_obra && <Pilula tom="perigo">obra precisava em {dataBR(p.necessario_em)}</Pilula>}
+              {p.treino.dias != null && <Pilula tom={p.treino.previsto_dias && p.treino.dias > p.treino.previsto_dias ? 'atencao' : 'neutro'} ponto={false}>
+                treinamento {fmt(p.treino.dias, 1)} d{p.treino.previsto_dias ? ` / ${fmt(p.treino.previsto_dias, 1)} d contrato` : ''}{p.treino.horas ? ` · ${fmt(p.treino.horas, 1)} h${p.treino.previsto_horas ? ` de ${fmt(p.treino.previsto_horas, 1)} h` : ''}` : ''}</Pilula>}
             </div>
             <div className="text-[12px] text-m-text-muted">
-              {[p.funcao, p.empresa, p.requisicao && `req. ${p.requisicao}`, `${fmt(p.dias_total, 1)} d no total`, p.necessario_em && !p.atrasado_para_obra && `precisa em ${dataBR(p.necessario_em)}`]
+              {[p.funcao, p.empresa, p.vaga_codigo ? `vaga ${p.vaga_codigo}` : p.requisicao && `req. ${p.requisicao}`, `${fmt(p.dias_total, 1)} d no total`, p.necessario_em && !p.atrasado_para_obra && `precisa em ${dataBR(p.necessario_em)}`]
                 .filter(Boolean).join(' · ')}
               {p.status === 'DESISTENCIA' && p.motivo_desistencia && ` · desistiu: ${p.motivo_desistencia}`}
             </div>

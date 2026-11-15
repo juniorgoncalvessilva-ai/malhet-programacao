@@ -136,7 +136,7 @@ def resumo(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     ult = s.scalar(select(ImportacaoEfetivoModel).where(ImportacaoEfetivoModel.obra_id == c.obra_id)
                    .order_by(ImportacaoEfetivoModel.id.desc()).limit(1))
     desm_em_equipe = [m.nome for m in cs if m.cracha in membro and not Situacao(m.situacao).ativo]
-    funcoes_sem = {m.funcao_chave for m in ativos if m.funcao_chave and m.funcao_chave not in dp}
+    funcoes_sem = {m.funcao_chave for m in ativos if m.funcao_chave and not (m.funcao_chave in dp and (dp[m.funcao_chave].recurso or dp[m.funcao_chave].ignorar))}
     return {
         "total": len(cs), "por_situacao": por_sit,
         "por_empresa": {e: sum(1 for m in ativos if m.empresa == e) for e in sorted({m.empresa for m in ativos})},
@@ -456,7 +456,8 @@ def funcoes(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     for k, g in grupos.items():
         d = dp.get(k)
         out.append({"funcao_chave": k, **g, "recurso": d.recurso if d else None, "ignorar": d.ignorar if d else False,
-                    "definido": d is not None, "sugestao": sugerir_recurso(g["funcao"], recursos)})
+                    "definido": bool(d and (d.recurso or d.ignorar)), "criada_na_obra": bool(d and d.criada_na_obra),
+                    "sugestao": sugerir_recurso(g["funcao"], recursos)})
     out.sort(key=lambda x: (x["definido"], -x["ativos"], x["funcao"]))
     return {"recursos_cpu": recursos, "funcoes": out}
 
@@ -481,9 +482,12 @@ def salvar_funcoes(d: DeParaIn, s: Session = Depends(get_session), c: ContextoOb
             continue
         rec = " ".join((it.recurso or "").split()) or None
         m = dp.get(k)
-        if rec is None and not it.ignorar:  # limpar o de-para
+        if rec is None and not it.ignorar:  # limpar o de-para (a função criada na obra continua na lista)
             if m is not None:
-                s.delete(m)
+                if m.criada_na_obra:
+                    m.recurso, m.ignorar, m.atualizado_por = None, False, c.usuario.id
+                else:
+                    s.delete(m)
                 n += 1
             continue
         if m is None:
@@ -503,6 +507,57 @@ def aplicar_sugestoes(s: Session = Depends(get_session), c: ContextoObra = Depen
     itens = [DeParaItem(funcao=f["funcao"], recurso=f["sugestao"]) for f in lista if not f["definido"] and f["sugestao"]]
     salvar_funcoes(DeParaIn(itens=itens), s, c)
     return {"aplicadas": len(itens)}
+
+
+class NovaFuncaoIn(BaseModel):
+    funcao: str = Field(min_length=3, max_length=120)
+    recurso: str | None = Field(None, max_length=120)
+
+
+@router.get("/funcoes/lista")
+def lista_funcoes(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Funções de contratação da obra (spec 089) para os formulários: vaga, nova aquisição, ficha."""
+    from app.modules.efetivo.infra.gateway import funcoes_de_contratacao
+
+    return [f.__dict__ for f in funcoes_de_contratacao(s, c.obra_id).values()]
+
+
+@router.post("/funcoes/nova", status_code=201)
+def nova_funcao(d: NovaFuncaoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Cria uma função de contratação padronizada. O de-para com a CPU pode ser feito depois."""
+    from app.modules.efetivo.infra.gateway import funcoes_de_contratacao
+
+    nome = " ".join(d.funcao.split()).upper()
+    k = chave_texto(nome)
+    existente = funcoes_de_contratacao(s, c.obra_id).get(k)
+    if existente is not None:
+        raise DomainError(f"a função {existente.funcao} já existe", "funcao")
+    rec = " ".join((d.recurso or "").split()) or None
+    m = DeParaFuncaoModel(obra_id=c.obra_id, funcao_chave=k, funcao=nome[:120], recurso=rec[:120] if rec else None,
+                          ignorar=False, criada_na_obra=True, atualizado_por=c.usuario.id)
+    s.add(m)
+    s.flush()
+    return {"funcao_chave": k, "funcao": m.funcao, "recurso": m.recurso, "pessoas": 0, "criada_na_obra": True}
+
+
+@router.delete("/funcoes/{funcao_chave}", status_code=204)
+def excluir_funcao(funcao_chave: str, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Só a função criada na obra e sem uso (pessoas, vagas ou processos de mobilização)."""
+    from app.modules.mobilizacao.infra.models import ProcessoMobilizacaoModel, VagaModel
+
+    m = s.scalar(select(DeParaFuncaoModel).where(DeParaFuncaoModel.obra_id == c.obra_id, DeParaFuncaoModel.funcao_chave == funcao_chave))
+    if m is None or not m.criada_na_obra:
+        raise DomainError("só a função criada na obra pode ser excluída (as do DP saem da planilha)")
+    usos = [(ColaboradorModel, ColaboradorModel.funcao_chave, "pessoa(s)"), (VagaModel, VagaModel.funcao_chave, "vaga(s)"),
+            (ProcessoMobilizacaoModel, ProcessoMobilizacaoModel.funcao_chave, "processo(s) de mobilização")]
+    em_uso = []
+    for modelo, col, rot in usos:
+        n = s.scalar(select(func.count()).select_from(modelo).where(modelo.obra_id == c.obra_id, col == funcao_chave))
+        if n:
+            em_uso.append(f"{n} {rot}")
+    if em_uso:
+        raise DomainError(f"{m.funcao} está em uso: {', '.join(em_uso)}")
+    s.delete(m)
 
 
 # ---- organograma ---------------------------------------------------------------------------------------

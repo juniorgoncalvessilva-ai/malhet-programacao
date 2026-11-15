@@ -10,6 +10,7 @@ import { Carregando } from '@/components/Obra/Esqueleto';
 import { Botao, Campo, Erro, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
 import { FormAso, FormTurma } from '@/components/Treinamentos/Formularios';
 import { EtapasProcesso } from '@/components/Efetivo/Mobilizacao';
+import { SeletorFuncao } from '@/components/Efetivo/SeletorFuncao';
 import { useMovimentosColaborador } from '@/components/Efetivo/useMovimentos';
 import { useFicha, usePessoaSeguranca, useProcessos, useTreinamentos } from '@/hooks/programacao/treinamentos';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -133,7 +134,7 @@ export function FichaColaborador({ id, onFechar, onCriado }: { id: number | null
               <Campo rotulo="Empresa" value={String(f.empresa)} onChange={set('empresa')} />
               <Campo rotulo="Matrícula" value={String(f.matricula)} onChange={set('matricula')} />
               <Campo rotulo="Crachá do Simova" placeholder={f.empresa === 'Própria' ? 'vazio = matrícula' : ''} value={String(f.cracha)} onChange={set('cracha')} />
-              <Campo rotulo="Função" value={String(f.funcao)} onChange={set('funcao')} />
+              <SeletorFuncao valor={String(f.funcao)} onTrocar={(v) => setF((x) => ({ ...x, funcao: v }))} />
               <Campo rotulo="DP" value={String(f.dp)} onChange={set('dp')} />
               <Selecao rotulo="Tipo de MO" value={String(f.tipo_mo)} onChange={set('tipo_mo')}>
                 <option value="">—</option><option>MOD</option><option>MOI</option>

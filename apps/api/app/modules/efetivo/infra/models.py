@@ -96,6 +96,8 @@ class DeParaFuncaoModel(Base):
     recurso: Mapped[str | None] = mapped_column(String(120))  # nome da função na CPU (Pedreiro, Servente…)
     ignorar: Mapped[bool] = mapped_column(Boolean, default=False)
     atualizado_por: Mapped[str | None] = mapped_column(String(80))
+    # função de contratação criada pela obra (spec 089): vale para vagas/mobilização/cadastro antes do de-para
+    criada_na_obra: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class SetorObraModel(Base):

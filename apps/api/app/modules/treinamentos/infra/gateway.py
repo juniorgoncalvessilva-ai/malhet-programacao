@@ -78,3 +78,27 @@ class AptidaoGateway:
             out[cid] = AptidaoInfo(cid, aptidao(asos.get(cid, []), regs.get(cid, []), ex, hoje), tuple(ex),
                                    bool(self.por_funcao.get(fch or "")), self.nomes)
         return out
+
+
+def cargas_registradas(s: Session, obra_id: int, colaboradores: list[int]) -> dict[int, list[tuple[date, float]]]:
+    """Treinamentos feitos por pessoa com a carga horária do catálogo (para medir as horas gastas — spec 089)."""
+    out: dict[int, list[tuple[date, float]]] = {}
+    if not colaboradores:
+        return out
+    q = (select(ColaboradorTreinamentoModel.colaborador_id, ColaboradorTreinamentoModel.realizado_em, TreinamentoModel.carga_horaria)
+         .join(TreinamentoModel, TreinamentoModel.id == ColaboradorTreinamentoModel.treinamento_id)
+         .where(ColaboradorTreinamentoModel.obra_id == obra_id, ColaboradorTreinamentoModel.colaborador_id.in_(colaboradores)))
+    for cid, quando, carga in s.execute(q):
+        out.setdefault(cid, []).append((quando, float(carga or 0)))
+    return out
+
+
+def horas_exigidas(s: Session, obra_id: int) -> dict[str, float]:
+    """Soma da carga horária dos treinamentos exigidos por função (sugestão para o previsto em contrato)."""
+    g = AptidaoGateway(s, obra_id)
+    todos = sum(t.carga_horaria or 0 for t in g.treinamentos if t.todos)
+    out = {}
+    for fch, ids in g.por_funcao.items():
+        out[fch] = todos + sum(t.carga_horaria or 0 for t in g.treinamentos if t.id in ids and not t.todos)
+    out[""] = todos
+    return out
