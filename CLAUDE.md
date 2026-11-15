@@ -189,6 +189,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Ícones/splash em `apps/mobile/assets` e `apps/mobile/loja`; `allowBackup=false`; app nativo sem cadastro aberto
   (`emAppNativo` esconde "Criar conta"). Política pública `/[locale]/privacidade` (contato = `NEXT_PUBLIC_CONTATO_PRIVACIDADE`,
   variável `CONTATO_PRIVACIDADE` do repositório) — ao coletar dado novo, atualize a política e a Data safety.
+- Página principal pública `/` (spec 092, `components/Marca/Landing.tsx`): a história da marca em seis atos (fonte: doc
+  "Malhet — a história da marca"; voz direta, sem número não confirmado, IA nunca como manchete). Pedra bruta → pedra
+  cúbica em canvas (`components/Marca/PedraCubica.tsx`). Login/cadastro na mesma linguagem (`Malhet/TelaAuth.tsx`).
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a
