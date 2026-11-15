@@ -6,7 +6,6 @@
  */
 
 import { type IconType } from "react-icons";
-import { FaGithub, FaLinkedin, FaTwitter, FaInstagram, FaYoutube, FaDiscord } from "react-icons/fa";
 
 // Tipos TypeScript para configuração
 export interface SocialLink {
@@ -177,19 +176,19 @@ export const appConfig: AppConfig = {
   app: {
     name: "Malhet",
     version: "1.2.1",
-    description: "Malhet · Programação diária por capacidade, integrada ao Simova",
-    tagline: "Dashboard Admin Moderno com Next.js",
+    description: "Malhet · Gestão da execução de obras",
+    tagline: "O que foi decidido, fica.",
     url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     locale: "pt-BR",
     timezone: "America/Sao_Paulo"
   },
 
   company: {
-    name: "AI Coders",
-    legalName: "AI Coders Technology Solutions",
-    description: "Soluções tecnológicas inovadoras para empresas modernas",
-    tagline: "Tecnologia que transforma negócios",
-    founded: "2024",
+    name: "Malhet",
+    legalName: "Malhet",
+    description: "Gestão da execução de obras: o que acontece na obra, quem decidiu e quanto custou.",
+    tagline: "O que foi decidido, fica.",
+    founded: "2026",
     address: {
       street: "Rua das Inovações, 123",
       city: "São Paulo",
@@ -203,7 +202,7 @@ export const appConfig: AppConfig = {
     main: "/images/logo/logo.svg",
     dark: "/images/logo/logo-dark.svg",
     icon: "/images/logo/logo-icon.svg",
-    favicon: "/favicon.ico",
+    favicon: "/brand/favicon.svg",
     sizes: {
       small: "/images/logo/logo-icon.svg",
       medium: "/images/logo/logo.svg",
@@ -211,55 +210,12 @@ export const appConfig: AppConfig = {
     }
   },
 
-  social: [
-    {
-      name: "GitHub",
-      url: "https://github.com/ai-coders",
-      icon: FaGithub,
-      color: "#181717",
-      username: "@ai-coders"
-    },
-    {
-      name: "LinkedIn",
-      url: "https://linkedin.com/company/ai-coders",
-      icon: FaLinkedin,
-      color: "#0A66C2",
-      username: "AI Coders"
-    },
-    {
-      name: "Twitter",
-      url: "https://twitter.com/ai_coders",
-      icon: FaTwitter,
-      color: "#1DA1F2",
-      username: "@ai_coders"
-    },
-    {
-      name: "Instagram",
-      url: "https://instagram.com/ai.coders",
-      icon: FaInstagram,
-      color: "#E4405F",
-      username: "@ai.coders"
-    },
-    {
-      name: "YouTube",
-      url: "https://youtube.com/@ai-coders",
-      icon: FaYoutube,
-      color: "#FF0000",
-      username: "AI Coders"
-    },
-    {
-      name: "Discord",
-      url: "https://discord.gg/ai-coders",
-      icon: FaDiscord,
-      color: "#5865F2",
-      username: "AI Coders Community"
-    }
-  ],
+  social: [],
 
   contact: {
-    email: "contato@ai-coders.com.br",
-    phone: "+55 (11) 99999-9999",
-    website: "https://ai-coders.com.br"
+    email: "",
+    phone: "",
+    website: "https://malhet.com"
   },
 
   theme: {
@@ -285,22 +241,9 @@ export const appConfig: AppConfig = {
   },
 
   seo: {
-    title: "AI Coders - Starter Kit | Dashboard Admin Moderno",
-    description: "Template moderno e rico em recursos para dashboard admin em Next.js com autenticação Clerk, internacionalização e componentes de UI elegantes.",
-    keywords: [
-      "nextjs",
-      "dashboard",
-      "admin",
-      "template",
-      "typescript",
-      "tailwind",
-      "clerk",
-      "i18n",
-      "zod",
-      "react-hook-form",
-      "brasil",
-      "starter-kit"
-    ],
+    title: "Malhet · Gestão da execução de obras",
+    description: "O Malhet registra o que acontece na obra, quem decidiu e quanto custou, para que nenhuma decisão se perca.",
+    keywords: ["gestão de obras", "programação de obra", "RDO", "PPC", "restrições", "efetivo", "segurança do trabalho", "Malhet"],
     ogImage: "/images/og-image.png",
     twitterCard: "summary_large_image"
   },
@@ -342,11 +285,11 @@ export const appConfig: AppConfig = {
 
   urls: {
     docs: "/docs",
-    support: "mailto:suporte@ai-coders.com.br",
-    privacy: "/privacy",
-    terms: "/terms",
-    blog: "https://blog.ai-coders.com.br",
-    status: "https://status.ai-coders.com.br"
+    support: "/privacidade",
+    privacy: "/privacidade",
+    terms: "/privacidade",
+    blog: "/",
+    status: "/"
   },
 
   development: {

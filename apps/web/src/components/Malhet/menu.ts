@@ -90,4 +90,3 @@ export function menuDoPerfil(grupos: GrupoMenu[], ordem: string[] | null): Grupo
     .sort((a, b) => Math.min(...a.itens.map((i) => pos(i.url)), 1e6) - Math.min(...b.itens.map((i) => pos(i.url)), 1e6));
 }
 
-export const APP_NOME = 'Programação';

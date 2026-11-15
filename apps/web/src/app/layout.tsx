@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     images: seoConfig.ogImage ? [seoConfig.ogImage] : undefined,
   },
   manifest: "/manifest.webmanifest",
-  icons: { apple: "/brand/apple-touch-icon.png", icon: "/brand/icone-192.png" },
+  icons: { apple: "/brand/apple-touch-icon.png", icon: [{ url: "/brand/favicon.svg", type: "image/svg+xml" }, { url: "/brand/icone-192.png", sizes: "192x192" }] },
   appleWebApp: { capable: true, title: "Malhet", statusBarStyle: "default" },
   twitter: {
     card: seoConfig.twitterCard || 'summary_large_image',

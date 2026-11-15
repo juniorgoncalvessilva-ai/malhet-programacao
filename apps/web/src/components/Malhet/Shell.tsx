@@ -1,6 +1,6 @@
 'use client';
 
-import { TituloAba } from '@/components/Obra/LogosObra';
+import { TituloAba, useLogo, useMarcaObra } from '@/components/Obra/LogosObra';
 import { SincronizarDados } from '@/lib/tempo-real';
 import { SincronizarFila } from '@/lib/offline/SincronizarFila';
 
@@ -14,14 +14,38 @@ import { Link, usePathname } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { cn } from '@/lib/utils';
 import { useObra } from '@/lib/obra/ObraProvider';
-import { APP_NOME, MENU, menuDoPerfil, type GrupoMenu } from './menu';
+import { MENU, menuDoPerfil, type GrupoMenu } from './menu';
 
-function Logo() {
+function Logo({ altura = 22 }: { altura?: number }) {
   return (
     <>
-      <img src="/brand/malhet.svg" alt="Malhet" className="h-[22px] w-auto dark:hidden" />
-      <img src="/brand/malhet-escuro.svg" alt="Malhet" className="hidden h-[22px] w-auto dark:block" />
+      <img src="/brand/malhet.svg" alt="Malhet" style={{ height: altura }} className="w-auto dark:hidden" />
+      <img src="/brand/malhet-escuro.svg" alt="Malhet" style={{ height: altura }} className="hidden w-auto dark:block" />
     </>
+  );
+}
+
+const iniciais = (nome: string) => nome.split(/\s+/).filter((p) => p.length > 2 || /^[A-Z]{2,}$/.test(p)).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || nome.slice(0, 2).toUpperCase();
+
+/**
+ * Topo do menu (spec 093): a empresa contratada da obra em destaque — a logo dela (Marca da obra) e o nome —, para a
+ * equipe sentir que o sistema é dela. Sem marca cadastrada: as iniciais na cor da obra; sem obra: a logo do Malhet.
+ */
+function MarcaContratada() {
+  const { obra } = useObra();
+  const m = useMarcaObra();
+  const logo = useLogo('contratada', m.data?.contratada, m.data?.versao);
+  const nome = m.data?.nome_contratada?.trim();
+  if (!obra || (!nome && !m.data?.contratada)) return <div className="flex h-10 items-center px-2.5"><Logo /></div>;
+  return (
+    <div className="flex flex-col gap-2 px-2.5">
+      {logo.data
+        ? <img src={logo.data} alt={nome ? `Logo da ${nome}` : 'Logo da contratada'} className="max-h-14 w-auto max-w-[196px] self-start object-contain" />
+        : <>
+            <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-m-accent-strong text-[15px] font-extrabold tracking-[0.02em] text-m-on-accent" aria-hidden="true">{iniciais(nome ?? 'Obra')}</span>
+            {nome && <span className="text-[17px] font-bold leading-[21px] tracking-[-0.2px] text-m-text-primary">{nome}</span>}
+          </>}
+    </div>
   );
 }
 
@@ -92,11 +116,7 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
   const menu = useMenuVisivel();
   return (
     <div className="flex h-full flex-col gap-[22px] py-5 pl-6 pr-3">
-      <div className="flex h-8 items-center gap-2.5 px-2.5">
-        <Logo />
-        <span className="h-[18px] w-px bg-m-stroke" />
-        <span className="text-sm font-medium text-m-text-secondary">{APP_NOME}</span>
-      </div>
+      <MarcaContratada />
       <SeletorObra />
       <nav className="flex flex-col gap-[22px]" aria-label="Menu do app">
         {menu.map((g) => (
@@ -128,9 +148,9 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
           </div>
         ))}
       </nav>
-      <span className="mt-auto flex h-9 items-center gap-2.5 px-2.5 text-sm text-m-text-secondary">
-        <LayoutGrid size={18} strokeWidth={1.75} aria-hidden="true" />
-        Todos os apps Malhet
+      <span className="mt-auto flex items-center gap-2 px-2.5 pt-2 text-[11px] text-m-text-muted">
+        <LayoutGrid size={14} strokeWidth={1.75} aria-hidden="true" />
+        com <span className="opacity-80"><Logo altura={13} /></span>
       </span>
     </div>
   );
@@ -212,6 +232,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [gaveta, setGaveta] = useState(false);
   const atual = MENU.flatMap((g) => g.itens).find((i) => i.url === itemAtivo(pathname));
   const { obra, carregando, superadmin } = useObra();
+  const marca = useMarcaObra();
+  const nomeEmpresa = obra ? marca.data?.nome_contratada?.trim() : null;
   const telaAdmin = pathname?.startsWith('/app/admin');
   return (
     <div className="min-h-screen bg-m-surface-base text-m-text-primary">
@@ -235,7 +257,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" aria-label="Abrir menu" onClick={() => setGaveta(true)} className="-ml-1 p-1 text-m-text-secondary lg:hidden"><MenuIcon size={20} /></button>
             <nav aria-label="Trilha" className="truncate text-[13px] text-m-text-muted">
-              Malhet <span className="text-m-stroke-strong">/</span> {APP_NOME}
+              {nomeEmpresa || 'Malhet'}
               {atual && <> <span className="text-m-stroke-strong">/</span> <b className="font-semibold text-m-text-primary">{atual.titulo}</b></>}
             </nav>
           </div>

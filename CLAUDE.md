@@ -192,6 +192,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Página principal pública `/` (spec 092, `components/Marca/Landing.tsx`): a história da marca em seis atos (fonte: doc
   "Malhet — a história da marca"; voz direta, sem número não confirmado, IA nunca como manchete). Pedra bruta → pedra
   cúbica em canvas (`components/Marca/PedraCubica.tsx`). Login/cadastro na mesma linguagem (`Malhet/TelaAuth.tsx`).
+- Dentro do app a empresa é a contratada (spec 093): topo do menu = logo/nome da contratada (`MarcaContratada` no
+  `Shell.tsx`, Marca da obra), trilha "Contratada / tela", Malhet só como "com Malhet" no pé. Nada do kit no título/ícone
+  (`config/app.ts`, `src/app/favicon.ico`, `public/brand/favicon.svg`).
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a
