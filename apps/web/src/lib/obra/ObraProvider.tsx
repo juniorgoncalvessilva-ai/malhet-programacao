@@ -21,6 +21,8 @@ interface ObraCtx {
   /** Página liberada para a pessoa nesta obra (url do menu). Sem lista = todas as do papel; a programação vigente fica
    * sempre aberta e o admin nunca perde os acessos. */
   podeVer: (url: string) => boolean;
+  /** Spec 090: telas do menu do computador do perfil nesta obra, na ordem do menu (null = ainda carregando / super admin). */
+  menuWeb: string[] | null;
   /** Tela do app de campo liberada (spec 066): pelo papel e, se houver lista, só as marcadas; Início e Programação sempre. */
   podeVerMobile: (url: string) => boolean;
   /** Spec 077: super admin "testando como" outro perfil — só a tela muda; o servidor continua tratando como super admin. */
@@ -75,11 +77,19 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
   }, [qc]);
 
   const obraReal = lista.data?.find((o) => o.id === obraId) ?? null;
+  // menu do computador de cada perfil nesta obra (spec 090); guardado no aparelho para a barra não piscar
+  const menus = useQuery({
+    queryKey: ['menu-web', obraId],
+    queryFn: async () => guardar(`menu-web:${obraId}`, await apiFetch<{ perfis: Record<string, { paginas: string[] }> }>('/menu-web', getToken, { headers: { 'X-Obra-Id': String(obraId) } })),
+    enabled: !!usuario && !!obraId,
+    initialData: () => guardado<{ perfis: Record<string, { paginas: string[] }> }>(`menu-web:${obraId}`), initialDataUpdatedAt: 0,
+  });
   const real = !!eu.data?.superadmin;
   const teste = real && simulando ? simulando : null;
   // testando como outro perfil: a obra "vira" daquele papel, sem listas de páginas — o que o perfil vê por padrão
   const obra = obraReal && teste ? { ...obraReal, papel: teste, paginas: null, paginas_mobile: null } : obraReal;
   const sa = real && !teste;
+  const menuWeb = sa || !obra ? null : menus.data?.perfis[obra.papel]?.paginas ?? null;
   const valor = useMemo<ObraCtx>(() => ({
     obras: lista.data ?? [],
     obra,
@@ -92,8 +102,10 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
     escolher,
     pode: (m) => !!obra && NIVEL[obra.papel] >= NIVEL[m],
     editaSsma: !!obra && ['seguranca', 'planejador', 'admin'].includes(obra.papel),
-    podeVer: (url) => sa || !obra?.paginas?.length || url === '/app/vigente'
-      || (obra.papel === 'admin' && url === '/app/acessos') || obra.paginas.includes(url),
+    menuWeb,
+    // perfil (spec 090) e, por cima, a lista da pessoa (spec 033); a vigente fica sempre e o admin nunca perde Acessos/Menus
+    podeVer: (url) => sa || url === '/app/vigente' || (obra?.papel === 'admin' && (url === '/app/acessos' || url === '/app/menu-celular'))
+      || ((!menuWeb || menuWeb.includes(url)) && (!obra?.paginas?.length || obra.paginas.includes(url))),
     podeVerMobile: (url) => {
       const item = MENU_MOBILE.find((i) => i.url === url);
       if (!obra || !item) return !!item || sa;
@@ -101,7 +113,7 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
       const peloPapel = !item.minimo || NIVEL[obra.papel] >= NIVEL[item.minimo] || (!!item.seguranca && obra.papel === 'seguranca');
       return peloPapel && (!obra.paginas_mobile?.length || obra.paginas_mobile.includes(url));
     },
-  }), [lista.data, lista.isLoading, eu.isLoading, obra, escolher, sa, real, teste, simular]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [lista.data, lista.isLoading, eu.isLoading, obra, escolher, sa, real, teste, simular, menuWeb]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useCorDaObra(obra?.cor ?? null);
   // key: trocar de obra remonta as telas (nenhum estado/consulta da obra anterior sobrevive)

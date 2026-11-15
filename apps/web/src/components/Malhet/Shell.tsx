@@ -14,7 +14,7 @@ import { Link, usePathname } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { cn } from '@/lib/utils';
 import { useObra } from '@/lib/obra/ObraProvider';
-import { APP_NOME, MENU, type GrupoMenu } from './menu';
+import { APP_NOME, MENU, menuDoPerfil, type GrupoMenu } from './menu';
 
 function Logo() {
   return (
@@ -82,8 +82,8 @@ function SeletorObra() {
 }
 
 function useMenuVisivel(): GrupoMenu[] {
-  const { pode, superadmin, editaSsma, podeVer } = useObra();
-  return MENU.map((g) => ({ ...g, itens: g.itens.filter((i) => (i.superadmin ? superadmin : i.ssma ? editaSsma : !i.minimo || pode(i.minimo)) && podeVer(i.url)) }))
+  const { pode, superadmin, editaSsma, podeVer, menuWeb } = useObra();
+  return menuDoPerfil(MENU, menuWeb).map((g) => ({ ...g, itens: g.itens.filter((i) => (i.superadmin ? superadmin : i.ssma ? editaSsma : !i.minimo || pode(i.minimo)) && podeVer(i.url)) }))
     .filter((g) => g.itens.length);
 }
 

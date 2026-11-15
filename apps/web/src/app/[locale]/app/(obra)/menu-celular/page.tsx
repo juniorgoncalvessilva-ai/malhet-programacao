@@ -7,6 +7,8 @@ import { PAPEL_ROTULO } from '@/components/Mobile/BarraCampo';
 import { MENU_MOBILE, type ItemMobile } from '@/components/Mobile/menu';
 import { Chip, Botao, Cabecalho, Painel } from '@/components/Obra/ui';
 import { EditorMenu } from '@/components/Perfil/EditorMenu';
+import { MenuComputador } from '@/components/Perfil/MenuComputador';
+import { Abas } from '@/components/Obra/Abas';
 import { useApi } from '@/hooks/programacao/useApi';
 import type { PapelObra } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
@@ -17,8 +19,22 @@ const PAPEIS: PapelObra[] = ['encarregado', 'seguranca', 'planejador', 'admin', 
 /** Telas que o perfil vê pelo papel (sem a lista por pessoa de Acessos). */
 const doPapel = (i: ItemMobile, p: PapelObra) => !!i.fixo || !i.minimo || NIVEL[p] >= NIVEL[i.minimo] || (!!i.seguranca && p === 'seguranca');
 
+/** Menus por perfil: computador (spec 090 — telas da barra lateral de cada papel) e celular (spec 075). */
+export default function MenusPorPerfilPage() {
+  const { pode } = useObra();
+  const [aba, setAba] = useState<'web' | 'celular'>('web');
+  if (!pode('admin')) return <p className="text-sm text-m-text-muted">Só o administrador da obra define os menus por perfil.</p>;
+  return (
+    <>
+      <Cabecalho eyebrow="Administrar · menus" titulo="Menus por perfil" />
+      <Abas rotulo="Menus" ativa={aba} onTrocar={setAba} abas={[{ chave: 'web', titulo: 'Computador (barra lateral)' }, { chave: 'celular', titulo: 'Celular' }]} />
+      {aba === 'web' ? <MenuComputador /> : <MenuCelular />}
+    </>
+  );
+}
+
 /** Menu do celular por perfil (spec 075): o admin escolhe a barra padrão de cada papel nesta obra; cada pessoa ainda pode ajustar a sua. */
-export default function MenuCelularPage() {
+function MenuCelular() {
   const api = useApi();
   const qc = useQueryClient();
   const { obra, pode, superadminReal, simular } = useObra();
@@ -28,10 +44,9 @@ export default function MenuCelularPage() {
   const perfil = q.data?.perfis[papel];
   useEffect(() => { if (perfil) setM({ barra: perfil.barra, destaque: perfil.destaque }); }, [papel, q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const recarregar = () => qc.invalidateQueries({ queryKey: ['menu-mobile', obra?.id] });
-  if (!pode('admin')) return <p className="text-sm text-m-text-muted">Só o administrador da obra define o menu por perfil.</p>;
+  if (!pode('admin')) return null;
   return (
     <>
-      <Cabecalho eyebrow="Administrar · celular" titulo="Menu do celular por perfil" />
       <div className="flex flex-wrap gap-1.5">{PAPEIS.map((p) => <Chip key={p} ativo={papel === p} onClick={() => setPapel(p)}>{PAPEL_ROTULO[p]}{q.data?.perfis[p]?.personalizado ? ' •' : ''}</Chip>)}</div>
       <div className="grid gap-5 lg:grid-cols-[520px_1fr]">
         <Painel titulo={`Barra padrão — ${PAPEL_ROTULO[papel]}`} subtitulo={perfil?.personalizado ? 'definida para esta obra' : 'padrão do sistema'}>

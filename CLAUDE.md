@@ -179,6 +179,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Planejamento, avisam a gestão e alimentam o processo (`vaga_id`; a Solicitação conta desde a abertura). Configurações:
   treinamento previsto em contrato por função (`mobilizacao_treinamento_previsto`, dias vira a meta de Treinamentos;
   horas × carga horária registrada, `cargas_registradas`). Abas Vagas | Processos | Métricas | Configurações.
+- Menu do computador por perfil (spec 090): `menu_web_perfil` (admin da obra) → `PADRAO_WEB` (`perfil/domain/menu_web.py`,
+  `TELAS_WEB` = url → exigência do papel); fora do menu do perfil a tela não aparece e o endereço volta à vigente
+  (`useObra().menuWeb` em `podeVer`). Barra lateral em grupos Planejamento · Campo e qualidade · Segurança (SSMA) · Efetivo
+  e mobilização · Cadastros · Administrar, ordenada pelo perfil (`menuDoPerfil`). Tela nova no menu = url em `menu.ts` **e**
+  em `TELAS_WEB` (teste confere). Editor: Administrar › Menus por perfil (aba Computador, `MenuComputador.tsx`).
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

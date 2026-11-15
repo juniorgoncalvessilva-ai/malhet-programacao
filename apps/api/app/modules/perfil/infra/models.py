@@ -41,3 +41,15 @@ class MenuPessoalModel(Base):
     usuario_id: Mapped[str] = mapped_column(String(80), index=True)
     menu: Mapped[dict] = mapped_column(JSONB)
     atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MenuWebPerfilModel(Base):
+    """Telas do menu do computador (barra lateral) de um perfil na obra, definidas pelo admin (spec 090)."""
+    __tablename__ = "menu_web_perfil"
+    __table_args__ = (UniqueConstraint("obra_id", "papel", name="uq_menu_web_perfil"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    papel: Mapped[str] = mapped_column(String(15))
+    paginas: Mapped[list] = mapped_column(JSONB)  # urls na ordem do menu
+    atualizado_por: Mapped[str | None] = mapped_column(String(150))
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -10,7 +10,8 @@ from app.core.auth import ContextoObra, UsuarioAtual, administrar, ler, usuario_
 from app.core.db import get_session
 from app.modules.obras.domain.obra import PapelObra
 from app.modules.perfil.domain.menu import MAX_BARRA, PADRAO, TELAS, validar_menu
-from app.modules.perfil.infra.models import MenuPerfilModel, MenuPessoalModel, PerfilUsuarioModel
+from app.modules.perfil.domain.menu_web import PADRAO_WEB, TELAS_WEB, permitida, validar_menu_web
+from app.modules.perfil.infra.models import MenuPerfilModel, MenuPessoalModel, MenuWebPerfilModel, PerfilUsuarioModel
 from app.shared.errors import DomainError, NotFoundError
 
 router = APIRouter(tags=["perfil e menu do celular"])
@@ -158,3 +159,44 @@ def padrao_do_sistema(papel: str, s: Session = Depends(get_session), c: Contexto
         s.delete(m)
         s.flush()
     return _perfis(s, c.obra_id)
+
+
+# ---- menu do computador por perfil (spec 090) ----
+def _perfis_web(s: Session, obra_id: int) -> dict[str, dict]:
+    salvos = {m.papel: m.paginas for m in s.scalars(select(MenuWebPerfilModel).where(MenuWebPerfilModel.obra_id == obra_id))}
+    return {p.value: {"paginas": validar_menu_web(p.value, [u for u in (salvos.get(p.value) or PADRAO_WEB[p.value])
+                                                            if u in TELAS_WEB and permitida(p.value, u)]),
+                      "personalizado": p.value in salvos,
+                      "permitidas": [u for u in TELAS_WEB if permitida(p.value, u)]} for p in PapelObra}
+
+
+@router.get("/menu-web")
+def menu_web(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """As telas da barra lateral de cada perfil nesta obra (o do perfil da obra ou o padrão do sistema)."""
+    perfis = _perfis_web(s, c.obra_id)
+    return {"meu": perfis[c.papel.value]["paginas"], "perfis": perfis}
+
+
+class MenuWebIn(BaseModel):
+    paginas: list[str]
+
+
+@router.put("/menu-web/perfis/{papel}")
+def salvar_menu_web(papel: str, d: MenuWebIn, s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    v = validar_menu_web(papel, d.paginas)
+    m = s.scalar(select(MenuWebPerfilModel).where(MenuWebPerfilModel.obra_id == c.obra_id, MenuWebPerfilModel.papel == papel))
+    if m is None:
+        m = MenuWebPerfilModel(obra_id=c.obra_id, papel=papel, paginas=v)
+        s.add(m)
+    m.paginas, m.atualizado_por = v, c.usuario.email
+    s.flush()
+    return _perfis_web(s, c.obra_id)
+
+
+@router.delete("/menu-web/perfis/{papel}")
+def menu_web_padrao(papel: str, s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    m = s.scalar(select(MenuWebPerfilModel).where(MenuWebPerfilModel.obra_id == c.obra_id, MenuWebPerfilModel.papel == papel))
+    if m is not None:
+        s.delete(m)
+        s.flush()
+    return _perfis_web(s, c.obra_id)
