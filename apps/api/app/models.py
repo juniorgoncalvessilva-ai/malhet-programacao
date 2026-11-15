@@ -26,3 +26,4 @@ from app.modules.criterios.infra import models as _criterios  # noqa: F401
 from app.modules.arquivos.infra import models as _arquivos  # noqa: F401
 from app.modules.treinamentos.infra import models as _treinamentos  # noqa: F401
 from app.modules.mobilizacao.infra import models as _mobilizacao  # noqa: F401
+from app.modules.erros.infra import models as _erros  # noqa: F401

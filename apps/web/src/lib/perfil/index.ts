@@ -10,7 +10,7 @@ import { useObra } from '@/lib/obra/ObraProvider';
 import { comCopia } from '@/lib/offline/db';
 
 /** Perfil da conta e menu do celular (specs 075 e 077). */
-export interface Perfil { usuario_id: string; email: string; superadmin: boolean; nome_exibicao: string | null; telefone: string | null; tem_avatar: boolean; avatar_versao: number }
+export interface Perfil { usuario_id: string; email: string; superadmin: boolean; nome_exibicao: string | null; telefone: string | null; tem_avatar: boolean; avatar_versao: number; tutoriais_pendentes?: string[] }
 export interface MenuConfig { barra: string[]; destaque: string | null }
 export interface RespostaMenu { meu: MenuConfig & { origem: 'pessoal' | 'perfil' | 'padrao' }; perfis: Record<PapelObra, MenuConfig & { personalizado: boolean }>; telas: string[]; max_barra: number }
 

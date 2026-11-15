@@ -64,6 +64,11 @@ export default function PrivacidadePage() {
               diagnóstico ou CID —, os treinamentos realizados e os resultados de testes de etilômetro.</li>
             <li><b>Registros de campo</b>: fotos e textos de atividades, ocorrências, restrições, auditorias e planos de ação,
               com data, hora e frente de serviço.</li>
+            <li><b>Diagnóstico de erros</b>: quando algo falha no app, ele envia à equipe Malhet a tela e a ação em que
+              falhou, a mensagem técnica, a versão, o tipo de aparelho e navegador, a obra e a conta de quem estava usando
+              (para podermos responder). Antes de guardar, e-mails, documentos, telefones e números longos (matrícula,
+              crachá) são mascarados; o que você digita nos formulários não é enviado. Se você escrever o que estava
+              fazendo, o texto vai junto.</li>
           </ul>
         </Secao>
 
@@ -79,6 +84,7 @@ export default function PrivacidadePage() {
         <Secao titulo="4. Para que usamos e com qual base legal">
           <ul className="list-disc pl-5">
             <li>Executar o contrato da obra (programação, apropriação de horas, equipes, mobilização) — art. 7º, V.</li>
+            <li>Diagnóstico de erros: corrigir falhas e manter o app funcionando — legítimo interesse, art. 7º, IX.</li>
             <li>Cumprir obrigações legais de saúde e segurança do trabalho (NR-7, NR-1 e normas de treinamento) — art. 7º, II
               e art. 11, II, “a”.</li>
             <li>Descritor facial, foto na assinatura e localização: <b>consentimento</b> específico por finalidade, que pode

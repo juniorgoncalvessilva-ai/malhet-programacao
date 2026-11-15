@@ -45,6 +45,7 @@ from app.modules.criterios.api.router import router as criterios
 from app.modules.arquivos.api.router import router as armazenamento
 from app.modules.treinamentos.api.router import router as treinamentos
 from app.modules.mobilizacao.api.router import router as mobilizacao
+from app.modules.erros.api.router import router as erros
 from app.modules.arquivos.application import fila as fila_arquivos
 import app.modules.campo.application.arquivos  # noqa: F401  (registra as fotos na fila de arquivos)
 import app.modules.ssma.application.arquivos  # noqa: F401  (registra os anexos de SSMA)
@@ -119,11 +120,42 @@ async def _http(_: Request, exc: HTTPException):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
+def _guardar_erro_do_servidor(exc: Exception, metodo: str, rota: str, obra: str | None) -> tuple[str, str]:
+    """Spec 098: a exceção não tratada vira relato (com sessão própria — a da requisição já voltou atrás)."""
+    from app.core.db import SessionLocal
+    from app.modules.erros.application.registrar import registrar, relato_do_servidor
+    from app.modules.erros.infra.obras import obra_existe
+
+    rel = relato_do_servidor(exc, metodo, rota)
+    with SessionLocal() as s:
+        registrar(s, rel, usuario_id=None, usuario_email=None, obra_id=int(obra) if obra and obra.isdigit() else None,
+                  obra_existe=obra_existe)
+        s.commit()
+    return rel.codigo, rel.id_local
+
+
+@app.exception_handler(Exception)
+async def _inesperado(request: Request, exc: Exception):
+    """Erro que ninguém previu: a equipe Malhet fica sabendo sozinha e a pessoa recebe um código para citar."""
+    from starlette.concurrency import run_in_threadpool
+
+    log.exception("Erro não tratado em %s %s", request.method, request.url.path)
+    rota = getattr(request.scope.get("route"), "path", None) or request.url.path
+    try:
+        codigo, ref = await run_in_threadpool(_guardar_erro_do_servidor, exc, request.method, rota, request.headers.get("x-obra-id"))
+    except Exception:  # guardar o relato nunca pode piorar o erro
+        log.exception("Não foi possível guardar o relato do erro")
+        codigo = ref = None
+    msg = "Algo deu errado no servidor." + (f" Já avisamos a equipe Malhet (código {codigo})." if codigo else "")
+    # erro_ref: a tela usa para a pessoa completar com "o que você fazia" (POST /erros/comentario)
+    return JSONResponse({"detail": msg, "erro_id": codigo, "erro_ref": ref}, status_code=500)
+
+
 @app.get("/health", tags=["infra"])
 def health():
     return {"status": "ok"}
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros):
     app.include_router(r, prefix="/api")

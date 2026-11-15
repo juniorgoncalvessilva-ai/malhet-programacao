@@ -8,6 +8,7 @@ import { ZustandProvider } from "@/providers/zustand-provider";
 import AnalyticsProvider from "@/providers/analytics-provider";
 import { queryClient } from '@/lib/query-client';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
+import { CapturaErros } from '@/components/Erros/Relatos';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -18,6 +19,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <ZustandProvider>
               {children}
               <ToastProvider />
+              <CapturaErros />
               {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
             </ZustandProvider>
           </ThemeProvider>

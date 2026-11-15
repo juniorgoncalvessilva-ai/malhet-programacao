@@ -10,6 +10,7 @@ from app.core.auth import ContextoObra, UsuarioAtual, administrar, ler, usuario_
 from app.core.db import get_session
 from app.modules.obras.domain.obra import PapelObra
 from app.modules.perfil.domain.menu import MAX_BARRA, PADRAO, TELAS, validar_menu
+from app.modules.perfil.domain import tutorial
 from app.modules.perfil.domain.menu_web import PADRAO_WEB, TELAS_WEB, permitida, validar_menu_web
 from app.modules.perfil.infra.models import MenuPerfilModel, MenuPessoalModel, MenuWebPerfilModel, PerfilUsuarioModel
 from app.shared.errors import DomainError, NotFoundError
@@ -21,7 +22,7 @@ AVATAR_MAX = 6 * 1024 * 1024
 def _perfil(s: Session, uid: str) -> PerfilUsuarioModel:
     p = s.get(PerfilUsuarioModel, uid)
     if p is None:
-        p = PerfilUsuarioModel(usuario_id=uid, avatar_versao=0)
+        p = PerfilUsuarioModel(usuario_id=uid, avatar_versao=0, tutoriais={})
         s.add(p)
         s.flush()
     return p
@@ -29,7 +30,8 @@ def _perfil(s: Session, uid: str) -> PerfilUsuarioModel:
 
 def _out(p: PerfilUsuarioModel, u: UsuarioAtual) -> dict:
     return {"usuario_id": u.id, "email": u.email, "superadmin": u.superadmin, "nome_exibicao": p.nome_exibicao,
-            "telefone": p.telefone, "tem_avatar": bool(p.avatar_tipo), "avatar_versao": p.avatar_versao}
+            "telefone": p.telefone, "tem_avatar": bool(p.avatar_tipo), "avatar_versao": p.avatar_versao,
+            "tutoriais_pendentes": tutorial.pendentes(p.tutoriais)}
 
 
 @router.get("/perfil")
@@ -52,6 +54,21 @@ def salvar(d: PerfilIn, s: Session = Depends(get_session), u: UsuarioAtual = Dep
     if len(tel) > 30:
         raise DomainError("telefone inválido", "telefone")
     p.nome_exibicao, p.telefone = nome or None, tel or None
+    s.flush()
+    return _out(p, u)
+
+
+class TutorialIn(BaseModel):
+    concluido: bool = False
+
+
+@router.put("/perfil/tutoriais/{chave}")
+def tutorial_visto(chave: str, d: TutorialIn, s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_atual)):
+    """Spec 097: a pessoa terminou ou pulou o tutorial — não abre mais sozinho (rever fica no menu da conta)."""
+    from datetime import datetime, timezone
+
+    p = _perfil(s, u.id)
+    p.tutoriais = tutorial.marcar(p.tutoriais, chave, d.concluido, datetime.now(timezone.utc).isoformat())
     s.flush()
     return _out(p, u)
 

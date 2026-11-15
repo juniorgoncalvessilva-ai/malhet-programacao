@@ -197,6 +197,13 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Dentro do app a empresa é a contratada (spec 093): topo do menu = logo/nome da contratada (`MarcaContratada` no
   `Shell.tsx`, Marca da obra), trilha "Contratada / tela", Malhet só como "com Malhet" no pé. Nada do kit no título/ícone
   (`config/app.ts`, `src/app/favicon.ico`, `public/brand/favicon.svg`).
+- Tutorial do primeiro acesso (spec 097): `components/Tutorial/{Tour,Tutoriais}.tsx`, alvos por `data-tour`; abre sozinho
+  uma vez por conta (computador no `Shell`, celular no `MobileShell`), conteúdo pelo papel; `perfil_usuario.tutoriais` +
+  `perfil/domain/tutorial.py::TUTORIAIS` (subir a versão = todos veem de novo); rever em menu da conta/Mais (`abrirTutorial`).
+- Relato automático de erros (spec 098, `erros/`): 5xx da API, tela quebrada (`error.tsx`), erro de script e relato manual
+  → `lib/erros/relatar.ts` (fila no aparelho, código E-XXXXXX, "contar o que fazia"); exceção não tratada da API vira relato
+  (500 com `erro_id`/`erro_ref`). Dado pessoal mascarado em `erros/domain/relato.py::limpar`. Super admin: `/app/admin/erros`
+  (grupos, resolver/voltou). Erro novo em tela nova não precisa de nada: já é capturado.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

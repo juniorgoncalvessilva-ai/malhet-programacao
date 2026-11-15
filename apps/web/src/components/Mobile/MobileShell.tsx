@@ -11,6 +11,7 @@ import { OfertaInstalar } from '@/components/Mobile/OfertaInstalar';
 import { itemMobileDe } from '@/components/Mobile/menu';
 import { BarraCampo, AvisoTeste } from '@/components/Mobile/BarraCampo';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { TutorialCelular } from '@/components/Tutorial/Tutoriais';
 
 /** Casca do app de campo: coluna de celular (até 480 px), conteúdo rolando e barra inferior fixa com alvos de 44 px+. */
 export function MobileShell({ children }: { children: ReactNode }) {
@@ -31,6 +32,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
           <SincronizarDados />
           {obra && <SincronizarPresenca />}
           {obra && <SincronizarFila />}
+          {obra && <TutorialCelular />}
           {obra ? (bloqueada ? <p className="pt-10 text-center text-sm text-m-text-muted">Tela não liberada para você nesta obra.</p> : children) : <p className="pt-10 text-center text-sm text-m-text-muted">{carregando ? 'Carregando obra…' : 'Sem acesso a nenhuma obra.'}</p>}
         </main>
         <BarraCampo pathname={pathname} />

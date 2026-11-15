@@ -1,6 +1,8 @@
 'use client';
 
-import { Bell, FlaskConical, LayoutGrid, LogOut, Settings2, X } from 'lucide-react';
+import { Bell, FlaskConical, GraduationCap, LayoutGrid, LifeBuoy, LogOut, Settings2, X } from 'lucide-react';
+import { RelatarProblema } from '@/components/Erros/Relatos';
+import { abrirTutorial } from '@/components/Tutorial/Tutoriais';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ItemMobile } from '@/components/Mobile/menu';
@@ -38,13 +40,13 @@ export function BarraCampo({ pathname }: { pathname: string }) {
   };
   return (
     <>
-      <nav aria-label="Navegação do campo" className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[480px] -translate-x-1/2 border-t border-m-stroke-subtle bg-m-surface-raised pb-[max(env(safe-area-inset-bottom),10px)] pt-2"
+      <nav aria-label="Navegação do campo" data-tour="barra" className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[480px] -translate-x-1/2 border-t border-m-stroke-subtle bg-m-surface-raised pb-[max(env(safe-area-inset-bottom),10px)] pt-2"
         style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
         {esq.map(comum)}
         {destaque && (() => {
           const Icone = destaque.icone; const at = ativoEm(destaque.url, pathname);
           return (
-            <Link href={destaque.url} aria-current={at ? 'page' : undefined} aria-label={destaque.titulo}
+            <Link href={destaque.url} aria-current={at ? 'page' : undefined} aria-label={destaque.titulo} data-tour="destaque"
               className="-mt-6 flex min-w-0 flex-col items-center gap-1 text-[10.5px] font-semibold text-m-accent">
               <span className={`grid h-14 w-14 place-items-center rounded-full bg-m-accent-strong text-m-on-accent shadow-lg ring-4 ring-m-surface-raised ${at ? 'scale-105' : ''}`}><Icone size={28} strokeWidth={2} aria-hidden="true" /></span>
               <span className="max-w-full truncate">{destaque.curto ?? destaque.titulo}</span>
@@ -52,7 +54,7 @@ export function BarraCampo({ pathname }: { pathname: string }) {
           );
         })()}
         {dir.map(comum)}
-        <button type="button" onClick={() => setAberto(true)} aria-haspopup="dialog" aria-expanded={aberto}
+        <button type="button" onClick={() => setAberto(true)} aria-haspopup="dialog" aria-expanded={aberto} data-tour="mais"
           className={`relative flex min-h-[48px] flex-col items-center justify-center gap-1 text-[10.5px] ${aberto ? 'font-semibold text-m-accent' : 'font-medium text-m-text-muted'}`}>
           <LayoutGrid size={24} strokeWidth={2} aria-hidden="true" />Mais
           {alertas > 0 && <span className="absolute right-[22%] top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-m-danger px-1 text-[10px] font-bold text-white" aria-label={`${alertas} alertas`}>{alertas > 99 ? '99+' : alertas}</span>}
@@ -67,6 +69,7 @@ function Mais({ itens, alertas, onFechar }: { itens: ItemMobile[]; alertas: numb
   const { usuario, sair } = useSessao();
   const { obra, obras, escolher, superadminReal, simulando, simular } = useObra();
   const perfil = usePerfil();
+  const [relatar, setRelatar] = useState(false);
   const telas = itens.filter((i) => i.url !== '/m/perfil' && i.url !== '/m/notificacoes');
   return (
     <div className="fixed inset-0 z-50 flex justify-center" role="dialog" aria-modal="true" aria-label="Mais opções">
@@ -89,7 +92,14 @@ function Mais({ itens, alertas, onFechar }: { itens: ItemMobile[]; alertas: numb
           <Link href="/m/perfil#menu" className="flex min-h-[52px] items-center gap-2 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3 text-[14px] font-semibold">
             <Settings2 size={19} className="text-m-accent" /> Meu menu
           </Link>
+          <button type="button" onClick={() => { onFechar(); abrirTutorial(); }} className="flex min-h-[52px] items-center gap-2 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3 text-left text-[14px] font-semibold">
+            <GraduationCap size={19} className="text-m-accent" /> Ver o tutorial
+          </button>
+          <button type="button" onClick={() => setRelatar(true)} className="flex min-h-[52px] items-center gap-2 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3 text-left text-[14px] font-semibold">
+            <LifeBuoy size={19} className="text-m-accent" /> Relatar um problema
+          </button>
         </div>
+        {relatar && <RelatarProblema onFechar={() => { setRelatar(false); onFechar(); }} />}
         {telas.length > 0 && (
           <section aria-label="Todas as telas" className="grid grid-cols-3 gap-2">
             {telas.map((i) => {

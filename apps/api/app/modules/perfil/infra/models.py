@@ -17,6 +17,7 @@ class PerfilUsuarioModel(Base):
     avatar: Mapped[bytes | None] = deferred(mapped_column(LargeBinary))
     avatar_tipo: Mapped[str | None] = mapped_column(String(30))
     avatar_versao: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    tutoriais: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")  # spec 097: {chave: {versao, concluido, em}}
     atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

@@ -4,7 +4,10 @@ import { TituloAba, useLogo, useMarcaObra } from '@/components/Obra/LogosObra';
 import { SincronizarDados } from '@/lib/tempo-real';
 import { SincronizarFila } from '@/lib/offline/SincronizarFila';
 
-import { Check, ChevronsUpDown, FlaskConical, LayoutGrid, LogOut, Menu as MenuIcon, Moon, Sun, UserRound, X } from 'lucide-react';
+import { Bug, Check, ChevronsUpDown, FlaskConical, GraduationCap, LayoutGrid, LifeBuoy, LogOut, Menu as MenuIcon, Moon, Sun, UserRound, X } from 'lucide-react';
+import { RelatarProblema } from '@/components/Erros/Relatos';
+import { TutorialComputador, abrirTutorial } from '@/components/Tutorial/Tutoriais';
+import { useErrosAbertos } from '@/lib/erros/consultas';
 import { Avatar } from '@/components/Perfil/Avatar';
 import { Sino } from '@/components/Notificacoes/Sino';
 import { nomeDe, usePerfil } from '@/lib/perfil';
@@ -62,7 +65,7 @@ function SeletorObra() {
     );
   }
   return (
-    <div className="relative">
+    <div className="relative" data-tour="obra">
       <button
         type="button"
         aria-haspopup="listbox"
@@ -118,7 +121,7 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
     <div className="flex h-full flex-col gap-[22px] py-5 pl-6 pr-3">
       <MarcaContratada />
       <SeletorObra />
-      <nav className="flex flex-col gap-[22px]" aria-label="Menu do app">
+      <nav className="flex flex-col gap-[22px]" aria-label="Menu do app" data-tour="menu">
         {menu.map((g) => (
           <div key={g.etapa} className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 px-2.5 pb-1.5 text-[11px] font-semibold uppercase leading-4 tracking-[0.48px] text-m-text-muted">
@@ -132,6 +135,7 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
                 <Link
                   key={i.url}
                   href={i.url}
+                  data-tour={`menu:${i.url}`}
                   onClick={onNavegar}
                   aria-current={ativo ? 'page' : undefined}
                   className={cn(
@@ -178,10 +182,14 @@ function Usuario() {
   const { superadmin, superadminReal, simulando, simular, papel } = useObra();
   const perfil = usePerfil();
   const [aberto, setAberto] = useState(false);
+  const [relatar, setRelatar] = useState(false);
+  const erros = useErrosAbertos().data?.abertos ?? 0;
   return (
-    <div className="relative">
+    <div className="relative" data-tour="conta">
+      {relatar && <RelatarProblema onFechar={() => setRelatar(false)} />}
       <button type="button" aria-label="Conta" aria-expanded={aberto} onClick={() => setAberto(!aberto)} className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-m-accent">
         <Avatar tamanho={36} />
+        {erros > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-m-danger ring-2 ring-m-surface-raised" aria-label={`${erros} erros em aberto`} />}
       </button>
       {aberto && (
         <div className="absolute right-0 top-11 z-50 w-72 rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised p-2 shadow-m-md">
@@ -196,6 +204,20 @@ function Usuario() {
           <Link href="/app/perfil" onClick={() => setAberto(false)} className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-m-text-secondary hover:bg-m-surface-hover">
             <UserRound size={16} /> Meu perfil
           </Link>
+          <button type="button" onClick={() => { setAberto(false); abrirTutorial(); }}
+            className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-m-text-secondary hover:bg-m-surface-hover">
+            <GraduationCap size={16} /> Ver o tutorial
+          </button>
+          <button type="button" onClick={() => { setAberto(false); setRelatar(true); }}
+            className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-m-text-secondary hover:bg-m-surface-hover">
+            <LifeBuoy size={16} /> Relatar um problema
+          </button>
+          {superadminReal && (
+            <Link href="/app/admin/erros" onClick={() => setAberto(false)} className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm text-m-text-secondary hover:bg-m-surface-hover">
+              <Bug size={16} /> Erros relatados
+              {erros > 0 && <span className="ml-auto rounded-full bg-m-danger px-2 py-0.5 text-[11px] font-bold text-white">{erros}</span>}
+            </Link>
+          )}
           {superadminReal && (
             <label className="flex flex-col gap-1 px-3 py-2 text-xs font-semibold text-m-accent">
               <span className="flex items-center gap-1.5"><FlaskConical size={14} /> Testar como perfil</span>
@@ -240,6 +262,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <TituloAba />
       <SincronizarDados />
       {obra && <SincronizarFila />}
+      {obra && !telaAdmin && <TutorialComputador />}
       <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r border-m-stroke-subtle bg-m-surface-raised lg:block print:hidden">
         <Lateral />
       </aside>
@@ -255,7 +278,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen flex-col lg:ml-[248px] print:ml-0">
         <header className="sticky top-0 z-40 flex h-16 print:hidden items-center justify-between gap-3 border-b border-m-stroke-subtle bg-m-surface-raised px-4 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <button type="button" aria-label="Abrir menu" onClick={() => setGaveta(true)} className="-ml-1 p-1 text-m-text-secondary lg:hidden"><MenuIcon size={20} /></button>
+            <button type="button" aria-label="Abrir menu" data-tour="abrir-menu" onClick={() => setGaveta(true)} className="-ml-1 p-1 text-m-text-secondary lg:hidden"><MenuIcon size={20} /></button>
             <nav aria-label="Trilha" className="truncate text-[13px] text-m-text-muted">
               {nomeEmpresa || 'Malhet'}
               {atual && <> <span className="text-m-stroke-strong">/</span> <b className="font-semibold text-m-text-primary">{atual.titulo}</b></>}
@@ -263,7 +286,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <Tema />
-            {obra && <Sino />}
+            {obra && <span data-tour="sino" className="inline-flex"><Sino /></span>}
             <Usuario />
           </div>
         </header>

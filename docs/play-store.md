@@ -77,7 +77,7 @@ Depois rode *App nativo* (Run workflow) e baixe o artifact `malhet-campo-play-aa
 ### Segurança dos dados (Data safety)
 - Dados **criptografados em trânsito**: sim (HTTPS). Pedido de **exclusão**: sim (link acima).
 - **Compartilhados com terceiros**: não (a empresa da obra é a controladora; não há venda nem anúncios).
-- **Coletados** (todos para *Funcionalidade do app* e *Gerenciamento da conta*; nenhum para anúncios ou analytics):
+- **Coletados** (para *Funcionalidade do app* e *Gerenciamento da conta*; diagnóstico de erros também para *Análise* — corrigir falhas; nenhum para anúncios):
 
 | Tipo na Play | O que é no Malhet | Obrigatório? |
 |---|---|---|
@@ -88,6 +88,7 @@ Depois rode *App nativo* (Run workflow) e baixe o artifact `malhet-campo-play-aa
 | Saúde e condicionamento › Informações de saúde | resultado do ASO (apto/inapto) e do etilômetro | sim (obrigação legal de SST) |
 | Informações pessoais › Outras (biométricas) | descritor facial (sem a foto) | **opcional** (consentimento) |
 | Atividade no app › Interações | lançamentos, ocorrências, auditorias | sim |
+| Informações e desempenho do app › Registros de falhas, Diagnóstico | relato automático de erro (spec 098): tela, ação, mensagem técnica, versão, aparelho; vinculado à conta | sim |
 
 > O Google Analytics do kit fica **desligado** (só liga com `NEXT_PUBLIC_GA_ENABLED=true`). Se um dia ligar, a Data
 > safety e a política precisam declarar *Analytics*.
