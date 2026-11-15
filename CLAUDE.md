@@ -191,7 +191,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   variável `CONTATO_PRIVACIDADE` do repositório) — ao coletar dado novo, atualize a política e a Data safety.
 - Página principal pública `/` (spec 092, `components/Marca/Landing.tsx`): a história da marca em seis atos (fonte: doc
   "Malhet — a história da marca"; voz direta, sem número não confirmado, IA nunca como manchete). Pedra bruta → pedra
-  cúbica em canvas (`components/Marca/PedraCubica.tsx`). Login/cadastro na mesma linguagem (`Malhet/TelaAuth.tsx`).
+  cúbica em canvas 3D que gira e segue o mouse (`components/Marca/PedraCubica.tsx`); leitura guiada pela rolagem (frases
+  que acendem, linha em foco, cena presa — spec 094). Login/cadastro na mesma linguagem com "Na obra agora" (`Malhet/TelaAuth.tsx`).
 - Dentro do app a empresa é a contratada (spec 093): topo do menu = logo/nome da contratada (`MarcaContratada` no
   `Shell.tsx`, Marca da obra), trilha "Contratada / tela", Malhet só como "com Malhet" no pé. Nada do kit no título/ícone
   (`config/app.ts`, `src/app/favicon.ico`, `public/brand/favicon.svg`).

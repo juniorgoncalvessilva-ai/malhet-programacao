@@ -85,3 +85,7 @@ body.malhet {
 .m-golpe { animation: m-golpe .55s cubic-bezier(.3,.7,.2,1); }
 .m-carimbo { animation: m-carimbo .45s cubic-bezier(.2,.8,.2,1) both; transform: rotate(-5deg); }
 @media (prefers-reduced-motion: reduce) { .m-golpe, .m-carimbo { animation: none; } }
+/* spec 094: a assinatura entra com o golpe do malhete */
+@keyframes m-selo { 0% { transform: translateY(-18px) scale(1.04); } 55% { transform: translateY(4px) scale(.995); } 75% { transform: translateY(-2px); } 100% { transform: none; } }
+.m-selo { animation: m-selo .7s cubic-bezier(.3,.7,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .m-selo { animation: none; } }
