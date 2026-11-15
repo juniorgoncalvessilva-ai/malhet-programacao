@@ -31,6 +31,8 @@ function ouvirRolagem(f: () => void) {
   f();
   return () => { ouvintes.delete(f); };
 }
+/** Tela em pé (celular, dobrável aberto, tablet em retrato) ou estreita: layout empilhado, cubo acima do texto. */
+const empilhado = () => typeof window !== 'undefined' && (window.innerWidth < 900 || window.innerHeight > window.innerWidth * 1.05);
 const semMovimento = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** 0→1 enquanto o elemento atravessa a tela (`fixo`: enquanto a seção alta rola por baixo do quadro preso). */
@@ -154,10 +156,10 @@ export function Landing() {
   const [estreito, setEstreito] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
   const progresso = useProgresso(heroRef, 'fixo');
-  useEffect(() => ouvirRolagem(() => { setY(window.scrollY); setEstreito(window.innerWidth < 900); }), []);
+  useEffect(() => ouvirRolagem(() => { setY(window.scrollY); setEstreito(empilhado()); }), []);
   const lapidado = progresso > 0.5;
   const entrar = carregado && usuario ? { href: '/app/vigente', texto: 'Abrir o Malhet' } : { href: '/auth/entrar', texto: 'Entrar' };
-  const saida = limitar((progresso - 0.75) / 0.25); // o título recua quando a pedra fica pronta
+  const saida = limitar((progresso - 0.8) / 0.2); // o título sobe um pouco quando a pedra fica pronta (sem sumir)
 
   return (
     <div className="min-h-screen overflow-x-clip" style={{ background: PEDRA, color: TINTA }}>
@@ -176,9 +178,9 @@ export function Landing() {
       </header>
 
       {/* 01 · a obra — a pedra se lapida conforme rola */}
-      <section id="topo" ref={heroRef} className="relative" style={{ height: estreito ? '180vh' : '210vh' }}>
+      <section id="topo" ref={heroRef} className="relative" style={{ height: estreito ? '150vh' : '165vh' }}>
         <div className="sticky top-0 h-[100svh] overflow-hidden">
-          <PedraCubica progresso={progresso} escala={estreito ? 0.24 : 0.34} deslocX={estreito ? 0 : 0.23} deslocY={estreito ? -0.13 : 0}
+          <PedraCubica progresso={progresso} escala={estreito ? 0.26 : 0.34} deslocX={estreito ? 0 : 0.23} deslocY={estreito ? -0.2 : 0}
             className="absolute inset-0 h-full w-full" />
           <div className="relative mx-auto flex h-full max-w-[1680px] flex-col px-5 pb-10 pt-24 sm:px-10">
             <div className="flex justify-between text-[11px] uppercase tracking-[0.18em] text-black/45" style={{ fontFamily: MONO }}>
@@ -186,7 +188,7 @@ export function Landing() {
               <span className="hidden sm:inline">[ 001 / 006 ]</span>
             </div>
             <div className={`flex flex-1 flex-col ${estreito ? 'justify-end' : 'justify-center'}`}
-              style={{ transform: `translateY(${-saida * 60}px)`, opacity: 1 - saida * 0.85 }}>
+              style={{ transform: `translateY(${-saida * 24}px)` }}>
               <h1 className="leading-[0.9] tracking-[-0.045em]" style={{ fontSize: 'clamp(46px, 7.2vw, 128px)' }}>
                 <span className="block font-light lg:whitespace-nowrap">Toda obra é feita</span>
                 <span className="block font-extrabold" style={{ color: VERDE }}>de decisões.</span>
@@ -247,15 +249,15 @@ function Cena() {
   const ref = useRef<HTMLElement>(null);
   // no computador a cena fica presa na tela; no celular (conteúdo maior que a tela) rola e acende conforme a leitura
   const [preso, setPreso] = useState(true);
-  useEffect(() => ouvirRolagem(() => setPreso(window.innerWidth >= 900 && window.innerHeight >= 640)), []);
+  useEffect(() => ouvirRolagem(() => setPreso(!empilhado() && window.innerHeight >= 640)), []);
   const pFixo = useProgresso(ref, 'fixo');
   const pPassa = useProgresso(ref, 'passagem');
-  const p = preso ? pFixo : limitar((pPassa - 0.15) / 0.5);
+  const p = preso ? pFixo : limitar((pPassa - 0.2) / 0.45);
   const atual = Math.min(CENA.length, Math.floor(p * (CENA.length + 1.4)));
   const perdeu = atual >= CENA.length;
   return (
-    <section id="historia" ref={ref} className="relative" style={{ height: preso ? '260vh' : 'auto' }}>
-      <div className={`${preso ? 'sticky top-0 h-[100svh]' : 'py-24'} flex flex-col justify-center px-5 sm:px-10`}>
+    <section id="historia" ref={ref} className="relative" style={{ height: preso ? '200vh' : 'auto' }}>
+      <div className={`${preso ? 'sticky top-0 h-[100svh] justify-center' : 'py-16'} flex flex-col px-5 sm:px-10`}>
         <div className="mx-auto w-full max-w-[1680px]">
           <Marcador n="2" titulo="A cena" />
           <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_1.15fr] lg:gap-16">
@@ -302,10 +304,10 @@ function Cena() {
 // ---- 03 · o espaço entre o cronograma e o BMM ------------------------------------------------------------
 function Espaco() {
   return (
-    <section id="metodo" className="px-5 py-24 sm:px-10 sm:py-36" style={{ background: '#EDF1F1' }}>
+    <section id="metodo" className="px-5 py-16 sm:px-10 sm:py-24" style={{ background: '#EDF1F1' }}>
       <div className="mx-auto max-w-[1680px]">
         <Marcador n="3" titulo="O espaço" />
-        <Acende className="mt-14 max-w-[1240px] font-light leading-[1.06] tracking-[-0.03em]" style={{ fontSize: 'clamp(32px, 4.8vw, 76px)' }}
+        <Acende className="mt-10 max-w-[1240px] font-light leading-[1.06] tracking-[-0.03em]" style={{ fontSize: 'clamp(32px, 4.8vw, 76px)' }}
           texto="O cronograma diz o que deveria acontecer. O BMM diz o que foi medido. Entre os dois fica *o *que *de *fato *aconteceu — e é ali que se *ganha ou se *perde dinheiro." />
 
         <Revela className="mt-20">
@@ -339,7 +341,7 @@ function Espaco() {
           </div>
         </Revela>
 
-        <div className="mt-28">
+        <div className="mt-20">
           {[
             ['Registro', 'O guindaste atrasou às 7h. Às 7h05, já estava registrado.', 'O ocorrido é registrado em campo, no momento em que acontece.'],
             ['Responsabilidade', 'Validado é com nome, data e hora.', 'Toda atividade tem dono; cada etapa validada tem responsável, setor e hora.'],
@@ -398,7 +400,7 @@ function Nome() {
     setTimeout(() => setBatido(`${agora.toLocaleDateString('pt-BR')} · ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`), 260);
   };
   return (
-    <section id="nome" ref={ref} className="overflow-hidden px-5 py-24 sm:px-10 sm:py-36">
+    <section id="nome" ref={ref} className="overflow-hidden px-5 py-16 sm:px-10 sm:py-24">
       <div className="mx-auto max-w-[1680px]">
         <Marcador n="4" titulo="O nome" />
       </div>
@@ -473,7 +475,7 @@ function Nome() {
 // ---- 05 · para quem: a linha no centro da tela em foco -------------------------------------------------
 function ParaQuem() {
   return (
-    <section id="para-quem" className="px-5 py-24 sm:px-10 sm:py-36">
+    <section id="para-quem" className="px-5 py-16 sm:px-10 sm:py-24">
       <div className="mx-auto max-w-[1680px]">
         <Marcador n="5" titulo="Para quem" />
         <Acende className="mt-14 max-w-[1000px] font-light leading-[1.05] tracking-[-0.03em]" style={{ fontSize: 'clamp(32px, 4.8vw, 76px)' }}
@@ -510,7 +512,7 @@ function Manifesto({ entrar }: { entrar: { href: string; texto: string } }) {
   const p = useProgresso(ref, 'entrada');
   const selado = p > 0.55;
   return (
-    <section id="manifesto" className="relative overflow-hidden px-5 py-24 text-white sm:px-10 sm:py-36" style={{ background: FUNDO_ESCURO }}>
+    <section id="manifesto" className="relative overflow-hidden px-5 py-16 text-white sm:px-10 sm:py-24" style={{ background: FUNDO_ESCURO }}>
       <div className="mx-auto max-w-[1680px]">
         <Marcador n="6" titulo="Manifesto" claro />
         <div className="relative mt-14 grid gap-10 lg:grid-cols-[1.25fr_1fr]">
