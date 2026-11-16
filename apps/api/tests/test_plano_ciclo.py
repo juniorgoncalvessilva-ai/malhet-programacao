@@ -14,7 +14,7 @@ def test_puxa_da_programacao_sem_duplicar_e_liga_a_linha(client):
     assert ln["no_plano"] is None and ln["inicio"] == "2026-11-09" == ln["fim"]  # janela = dias com previsto
     r = client.post("/api/planos/itens/da-programacao", json={"programacao_id": pid}).json()
     assert (r["novos"], r["ligados"], r["ja_estavam"]) == (1, 0, 0)
-    itens = client.get("/api/planos").json()["itens"]
+    itens = client.get("/api/planos", params={"inicio": "2026-11-09"}).json()["itens"]
     assert len(itens) == 1 and itens[0]["descricao"] == ln["descricao"] and itens[0]["situacao"] == "programado"
     assert itens[0]["programacoes"][0]["id"] == pid  # a linha ficou ligada ao item
     r = client.post("/api/planos/itens/da-programacao", json={"programacao_id": pid}).json()
@@ -25,7 +25,7 @@ def test_puxa_da_programacao_sem_duplicar_e_liga_a_linha(client):
 def test_lookahead_pelo_plano(client):
     pid = _programacao(client)
     client.post("/api/planos/itens/da-programacao", json={"programacao_id": pid})
-    it = client.get("/api/planos").json()["itens"][0]
+    it = client.get("/api/planos", params={"inicio": "2026-11-09"}).json()["itens"][0]
     eq = client.get("/api/equipes").json()
     if eq:
         client.put(f"/api/planos/itens/{it['id']}", json={"descricao": it["descricao"], "area_id": it["area_id"], "tipo_id": it["tipo_id"],

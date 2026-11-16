@@ -527,6 +527,49 @@ def excluir_emissao(s: Session, p: ProgramacaoModel, rev: int) -> dict:
     return {"excluida": rev, "restantes": restantes, "status": p.status, "proxima_revisao": p.revisao}
 
 
+def renumerar_emissoes(s: Session, p: ProgramacaoModel, mapa: dict[int, int] | None, em_sequencia: bool) -> dict:
+    """Spec 100 (só super admin — a rota confere): muda o número das revisões emitidas sem mexer no conteúdo. A foto
+    de cada emissão, o histórico dos indicadores e a conclusão passam a usar o número novo; o número original fica
+    guardado na foto (`revisao_original`). A próxima emissão continua do maior número."""
+    from app.modules.indicadores.infra.models import FatoProgramacaoModel
+    from app.modules.planejamento.domain.revisoes import nova_numeracao, sequencial
+    from sqlalchemy import update
+
+    todas = list(s.scalars(select(EmissaoModel).where(EmissaoModel.programacao_id == p.id)))
+    if not todas:
+        raise DomainError("programação sem revisões emitidas")
+    datas = [(e.revisao, e.emitida_em) for e in todas]
+    final = sequencial(datas) if em_sequencia else nova_numeracao(datas, mapa or {})
+    muda = {o: n for o, n in final.items() if o != n}
+    if muda:
+        F = FatoProgramacaoModel
+        # em duas passadas (números temporários negativos): trocar 2 ↔ 1 não colide no meio do caminho
+        for e in todas:
+            if e.revisao in muda:
+                e.revisao = -1 - e.revisao
+        for o in muda:
+            s.execute(update(F).where(F.programacao_id == p.id, F.revisao == o).values(revisao=-1 - o))
+        s.flush()
+        for e in todas:
+            if e.revisao < 0:
+                o = -1 - e.revisao
+                e.revisao = muda[o]
+                foto = dict(e.foto)
+                foto.setdefault("revisao_original", o)
+                foto["revisao"] = muda[o]
+                e.foto = foto
+        for o, n in muda.items():
+            s.execute(update(F).where(F.programacao_id == p.id, F.revisao == -1 - o).values(revisao=n))
+        for k in p.conclusoes:  # a foto da conclusão guarda a "próxima" (última emitida + 1)
+            r = (k.foto or {}).get("revisao")
+            if isinstance(r, int) and r - 1 in muda:
+                k.foto = {**k.foto, "revisao": muda[r - 1] + 1}
+        p.revisao = max(final.values()) + 1
+    s.flush()
+    return {"numeracao": [{"de": o, "para": n} for o, n in sorted(final.items(), key=lambda x: x[1])],
+            "alteradas": len(muda), "proxima_revisao": p.revisao}
+
+
 def reabrir(p: ProgramacaoModel) -> None:
     exigir_aberta(p)
     if p.status != "emitida":

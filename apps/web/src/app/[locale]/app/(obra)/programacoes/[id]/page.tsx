@@ -24,6 +24,7 @@ import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
 import { DesviosDaProgramacao } from '@/components/Obra/DesviosProgramacao';
 import { RevisoesProgramacao } from '@/components/Obra/RevisoesProgramacao';
+import { TrocarItemPq } from '@/components/Obra/TrocarItemPq';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 
 interface FormLinha {
@@ -47,6 +48,8 @@ export default function MontarPage() {
   const { pode } = useObra();
   const prog = useProgramacao(id);
   const podeAssociar = pode('encarregado') && prog.data?.status !== 'concluida';
+  // spec 099: corrigir o item da PQ vale também com a programação emitida (sai na próxima revisão)
+  const podeTrocarPq = pode('planejador') && prog.data?.status !== 'concluida';
   const frentes = useFrentes2();
   const catalogo = useCatalogo();
   const wbs = useWbs();
@@ -457,7 +460,8 @@ export default function MontarPage() {
                             <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}{comoLista(ln.ssma?.pto).length ? ` · PTO ${comoLista(ln.ssma?.pto).join(', ')}` : ''}</div>
                             <Calculo ln={ln} pid={id} />
                           </td>
-                          <td className="px-2 py-2">{ln.item_pq ? <span title={ln.descricao_pq ?? ''}>{ln.item_pq}</span> : <span className="text-m-warning">sem PQ</span>}</td>
+                          <td className="whitespace-nowrap px-2 py-2">{ln.item_pq ? <span title={ln.descricao_pq ?? ''}>{ln.item_pq}</span> : <span className="text-m-warning">sem PQ</span>}
+                            {podeTrocarPq && <TrocarItemPq pid={id} linha={ln} />}</td>
                           <td className="px-2 py-2">{ln.equipe ? <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave="composicao_equipe" titulo="Ver a composição da equipe e de onde vem a função de cada pessoa">{ln.equipe}</Calculado> : <span className="text-m-warning">sem equipe</span>}{ln.equipe && !ln.cracha && <div className="text-xs text-m-warning">sem crachá</div>}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-right">{ln.qtd_projeto != null ? <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave="qtd_projeto">{`${fmt(ln.qtd_projeto)} ${ln.unidade ?? ''}`}</Calculado> : '—'}
                             {ln.realizado_anterior ? <div className="text-[11px] text-m-text-muted">feito <Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave="realizado_anterior">{fmt(ln.realizado_anterior)}</Calculado></div> : null}

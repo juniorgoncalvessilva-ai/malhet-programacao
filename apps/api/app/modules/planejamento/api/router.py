@@ -468,8 +468,12 @@ def memoria_programacao(pid: int, s: Session = Depends(get_session), c: Contexto
 @router.get("/programacoes/{pid}/emissoes")
 def emissoes(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     sv.obter(s, c.obra_id, pid)
-    q = select(EmissaoModel).where(EmissaoModel.programacao_id == pid).order_by(EmissaoModel.revisao.desc())
-    return [{"revisao": e.revisao, "emitida_em": e.emitida_em, "emitida_por": e.emitida_por} for e in s.scalars(q)]
+    E = EmissaoModel
+    # revisao_original: número com que foi emitida, se o super admin renumerou (spec 100) — sem carregar a foto inteira
+    q = (select(E.revisao, E.emitida_em, E.emitida_por, E.foto["revisao_original"].astext)
+         .where(E.programacao_id == pid).order_by(E.revisao.desc()))
+    return [{"revisao": r, "emitida_em": em, "emitida_por": por, "revisao_original": int(orig) if orig else None}
+            for r, em, por, orig in s.execute(q)]
 
 
 @router.get("/programacoes/{pid}/emissoes/{rev}")
@@ -487,6 +491,34 @@ def excluir_emissao(pid: int, rev: int, s: Session = Depends(get_session), c: Co
     if not c.usuario.superadmin:
         raise negar("só o super admin pode excluir revisões da programação")
     return sv.excluir_emissao(s, sv.obter(s, c.obra_id, pid), rev)
+
+
+class NumeracaoIn(BaseModel):
+    mapa: dict[int, int] = {}  # revisão atual → número novo
+    sequencial: bool = False  # 0, 1, 2… na ordem de emissão
+
+
+@router.put("/programacoes/{pid}/emissoes/numeracao")
+def numeracao_emissoes(pid: int, d: NumeracaoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    """Muda o número das revisões emitidas (spec 100) — só o super admin, para o documento impresso não carregar as
+    emissões de teste. O conteúdo de cada revisão não muda; a ordem também não."""
+    if not c.usuario.superadmin:
+        raise negar("só o super admin pode alterar a numeração das revisões")
+    return sv.renumerar_emissoes(s, sv.obter(s, c.obra_id, pid), d.mapa, d.sequencial)
+
+
+class ItemPqLinhaIn(BaseModel):
+    item_pq: str
+    tambem_na_wbs: bool = True
+
+
+@router.put("/programacoes/{pid}/linhas/{lid}/item-pq")
+def trocar_item_pq(pid: int, lid: int, d: ItemPqLinhaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Corrige o item da PQ da linha (spec 099), também com a programação emitida: a revisão impressa continua como
+    foi, a correção sai na próxima revisão. Concluída: só depois de Revisar."""
+    from app.modules.planejamento.application.item_pq_linha import trocar_item_pq as trocar
+
+    return trocar(s, c.obra_id, sv.obter(s, c.obra_id, pid), lid, d.item_pq, d.tambem_na_wbs)
 
 
 @router.get("/programacoes/{pid}/ft")
