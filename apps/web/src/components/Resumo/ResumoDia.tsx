@@ -12,13 +12,13 @@ import { compartilhar, copiarTexto, linkWhatsapp, longoParaLink, podeCompartilha
 
 /**
  * Resumo do dia — check out (spec 101): o que aconteceu na obra num dia, por frente, na hierarquia da programação
- * (Local → Área → CWP). Seis quadrantes na ordem pedida (atividades, ocorrências, restrições, auditorias, equipes,
- * fotos); o texto de cada um sai pronto do servidor e a pessoa escolhe o que vai, pode editar, copia ou manda no WhatsApp
+ * (Local → Área → CWP). Sete quadrantes na ordem pedida (atividades, ocorrências, equipes impactadas pelas ocorrências
+ * — spec 102 —, restrições, auditorias, equipes, fotos); o texto de cada um sai pronto do servidor e a pessoa escolhe o que vai, pode editar, copia ou manda no WhatsApp
  * — no celular, junto com as fotos.
  */
-type Secao = 'atividades' | 'ocorrencias' | 'restricoes' | 'auditorias' | 'equipes' | 'fotos';
-const SECOES: Secao[] = ['atividades', 'ocorrencias', 'restricoes', 'auditorias', 'equipes', 'fotos'];
-const NOME: Record<Secao, string> = { atividades: 'Atividades', ocorrencias: 'Ocorrências', restricoes: 'Restrições', auditorias: 'Auditorias', equipes: 'Equipes', fotos: 'Fotos' };
+type Secao = 'atividades' | 'ocorrencias' | 'impactadas' | 'restricoes' | 'auditorias' | 'equipes' | 'fotos';
+const SECOES: Secao[] = ['atividades', 'ocorrencias', 'impactadas', 'restricoes', 'auditorias', 'equipes', 'fotos'];
+const NOME: Record<Secao, string> = { atividades: 'Atividades', ocorrencias: 'Ocorrências', impactadas: 'Equipes impactadas', restricoes: 'Restrições', auditorias: 'Auditorias', equipes: 'Equipes', fotos: 'Fotos' };
 const MAX_FOTOS = 30;
 
 interface Grupo<T> { local: string | null; area: string | null; area_id: number | null; itens?: T[]; cwps?: { texto: string | null; itens: T[] }[] }
@@ -27,11 +27,13 @@ interface Ocorrencia { id: number; causa: string | null; descricao: string; ativ
 interface Restricao { id: number; numero: number; acao: string; atividade: string | null; responsavel: string | null; prazo_br: string | null; status: string; impeditivo: boolean | null; marcador: 'nova' | 'concluida' | 'atrasada' | 'pendente' }
 interface Auditoria { id: number; numero: number; tipo: string | null; tipo_registro: string | null; nao_conformidade: string | null; medida_corretiva: string | null; ver_agir: boolean | null; acao_numero: number | null; encarregado: string | null; auditor: string | null }
 interface Equipe { equipe_id: number; nome: string; encarregado: string | null; setor: string | null; presentes: number; total: number; funcoes: string[]; atividades: string[] }
+interface Impactada { equipe_id: number; nome: string; encarregado: string | null; presentes: number; total: number; ocorrencias: { causa: string | null; descricao: string; atividade: string | null; status: string; qtd_nao_cumprida: number | null; area: string | null }[] }
 interface GrupoFoto { descricao: string; tipo: string; n: number; ids: number[] }
 interface Resumo {
   data: string; obra: string; programacao: { id: number; titulo: string } | null;
   atividades: { total: number; grupos: Grupo<Atividade>[] }; ocorrencias: { total: number; grupos: Grupo<Ocorrencia>[] };
   restricoes: { total: number; grupos: Grupo<Restricao>[] }; auditorias: { total: number; grupos: Grupo<Auditoria>[] };
+  impactadas: { itens: Impactada[]; total: number; ocorrencias: number; sem_equipe: number };
   equipes: { itens: Equipe[]; presentes: number; sem_equipe: number };
   fotos: { total: number; grupos: Grupo<GrupoFoto>[]; lista: { id: number; tipo: string; legenda: string | null; area: string; descricao: string | null }[] };
   textos: Record<'cabecalho' | Secao, string>;
@@ -210,6 +212,31 @@ export function ResumoDia({ compacto = false }: { compacto?: boolean }) {
                 {x.acao && <span className="text-[12px] text-m-text-secondary">Ação: {x.acao}{x.responsavel ? ` (${x.responsavel})` : ''}</span>}
               </div>
             )} /> : vazio}
+          </Painel>
+
+          <Painel titulo={`Quem foi impactado? · ${r.impactadas.total} equipe${r.impactadas.total === 1 ? '' : 's'}`}
+            subtitulo={`A equipe da atividade de cada ocorrência, com a presença do dia${r.impactadas.sem_equipe ? ` · ${r.impactadas.sem_equipe} ocorrência(s) sem equipe ligada à atividade` : ''}`}
+            acoes={<AcoesSecao texto={r.textos.impactadas} nome="Equipes impactadas" />}>
+            {r.impactadas.total ? (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {r.impactadas.itens.map((e) => (
+                  <li key={e.equipe_id} className="flex flex-col gap-1 rounded-m-md border border-m-stroke-subtle border-l-4 border-l-m-warning p-3 text-[13px]">
+                    <span className="flex items-baseline justify-between gap-2"><b className="text-m-text-primary">{e.nome}</b>
+                      <span className="whitespace-nowrap text-[12.5px] text-m-text-secondary"><b className="text-m-text-primary">{e.presentes}</b>/{e.total} presentes</span></span>
+                    {e.encarregado && <span className="text-[12px] text-m-text-muted">Enc. {e.encarregado}</span>}
+                    <ul className="mt-1 flex flex-col gap-1 border-t border-m-stroke-subtle pt-1.5">
+                      {e.ocorrencias.map((o, i) => (
+                        <li key={i} className="text-[12.5px] leading-[18px]">
+                          <span className="text-m-text-primary">▸ {o.causa && <b>{o.causa}: </b>}{o.descricao}</span>{' '}
+                          <Pilula tom={o.status === 'Concluído' ? 'sucesso' : 'atencao'}>{o.status}</Pilula>
+                          {(o.atividade || o.qtd_nao_cumprida) && <span className="block text-[12px] text-m-text-muted">{[o.atividade && `${o.atividade}${o.area ? ` (${o.area})` : ''}`, o.qtd_nao_cumprida ? `não cumprido ${fmt(o.qtd_nao_cumprida)}` : null].filter(Boolean).join(' · ')}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            ) : r.impactadas.sem_equipe ? <p className="text-[13px] text-m-text-muted">As ocorrências do dia não têm equipe ligada à atividade — ligue a equipe na linha da programação para aparecer aqui.</p> : vazio}
           </Painel>
 
           <Painel titulo={`O que está travando? · ${r.restricoes.total}`} subtitulo="Restrições abertas ou concluídas no dia e as pendentes das frentes trabalhadas" acoes={<AcoesSecao texto={r.textos.restricoes} nome="Restrições" />}>

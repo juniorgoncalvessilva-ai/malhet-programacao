@@ -1,14 +1,14 @@
 """Resumo do dia — "check out" (spec 101): o que aconteceu na obra num dia, por frente, pronto para copiar e colar ou
-mandar no WhatsApp aos setores. Seis partes, nesta ordem: atividades executadas, ocorrências, restrições, auditorias,
-equipes e fotos; todas na hierarquia da programação (Local → Área → CWP).
+mandar no WhatsApp aos setores. Sete partes, nesta ordem: atividades executadas, ocorrências, equipes impactadas pelas
+ocorrências (spec 102), restrições, auditorias, equipes e fotos; todas na hierarquia da programação (Local → Área → CWP).
 
 Só texto aqui (sem banco): recebe o resumo já montado e devolve o texto de cada parte no formato do WhatsApp
 (*negrito*, _itálico_, • para itens). As partes são independentes: a tela junta só as escolhidas.
 """
 from datetime import date
 
-SECOES = ("atividades", "ocorrencias", "restricoes", "auditorias", "equipes", "fotos")
-TITULO = {"atividades": "ATIVIDADES EXECUTADAS", "ocorrencias": "OCORRÊNCIAS", "restricoes": "RESTRIÇÕES",
+SECOES = ("atividades", "ocorrencias", "impactadas", "restricoes", "auditorias", "equipes", "fotos")
+TITULO = {"atividades": "ATIVIDADES EXECUTADAS", "ocorrencias": "OCORRÊNCIAS", "impactadas": "EQUIPES IMPACTADAS", "restricoes": "RESTRIÇÕES",
           "auditorias": "AUDITORIAS", "equipes": "EQUIPES", "fotos": "FOTOS"}
 SEM_FRENTE = "Sem frente"
 
@@ -95,6 +95,16 @@ def _equipe(it: dict) -> list[str]:
     return out
 
 
+def _impactada(it: dict) -> list[str]:
+    pres = f" — {it['presentes']}/{it['total']} presentes" if it.get("total") else ""
+    out = [f"• *{it['nome']}*" + (f" (Enc. {it['encarregado']})" if it.get("encarregado") else "") + pres]
+    for o in it["ocorrencias"]:
+        ativ = f" — {o['atividade']}" + (f" ({o['area']})" if o.get("area") else "") if o.get("atividade") else ""
+        falta = f" · não cumprido {num(o['qtd_nao_cumprida'])}" if o.get("qtd_nao_cumprida") else ""
+        out.append(f"   ▸ {o['causa'] + ': ' if o.get('causa') else ''}{o['descricao']}{ativ}{falta}")
+    return out
+
+
 def _foto(it: dict) -> str:
     return f"• {it['descricao']} ({it['n']} foto{'s' if it['n'] > 1 else ''})"
 
@@ -111,6 +121,14 @@ def textos(r: dict, qtd: bool = True) -> dict[str, str]:
         grupos = r[sec]["grupos"]
         n = r[sec]["total"]
         out[sec] = "\n".join([f"*{TITULO[sec]} ({n})*", *_frentes(grupos, fmt[sec])]).strip() if n else ""
+    im = r.get("impactadas") or {"itens": [], "sem_equipe": 0}
+    if im["itens"] or im.get("sem_equipe"):
+        linhas = [f"*{TITULO['impactadas']} ({len(im['itens'])})*", ""] + [x for it in im["itens"] for x in _impactada(it)]
+        if im.get("sem_equipe"):
+            linhas.append(f"_{im['sem_equipe']} ocorrência(s) sem equipe ligada à atividade_")
+        out["impactadas"] = "\n".join(linhas).strip()
+    else:
+        out["impactadas"] = ""
     eq = r["equipes"]
     if eq["itens"]:
         topo = f"*{TITULO['equipes']} ({len(eq['itens'])})*" + (f" — {eq['presentes']} presentes" if eq.get("presentes") else "")

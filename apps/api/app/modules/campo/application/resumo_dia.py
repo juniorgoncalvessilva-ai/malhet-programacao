@@ -102,16 +102,20 @@ def montar(s: Session, c: ContextoObra, d: date) -> dict:
     # 2. ocorrências do dia (desvios), na frente da atividade impactada
     causas = {k.id: k.descricao for k in s.scalars(select(CausaDesvioModel).where(CausaDesvioModel.obra_id == obra_id))}
     desvios = list(s.scalars(select(DesvioModel).where(DesvioModel.obra_id == obra_id, DesvioModel.data == d).order_by(DesvioModel.id)))
-    area_linha = dict(s.execute(select(LinhaProgramacaoModel.id, LinhaProgramacaoModel.area_id).where(
-        LinhaProgramacaoModel.id.in_({x.linha_id for x in desvios if x.linha_id} or {0}))).all())
-    ocorr = []
+    da_linha = {lid: (aid, eid) for lid, aid, eid in s.execute(
+        select(LinhaProgramacaoModel.id, LinhaProgramacaoModel.area_id, LinhaProgramacaoModel.equipe_id).where(
+            LinhaProgramacaoModel.id.in_({x.linha_id for x in desvios if x.linha_id} or {0})))}
+    ocorr, impacto = [], []  # impacto: (equipe da atividade impactada, área, ocorrência) — spec 102
     for x in desvios:
-        aid = x.area_id or area_linha.get(x.linha_id)
+        aid_ln, eq_ln = da_linha.get(x.linha_id, (None, None))
+        aid = x.area_id or aid_ln
         areas_do_dia.add(aid) if aid else None
-        ocorr.append((aid, x.frente, {"id": x.id, "causa": causas.get(x.causa_id), "descricao": x.descricao,
-                                     "atividade": x.atividade_impactada or x.referencia, "acao": x.acao,
-                                     "responsavel": x.responsavel, "status": STATUS_DESVIO.get(x.status, "Pendente"),
-                                     "qtd_nao_cumprida": x.qtd_nao_cumprida}))
+        it = {"id": x.id, "causa": causas.get(x.causa_id), "descricao": x.descricao,
+              "atividade": x.atividade_impactada or x.referencia, "acao": x.acao,
+              "responsavel": x.responsavel, "status": STATUS_DESVIO.get(x.status, "Pendente"),
+              "qtd_nao_cumprida": x.qtd_nao_cumprida}
+        ocorr.append((aid, x.frente, it))
+        impacto.append((eq_ln, aid, it))
     ocorrencias = {"total": len(ocorr), "grupos": fr.agrupar(ocorr)}
 
     # 3. restrições: as abertas no dia, as concluídas no dia e as pendentes das frentes/atividades do dia
@@ -170,6 +174,28 @@ def montar(s: Session, c: ContextoObra, d: date) -> dict:
     eq_itens.sort(key=lambda x: (not x["atividades"], x["nome"]))
     equipes = {"itens": eq_itens, "presentes": pres["presentes"], "sem_equipe": len(pres["sem_equipe"])}
 
+    # 2b. equipes impactadas (spec 102): a equipe da atividade impactada por cada ocorrência, com a presença do dia
+    from app.modules.equipes.infra.models import EquipeModel
+
+    pres_eq = {e["equipe_id"]: e for e in pres["equipes"]}
+    imp: "OrderedDict[int, dict]" = OrderedDict()
+    sem_equipe_oc = 0
+    for eq_id, aid, it in impacto:
+        if not eq_id:
+            sem_equipe_oc += 1
+            continue
+        g = imp.get(eq_id)
+        if g is None:
+            e = pres_eq.get(eq_id)
+            m = None if e else s.get(EquipeModel, eq_id)
+            g = imp[eq_id] = {"equipe_id": eq_id, "nome": e["nome"] if e else (m.nome if m else "?"),
+                              "encarregado": e["encarregado"] if e else (m.encarregado_nome if m else None),
+                              "presentes": e["presentes"] if e else 0, "total": e["total"] if e else 0, "ocorrencias": []}
+        g["ocorrencias"].append({**{k: it[k] for k in ("causa", "descricao", "atividade", "status", "qtd_nao_cumprida")},
+                                 "area": fr.areas[aid][5].split(" · ")[0] if aid in fr.areas else None})
+    impactadas = {"itens": sorted(imp.values(), key=lambda x: x["nome"]), "total": len(imp),
+                  "ocorrencias": sum(len(x["ocorrencias"]) for x in imp.values()), "sem_equipe": sem_equipe_oc}
+
     # 6. fotos do dia (book), por frente; no texto, uma linha por atividade/ocorrência com a quantidade
     book = montar_book(s, obra_id, d, d, None, None)
     por_alvo: "OrderedDict[tuple, dict]" = OrderedDict()
@@ -187,4 +213,4 @@ def montar(s: Session, c: ContextoObra, d: date) -> dict:
     return {"data": d.isoformat(), "obra": rotulo_obra,
             "programacao": {"id": prog.id, "titulo": prog.titulo} if prog else None,
             "atividades": atividades, "ocorrencias": ocorrencias, "restricoes": restricoes, "auditorias": auditorias,
-            "equipes": equipes, "fotos": fotos, "gerado_em": datetime.now(timezone.utc).isoformat()}
+            "impactadas": impactadas, "equipes": equipes, "fotos": fotos, "gerado_em": datetime.now(timezone.utc).isoformat()}

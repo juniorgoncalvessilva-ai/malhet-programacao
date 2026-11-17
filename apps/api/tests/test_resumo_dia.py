@@ -45,6 +45,9 @@ def test_resumo_do_dia(client):
     oc = j["ocorrencias"]
     assert oc["total"] == 1 and oc["grupos"][0]["area"].startswith("004.05")
     assert oc["grupos"][0]["itens"][0]["causa"] == causa["descricao"]
+    # spec 102: sem equipe na linha, a ocorrência conta como "sem equipe"; com equipe, a equipe aparece impactada
+    assert j["impactadas"] == {"itens": [], "total": 0, "ocorrencias": 0, "sem_equipe": 1}
+    assert "1 ocorrência(s) sem equipe" in j["textos"]["impactadas"]
     # restrição nova (criada hoje) não entra num dia passado; a pendente da frente do dia entra como atrasada? só se já existia
     assert j["restricoes"]["total"] == 0
     # fotos agrupadas pela atividade
@@ -69,9 +72,30 @@ def test_resumo_do_dia(client):
     assert "_(nova)_" in hoje["textos"]["restricoes"]
 
 
+def test_equipe_impactada(client):
+    pid, ln, causa = _cenario(client)
+    eq = client.post("/api/equipes", json={"nome": "EQ CONCRETO 01", "encarregado_cracha": "115095", "encarregado_nome": "Damião"})
+    assert eq.status_code in (200, 201), eq.text
+    from app.core.db import SessionLocal
+    from app.modules.planejamento.infra.models import LinhaProgramacaoModel
+
+    with SessionLocal() as s:  # a equipe da linha (a programação emitida não deixa editar a linha pela tela)
+        s.get(LinhaProgramacaoModel, ln["id"]).equipe_id = eq.json()["id"]
+        s.commit()
+    j = client.get("/api/campo/resumo-dia", params={"data": DIA}).json()
+    im = j["impactadas"]
+    assert (im["total"], im["ocorrencias"], im["sem_equipe"]) == (1, 1, 0)
+    e = im["itens"][0]
+    assert e["nome"] == "EQ CONCRETO 01" and e["ocorrencias"][0]["area"] == "004.05"
+    t = j["textos"]["impactadas"]
+    assert t.startswith("*EQUIPES IMPACTADAS (1)*") and "• *EQ CONCRETO 01*" in t
+    assert f"▸ {causa['descricao']}: Bomba de concreto atrasou 2 h" in t
+    assert j["texto"].index("*OCORRÊNCIAS") < j["texto"].index("*EQUIPES IMPACTADAS")
+
+
 def test_dia_vazio(client):
     j = client.get("/api/campo/resumo-dia", params={"data": "2020-01-01"}).json()
-    assert j["programacao"] is None and all(j[k]["total"] == 0 for k in ("atividades", "ocorrencias", "restricoes", "auditorias", "fotos"))
+    assert j["programacao"] is None and all(j[k]["total"] == 0 for k in ("atividades", "ocorrencias", "impactadas", "restricoes", "auditorias", "fotos"))
     assert j["texto"] == j["textos"]["cabecalho"]
 
 

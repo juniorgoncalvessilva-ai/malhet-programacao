@@ -170,7 +170,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Resumo do dia — check out (spec 101): `GET /campo/resumo-dia` (`campo/application/resumo_dia.py`: atividades com realizado/
   foto no dia, ocorrências, restrições, auditorias, equipes × atividades, fotos — tudo Local → Área → CWP) e texto do WhatsApp
   por parte em `campo/domain/resumo_dia.py` (`textos`, `juntar`). Tela `/app/resumo-dia` e `/m/resumo` (`ResumoDia.tsx`):
-  escolher partes, editar, copiar, wa.me e compartilhar com fotos no celular (`lib/resumo/whatsapp.ts`).
+  escolher partes, editar, copiar, wa.me e compartilhar com fotos no celular (`lib/resumo/whatsapp.ts`). Equipes impactadas
+  pelas ocorrências (equipe da linha do desvio + presença do dia, `impactadas`) logo abaixo das ocorrências. Spec 102.
 - Ficha do colaborador (spec 087): `GET/POST/PUT/DELETE /efetivo/colaboradores` (campos operacionais — nada de CPF, RG,
   telefone, endereço, nascimento ou saúde; `Ficha`, `chave_cadastro`); excluir só sem prova (presença, LGPD, assinatura,
   etilômetro). `FichaColaborador.tsx` (abas Dados | Contrato | ASO e treinamentos | Mobilização | Histórico).
