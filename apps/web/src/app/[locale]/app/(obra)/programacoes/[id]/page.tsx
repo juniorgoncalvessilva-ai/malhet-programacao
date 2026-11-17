@@ -7,7 +7,7 @@ import { Abas } from '@/components/Obra/Abas';
 import { ResumoProgramacao } from '@/components/Obra/ResumoProgramacao';
 import { AgruparPor, SequenciaProgramacao } from '@/components/Obra/SequenciaProgramacao';
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Calculator, Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { Calculado } from '@/components/Obra/Calculado';
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -23,6 +23,7 @@ import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
 import { DesviosDaProgramacao } from '@/components/Obra/DesviosProgramacao';
+import { usePreferencia } from '@/lib/preferencia';
 import { RevisoesProgramacao } from '@/components/Obra/RevisoesProgramacao';
 import { TrocarItemPq } from '@/components/Obra/TrocarItemPq';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
@@ -48,6 +49,8 @@ export default function MontarPage() {
   const { pode } = useObra();
   const prog = useProgramacao(id);
   const podeAssociar = pode('encarregado') && prog.data?.status !== 'concluida';
+  // spec 105: o cálculo da CPU embaixo de cada linha fica escondido até a pessoa pedir (lembrado no navegador)
+  const [verCpu, setVerCpu] = usePreferencia('malhet.programacao.cpu', false);
   // spec 099: corrigir o item da PQ vale também com a programação emitida (sai na próxima revisão)
   const podeTrocarPq = pode('planejador') && prog.data?.status !== 'concluida';
   const frentes = useFrentes2();
@@ -405,6 +408,9 @@ export default function MontarPage() {
           {encs.length > 1 && <FiltroEncarregado encs={encs} valor={enc} onChange={setEnc} />}
           <AgruparPor porEnc={porEnc} onChange={setPorEnc} />
           <BotaoNomes />
+          <Chip ativo={verCpu} onClick={() => setVerCpu(!verCpu)} title="Mostrar ou esconder, em cada linha, HH/un, quem governa, índice e capacidade pela CPU">
+            <Calculator size={14} className="mr-1" /> {verCpu ? 'Esconder cálculo da CPU' : 'Cálculo da CPU'}
+          </Chip>
           <Chip ativo={modo === 'previsto'} onClick={() => setModo('previsto')}>P · Previsto</Chip>
           <Chip ativo={modo === 'realizado'} onClick={() => setModo('realizado')}>R · Realizado</Chip>
           {modo === 'previsto' && rascunho && pode('encarregado') && v.linhas > 0 && <>
@@ -458,7 +464,7 @@ export default function MontarPage() {
                             <div className="text-xs text-m-text-muted">{ln.wbs_codigo && <span title={ln.wbs_caminho ?? ''} className="mr-1 rounded-[5px] bg-m-info-subtle px-1.5 py-px font-semibold text-m-info">WBS {ln.wbs_codigo}</span>}{ln.grupo.codigo} · {ln.grupo.descricao}{ln.id_crono ? ` · ${ln.id_crono}` : ''}{ln.observacao ? ` · ${ln.observacao}` : ''}
                               {podeAssociar && <span className="ml-1.5"><AssociarAtividadeLinha pid={id} linha={ln} /></span>}</div>
                             <div className="text-[11px] text-m-text-muted">{NATUREZA[(ln.natureza ?? 'P') as keyof typeof NATUREZA]}{ln.turno ? ` · ${ln.turno}` : ''}{ln.jornada ? ` ${fmt(ln.jornada, 1)}h` : ''}{ln.responsavel ? ` · resp. ${ln.responsavel}` : ''}{comoLista(ln.ssma?.pto).length ? ` · PTO ${comoLista(ln.ssma?.pto).join(', ')}` : ''}</div>
-                            <Calculo ln={ln} pid={id} />
+                            <Calculo ln={ln} pid={id} detalhe={verCpu} />
                           </td>
                           <td className="whitespace-nowrap px-2 py-2">{ln.item_pq ? <span title={ln.descricao_pq ?? ''}>{ln.item_pq}</span> : <span className="text-m-warning">sem PQ</span>}
                             {podeTrocarPq && <TrocarItemPq pid={id} linha={ln} />}</td>
@@ -587,9 +593,11 @@ function ModoLinha({ ln, pid, editar, aplicar }: { ln: LinhaVisao; pid: number; 
 }
 
 /** Produção da linha pela CPU da obra: HH/un, quem governa, índice e capacidade da equipe (cada número abre a conta). */
-function Calculo({ ln, pid }: { ln: LinhaVisao; pid: number }) {
+function Calculo({ ln, pid, detalhe }: { ln: LinhaVisao; pid: number; detalhe: boolean }) {
   const c = ln.calc;
   if (!c) return null;
+  // escondido (padrão, spec 105): só os alertas ficam, para a linha ficar limpa
+  if (!detalhe) return c.alertas.length ? <div className="mt-1 text-[11px] leading-snug text-m-warning">{c.alertas.map((a) => <div key={a}>{a}</div>)}</div> : null;
   const un = ln.unidade ?? 'un';
   const rota = `/programacoes/${pid}/linhas/${ln.id}/memoria`;
   return (

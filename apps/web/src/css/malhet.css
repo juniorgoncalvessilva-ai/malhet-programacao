@@ -80,6 +80,7 @@ body.malhet {
 }
 
 /* Página principal (spec 092): o golpe do malhete e o carimbo da validação */
+@keyframes m-entrar { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 @keyframes m-golpe { 0% { transform: rotate(0deg); } 35% { transform: rotate(-42deg); } 62% { transform: rotate(14deg); } 78% { transform: rotate(-6deg); } 100% { transform: rotate(0deg); } }
 @keyframes m-carimbo { 0% { opacity: 0; transform: scale(1.7) rotate(-9deg); } 55% { opacity: 1; transform: scale(.94) rotate(-5deg); } 100% { opacity: 1; transform: scale(1) rotate(-5deg); } }
 .m-golpe { animation: m-golpe .55s cubic-bezier(.3,.7,.2,1); }
