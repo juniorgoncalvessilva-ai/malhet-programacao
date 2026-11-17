@@ -46,9 +46,11 @@ from app.modules.arquivos.api.router import router as armazenamento
 from app.modules.treinamentos.api.router import router as treinamentos
 from app.modules.mobilizacao.api.router import router as mobilizacao
 from app.modules.erros.api.router import router as erros
+from app.modules.aderencia.api.router import router as aderencia
 from app.modules.arquivos.application import fila as fila_arquivos
 import app.modules.campo.application.arquivos  # noqa: F401  (registra as fotos na fila de arquivos)
 import app.modules.ssma.application.arquivos  # noqa: F401  (registra os anexos de SSMA)
+import app.modules.aderencia.application.importar  # noqa: F401  (registra os modelos de apresentação)
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -157,5 +159,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros, aderencia):
     app.include_router(r, prefix="/api")

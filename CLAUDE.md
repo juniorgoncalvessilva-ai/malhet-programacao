@@ -169,6 +169,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`/planos/programacao/previa`, `/planos/itens/da-programacao`, liga `programacao_linha.plano_item_id`); restrições abrem
   abaixo da atividade; look-ahead `?origem=plano` (`dias_do_plano`).
 - Início do celular só com o que fazer e atalhos (sem lista de atividades). Spec 078.
+- Aderência semanal (spec 104, `aderencia/`): financeiro = qtd × PU por responsável da linha; painel da semana N (anteriores,
+  ranking, semana anterior, meta + marcos) em `domain/aderencia.py`; semanas sem programação emitida vêm do histórico
+  (`aderencia_historico`, lido da apresentação anterior por `ler_historico`); modelo .pptx da obra/contratada
+  (`apresentacao_modelo`, herdado pela `nome_contratada`) e `application/apresentacao.py` (python-pptx: mantém capa,
+  divisória, encerramento e mestre; redesenha as folhas). Tela `/app/aderencia`. `ResumoProgramacao` com coluna R$.
 - Resumo do dia — check out (spec 101): `GET /campo/resumo-dia` (`campo/application/resumo_dia.py`: atividades com realizado/
   foto no dia, ocorrências, restrições, auditorias, equipes × atividades, fotos — tudo Local → Área → CWP) e texto do WhatsApp
   por parte em `campo/domain/resumo_dia.py` (`textos`, `juntar`). Tela `/app/resumo-dia` e `/m/resumo` (`ResumoDia.tsx`):

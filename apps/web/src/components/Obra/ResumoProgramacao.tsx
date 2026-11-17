@@ -10,6 +10,7 @@ import { nomeLinha, type ModoNomes } from '@/lib/programacao/nomes';
 /**
  * Resumo da programação (spec 053): o programado por frente (local → área → linhas) e por responsável → encarregado,
  * com a quantidade somada por unidade de medida (previsto e realizado) e o HH previsto. Toda soma abre a conta.
+ * Coluna R$ (spec 104): o financeiro = quantidade × PU do item da PQ (etapa: PU × peso; sem avanço = 0), previsto e real.
  */
 type Linha = LinhaVisao & { local: string; area: string };
 type Visao = { titulo: string; locais: { codigo: string; descricao: string; areas: { codigo: string; descricao: string; linhas: LinhaVisao[] }[] }[] };
@@ -27,6 +28,26 @@ function memoriaSoma(chave: string, titulo: string, linhas: Linha[], campo: 'tot
       { descricao: 'Total', conta: `${linhas.length} linha(s)`, resultado: `${fmt(total)} ${unid}`, destaque: true }],
     fontes: [{ dado: rot, valor: `${fmt(total)} ${unid}`, origem: 'Programação', local: campo === 'hh' ? 'HH previsto de cada linha (CPU da obra × previsto)' : `coluna Total (${rot}) de cada linha` }],
     notas: [],
+  };
+}
+
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const financeiro = (l: LinhaVisao, campo: 'total_previsto' | 'total_realizado') => (l[campo] ?? 0) * (l.pu ?? 0);
+
+function memoriaFinanceira(chave: string, titulo: string, linhas: Linha[], campo: 'total_previsto' | 'total_realizado', nomes: ModoNomes): MemoriaCalculo {
+  const total = linhas.reduce((s, l) => s + financeiro(l, campo), 0);
+  const rot = campo === 'total_previsto' ? 'previsto' : 'realizado';
+  const semPu = linhas.filter((l) => l.pu == null && (l[campo] ?? 0) > 0);
+  return {
+    chave, titulo, valor: brl(total), formula: `soma de (quantidade ${rot} × PU) das linhas deste grupo`,
+    passos: [...linhas.filter((l) => (l[campo] ?? 0) > 0).map((l) => ({
+      descricao: `${l.codigo_simova} ${nomeLinha(l, nomes)}`,
+      conta: `${fmt(l[campo] ?? 0)} ${l.unidade ?? ''} × ${l.pu != null ? brl(l.pu) : 'sem PU'}${l.etapa ? (l.etapa.sem_avanco ? ' (etapa sem avanço)' : ` (etapa ${fmt((l.etapa.percentual ?? 0) * 100, 2)}%)`) : ''}`,
+      resultado: brl(financeiro(l, campo)), destaque: false })),
+      { descricao: 'Total', conta: `${linhas.length} linha(s)`, resultado: brl(total), destaque: true }],
+    fontes: [{ dado: 'PU', valor: 'por item', origem: 'PQ vigente', local: 'preço unitário do item da PQ da linha (etapa: PU × peso)' },
+      { dado: rot, valor: '', origem: 'Programação', local: `coluna Total (${rot}) de cada linha` }],
+    notas: semPu.length ? [`${semPu.length} linha(s) sem PU contam R$ 0: ${semPu.slice(0, 5).map((l) => l.codigo_simova).join(', ')}`] : [],
   };
 }
 
@@ -57,6 +78,10 @@ export function ResumoProgramacao({ v, nomes }: { v: Visao; nomes: ModoNomes }) 
           </td>
         );
       })}
+      <td className={`whitespace-nowrap px-2 py-1.5 text-right ${forte ? 'font-semibold text-m-text-primary' : ''}`}>
+        {ver !== 'realizado' && <div><Calculado chave={`${chave}:rs:p`} memoria={() => memoriaFinanceira(`${chave}:rs:p`, `${titulo} · financeiro previsto`, ls, 'total_previsto', nomes)}>{brl(ls.reduce((s, l) => s + financeiro(l, 'total_previsto'), 0))}</Calculado></div>}
+        {ver !== 'previsto' && <div className={ver === 'ambos' ? 'text-[11.5px] font-normal text-m-text-muted' : ''}>{ver === 'ambos' ? 'R ' : ''}<Calculado chave={`${chave}:rs:r`} memoria={() => memoriaFinanceira(`${chave}:rs:r`, `${titulo} · financeiro realizado`, ls, 'total_realizado', nomes)}>{brl(ls.reduce((s, l) => s + financeiro(l, 'total_realizado'), 0))}</Calculado></div>}
+      </td>
       <td className="whitespace-nowrap px-2 py-1.5 text-right">
         <Calculado chave={`${chave}:hh`} memoria={() => memoriaSoma(`${chave}:hh`, `${titulo} · HH previsto`, ls, 'hh', 'HH', nomes)}>{fmt(ls.reduce((s, l) => s + (l.calc?.total_hh_previsto ?? 0), 0), 1)}</Calculado>
       </td>
@@ -67,6 +92,7 @@ export function ResumoProgramacao({ v, nomes }: { v: Visao; nomes: ModoNomes }) 
       <tr className="text-left text-[11px] uppercase tracking-[0.3px] text-m-text-muted">
         <th className="px-2 py-2">{primeira}</th><th className="px-2 py-2 text-right">Linhas</th>
         {unidades.map((u) => <th key={u} className="px-2 py-2 text-right normal-case">{u}{ver === 'ambos' ? <span className="block text-[10px] font-normal">prev. / R</span> : null}</th>)}
+        <th className="px-2 py-2 text-right">R${ver === 'ambos' ? <span className="block text-[10px] font-normal normal-case">prev. / R</span> : null}</th>
         <th className="px-2 py-2 text-right">HH prev.</th>
       </tr>
     </thead>

@@ -15,7 +15,7 @@ TELAS_WEB: dict[str, str | None] = {
     # Planejamento
     "/app/vigente": None, "/app/cronograma": None, "/app/wbs": None, "/app/criterios": None, "/app/plano": None,
     "/app/programacoes": None, "/app/lookahead": None, "/app/restricoes": None, "/app/pto": PLANEJADOR,
-    "/app/desvios": None, "/app/indicadores": None,
+    "/app/desvios": None, "/app/indicadores": None, "/app/aderencia": None,
     # Campo e qualidade
     "/app/resumo-dia": None, "/app/fotos": None, "/app/auditorias": None, "/app/acoes": None,
     # Segurança (SSMA)
@@ -55,7 +55,7 @@ PADRAO_WEB: dict[str, list[str]] = {
                   "/app/auditorias", "/app/acoes", "/app/resumo-dia", "/app/fotos", "/app/vigente", "/app/lookahead",
                   "/app/presenca", "/app/efetivo", "/app/efetivo/organograma"],
     "leitor": ["/app/vigente", "/app/cronograma", "/app/plano", "/app/programacoes", "/app/lookahead", "/app/restricoes",
-               "/app/desvios", "/app/indicadores", "/app/resumo-dia", "/app/fotos", "/app/efetivo/organograma"],
+               "/app/desvios", "/app/indicadores", "/app/aderencia", "/app/resumo-dia", "/app/fotos", "/app/efetivo/organograma"],
 }
 
 

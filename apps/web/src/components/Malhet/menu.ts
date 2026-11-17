@@ -1,4 +1,4 @@
-import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send } from 'lucide-react';
+import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -25,6 +25,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'PTO (planejamento)', url: '/app/pto', icone: ClipboardList, minimo: 'planejador' },
       { titulo: 'Desvios (Pareto)', url: '/app/desvios', icone: AlertTriangle },
       { titulo: 'Indicadores', url: '/app/indicadores', icone: BarChart3 },
+      { titulo: 'Aderência semanal', url: '/app/aderencia', icone: TrendingUp },
     ],
   },
   {

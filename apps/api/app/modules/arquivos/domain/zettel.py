@@ -44,13 +44,15 @@ TIPOS = {
     "referencia": ("60-referencias", "REF"),
     "relatorio": ("70-relatorios", "RELATORIO"),
     "programacao": ("10-programacoes", "PROG"),
+    "modelo-apresentacao": ("80-modelos", "MODELO"),  # spec 104: modelo .pptx das apresentações da contratada
 }
 
 EXTENSOES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf",
              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
              "application/vnd.ms-excel": "xls",
              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-             "application/msword": "doc", "text/markdown": "md", "text/plain": "txt"}
+             "application/msword": "doc",
+             "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx", "text/markdown": "md", "text/plain": "txt"}
 
 
 def curto(texto: str | None, limite: int = 40) -> str:
