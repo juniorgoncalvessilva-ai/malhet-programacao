@@ -80,6 +80,9 @@ class MovimentoEfetivoModel(Base):
     de: Mapped[str | None] = mapped_column(String(150))
     para: Mapped[str | None] = mapped_column(String(150))
     importacao_id: Mapped[int | None] = mapped_column(ForeignKey("importacao_efetivo.id", ondelete="SET NULL"))
+    # troca de equipe (tipo EQUIPE): as equipes pelo id, para contar as alterações mesmo depois de renomear (spec 107)
+    de_equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"), index=True)
+    para_equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"), index=True)
     por: Mapped[str] = mapped_column(String(80))
     em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

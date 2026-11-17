@@ -16,8 +16,11 @@ import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Calculado } from '@/components/Obra/Calculado';
+import { ConfigNomeEquipe } from '@/components/Equipes/ConfigNomeEquipe';
+import { MovimentacoesEquipes } from '@/components/Equipes/MovimentacoesEquipes';
+import { type ConfigNomeEquipe as Config, limparDisciplina, nomeEquipe } from '@/lib/equipes/nome';
 
-type Form = Omit<Equipe, 'id' | 'hh_disponivel_dia' | 'composicao_efetiva' | 'encarregado_efetivo' | 'fora_do_efetivo'> & { id?: number };
+type Form = Omit<Equipe, 'id' | 'hh_disponivel_dia' | 'composicao_efetiva' | 'encarregado_efetivo' | 'fora_do_efetivo'> & { id?: number; disciplina_padrao?: string | null };
 type Vinculo = { equipes: number; vinculados: number; nao_encontrados: string[]; sem_numero: string[] };
 /** Crachá provisório ("?nome") = pessoa ainda sem número. */
 const semNumero = (c: string | null | undefined) => !c || c.startsWith('?');
@@ -37,7 +40,9 @@ export default function EquipesPage() {
   const api = useApi();
   const qc = useQueryClient();
   const recursos = useQuery({ queryKey: ['cpu-recursos'], queryFn: () => api.get<{ recurso: string; tipo: 'MOD' | 'EQU'; composicoes: number }[]>('/cpu/recursos') });
-  const [aba, setAba] = useState<'equipes' | 'importar'>('equipes');
+  const [aba, setAba] = useState<'equipes' | 'movimentacoes' | 'configuracao' | 'importar'>('equipes');
+  const config = useQuery({ queryKey: ['equipes-config'], queryFn: () => api.get<Config>('/equipes/config') });
+  const [nomeManual, setNomeManual] = useState(false); // spec 107: equipe nova sai no padrão da obra, a não ser que digite o nome
   const [form, setForm] = useState<Form | null>(null);
   const [nova, setNova] = useState<ComposicaoEquipe>({ recurso: '', tipo: 'EQU', quantidade: 1 });
   const [erro, setErro] = useState<unknown>(null);
@@ -89,12 +94,20 @@ export default function EquipesPage() {
   };
   const atualizar = () => { qc.invalidateQueries({ queryKey: chaves.equipes }); qc.invalidateQueries({ queryKey: ['programacao'] }); qc.invalidateQueries({ queryKey: kEfetivo.efetivo }); };
 
+  const padrao = !!form && !form.id && !nomeManual && !!config.data;
+  const previa = padrao && config.data ? nomeEquipe(config.data.modelo_nome, config.data.proximo_numero, form?.disciplina_padrao || '…', config.data.digitos) : '';
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
     try {
-      if (form.id) await api.put(`/equipes/${form.id}`, form); else await api.post('/equipes', form);
-      toast.success('Equipe salva');
+      if (form.id) await api.put(`/equipes/${form.id}`, { ...form, disciplina_padrao: null });
+      else {
+        const nova = await api.post<Equipe>('/equipes', padrao ? { ...form, nome: '', disciplina_padrao: form.disciplina_padrao ?? '' } : { ...form, disciplina_padrao: null });
+        if (padrao) toast.success(`Equipe ${nova.nome} criada`);
+      }
+      if (form.id || !padrao) toast.success('Equipe salva');
+      qc.invalidateQueries({ queryKey: ['equipes-config'] });
+      qc.invalidateQueries({ queryKey: ['equipes-movimentacoes'] });
       setForm(null);
       setErro(null);
       atualizar();
@@ -127,11 +140,14 @@ export default function EquipesPage() {
         acoes={<div className="flex flex-wrap gap-2">
           {pode('planejador') && <Botao variante="secundario" disabled={vinculando} onClick={vincular}><Link2 size={16} /> {vinculando ? 'Vinculando…' : 'Vincular ao efetivo'}</Botao>}
           <Botao variante="secundario" onClick={() => api.download('/equipes/simova.xlsx', 'Equipe_Simova.xlsx').then(() => toast.success('Arquivo no padrão do Simova gerado (equipes ativas)')).catch((e) => toast.error(e.message))}><Download size={16} /> Exportar para o Simova</Botao>
-          {pode('planejador') && <Botao variante="secundario" onClick={() => { setAba('equipes'); setErro(null); setForm({ ...NOVA, composicao: [], membros: [] }); }}><Plus size={16} /> Nova equipe</Botao>}
+          {pode('planejador') && <Botao variante="secundario" onClick={() => { setAba('equipes'); setErro(null); setNomeManual(false); setForm({ ...NOVA, composicao: [], membros: [], disciplina_padrao: '' }); }}><Plus size={16} /> Nova equipe</Botao>}
         </div>}
       />
       <Abas rotulo="Seções das equipes" ativa={aba} onTrocar={setAba}
-        abas={[{ chave: 'equipes', titulo: `Equipes (${equipes.data?.length ?? 0})` }, { chave: 'importar', titulo: 'Importar', visivel: pode('planejador') }]} />
+        abas={[{ chave: 'equipes', titulo: `Equipes (${equipes.data?.length ?? 0})` }, { chave: 'movimentacoes', titulo: 'Movimentações' },
+          { chave: 'configuracao', titulo: 'Configuração' }, { chave: 'importar', titulo: 'Importar', visivel: pode('planejador') }]} />
+      {aba === 'movimentacoes' && <MovimentacoesEquipes />}
+      {aba === 'configuracao' && <ConfigNomeEquipe config={config.data} podeEditar={pode('admin')} />}
       {aba === 'importar' && pode('planejador') && (
         <Painel titulo="Importar equipes do Simova">
           <UploadForm campos={[{ nome: 'arquivo', rotulo: 'Equipe.xlsx' }]} rotulo="Importar" pendente={importando} onEnviar={async (fd) => { await importarSimova(fd); setAba('equipes'); }} />
@@ -154,7 +170,18 @@ export default function EquipesPage() {
           <Painel titulo={form.id ? `Editar ${form.nome}` : 'Nova equipe'}>
             <form onSubmit={salvar} className="grid gap-3 md:grid-cols-6">
               <Campo rotulo="Código Simova" value={form.codigo_simova ?? ''} onChange={(e) => setForm({ ...form, codigo_simova: e.target.value || null })} />
-              <div className="md:col-span-2"><Campo rotulo="Nome da equipe" required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
+              {padrao ? (
+                <div className="md:col-span-2">
+                  <Campo rotulo="Disciplina" required={!!config.data?.modelo_nome.includes('{disciplina}')} list="disciplinas-equipe" placeholder="FORMA, CONCRETO, ARMAÇÃO…" value={form.disciplina_padrao ?? ''}
+                    onChange={(e) => setForm({ ...form, disciplina_padrao: e.target.value })} onBlur={(e) => setForm({ ...form, disciplina_padrao: limparDisciplina(e.target.value) })} />
+                  <datalist id="disciplinas-equipe">{config.data?.disciplinas.map((d) => <option key={d} value={d} />)}</datalist>
+                  <p className="mt-1 text-[12.5px] text-m-text-secondary">Nome: <b className="text-m-text-primary">{previa}</b> · número automático
+                    <button type="button" className="ml-2 font-semibold text-m-accent underline" onClick={() => { setNomeManual(true); setForm({ ...form, nome: '' }); }}>digitar o nome</button></p>
+                </div>
+              ) : (
+                <div className="md:col-span-2"><Campo rotulo="Nome da equipe" required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+                  {!form.id && config.data && <button type="button" className="mt-1 text-[12.5px] font-semibold text-m-accent underline" onClick={() => setNomeManual(false)}>usar o padrão da obra ({config.data.modelo_nome})</button>}</div>
+              )}
               <Selecao rotulo="Turno" value={form.turno ?? ''} onChange={(e) => setForm({ ...form, turno: e.target.value || null })}>
                 {TURNOS.map((t) => <option key={t} value={t}>{t}</option>)}
                 {form.turno && !TURNOS.includes(form.turno) && <option value={form.turno}>{form.turno}</option>}
@@ -237,7 +264,7 @@ export default function EquipesPage() {
                   <Campo rotulo="ou pela matrícula" placeholder="115532 ou 115532 - José da Silva" value={novoMembro} className="w-[300px]"
                     onChange={(e) => setNovoMembro(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addMembro(); } }} />
                   <Botao type="button" variante="secundario" onClick={addMembro}><UserPlus size={16} /> Incluir</Botao>
-                  <span className="pb-2.5 text-[12px] text-m-text-muted">Ao salvar, nome e função vêm do efetivo pela matrícula.</span>
+                  <span className="pb-2.5 text-[12px] text-m-text-muted">Ao salvar, nome e função vêm do efetivo pela matrícula. Quem estava em outra equipe sai de lá sozinho (líder pode ficar nas duas) e a troca vai para Movimentações.</span>
                 </div>
               </div>
 
@@ -307,7 +334,7 @@ export default function EquipesPage() {
                   {!!e.fora_do_efetivo && <div className="mt-1"><Pilula tom="atencao">{e.fora_do_efetivo} fora do efetivo</Pilula></div>}</td>
                   <td className={td}><Calculado rota={`/equipes/${e.id}/memoria`} chave="hh_disponivel">{fmt(e.hh_disponivel_dia)}</Calculado></td>
                   <td className={`${td} whitespace-nowrap`}>{pode('planejador') && <>
-                    <button type="button" className="font-semibold text-m-accent" onClick={() => { setErro(null); setForm({ ...e }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar</button>
+                    <button type="button" className="font-semibold text-m-accent" onClick={() => { setErro(null); setNomeManual(true); setForm({ ...e }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar</button>
                     <button type="button" aria-label={`Excluir ${e.nome}`} className="ml-3 p-1 align-middle text-m-text-muted hover:text-m-danger" onClick={() => excluir([e.id])}><Trash2 size={15} /></button>
                   </>}</td>
                 </tr>

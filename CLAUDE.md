@@ -52,7 +52,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   contagens e gráficos agrupados do efetivo, cada número com memória. Spec 051.
 - Equipes × efetivo: o número antes do nome ("115532 :: JOSÉ") é a matrícula — `separar_cracha` +
   `LocalizadorEfetivo` + `equipes/application/vincular_efetivo.py` (ao salvar/importar e `POST /equipes/vincular-efetivo`).
-  Spec 016.
+  Spec 016. Uma equipe por funcionário: entrar numa equipe tira das outras (líder — encarregado/responsável/supervisor — pode
+  estar em várias), tudo por `equipes/application/alocacao.py::Alocador` com movimento `EQUIPE` (`de_equipe_id`/`para_equipe_id`);
+  aba Movimentações (`GET /equipes/movimentacoes`). Nome padrão `equipe_config` (`EQUIPE.{n}_{disciplina}`, número automático,
+  `disciplina_padrao`, aba Configuração). Spec 107.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e

@@ -57,3 +57,12 @@ class EquipeMembroModel(Base):
     cracha: Mapped[str] = mapped_column(String(20))
     nome: Mapped[str] = mapped_column(String(150))
     funcao: Mapped[str | None] = mapped_column(String(120))
+
+
+class EquipeConfigModel(Base):
+    """Padrão de nome das equipes da obra (spec 107): "EQUIPE.{n}_{disciplina}" — número automático, disciplina digitada."""
+
+    __tablename__ = "equipe_config"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
+    modelo_nome: Mapped[str] = mapped_column(String(60), default="EQUIPE.{n}_{disciplina}")
+    digitos: Mapped[int] = mapped_column(Integer, default=1)  # 1 = 7, 10 · 2 = 07, 10

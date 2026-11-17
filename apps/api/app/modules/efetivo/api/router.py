@@ -1,5 +1,5 @@
 """Efetivo e mobilização: importação semanal, equipes montadas pelo efetivo, de-para de funções e organograma."""
-from datetime import date, datetime
+from datetime import date
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel, Field
@@ -349,12 +349,19 @@ def _mover(s: Session, c: ContextoObra, m: ColaboradorModel, equipe: EquipeModel
         raise DomainError(f"{m.nome} não tem crachá/matrícula: defina o crachá antes de colocar em equipe")
     if equipe is not None and equipe.encarregado_cracha == m.cracha:
         raise DomainError(f"{m.nome} é o encarregado de {equipe.nome}")
-    de = _tirar_de_equipes(s, c.obra_id, m.cracha)
-    if equipe is not None:
-        equipe.membros.append(EquipeMembroModel(cracha=m.cracha, nome=m.nome[:150], funcao=None))
-    if (de or None) != (equipe.nome if equipe else None):
-        s.add(MovimentoEfetivoModel(obra_id=c.obra_id, colaborador_id=m.id, tipo="EQUIPE", de=de,
-                                    para=equipe.nome if equipe else None, por=c.usuario.id))
+    from app.modules.equipes.application.alocacao import Alocador
+
+    al = Alocador(s, c.obra_id, c.usuario.id)
+    if equipe is None:  # tirar: sai de todas as equipes em que é funcionário(a), cada saída no histórico
+        for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id)):
+            for mb in [x for x in e.membros if x.cracha == m.cracha]:
+                e.membros.remove(mb)
+                al.saiu(e, m.cracha)
+        return
+    if any(x.cracha == m.cracha for x in equipe.membros):
+        return  # já está nesta equipe
+    # entra e sai sozinho da outra equipe (líder pode ficar em mais de uma) — spec 107
+    al.incluir(equipe, m.cracha, m.nome)
 
 
 def _equipe(s: Session, c: ContextoObra, eid: int) -> EquipeModel:
@@ -383,7 +390,8 @@ def mover(d: MoverIn, s: Session = Depends(get_session), c: ContextoObra = Depen
 
 
 class NovaEquipeIn(BaseModel):
-    nome: str = Field(min_length=2, max_length=120)
+    nome: str = Field("", max_length=120)
+    disciplina_padrao: str | None = None  # nome no padrão da obra, número automático (spec 107)
     encarregado_id: int
     colaboradores: list[int] = []
     turno: str | None = "Diurno"
@@ -395,6 +403,12 @@ class NovaEquipeIn(BaseModel):
 @router.post("/equipes", status_code=201)
 def criar_equipe(d: NovaEquipeIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Cria a equipe com o encarregado e os colaboradores escolhidos no efetivo."""
+    if d.disciplina_padrao is not None:
+        from app.modules.equipes.application.nome import nome_da_nova_equipe
+
+        d.nome = nome_da_nova_equipe(s, c.obra_id, d.disciplina_padrao)
+    if len(d.nome.strip()) < 2:
+        raise DomainError("dê um nome à equipe", "nome")
     if s.scalar(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id, EquipeModel.nome == d.nome.strip())):
         raise DomainError(f"já existe a equipe {d.nome}", "nome")
     enc = _colab(s, c, d.encarregado_id)

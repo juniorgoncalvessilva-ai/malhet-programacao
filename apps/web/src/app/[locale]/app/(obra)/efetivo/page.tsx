@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRightLeft, History, Plus, Route, Upload, UserMinus, UserPlus, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -18,11 +18,12 @@ import type { Colaborador, SituacaoEfetivo } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { SITUACOES, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
 import { Carregando, LinhasCarregando } from '@/components/Obra/Esqueleto';
+import { type ConfigNomeEquipe, limparDisciplina, nomeEquipe } from '@/lib/equipes/nome';
 
 const TOM = TOM_SITUACAO;
 /** Desenha a lista aos poucos (todo mundo aparece: mais linhas entram ao rolar), para a tela não travar com milhares. */
 const LOTE = 200;
-type NovaEquipe = { nome: string; encarregado_id: string; turno: string; jornada_horas: string; responsavel: string };
+type NovaEquipe = { nome: string; encarregado_id: string; turno: string; jornada_horas: string; responsavel: string; disciplina: string; manual: boolean };
 
 export default function EfetivoPage() {
   const { pode } = useObra();
@@ -40,6 +41,9 @@ export default function EfetivoPage() {
   const [soSemEquipe, setSoSemEquipe] = useState(false);
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [nova, setNova] = useState<NovaEquipe | null>(null);
+  // spec 107: nome no padrão da obra (número automático + disciplina digitada)
+  const configNome = useQuery({ queryKey: ['equipes-config'], queryFn: () => api.get<ConfigNomeEquipe>('/equipes/config'), enabled: !!nova });
+  const padraoNome = !!nova && !nova.manual && !!configNome.data;
   const [destino, setDestino] = useState('');
   const [importando, setImportando] = useState(false);
   const [erro, setErro] = useState<unknown>(null);
@@ -83,11 +87,12 @@ export default function EfetivoPage() {
     if (!nova) return;
     try {
       const e = await api.post<{ nome: string; codigo_simova: string }>('/efetivo/equipes', {
-        nome: nova.nome, encarregado_id: Number(nova.encarregado_id), colaboradores: [...sel],
+        nome: padraoNome ? '' : nova.nome, disciplina_padrao: padraoNome ? limparDisciplina(nova.disciplina) : null,
+        encarregado_id: Number(nova.encarregado_id), colaboradores: [...sel],
         turno: nova.turno, jornada_horas: Number(nova.jornada_horas) || 9, responsavel: nova.responsavel || null,
       });
       toast.success(`Equipe ${e.nome} criada (código Simova ${e.codigo_simova})`);
-      setNova(null); setSel(new Set()); setErro(null); atualizar();
+      setNova(null); setSel(new Set()); setErro(null); atualizar(); qc.invalidateQueries({ queryKey: ['equipes-config'] });
     } catch (e) { setErro(e); }
   };
   const mover = async (equipeId: number | null) => {
@@ -172,7 +177,7 @@ export default function EfetivoPage() {
         titulo="Quem está na obra e em que equipe?"
         subtitulo={`${filtrados.length} de ${todos.length} pessoas${sel.size ? ` · ${sel.size} selecionada(s)` : ''}`}
         acoes={planejar && <div className="flex flex-wrap items-end gap-2">
-          <Botao disabled={!sel.size} onClick={() => setNova({ nome: '', encarregado_id: '', turno: 'Diurno', jornada_horas: '9', responsavel: '' })}><Plus size={16} /> Criar equipe com selecionados</Botao>
+          <Botao disabled={!sel.size} onClick={() => setNova({ nome: '', encarregado_id: '', turno: 'Diurno', jornada_horas: '9', responsavel: '', disciplina: '', manual: false })}><Plus size={16} /> Criar equipe com selecionados</Botao>
           <Selecao rotulo="Mover para" value={destino} onChange={(e) => setDestino(e.target.value)} className="w-[230px]">
             <option value="">Escolha a equipe…</option>
             {equipes.data?.filter((e) => e.ativo).map((e) => <option key={e.id} value={e.id}>{e.codigo_simova ? `${e.codigo_simova} · ` : ''}{e.nome}</option>)}
@@ -183,7 +188,16 @@ export default function EfetivoPage() {
       >
         {nova && (
           <div className="grid gap-3 rounded-m-lg border border-m-accent/40 bg-m-accent-subtle/40 p-4 md:grid-cols-5">
-            <Campo rotulo="Nome da equipe" required placeholder="EQUIPE.22_CONCRETO" value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} />
+            {padraoNome && configNome.data ? (
+              <div>
+                <Campo rotulo="Disciplina" required list="disciplinas-efetivo" placeholder="FORMA, CONCRETO…" value={nova.disciplina} onChange={(e) => setNova({ ...nova, disciplina: e.target.value })} />
+                <datalist id="disciplinas-efetivo">{configNome.data.disciplinas.map((d) => <option key={d} value={d} />)}</datalist>
+                <p className="mt-1 text-[12px] text-m-text-secondary">Nome: <b className="text-m-text-primary">{nomeEquipe(configNome.data.modelo_nome, configNome.data.proximo_numero, nova.disciplina || '…', configNome.data.digitos)}</b>
+                  <button type="button" className="ml-1.5 font-semibold text-m-accent underline" onClick={() => setNova({ ...nova, manual: true })}>digitar</button></p>
+              </div>
+            ) : (
+              <Campo rotulo="Nome da equipe" required placeholder="EQUIPE.22_CONCRETO" value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} />
+            )}
             <Selecao rotulo="Encarregado" required value={nova.encarregado_id} onChange={(e) => setNova({ ...nova, encarregado_id: e.target.value })}>
               <option value="">Escolha entre os selecionados…</option>
               {selecionados.map((c) => <option key={c.id} value={c.id}>{c.nome} · {c.funcao ?? ''}</option>)}
@@ -194,7 +208,7 @@ export default function EfetivoPage() {
             <Campo rotulo="Jornada (h/dia)" type="number" step="0.25" value={nova.jornada_horas} onChange={(e) => setNova({ ...nova, jornada_horas: e.target.value })} />
             <Campo rotulo="Responsável" value={nova.responsavel} onChange={(e) => setNova({ ...nova, responsavel: e.target.value })} />
             <div className="flex items-center gap-2 md:col-span-5">
-              <Botao disabled={!nova.nome.trim() || !nova.encarregado_id} onClick={criarEquipe}>Criar equipe com {sel.size} pessoa(s)</Botao>
+              <Botao disabled={(padraoNome ? (configNome.data?.modelo_nome.includes('{disciplina}') && !nova.disciplina.trim()) : !nova.nome.trim()) || !nova.encarregado_id} onClick={criarEquipe}>Criar equipe com {sel.size} pessoa(s)</Botao>
               <Botao variante="secundario" onClick={() => setNova(null)}>Cancelar</Botao>
               <span className="text-[12px] text-m-text-muted">O código Simova é o próximo livre; quem estiver em outra equipe muda para esta.</span>
               {selecionados.some((c) => !c.cracha) && <span className="text-[12px] font-semibold text-m-warning">Sem crachá (defina antes ou tire da seleção): {selecionados.filter((c) => !c.cracha).map((c) => c.nome).join(', ')}</span>}
