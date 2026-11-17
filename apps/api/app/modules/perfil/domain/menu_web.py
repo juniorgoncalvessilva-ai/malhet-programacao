@@ -17,7 +17,7 @@ TELAS_WEB: dict[str, str | None] = {
     "/app/programacoes": None, "/app/lookahead": None, "/app/restricoes": None, "/app/pto": PLANEJADOR,
     "/app/desvios": None, "/app/indicadores": None,
     # Campo e qualidade
-    "/app/fotos": None, "/app/auditorias": None, "/app/acoes": None,
+    "/app/resumo-dia": None, "/app/fotos": None, "/app/auditorias": None, "/app/acoes": None,
     # Segurança (SSMA)
     "/app/ssma": SSMA, "/app/ssma/cadastros": SSMA, "/app/preventivos": None, "/app/lgpd": SSMA,
     # Efetivo e mobilização
@@ -49,13 +49,13 @@ PADRAO_WEB: dict[str, list[str]] = {
     "admin": _TODAS,
     "planejador": [u for u in _TODAS if TELAS_WEB[u] != ADMIN],
     "encarregado": ["/app/vigente", "/app/programacoes", "/app/lookahead", "/app/restricoes", "/app/desvios",
-                    "/app/fotos", "/app/auditorias", "/app/acoes", "/app/preventivos",
+                    "/app/resumo-dia", "/app/fotos", "/app/auditorias", "/app/acoes", "/app/preventivos",
                     "/app/presenca", "/app/equipes", "/app/efetivo/organograma"],
     "seguranca": ["/app/ssma/cadastros", "/app/ssma", "/app/preventivos", "/app/lgpd",
-                  "/app/auditorias", "/app/acoes", "/app/fotos", "/app/vigente", "/app/lookahead",
+                  "/app/auditorias", "/app/acoes", "/app/resumo-dia", "/app/fotos", "/app/vigente", "/app/lookahead",
                   "/app/presenca", "/app/efetivo", "/app/efetivo/organograma"],
     "leitor": ["/app/vigente", "/app/cronograma", "/app/plano", "/app/programacoes", "/app/lookahead", "/app/restricoes",
-               "/app/desvios", "/app/indicadores", "/app/fotos", "/app/efetivo/organograma"],
+               "/app/desvios", "/app/indicadores", "/app/resumo-dia", "/app/fotos", "/app/efetivo/organograma"],
 }
 
 

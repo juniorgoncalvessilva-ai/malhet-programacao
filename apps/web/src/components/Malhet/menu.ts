@@ -1,4 +1,4 @@
-import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft } from 'lucide-react';
+import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -31,6 +31,7 @@ export const MENU: GrupoMenu[] = [
     etapa: 'Campo e qualidade',
     cor: 'var(--m-proc-executar)',
     itens: [
+      { titulo: 'Resumo do dia (check out)', url: '/app/resumo-dia', icone: Send },
       { titulo: 'Book de fotos', url: '/app/fotos', icone: Images },
       { titulo: 'Auditorias', url: '/app/auditorias', icone: ShieldAlert },
       { titulo: 'Plano de ação 5W2H', url: '/app/acoes', icone: ListChecks },

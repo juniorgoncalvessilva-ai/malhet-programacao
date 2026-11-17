@@ -78,3 +78,15 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
                                    "editavel": p.status == "emitida", "inicio": p.inicio.isoformat(), "fim": p.fim.isoformat()},
             "dia_semana": v["dias"][i]["dia"], "linhas": linhas, "pendentes": pendentes, "so_minha_equipe": minhas is not None,
             "anterior": (d - timedelta(days=1)).isoformat(), "seguinte": (d + timedelta(days=1)).isoformat()}
+
+
+@router.get("/resumo-dia")
+def resumo_dia(data: date | None = None, qtd: bool = True, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Resumo do dia — check out (spec 101): atividades executadas, ocorrências, restrições, auditorias, equipes e fotos
+    por frente, com o texto de cada parte pronto para copiar ou mandar no WhatsApp."""
+    from app.modules.campo.application.resumo_dia import montar
+    from app.modules.campo.domain.resumo_dia import SECOES, juntar, textos
+
+    r = montar(s, c, data or date.today())
+    t = textos(r, qtd)
+    return {**r, "textos": t, "texto": juntar(t, SECOES)}

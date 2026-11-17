@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, ShieldAlert, ShieldCheck, UserRound, Wind, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Bell, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, Send, ShieldAlert, ShieldCheck, UserRound, Wind, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 /**
@@ -20,6 +20,7 @@ export const MENU_MOBILE: ItemMobile[] = [
   { url: '/m/presenca', titulo: 'Presença', icone: ScanFace, barra: true, destaque: true, minimo: 'encarregado', descricao: 'Ler crachá, NFC ou rosto' },
   { url: '/m/ocorrencias', titulo: 'Ocorrências', icone: AlertTriangle, barra: true, descricao: 'Registrar e ver ocorrências' },
   { url: '/m/restricoes', titulo: 'Restrições', icone: Fish, barra: true, descricao: 'Restrições do 6WLA' },
+  { url: '/m/resumo', titulo: 'Resumo do dia', curto: 'Resumo', icone: Send, descricao: 'Check out do dia por frente, para o WhatsApp' },
   { url: '/m/pendencias', titulo: 'Pendências', icone: ClipboardCheck, barra: true, minimo: 'encarregado', descricao: 'Dias sem lançamento' },
   { url: '/m/auditorias', titulo: 'Auditorias', icone: ShieldAlert, minimo: 'encarregado', seguranca: true, descricao: 'Auditoria de segurança e envio no WhatsApp' },
   { url: '/m/acoes', titulo: 'Ações 5W2H', curto: 'Ações', icone: ListChecks, minimo: 'encarregado', seguranca: true, descricao: 'Concluir ações com foto e verificar' },

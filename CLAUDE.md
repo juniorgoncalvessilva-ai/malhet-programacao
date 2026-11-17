@@ -167,6 +167,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`/planos/programacao/previa`, `/planos/itens/da-programacao`, liga `programacao_linha.plano_item_id`); restrições abrem
   abaixo da atividade; look-ahead `?origem=plano` (`dias_do_plano`).
 - Início do celular só com o que fazer e atalhos (sem lista de atividades). Spec 078.
+- Resumo do dia — check out (spec 101): `GET /campo/resumo-dia` (`campo/application/resumo_dia.py`: atividades com realizado/
+  foto no dia, ocorrências, restrições, auditorias, equipes × atividades, fotos — tudo Local → Área → CWP) e texto do WhatsApp
+  por parte em `campo/domain/resumo_dia.py` (`textos`, `juntar`). Tela `/app/resumo-dia` e `/m/resumo` (`ResumoDia.tsx`):
+  escolher partes, editar, copiar, wa.me e compartilhar com fotos no celular (`lib/resumo/whatsapp.ts`).
 - Ficha do colaborador (spec 087): `GET/POST/PUT/DELETE /efetivo/colaboradores` (campos operacionais — nada de CPF, RG,
   telefone, endereço, nascimento ou saúde; `Ficha`, `chave_cadastro`); excluir só sem prova (presença, LGPD, assinatura,
   etilômetro). `FichaColaborador.tsx` (abas Dados | Contrato | ASO e treinamentos | Mobilização | Histórico).
