@@ -104,7 +104,8 @@ async function fotoDoRosto(v: HTMLVideoElement, caixa: { x: number; y: number; w
  */
 export function LeitorFacial({ pessoas, limite, onLer, capturar = false, onDesconhecido, pausado = false }: {
   pessoas: PessoaBase[]; limite: number; onLer: (p: PessoaBase, extra: { foto: Blob | null; distancia: number }) => void; capturar?: boolean;
-  onDesconhecido?: (descritor: number[]) => void; pausado?: boolean;
+  /** `foto` = recorte do rosto como URL do objeto, só em memória (quem recebe revoga); nunca é enviada. */
+  onDesconhecido?: (descritor: number[], foto: string | null) => void; pausado?: boolean;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [frente, setFrente] = useState<'environment' | 'user'>('environment');
@@ -112,6 +113,9 @@ export function LeitorFacial({ pessoas, limite, onLer, capturar = false, onDesco
   const [msg, setMsg] = useState('Carregando o reconhecimento facial…');
   const [caixa, setCaixa] = useState<{ x: number; y: number; w: number; h: number; nome?: string } | null>(null);
   const comRosto = useMemo(() => pessoas.filter((p) => p.face), [pessoas]);
+  // a lista entra por ref: rosto novo cadastrado (ou a tela que redesenha) não reabre a câmera (spec 106)
+  const rostos = useRef(comRosto); rostos.current = comRosto;
+  const temRosto = comRosto.length > 0;
   const ler = useRef(onLer); ler.current = onLer;
   const desconhecido = useRef(onDesconhecido); desconhecido.current = onDesconhecido;
   const pausa = useRef(pausado); pausa.current = pausado;
@@ -119,7 +123,7 @@ export function LeitorFacial({ pessoas, limite, onLer, capturar = false, onDesco
 
   useEffect(() => {
     if (!temCamera()) { setEstado('erro'); setMsg('Sem acesso à câmera neste navegador (precisa de HTTPS).'); return; }
-    if (!comRosto.length && !oferece) { setEstado('erro'); setMsg('Ninguém com rosto cadastrado. Cadastre em Efetivo › Crachá e rosto.'); return; }
+    if (!temRosto && !oferece) { setEstado('erro'); setMsg('Ninguém com rosto cadastrado. Cadastre em Efetivo › Crachá e rosto.'); return; }
     let vivo = true; let fechar: (() => void) | null = null;
     const ultimo = new Map<number, number>();
     let anterior: number | null = null;
@@ -128,14 +132,16 @@ export function LeitorFacial({ pessoas, limite, onLer, capturar = false, onDesco
       try {
         await carregarFace();
         fechar = await abrirCamera(video.current!, frente);
-        setEstado('pronto'); setMsg(comRosto.length ? 'Enquadre um rosto por vez' : 'Ninguém com rosto cadastrado ainda — enquadre o rosto para cadastrar');
+        setEstado('pronto'); setMsg(temRosto ? 'Enquadre um rosto por vez' : 'Ninguém com rosto cadastrado ainda — enquadre o rosto para cadastrar');
         while (vivo) {
+          // pausado (cartão de cadastro aberto, spec 106): não lê rosto nenhum — o quadro fica congelado ao fundo
+          if (pausa.current) { await new Promise((x) => setTimeout(x, 250)); continue; }
           const v = video.current;
           const r = v && v.readyState >= 2 ? await lerRosto(v, 224) : null;
           if (!vivo) break;
           if (r && v) {
             const k = v.clientWidth / (v.videoWidth || 1);
-            const m = maisProximo(r.descritor, comRosto, limite);
+            const m = maisProximo(r.descritor, rostos.current, limite);
             setCaixa({ x: r.caixa.x * k, y: r.caixa.y * k, w: r.caixa.w * k, h: r.caixa.h * k, nome: m?.pessoa.nome });
             // duas leituras seguidas da mesma pessoa = confirmada; a mesma pessoa só de novo depois de 5 s
             if (m && anterior === m.pessoa.id && (ultimo.get(m.pessoa.id) ?? 0) + 5000 < Date.now()) {
@@ -146,14 +152,23 @@ export function LeitorFacial({ pessoas, limite, onLer, capturar = false, onDesco
             semMatch = m ? 0 : semMatch + 1;
             if (!m && semMatch >= 4 && desconhecido.current && !pausa.current && Date.now() - ultimoAviso > 6000) {
               ultimoAviso = Date.now(); semMatch = 0;
-              desconhecido.current(Array.from(r.descritor));
+              const blob = await fotoDoRosto(v, r.caixa).catch(() => null);
+              if (!vivo) break;
+              desconhecido.current(Array.from(r.descritor), blob ? URL.createObjectURL(blob) : null);
             }
           } else { setCaixa(null); anterior = null; await new Promise((x) => setTimeout(x, 120)); }
         }
       } catch (e) { if (vivo) { setEstado('erro'); setMsg((e as Error).message || 'Não consegui abrir a câmera'); } }
     })();
     return () => { vivo = false; fechar?.(); };
-  }, [frente, comRosto, limite, capturar, oferece]);
+  }, [frente, temRosto, limite, capturar, oferece]);
+
+  // congela a imagem enquanto pausado: o vídeo para no quadro do rosto lido (sem custo de processamento) e volta ao fechar
+  useEffect(() => {
+    const v = video.current;
+    if (!v || estado !== 'pronto') return;
+    if (pausado) v.pause(); else void v.play().catch(() => undefined);
+  }, [pausado, estado]);
 
   return (
     <section className="flex flex-col gap-2">

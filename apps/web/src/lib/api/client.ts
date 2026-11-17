@@ -3,7 +3,7 @@
  * Base: NEXT_PUBLIC_API_URL (padrão /backend/api, reescrito pelo Next para API_INTERNAL_URL — mesma origem,
  * então o cookie de refresh e o CSRF do auth-kit funcionam sem CORS).
  */
-import { relatarFalhaApi } from '@/lib/erros/relatar';
+import { apiRespondeu, relatarFalhaApi } from '@/lib/erros/relatar';
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/backend/api';
 
@@ -14,6 +14,11 @@ export class ApiError extends Error {
 }
 
 export type TokenGetter = () => Promise<string | null>;
+
+/** A API respondeu (qualquer coisa que não seja o proxy dizendo 502/503): zera a contagem de "fora do ar" (spec 106). */
+function chegou(res: Response) {
+  if (res.status !== 502 && res.status !== 503) apiRespondeu();
+}
 
 async function erro(res: Response, metodo = 'GET', caminho = ''): Promise<never> {
   let msg = res.statusText;
@@ -39,6 +44,7 @@ export async function apiFetch<T>(path: string, getToken: TokenGetter, init: Req
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const res = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: 'include' });
+  chegou(res);
   if (!res.ok) return erro(res, init.method ?? 'GET', path);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -50,6 +56,7 @@ export async function apiDownload(path: string, getToken: TokenGetter, nomePadra
   if (token) headers.Authorization = `Bearer ${token}`;
   if (obraId) headers['X-Obra-Id'] = String(obraId);
   const res = await fetch(`${API_URL}${path}`, { headers, credentials: 'include' });
+  chegou(res);
   if (!res.ok) return erro(res, 'GET', path);
   const blob = await res.blob();
   const cd = res.headers.get('Content-Disposition') ?? '';
@@ -70,6 +77,7 @@ export async function apiBlob(path: string, getToken: TokenGetter, obraId?: numb
   if (token) headers.Authorization = `Bearer ${token}`;
   if (obraId) headers['X-Obra-Id'] = String(obraId);
   const res = await fetch(`${API_URL}${path}`, { headers, credentials: 'include' });
+  chegou(res);
   if (!res.ok) return erro(res, 'GET', path);
   return res.blob();
 }
@@ -81,6 +89,7 @@ export async function apiPostDownload(path: string, getToken: TokenGetter, corpo
   if (token) headers.Authorization = `Bearer ${token}`;
   if (obraId) headers['X-Obra-Id'] = String(obraId);
   const res = await fetch(`${API_URL}${path}`, { method: 'POST', body: corpo, headers, credentials: 'include' });
+  chegou(res);
   if (!res.ok) return erro(res, 'POST', path);
   const blob = await res.blob();
   const cd = res.headers.get('Content-Disposition') ?? '';

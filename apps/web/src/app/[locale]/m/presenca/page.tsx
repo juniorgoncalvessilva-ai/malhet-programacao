@@ -24,9 +24,12 @@ export default function PresencaPage() {
   const [ultimo, setUltimo] = useState<Resultado | null>(null);
   const [equipe, setEquipe] = useState<string>('');
   const [novo, setNovo] = useState<Extract<Resultado, { tipo: 'desconhecido' }> | null>(null);
-  const [rostoNovo, setRostoNovo] = useState<number[] | null>(null); // spec 103: rosto não reconhecido
+  const [rostoNovo, setRostoNovo] = useState<{ face: number[]; foto: string | null } | null>(null); // spec 103/106: rosto não reconhecido
+  // a miniatura do rosto vive só em memória: some ao fechar o cartão (spec 106)
+  const fecharRosto = () => setRostoNovo((r) => { if (r?.foto) URL.revokeObjectURL(r.foto); return null; });
   const limpar = useRef<ReturnType<typeof setTimeout> | null>(null);
   const equipes = useMemo(() => new Map((pr.base?.equipes ?? []).map((e) => [e.id, e])), [pr.base]);
+  const liberados = useMemo(() => (pr.base?.pessoas ?? []).filter(rostoLiberado), [pr.base]);
 
 
   const mostrar = useCallback((r: Resultado) => {
@@ -89,10 +92,11 @@ export default function PresencaPage() {
 
           {modo === 'nfc' && <LeitorNfc onLer={async (s, t) => mostrar(await pr.porNfc(s, t))} />}
           {modo === 'codigo' && <LeitorCodigo onLer={async (c, meio) => mostrar(await pr.porCodigo(c, meio))} />}
-          {modo === 'facial' && <LeitorFacial pessoas={pr.base.pessoas.filter(rostoLiberado)} limite={pr.base.distancia_max} onLer={async (p) => mostrar(await pr.registrar(p, 'facial'))}
-            onDesconhecido={(d) => setRostoNovo(d)} pausado={!!rostoNovo} />}
-          {rostoNovo && <CadastroRosto pessoas={pr.base.pessoas} online={pr.online} onFechar={() => setRostoNovo(null)}
-            onSalvar={async (p) => { const res = await pr.cadastrarRosto(p, rostoNovo); setRostoNovo(null); mostrar(res); }} />}
+          {modo === 'facial' && <LeitorFacial pessoas={liberados} limite={pr.base.distancia_max} onLer={async (p) => mostrar(await pr.registrar(p, 'facial'))}
+            onDesconhecido={(face, foto) => setRostoNovo({ face, foto })}
+            pausado={!!rostoNovo} />}
+          {rostoNovo && <CadastroRosto pessoas={pr.base.pessoas} online={pr.online} foto={rostoNovo.foto} onFechar={fecharRosto}
+            onSalvar={async (p) => { const res = await pr.cadastrarRosto(p, rostoNovo.face); fecharRosto(); mostrar(res); }} />}
 
           <section className={cartaoM}>
             <div className="flex items-center justify-between gap-2">

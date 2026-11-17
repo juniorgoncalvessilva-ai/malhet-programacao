@@ -144,3 +144,17 @@ def test_so_super_admin_le(client, monkeypatch):
     assert r.status_code == 200 and len(r.json()["codigos"]) == 1
     assert client.get("/api/erros").status_code == 401
     assert client.get("/api/erros/resumo").status_code == 401
+
+
+def test_janela_de_deploy_nao_vira_relato(client):
+    """Spec 106: consulta (GET) que pegou 502/503 é a API reiniciando no deploy — aceita e descarta; 504 é rota lenta."""
+    base = {"origem": "web", "tipo": "api", "local": "/pt-BR/app/vigente"}
+    deploy = [{**base, "id_local": _id(), "mensagem": f"{st} em GET /mudancas: Bad Gateway", "acao": "GET /mudancas", "status": st}
+              for st in (502, 503)]
+    lento = {**base, "id_local": _id(), "mensagem": "504 em GET /book", "acao": "GET /fotos/book", "status": 504}
+    fora = {**base, "id_local": _id(), "mensagem": "API indisponível há mais de 90 s", "acao": "API indisponível", "status": 503}
+    salvar = {**base, "id_local": _id(), "mensagem": "503 em POST /programacoes/5/emitir", "acao": "POST /programacoes/5/emitir", "status": 503}
+    r = client.post("/api/erros", json={"relatos": [*deploy, fora, salvar, lento]}).json()
+    assert r == {"codigos": [codigo_de(x["id_local"]) for x in (fora, salvar, lento)], "recusados": 0}
+    assert Relato.de_entrada(**deploy[0]).transitorio is True
+    assert Relato.de_entrada(**{**deploy[0], "status": 500}).transitorio is False

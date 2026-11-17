@@ -11,8 +11,8 @@ const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUp
  * Rosto não cadastrado (spec 103): a câmera achou um rosto que não bate com ninguém. Escolhe quem é, confirma o
  * consentimento da pessoa (LGPD — só o descritor é guardado, nunca a foto) e a presença já entra. Sem internet, vai na fila.
  */
-export function CadastroRosto({ pessoas, online, onFechar, onSalvar }: {
-  pessoas: PessoaBase[]; online: boolean; onFechar: () => void; onSalvar: (p: PessoaBase) => Promise<void>;
+export function CadastroRosto({ pessoas, online, foto, onFechar, onSalvar }: {
+  pessoas: PessoaBase[]; online: boolean; foto?: string | null; onFechar: () => void; onSalvar: (p: PessoaBase) => Promise<void>;
 }) {
   const [busca, setBusca] = useState('');
   const [escolhida, setEscolhida] = useState<PessoaBase | null>(null);
@@ -24,13 +24,16 @@ export function CadastroRosto({ pessoas, online, onFechar, onSalvar }: {
     return pessoas.filter((p) => semAcento(p.nome).includes(t) || (p.matricula ?? '').includes(t) || p.codigos.some((c) => c.includes(t))).slice(0, 30);
   }, [busca, pessoas]);
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 font-[Figtree,system-ui,sans-serif]" role="dialog" aria-modal="true" aria-labelledby="rosto-titulo">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 font-[Figtree,system-ui,sans-serif]" role="dialog" aria-modal="true" aria-labelledby="rosto-titulo">
       <div className="flex max-h-[90dvh] w-full max-w-[480px] flex-col gap-3 overflow-y-auto rounded-t-[24px] bg-m-surface-raised p-4 pb-[max(env(safe-area-inset-bottom),16px)] text-m-text-primary">
         <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-m-warning-subtle text-m-warning"><ScanFace size={20} aria-hidden="true" /></span>
+          {foto
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={foto} alt="Rosto lido pela câmera" className="h-16 w-16 shrink-0 rounded-[14px] object-cover" />
+            : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-m-warning-subtle text-m-warning"><ScanFace size={20} aria-hidden="true" /></span>}
           <div className="flex-1">
             <h2 id="rosto-titulo" className="text-[18px] font-semibold leading-6">Rosto não cadastrado</h2>
-            <p className="text-[13px] text-m-text-tertiary">Quem é? Cadastre o rosto agora e a presença já entra.</p>
+            <p className="text-[13px] text-m-text-tertiary">Quem é? Cadastre o rosto agora e a presença já entra. A câmera fica parada enquanto você escolhe.</p>
           </div>
           <button type="button" onClick={onFechar} aria-label="Fechar" className="grid h-10 w-10 place-items-center rounded-full border border-m-stroke"><X size={18} /></button>
         </div>

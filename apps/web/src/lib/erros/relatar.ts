@@ -6,6 +6,7 @@
  * - Não manda corpo de requisição nem dado digitado; o servidor ainda mascara e-mail, CPF, telefone e números longos.
  * - Erros iguais em sequência viram um só (30 s). Ruído do navegador (extensões, ResizeObserver) é ignorado.
  * - Falha que a pessoa percebe (API 5xx, tela que quebrou) mostra o aviso com o código; erro solto de script só é enviado.
+ * - 502/503 por menos de 90 s é deploy (a API reiniciando): nem relato nem aviso (spec 106).
  */
 import { emAppNativo } from '@/lib/presenca/leitores';
 
@@ -92,10 +93,30 @@ export function relatarErro(e: { tipo: TipoErro; mensagem: string; pilha?: strin
   return aviso;
 }
 
+/**
+ * Janela de deploy (spec 106): enquanto a API reinicia, o proxy responde 502/503 por alguns segundos. Isso não é erro para
+ * relatar nem para avisar a pessoa — as consultas automáticas (mudanças, notificações, presença) tentam de novo sozinhas.
+ * Só se a API ficar sem responder por mais de 90 s vai um único relato "API indisponível". Qualquer resposta da API zera.
+ */
+const TOLERANCIA_FORA = 90_000;
+let foraDesde: number | null = null;
+let foraRelatado = false;
+/** Chamada pelo cliente a cada resposta que chegou da API (mesmo 4xx): ela está no ar. */
+export function apiRespondeu() { foraDesde = null; foraRelatado = false; }
+
 /** Chamada da API que falhou no servidor (5xx). Se o servidor já guardou (erro_ref), só mostra o aviso com o código dele. */
 export function relatarFalhaApi(metodo: string, caminho: string, status: number, mensagem: string, servidor?: { codigo?: string | null; ref?: string | null }) {
   if (typeof window === 'undefined' || status < 500) return;
   const acao = `${metodo.toUpperCase()} ${caminho.split('?')[0]}`;
+  if (status === 502 || status === 503) {
+    const agora = Date.now();
+    foraDesde ??= agora;
+    if (foraRelatado || agora - foraDesde < TOLERANCIA_FORA) return;
+    foraRelatado = true;
+    relatarErro({ tipo: 'api', mensagem: `API indisponível há mais de ${Math.round((agora - foraDesde) / 1000)} s (último: ${status} em ${acao})`,
+      acao: 'API indisponível', status, avisar: true, titulo: 'O servidor está fora do ar' });
+    return;
+  }
   if (servidor?.codigo && servidor.ref) {
     window.dispatchEvent(new CustomEvent<AvisoErro>(EVENTO_AVISO, { detail: { codigo: servidor.codigo, idLocal: servidor.ref, titulo: 'O servidor não conseguiu concluir' } }));
     return;

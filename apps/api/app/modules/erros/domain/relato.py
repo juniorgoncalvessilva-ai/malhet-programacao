@@ -122,6 +122,13 @@ class Relato:
     def grupo(self) -> str:
         return assinatura(self.tipo, self.mensagem or self.comentario, self.local, self.acao, self.pilha)
 
+    @property
+    def transitorio(self) -> bool:
+        """Consulta (GET) que deu 502/503: é a janela de deploy (a API reiniciando). Não vira relato (spec 106);
+        se a API ficar fora do ar de verdade, o app manda um único "API indisponível", que não começa por GET.
+        504 (tempo esgotado com a API no ar) continua sendo relato: é rota lenta, não deploy."""
+        return self.tipo == "api" and self.status in (502, 503) and self.acao.startswith("GET ")
+
     def comentar(self, texto: str) -> "Relato":
         return replace(self, comentario=limpar(texto, MAX_COMENTARIO))
 

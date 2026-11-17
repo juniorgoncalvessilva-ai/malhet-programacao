@@ -102,7 +102,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`CadastroRapido`): vincular à pessoa do efetivo (`/presenca/vincular`, fila offline) ou cadastro simplificado nome + função
   do de-para (`/presenca/pessoa-simplificada`, `colaborador.cadastro_pendente`) com alerta `CadastrosPendentes`. Spec 065. Matrícula
   que já é do efetivo junta os cadastros (`unificar`, todas as FKs de `colaborador` + identificação) após confirmar; rosto que não
-  bate abre `CadastroRosto` (vincular com `face`+consentimento, offline) e `rostoLiberado` aceita termo pendente. Spec 103. iPhone (sem Web NFC):
+  bate abre `CadastroRosto` (vincular com `face`+consentimento, offline) e `rostoLiberado` aceita termo pendente. Spec 103. Com o cartão aberto o
+  `LeitorFacial` fica `pausado` (não lê e congela o vídeo; miniatura do rosto só em memória). Spec 106. iPhone (sem Web NFC):
   link `/m/presenca?c=&m=` gravado no crachá (`gravarCracha`, Android) ou em etiqueta QR (`CrachasLink.tsx`), QR/código pela
   câmera com ZXing quando não há `BarcodeDetector` (`leitores.ts`, `codigoLido`). Spec 067. Duplicidade entre celulares: vale a
   leitura mais cedo (`presenca_leitura.valida`, `validas`), `GET /presenca/hoje` avisa "já registrado por outro celular". Spec 069.
@@ -219,7 +220,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Relato automático de erros (spec 098, `erros/`): 5xx da API, tela quebrada (`error.tsx`), erro de script e relato manual
   → `lib/erros/relatar.ts` (fila no aparelho, código E-XXXXXX, "contar o que fazia"); exceção não tratada da API vira relato
   (500 com `erro_id`/`erro_ref`). Dado pessoal mascarado em `erros/domain/relato.py::limpar`. Super admin: `/app/admin/erros`
-  (grupos, resolver/voltou). Erro novo em tela nova não precisa de nada: já é capturado.
+  (grupos, resolver/voltou). Erro novo em tela nova não precisa de nada: já é capturado. 502/503 por até 90 s = deploy: nem relato
+  nem aviso (`apiRespondeu`; servidor descarta `Relato.transitorio`); depois, um único "API indisponível". Spec 106.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

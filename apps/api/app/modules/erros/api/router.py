@@ -71,6 +71,8 @@ def receber(d: LoteIn, request: Request, s: Session = Depends(get_session),
         except DomainError:
             recusados += 1
             continue
+        if rel.transitorio:  # fila antiga de aparelho com a falha da janela de deploy: aceita e descarta
+            continue
         m = registrar(s, rel, usuario_id=u.id if u else None, usuario_email=u.email if u else None, obra_id=obra,
                       obra_existe=obra_existe)
         codigos.append(m.codigo)
