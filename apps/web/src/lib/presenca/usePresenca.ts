@@ -145,5 +145,16 @@ export function usePresenca() {
     return registrar(p, r.meio);
   }, [post, atualizarPessoa, registrar]);
 
-  return { vincular, cadastrar, obraId, base, baixando, erroBase, baixarBase, hoje, presentes, fila, online, enviar, registrar, porCodigo, porNfc, indice, data };
+  // rosto não reconhecido (spec 103): cadastra o rosto na pessoa (com o consentimento dela) e já registra a presença;
+  // funciona sem internet — vai na mesma fila dos crachás ligados no campo
+  const cadastrarRosto = useCallback(async (p: PessoaBase, face: number[]): Promise<Resultado> => {
+    await guardarVinculo(obraId, { colaborador_id: p.id, face, consentimento: true });
+    const atual: PessoaBase = { ...p, face };
+    await atualizarPessoa(atual);
+    const res = await registrar(atual, 'facial');
+    if (navigator.onLine !== false) enviar();
+    return res;
+  }, [obraId, atualizarPessoa, registrar, enviar]);
+
+  return { vincular, cadastrar, cadastrarRosto, obraId, base, baixando, erroBase, baixarBase, hoje, presentes, fila, online, enviar, registrar, porCodigo, porNfc, indice, data };
 }

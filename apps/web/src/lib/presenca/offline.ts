@@ -23,7 +23,11 @@ export interface BasePresenca {
   termo_lgpd?: TermoLgpd;
 }
 /** Crachá ligado a uma pessoa no celular, esperando internet para ir ao servidor (spec 065). */
-export interface VinculoLocal { colaborador_id: number; codigo?: string | null; nfc?: string | null }
+export interface VinculoLocal { colaborador_id: number; codigo?: string | null; nfc?: string | null; face?: number[] | null; consentimento?: boolean }
+
+/** O rosto da pessoa pode ser usado (LGPD, spec 074 + 103): aceitou a biometria no termo, ou ainda não respondeu o termo e
+ * o consentimento foi colhido no cadastro do rosto. Recusou ou revogou: não. */
+export const rostoLiberado = (p: { lgpd?: ConsentimentoLgpd }) => !p.lgpd || p.lgpd.biometria || p.lgpd.situacao === 'pendente';
 export type Meio = 'nfc' | 'qr' | 'codigo' | 'facial' | 'manual';
 export interface LeituraLocal {
   id_local: string; obra_id: number; colaborador_id: number; nome: string; data: string; hora: string; meio: Meio;
@@ -94,7 +98,7 @@ async function enviarVinculos(post: Post, obraId: number): Promise<void> {
     try { await post('/presenca/vincular', v); } catch (e) {
       // sem rede: tenta depois; recusado pelo servidor (crachá de outra pessoa…): descarta para não travar a fila
       if (typeof navigator !== 'undefined' && navigator.onLine === false) resta.push(v);
-      else if (!(e instanceof Error) || !/já é de|não encontrad|inválid/i.test(e.message)) resta.push(v);
+      else if (!(e instanceof Error) || !/já é de|não encontrad|inválid|não autorizou|consentimento/i.test(e.message)) resta.push(v);
     }
   }
   await req((await loja('kv', 'readwrite')).put(resta, `vinculos:${obraId}`));

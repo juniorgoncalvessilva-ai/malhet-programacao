@@ -5,7 +5,8 @@ import { LeitorCodigo, LeitorFacial, LeitorNfc } from '@/components/Mobile/Leito
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TopoM, cartaoM } from '@/components/Mobile/ui';
 import { avisar, temNfc } from '@/lib/presenca/leitores';
-import type { PessoaBase } from '@/lib/presenca/offline';
+import { type PessoaBase, rostoLiberado } from '@/lib/presenca/offline';
+import { CadastroRosto } from '@/components/Mobile/CadastroRosto';
 import { type Resultado, usePresenca } from '@/lib/presenca/usePresenca';
 
 type Modo = 'nfc' | 'codigo' | 'facial' | 'lista';
@@ -23,6 +24,7 @@ export default function PresencaPage() {
   const [ultimo, setUltimo] = useState<Resultado | null>(null);
   const [equipe, setEquipe] = useState<string>('');
   const [novo, setNovo] = useState<Extract<Resultado, { tipo: 'desconhecido' }> | null>(null);
+  const [rostoNovo, setRostoNovo] = useState<number[] | null>(null); // spec 103: rosto não reconhecido
   const limpar = useRef<ReturnType<typeof setTimeout> | null>(null);
   const equipes = useMemo(() => new Map((pr.base?.equipes ?? []).map((e) => [e.id, e])), [pr.base]);
 
@@ -87,7 +89,10 @@ export default function PresencaPage() {
 
           {modo === 'nfc' && <LeitorNfc onLer={async (s, t) => mostrar(await pr.porNfc(s, t))} />}
           {modo === 'codigo' && <LeitorCodigo onLer={async (c, meio) => mostrar(await pr.porCodigo(c, meio))} />}
-          {modo === 'facial' && <LeitorFacial pessoas={pr.base.pessoas.filter((p) => p.lgpd?.biometria !== false)} limite={pr.base.distancia_max} onLer={async (p) => mostrar(await pr.registrar(p, 'facial'))} />}
+          {modo === 'facial' && <LeitorFacial pessoas={pr.base.pessoas.filter(rostoLiberado)} limite={pr.base.distancia_max} onLer={async (p) => mostrar(await pr.registrar(p, 'facial'))}
+            onDesconhecido={(d) => setRostoNovo(d)} pausado={!!rostoNovo} />}
+          {rostoNovo && <CadastroRosto pessoas={pr.base.pessoas} online={pr.online} onFechar={() => setRostoNovo(null)}
+            onSalvar={async (p) => { const res = await pr.cadastrarRosto(p, rostoNovo); setRostoNovo(null); mostrar(res); }} />}
 
           <section className={cartaoM}>
             <div className="flex items-center justify-between gap-2">

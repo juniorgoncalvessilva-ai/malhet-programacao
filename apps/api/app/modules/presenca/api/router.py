@@ -306,17 +306,32 @@ class VincularIn(BaseModel):
     colaborador_id: int
     codigo: str | None = None
     nfc: str | None = None
+    face: list[float] | None = None  # rosto não reconhecido, cadastrado na hora (spec 103)
+    consentimento: bool = False
 
 
 @router.post("/vincular")
 def vincular(d: VincularIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
-    """Crachá lido e não cadastrado → liga à pessoa do efetivo, direto do celular (spec 065)."""
+    """Crachá lido e não cadastrado → liga à pessoa do efetivo, direto do celular (spec 065). Rosto não reconhecido →
+    cadastra o rosto na pessoa, com o consentimento dela (LGPD), na hora (spec 103)."""
     p = s.get(ColaboradorModel, d.colaborador_id)
     if p is None or p.obra_id != c.obra_id:
         raise NotFoundError("Pessoa", d.colaborador_id)
-    if not (d.codigo or d.nfc):
-        raise DomainError("leia o crachá (código ou NFC)")
-    _ligar(s, c.obra_id, p.id, d.codigo, d.nfc, c.usuario.id)
+    if not (d.codigo or d.nfc or d.face):
+        raise DomainError("leia o crachá (código ou NFC) ou o rosto")
+    i = _ligar(s, c.obra_id, p.id, d.codigo, d.nfc, c.usuario.id)
+    if d.face:
+        from app.modules.lgpd.api.router import consentimento_de
+
+        face = validar_descritor(d.face)
+        sit = consentimento_de(s, c.obra_id, p.id)
+        if sit["situacao"] in ("recusado", "revogado") or (sit["situacao"] != "pendente" and not sit["biometria"]):
+            raise DomainError(f"{p.nome} não autorizou o reconhecimento facial no termo LGPD", "consentimento")
+        if not d.consentimento:
+            raise DomainError("registre o consentimento da pessoa para usar o rosto (LGPD)", "consentimento")
+        agora = datetime.now(timezone.utc)
+        i.face_descritor, i.face_em, i.consentimento_em, i.consentimento_por = face, agora, agora, c.usuario.id
+        s.flush()
     return _pessoa_base(s, p)
 
 
@@ -376,11 +391,13 @@ class CompletarIn(BaseModel):
     matricula: str | None = None
     nome: str | None = None
     concluido: bool = True
+    unificar: bool = False  # matrícula já existe no efetivo: juntar o cadastro do campo à pessoa (spec 103)
 
 
 @router.put("/cadastros-pendentes/{cid}")
 def completar(cid: int, d: CompletarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    """DP/RH completa: matrícula (vira a chave e o crachá do Simova) e o nome certo; tira o alerta."""
+    """DP/RH completa: matrícula (vira a chave e o crachá do Simova) e o nome certo; tira o alerta. Matrícula que já é de
+    alguém do efetivo: pede confirmação e junta os dois cadastros (spec 103)."""
     from app.modules.efetivo.domain.efetivo import normalizar_matricula
 
     p = s.get(ColaboradorModel, cid)
@@ -392,9 +409,16 @@ def completar(cid: int, d: CompletarIn, s: Session = Depends(get_session), c: Co
         mat = normalizar_matricula(d.matricula)
         if not mat:
             raise DomainError("matrícula inválida", "matricula")
-        outro = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.chave == mat, ColaboradorModel.id != cid))
+        outro = s.scalar(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id, ColaboradorModel.id != cid,
+                                                        (ColaboradorModel.chave == mat) | (ColaboradorModel.matricula == mat)))
         if outro is not None:
-            raise DomainError(f"a matrícula {mat} já é de {outro.nome}", "matricula")
+            # spec 103: a matrícula já é de alguém do efetivo = é a mesma pessoa → junta o cadastro do campo a ela
+            if not d.unificar:
+                raise DomainError(f"a matrícula {mat} é de {outro.nome} ({outro.funcao or 'sem função'}) no efetivo — "
+                                  "confirme para juntar este cadastro do campo ao dele", "unificar")
+            from app.modules.presenca.application.unificar import unificar
+
+            return unificar(s, c.obra_id, p, outro)
         p.matricula, p.cracha, p.chave = mat, mat, mat
     p.cadastro_pendente = not d.concluido
     s.flush()

@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useConfirmar } from '@/components/Obra/Confirmar';
+import { ApiError } from '@/lib/api/client';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useObra } from '@/lib/obra/ObraProvider';
 
@@ -17,16 +19,37 @@ export function usePendentesCadastro(meus = false) {
 /**
  * Alerta do DP/RH (spec 065): pessoas cadastradas de forma simplificada no campo (nome + função) esperando a matrícula.
  * O planejamento/admin completa aqui; se a planilha do DP trouxer a pessoa com o mesmo nome, completa sozinho.
+ * Matrícula que já é de alguém do efetivo = a mesma pessoa: confirma e o cadastro do campo é juntado a ela (spec 103).
  */
 export function CadastrosPendentes() {
   const api = useApi();
   const { pode } = useObra();
   const q = usePendentesCadastro();
+  const confirmar = useConfirmar();
   const [mat, setMat] = useState<Record<number, string>>({});
   const lista = q.data ?? [];
   if (!lista.length) return null;
   const completar = async (p: Pendente, concluido = true) => {
-    try { await api.put(`/presenca/cadastros-pendentes/${p.id}`, { matricula: mat[p.id] || null, concluido }); toast.success(`Cadastro de ${p.nome} completo`); } catch (e) { toast.error((e as Error).message); }
+    const corpo = { matricula: mat[p.id] || null, concluido };
+    try {
+      await api.put(`/presenca/cadastros-pendentes/${p.id}`, corpo);
+      toast.success(`Cadastro de ${p.nome} completo`);
+    } catch (e) {
+      if (!(e instanceof ApiError && e.campo === 'unificar')) { toast.error((e as Error).message); return; }
+      // a matrícula já é de alguém do efetivo: mesma pessoa — confirma e junta os cadastros
+      const nomeEfetivo = /é de (.+?) \(/.exec(e.message)?.[1] ?? 'a pessoa do efetivo';
+      await confirmar({
+        titulo: `Juntar ${p.nome} a ${nomeEfetivo}?`,
+        mensagem: `${e.message.split(' — ')[0].replace(/^a matrícula/, 'A matrícula')}. É a mesma pessoa: as presenças, o crachá/NFC/rosto, `
+          + 'o termo LGPD e as assinaturas feitas no campo passam para o cadastro do efetivo, que fica com o nome e a função do DP. '
+          + 'O cadastro provisório sai da lista.',
+        acao: 'Juntar cadastros', perigo: false,
+        executar: async () => {
+          const r = await api.put<{ nome: string; registros_movidos: number }>(`/presenca/cadastros-pendentes/${p.id}`, { ...corpo, unificar: true });
+          toast.success(`Cadastro do campo juntado a ${r.nome}${r.registros_movidos ? ` · ${r.registros_movidos} registro(s) levados` : ''}`);
+        },
+      });
+    }
   };
   return (
     <section className="flex flex-col gap-2 rounded-m-lg border border-m-warning/50 bg-m-warning-subtle p-4">
@@ -38,7 +61,8 @@ export function CadastrosPendentes() {
             <span className="min-w-0 flex-1"><b>{p.nome}</b> · {p.funcao ?? '—'}<span className="block text-[11.5px] text-m-text-muted">por {p.cadastrado_por ?? '—'}{p.cadastrado_em ? ` em ${new Date(p.cadastrado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}</span></span>
             {pode('planejador') && (
               <>
-                <input aria-label={`Matrícula de ${p.nome}`} placeholder="matrícula" value={mat[p.id] ?? ''} onChange={(e) => setMat({ ...mat, [p.id]: e.target.value })} className="h-9 w-32 rounded-[8px] border border-m-stroke bg-m-surface-field px-2" />
+                <input aria-label={`Matrícula de ${p.nome}`} placeholder="matrícula" value={mat[p.id] ?? ''} onChange={(e) => setMat({ ...mat, [p.id]: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && mat[p.id]) completar(p); }} className="h-9 w-32 rounded-[8px] border border-m-stroke bg-m-surface-field px-2" />
                 <button type="button" disabled={!mat[p.id]} onClick={() => completar(p)} className="h-9 rounded-full bg-m-accent px-3 text-[12.5px] font-semibold text-white disabled:opacity-40">Completar</button>
               </>
             )}

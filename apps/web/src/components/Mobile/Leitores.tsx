@@ -98,8 +98,13 @@ async function fotoDoRosto(v: HTMLVideoElement, caixa: { x: number; y: number; w
   return new Promise((ok) => c.toBlob((b) => ok(b), 'image/jpeg', 0.82));
 }
 
-export function LeitorFacial({ pessoas, limite, onLer, capturar = false }: {
+/**
+ * Leitura pelo rosto. Com `onDesconhecido` (presença, spec 103) a câmera abre mesmo sem ninguém com rosto cadastrado e, quando
+ * um rosto fica alguns quadros sem bater com ninguém, avisa "Rosto não cadastrado" e entrega o descritor para cadastrar na hora.
+ */
+export function LeitorFacial({ pessoas, limite, onLer, capturar = false, onDesconhecido, pausado = false }: {
   pessoas: PessoaBase[]; limite: number; onLer: (p: PessoaBase, extra: { foto: Blob | null; distancia: number }) => void; capturar?: boolean;
+  onDesconhecido?: (descritor: number[]) => void; pausado?: boolean;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [frente, setFrente] = useState<'environment' | 'user'>('environment');
@@ -108,18 +113,22 @@ export function LeitorFacial({ pessoas, limite, onLer, capturar = false }: {
   const [caixa, setCaixa] = useState<{ x: number; y: number; w: number; h: number; nome?: string } | null>(null);
   const comRosto = useMemo(() => pessoas.filter((p) => p.face), [pessoas]);
   const ler = useRef(onLer); ler.current = onLer;
+  const desconhecido = useRef(onDesconhecido); desconhecido.current = onDesconhecido;
+  const pausa = useRef(pausado); pausa.current = pausado;
+  const oferece = !!onDesconhecido;
 
   useEffect(() => {
     if (!temCamera()) { setEstado('erro'); setMsg('Sem acesso à câmera neste navegador (precisa de HTTPS).'); return; }
-    if (!comRosto.length) { setEstado('erro'); setMsg('Ninguém com rosto cadastrado. Cadastre em Efetivo › Crachá e rosto.'); return; }
+    if (!comRosto.length && !oferece) { setEstado('erro'); setMsg('Ninguém com rosto cadastrado. Cadastre em Efetivo › Crachá e rosto.'); return; }
     let vivo = true; let fechar: (() => void) | null = null;
     const ultimo = new Map<number, number>();
     let anterior: number | null = null;
+    let semMatch = 0; let ultimoAviso = 0;
     (async () => {
       try {
         await carregarFace();
         fechar = await abrirCamera(video.current!, frente);
-        setEstado('pronto'); setMsg('Enquadre um rosto por vez');
+        setEstado('pronto'); setMsg(comRosto.length ? 'Enquadre um rosto por vez' : 'Ninguém com rosto cadastrado ainda — enquadre o rosto para cadastrar');
         while (vivo) {
           const v = video.current;
           const r = v && v.readyState >= 2 ? await lerRosto(v, 224) : null;
@@ -133,12 +142,18 @@ export function LeitorFacial({ pessoas, limite, onLer, capturar = false }: {
               ultimo.set(m.pessoa.id, Date.now()); ler.current(m.pessoa, { foto: capturar ? await fotoDoRosto(v, r.caixa) : null, distancia: m.dist });
             }
             anterior = m?.pessoa.id ?? null;
+            // rosto que não bate com ninguém por alguns quadros seguidos: oferece o cadastro (no máximo a cada 6 s)
+            semMatch = m ? 0 : semMatch + 1;
+            if (!m && semMatch >= 4 && desconhecido.current && !pausa.current && Date.now() - ultimoAviso > 6000) {
+              ultimoAviso = Date.now(); semMatch = 0;
+              desconhecido.current(Array.from(r.descritor));
+            }
           } else { setCaixa(null); anterior = null; await new Promise((x) => setTimeout(x, 120)); }
         }
       } catch (e) { if (vivo) { setEstado('erro'); setMsg((e as Error).message || 'Não consegui abrir a câmera'); } }
     })();
     return () => { vivo = false; fechar?.(); };
-  }, [frente, comRosto, limite, capturar]);
+  }, [frente, comRosto, limite, capturar, oferece]);
 
   return (
     <section className="flex flex-col gap-2">
@@ -149,12 +164,12 @@ export function LeitorFacial({ pessoas, limite, onLer, capturar = false }: {
           <span className={`absolute rounded-[10px] border-[3px] ${caixa.nome ? 'border-green-400' : 'border-yellow-300'} ${frente === 'user' ? '-scale-x-100' : ''}`}
             style={{ left: caixa.x, top: caixa.y, width: caixa.w, height: caixa.h }} aria-hidden="true" />
         )}
-        <span className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-center text-[13px] font-semibold text-white">{caixa?.nome ?? msg}</span>
+        <span className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-center text-[13px] font-semibold text-white">{caixa ? (caixa.nome ?? (oferece ? 'Rosto não cadastrado' : 'Rosto não reconhecido')) : msg}</span>
         <button type="button" aria-label="Trocar câmera" onClick={() => setFrente((f) => (f === 'user' ? 'environment' : 'user'))}
           className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-full bg-white/85 text-m-accent-strong"><SwitchCamera size={20} /></button>
       </div>
       {estado === 'carregando' && <span className="text-center text-[12px] text-m-text-muted">Na primeira vez baixa ~6 MB; depois funciona sem internet.</span>}
-      {estado === 'pronto' && <span className="flex items-center justify-center gap-1 text-[12px] text-m-text-muted"><UserCheck size={14} /> {comRosto.length} pessoas com rosto cadastrado</span>}
+      {estado === 'pronto' && <span className="flex items-center justify-center gap-1 text-[12px] text-m-text-muted"><UserCheck size={14} /> {comRosto.length} pessoa{comRosto.length === 1 ? '' : 's'} com rosto cadastrado</span>}
     </section>
   );
 }

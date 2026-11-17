@@ -2,7 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRightLeft, History, Plus, Route, Upload, UserMinus, UserPlus, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Abas } from '@/components/Obra/Abas';
@@ -20,7 +20,8 @@ import { SITUACOES, TOM_SITUACAO } from '@/lib/efetivo/situacoes';
 import { Carregando, LinhasCarregando } from '@/components/Obra/Esqueleto';
 
 const TOM = TOM_SITUACAO;
-const LIMITE = 300;
+/** Desenha a lista aos poucos (todo mundo aparece: mais linhas entram ao rolar), para a tela não travar com milhares. */
+const LOTE = 200;
 type NovaEquipe = { nome: string; encarregado_id: string; turno: string; jornada_horas: string; responsavel: string };
 
 export default function EfetivoPage() {
@@ -53,6 +54,19 @@ export default function EfetivoPage() {
       && (!t || c.nome.toLowerCase().includes(t) || (c.matricula ?? '').includes(t) || (c.funcao ?? '').toLowerCase().includes(t) || (c.equipe ?? '').toLowerCase().includes(t)));
   }, [todos, fSit, empresa, q, soSemEquipe]);
   const selecionados = todos.filter((c) => sel.has(c.id));
+  const [mostrar, setMostrar] = useState(LOTE);
+  useEffect(() => { setMostrar(LOTE); }, [fSit, empresa, q, soSemEquipe]);
+  const fim = useRef<HTMLTableRowElement>(null);
+  const rolagem = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = fim.current;
+    if (!el || mostrar >= filtrados.length) return;
+    // a tabela rola dentro da própria caixa: o fim dela é observado nessa rolagem
+    const ob = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) setMostrar((m) => m + LOTE); }, { root: rolagem.current, rootMargin: '400px' });
+    ob.observe(el);
+    return () => ob.disconnect();
+  }, [mostrar, filtrados.length]);
+  const fora = todos.length - filtrados.length;
   const r = resumo.data;
 
   const importar = async (fd: FormData) => {
@@ -94,7 +108,7 @@ export default function EfetivoPage() {
   };
   const [aba, setAba] = useState<'efetivo' | 'resumo' | 'importar'>('efetivo');
   const [ficha, setFicha] = useState<number | 'novo' | null>(null);
-  const marcarTodos = () => setSel(sel.size ? new Set() : new Set(filtrados.slice(0, LIMITE).map((c) => c.id)));
+  const marcarTodos = () => setSel(sel.size ? new Set() : new Set(filtrados.map((c) => c.id)));
 
   return (
     <>
@@ -203,7 +217,12 @@ export default function EfetivoPage() {
           </Selecao>
           <label className="flex items-center gap-2 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={soSemEquipe} onChange={(e) => setSoSemEquipe(e.target.checked)} /> Só sem equipe</label>
         </div>
-        <div className="-mx-1 max-h-[65vh] overflow-auto px-1">
+        <p className="text-[12.5px] text-m-text-secondary">
+          <b className="text-m-text-primary">{filtrados.length}</b> de {todos.length} pessoa{todos.length === 1 ? '' : 's'} do efetivo
+          {fora > 0 && <> · {fora} fora dos filtros (situação, empresa, busca) — <button type="button" className="font-semibold text-m-accent underline"
+            onClick={() => { setFSit(new Set()); setEmpresa(''); setQ(''); setSoSemEquipe(false); }}>ver todo mundo</button></>}
+        </p>
+        <div ref={rolagem} className="-mx-1 max-h-[65vh] overflow-auto px-1">
           <table className="w-full border-separate border-spacing-0 text-[13px]">
             <thead className="sticky top-0 z-10 bg-m-surface-raised">
               <tr className="text-left text-[10.5px] font-semibold uppercase tracking-[0.3px] text-m-text-muted">
@@ -215,7 +234,7 @@ export default function EfetivoPage() {
             <tbody>
               {lista.isLoading && <LinhasCarregando colunas={7} />}
               {!lista.isLoading && !filtrados.length && <tr><td colSpan={7} className="py-8 text-center text-m-text-muted">{todos.length ? 'Ninguém com esses filtros.' : 'Importe a planilha de efetivo.'}</td></tr>}
-              {filtrados.slice(0, LIMITE).map((c) => (
+              {filtrados.slice(0, mostrar).map((c) => (
                 <tr key={c.id} className={`${sel.has(c.id) ? 'bg-m-accent-subtle' : 'hover:bg-m-surface-hover'} ${c.no_ultimo_arquivo ? '' : 'opacity-60'}`}>
                   <td className="border-b border-m-row px-2 py-1.5">{planejar && <input type="checkbox" aria-label={`Selecionar ${c.nome}`} checked={sel.has(c.id)} onChange={() => setSel((x) => { const n = new Set(x); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })} />}</td>
                   <td className="whitespace-nowrap border-b border-m-row px-2 py-1.5 tabular-nums">
@@ -243,7 +262,8 @@ export default function EfetivoPage() {
                   </td>
                 </tr>
               ))}
-              {filtrados.length > LIMITE && <tr><td colSpan={7} className="py-3 text-center text-[12px] text-m-text-muted">Mostrando {LIMITE} de {filtrados.length}: refine a busca.</td></tr>}
+              {filtrados.length > mostrar && <tr ref={fim}><td colSpan={7} className="py-3 text-center text-[12px] text-m-text-muted">
+                Carregando mais… <button type="button" className="font-semibold text-m-accent underline" onClick={() => setMostrar(filtrados.length)}>mostrar todos os {filtrados.length}</button></td></tr>}
             </tbody>
           </table>
         </div>

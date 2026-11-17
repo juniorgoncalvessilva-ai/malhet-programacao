@@ -99,7 +99,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   obras lembradas no aparelho. Web: `/app/presenca` e `/app/efetivo/identificacao`. Modelos copiados do npm no build
   (`scripts/copiar-modelos-face.mjs`, fora do git). Câmera/NFC/SW exigem HTTPS. Spec 063. Crachá não cadastrado → cadastro rápido
   (`CadastroRapido`): vincular à pessoa do efetivo (`/presenca/vincular`, fila offline) ou cadastro simplificado nome + função
-  do de-para (`/presenca/pessoa-simplificada`, `colaborador.cadastro_pendente`) com alerta `CadastrosPendentes`. Spec 065. iPhone (sem Web NFC):
+  do de-para (`/presenca/pessoa-simplificada`, `colaborador.cadastro_pendente`) com alerta `CadastrosPendentes`. Spec 065. Matrícula
+  que já é do efetivo junta os cadastros (`unificar`, todas as FKs de `colaborador` + identificação) após confirmar; rosto que não
+  bate abre `CadastroRosto` (vincular com `face`+consentimento, offline) e `rostoLiberado` aceita termo pendente. Spec 103. iPhone (sem Web NFC):
   link `/m/presenca?c=&m=` gravado no crachá (`gravarCracha`, Android) ou em etiqueta QR (`CrachasLink.tsx`), QR/código pela
   câmera com ZXing quando não há `BarcodeDetector` (`leitores.ts`, `codigoLido`). Spec 067. Duplicidade entre celulares: vale a
   leitura mais cedo (`presenca_leitura.valida`, `validas`), `GET /presenca/hoje` avisa "já registrado por outro celular". Spec 069.

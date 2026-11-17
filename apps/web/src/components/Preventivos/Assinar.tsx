@@ -4,6 +4,7 @@ import { Eraser, List, Nfc, PenLine, ScanFace, ScanLine } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { LeitorCodigo, LeitorFacial, LeitorNfc } from '@/components/Mobile/Leitores';
+import { rostoLiberado } from '@/lib/presenca/offline';
 import { avisar, temNfc } from '@/lib/presenca/leitores';
 import type { PessoaBase } from '@/lib/presenca/offline';
 import type { Assinatura } from '@/lib/preventivos';
@@ -46,7 +47,7 @@ export function IdentificarPessoa({ pessoas, limite, busca, onPessoa, rosto = tr
       <Abas modos={rosto ? ['nfc', 'codigo', 'rosto', 'lista'] : ['nfc', 'codigo', 'lista']} modo={modo} onTrocar={setModo} />
       {modo === 'nfc' && <LeitorNfc onLer={(s, tx) => achou(busca.porNfc(s, tx), 'nfc', s ?? tx[0] ?? '?')} />}
       {modo === 'codigo' && <LeitorCodigo onLer={(c, meio) => achou(busca.porCodigo(c), meio, c)} />}
-      {modo === 'rosto' && <LeitorFacial pessoas={pessoas.filter((p) => p.lgpd?.biometria !== false)} limite={limite} onLer={(p) => achou(p, 'facial', p.nome)} />}
+      {modo === 'rosto' && <LeitorFacial pessoas={pessoas.filter(rostoLiberado)} limite={limite} onLer={(p) => achou(p, 'facial', p.nome)} />}
       {modo === 'lista' && (
         <div className="flex flex-col rounded-[16px] border border-m-stroke-subtle bg-m-surface-raised p-3">
           <input autoFocus aria-label="Buscar colaborador" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Nome ou matrícula (2 letras ou mais)"

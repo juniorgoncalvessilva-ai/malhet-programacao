@@ -54,3 +54,50 @@ def test_dp_completa_a_mao(client):
     assert client.put(f"/api/presenca/cadastros-pendentes/{novo['id']}", json={"matricula": "115.013"}).status_code == 422  # já é de outro
     r = client.put(f"/api/presenca/cadastros-pendentes/{novo['id']}", json={"matricula": "115.500"}).json()
     assert (r["matricula"], r["cadastro_pendente"]) == ("115500", False)
+
+
+def test_matricula_do_efetivo_junta_os_cadastros(client):
+    """Spec 103: a matrícula informada já é de alguém do efetivo = mesma pessoa; o cadastro do campo é juntado a ela."""
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    client.put("/api/efetivo/funcoes", json={"itens": [{"funcao": "SERVENTE", "recurso": "Servente"}]})
+    base = client.get("/api/presenca/base").json()
+    fk = next(x for x in base["funcoes"] if x["funcao"] == "SERVENTE")["funcao_chave"]
+    dono = next(p for p in client.get("/api/efetivo/colaboradores").json() if p["matricula"] == "115013")
+    # a pessoa do efetivo já tem NFC; o cadastro do campo nasceu com o QR do crachá e já tem presença
+    assert client.post("/api/presenca/vincular", json={"colaborador_id": dono["id"], "nfc": "04:cc:dd"}).status_code == 200
+    novo = client.post("/api/presenca/pessoa-simplificada", json={"nome": "Caroline Campo Teste", "funcao_chave": fk, "codigo": "QR-555"}).json()
+    leit = {"id_local": "cel9-0000555", "colaborador_id": novo["id"], "data": "2026-11-13", "hora": "2026-11-13T07:00:00-03:00", "meio": "codigo"}
+    assert client.post("/api/presenca/leituras", json={"leituras": [leit]}).json()["aceitas"] == 1
+
+    url = f"/api/presenca/cadastros-pendentes/{novo['id']}"
+    r = client.put(url, json={"matricula": "115.013"})
+    assert r.status_code == 422 and r.json()["campo"] == "unificar" and dono["nome"] in r.text  # pede confirmação
+    r = client.put(url, json={"matricula": "115.013", "unificar": True})
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert j["unificado"] and j["id"] == dono["id"] and j["do_campo"]["nome"] == "CAROLINE CAMPO TESTE" and j["registros_movidos"] >= 1
+    # o provisório saiu, o alerta sumiu e tudo ficou na pessoa do efetivo: presença, NFC e o QR do campo
+    assert client.get("/api/presenca/cadastros-pendentes").json() == []
+    assert not any(p["id"] == novo["id"] for p in client.get("/api/efetivo/colaboradores").json())
+    dia = client.get("/api/presenca/dia", params={"data": "2026-11-13"}).json()
+    assert dia["presentes"] == 1
+    p = {x["id"]: x for x in client.get("/api/presenca/base").json()["pessoas"]}[dono["id"]]
+    assert "QR555" in p["codigos"] and p["nfc"] == "04CCDD"
+
+
+def test_rosto_nao_reconhecido_cadastrado_na_hora(client):
+    """Spec 103: rosto que não bate com ninguém é cadastrado na pessoa pelo celular, com o consentimento dela."""
+    from app.modules.presenca.domain.presenca import TAM_DESCRITOR
+
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    pessoa = client.get("/api/presenca/base").json()["pessoas"][0]
+    rosto = [0.01 * (k % 7) for k in range(TAM_DESCRITOR)]
+    r = client.post("/api/presenca/vincular", json={"colaborador_id": pessoa["id"], "face": rosto})
+    assert r.status_code == 422 and "consentimento" in r.text  # sem o aceite da pessoa, não grava
+    assert client.post("/api/presenca/vincular", json={"colaborador_id": pessoa["id"]}).status_code == 422  # nada lido
+    r = client.post("/api/presenca/vincular", json={"colaborador_id": pessoa["id"], "face": rosto, "consentimento": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["face"] and len(r.json()["face"]) == TAM_DESCRITOR
+    p = next(x for x in client.get("/api/presenca/base").json()["pessoas"] if x["id"] == pessoa["id"])
+    # sem termo LGPD respondido, o consentimento colhido no cadastro do rosto vale (situação pendente): o celular usa o rosto
+    assert p["face"] and p["lgpd"]["situacao"] == "pendente"
