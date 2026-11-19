@@ -123,6 +123,11 @@ def coletar(s: Session, obra_id: int, referencia: date, base_id: int | None) -> 
 
 
 # ---- Excel ------------------------------------------------------------------------------------------------------
+def _cf(cor: str) -> PatternFill:
+    """Preenchimento de formatação condicional: o Excel lê a cor do `bgColor` (o LibreOffice aceita o `fgColor`)."""
+    return PatternFill(fill_type="solid", fgColor=cor, bgColor=cor)
+
+
 def _f(cor: str) -> PatternFill:
     return PatternFill("solid", fgColor=cor)
 
@@ -230,16 +235,20 @@ def gerar(s: Session, obra_id: int, referencia: date, base_id: int | None, obra_
             ws[f"{col}{r}"].number_format = "dd/mm/yyyy"
         ws[f"E{r}"].number_format = "0%"
         ws[f"F{r}"].number_format = "0.00%"
+        # agrupamento como no cronograma: cada nível da WBS recolhe o que está abaixo dele (+/− na margem)
+        if ln.nivel:
+            ws.row_dimensions[r].outline_level = min(ln.nivel, 7)
         r += 1
     fim = max(r - 1, L0)
 
     # formatação condicional: semana com a atividade = azul-escuro; 6M: pendente vermelho, resolvida verde
-    ws.conditional_formatting.add(f"S{L0}:Z{fim}", CellIsRule(operator="equal", formula=['"1"'], fill=_f(AZUL_ESCURO),
+    ws.conditional_formatting.add(f"S{L0}:Z{fim}", CellIsRule(operator="equal", formula=['"1"'], fill=_cf(AZUL_ESCURO),
                                                               font=Font(color=AZUL_ESCURO)))
     # (célula vazia = nenhuma restrição: sem cor)
-    ws.conditional_formatting.add(f"AA{L0}:AF{fim}", FormulaRule(formula=[f"AND(ISNUMBER(AA{L0}),AA{L0}>0)"], fill=_f(VERMELHO_6M)))
-    ws.conditional_formatting.add(f"AA{L0}:AF{fim}", FormulaRule(formula=[f"AND(ISNUMBER(AA{L0}),AA{L0}=0)"], fill=_f(VERDE_6M)))
+    ws.conditional_formatting.add(f"AA{L0}:AF{fim}", FormulaRule(formula=[f"AND(ISNUMBER(AA{L0}),AA{L0}>0)"], fill=_cf(VERMELHO_6M)))
+    ws.conditional_formatting.add(f"AA{L0}:AF{fim}", FormulaRule(formula=[f"AND(ISNUMBER(AA{L0}),AA{L0}=0)"], fill=_cf(VERDE_6M)))
     ws.conditional_formatting.add(f"N{L0}:N{fim}", IconSetRule("3TrafficLights1", "num", [-99999, -5, 0]))
+    ws.sheet_properties.outlinePr.summaryBelow = False  # o título fica em cima dos filhos, como no P6
     ws.freeze_panes = f"E{L0}"
     ws.auto_filter.ref = f"B3:{ult}{fim}"
     ws.print_title_rows = "1:3"
@@ -247,7 +256,8 @@ def gerar(s: Session, obra_id: int, referencia: date, base_id: int | None, obra_
     ws.page_setup.paperSize = ws.PAPERSIZE_A3
     ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    inserir_logos(ws, marca_da_obra(s, obra_id), ["B2", "AC2"], altura_px=55)
+    ws.column_dimensions["AG"].width = 20
+    inserir_logos(ws, marca_da_obra(s, obra_id), ["B2", "AG2"], altura_px=55)  # contratada à direita, sem cobrir o título 6M
 
     _aba_semanas(wb, min(datas), max(datas))
     buf = BytesIO()

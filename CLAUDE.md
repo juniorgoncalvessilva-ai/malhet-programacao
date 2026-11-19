@@ -164,7 +164,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   6WLA em Excel no layout da obra (aba 6 semanas, `Exportar6wla`): cronograma vigente + plano nas 7 semanas, WBS do P6, linha de
   base escolhida, 6M = restrições pendentes; `planos/domain/seis_semanas.py` + `application/seis_semanas.py`
   (`GET /planos/seis-semanas.xlsx`, fórmulas na aba "Dados - Semanas"). Dia da obra = `app/shared/tempo.py::hoje_local()`
-  (servidor em UTC). Spec 108.
+  (servidor em UTC). Spec 108. Cor de formatação condicional vai no `bgColor` (`_cf`) e linhas agrupadas pela WBS (+/−). Spec 110.
 - Critério de avanço (`criterios/`, spec 079): planilha "Critério de medição" (código CMS + item da PQ → etapas com % do valor),
   etapa **sem avanço** = só esforço. WBS ganha o nível Etapa abaixo do IWP (`wbs_no.etapa_id/percentual/sem_avanco`, código
   `…-E1`, botão "critério" = `aplicar-criterio`); IWP com etapas vai à programação/plano como as etapas

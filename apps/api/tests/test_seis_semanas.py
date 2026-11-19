@@ -108,3 +108,10 @@ def test_excel_6wla_no_layout_da_obra(client):
     sem = {c.value.date(): n.value for c, n in wb["Dados - Semanas"].iter_rows(max_col=2) if c.value}
     assert sem[date(2026, 11, 8)] == 32 and sem[date(2026, 11, 14)] == 32 and sem[date(2026, 11, 15)] == 33
     assert ws.freeze_panes == "E4" and ws.column_dimensions["E"].hidden
+    # spec 110: o "1" pinta de azul-escuro no Excel (a cor da formatação condicional vai no bgColor)
+    regra = next(r for cf in ws.conditional_formatting for r in cf.rules if r.formula == ['"1"'])
+    assert regra.dxf.fill.bgColor.rgb.endswith("002060")
+    # agrupamento como no cronograma: O.S. 1 (nível 0) recolhe o CWA (1) e as atividades (2)
+    assert not ws.sheet_properties.outlinePr.summaryBelow
+    niveis = {k: ws.row_dimensions[r].outline_level for k, r in linhas.items()}
+    assert (niveis["5  O.S. 1"], niveis["5.2  CWA 004 - Novo CMD"], niveis["C-9"], niveis["P90-0001"]) == (0, 1, 2, 1)
