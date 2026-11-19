@@ -115,7 +115,12 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - App de campo (`src/app/[locale]/m`): aba Programação (`m/vigente`) com `DetalheAtividade` (frente, quantitativo, efetivo,
   atalhos Lançar/Ocorrência com `?data=&linha=`); Lançar com setas/arrastar e frente em destaque; ocorrência com várias
   causas (um desvio por causa, fotos por causa); área da restrição em lista com busca; carimbo de data/hora + frente nas
-  fotos da restrição (`carimbarFoto`). Spec 061.
+  fotos da restrição (`carimbarFoto`). Spec 061. Toda foto de campo sai carimbada (data/hora + linhas + obra) em `useEnviarFoto`
+  (`extra.carimbo`; já carimbada não repete). Registrar atividade fora da programação (spec 119): `/m/lancar/registrar` →
+  frente (CWA) → IWP da WBS da frente com CWP e grupo (`wbs/infra/gateway.py::itens_da_area`, filtro) ou item da PQ → texto
+  livre → fotos (`registro_atividade`, `campo/api/registros.py`, foto alvo `registro`; entra no book como atividade "Fora da
+  programação"). Baixar foto: `GET /fotos/{id}/arquivo?baixar=true` (nome AAAAMMDD-HHMM-frente-tipo-id, `nome_para_baixar`),
+  `baixarFoto` (compartilhar no app nativo) na foto ampliada e no book.
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

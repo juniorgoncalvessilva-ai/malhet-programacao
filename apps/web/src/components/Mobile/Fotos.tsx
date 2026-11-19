@@ -1,10 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Camera, X } from 'lucide-react';
+import { Camera, Download, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useApi } from '@/hooks/programacao/useApi';
+import { useObraOpcional } from '@/lib/obra/ObraProvider';
+import { emAppNativo } from '@/lib/presenca/leitores';
 
 /** Reduz a foto no próprio celular (lado maior 1600 px, JPEG 0,8) antes de enviar: menos dados móveis. */
 export async function reduzirFoto(arq: File, maior = 1600): Promise<Blob> {
@@ -21,6 +23,8 @@ export async function reduzirFoto(arq: File, maior = 1600): Promise<Blob> {
 
 /** Momento em que cada foto foi tirada/escolhida (para o carimbo de data e hora). */
 export const momentoDaFoto = new WeakMap<Blob, Date>();
+/** Fotos que já saíram de carimbarFoto: o envio não carimba de novo. */
+const carimbadas = new WeakSet<Blob>();
 export const dataHoraBR = (d: Date) => `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
 /**
@@ -50,13 +54,25 @@ export async function carimbarFoto(foto: Blob, linhas: string[], quando = moment
       ctx.strokeText(x.t, pad, y, c.width - pad * 2); ctx.fillText(x.t, pad, y, c.width - pad * 2);
       y += x.px * 1.3;
     }
-    return await new Promise<Blob>((ok, falha) => c.toBlob((b) => (b ? ok(b) : falha(new Error('foto inválida'))), 'image/jpeg', 0.85));
+    const pronta = await new Promise<Blob>((ok, falha) => c.toBlob((b) => (b ? ok(b) : falha(new Error('foto inválida'))), 'image/jpeg', 0.85));
+    carimbadas.add(pronta);
+    return pronta;
   } finally { URL.revokeObjectURL(url); }
 }
 
+/**
+ * Envia a foto de campo. Toda foto sai carimbada com a data e a hora em que foi tirada (spec 119: as de Lançar o dia e de
+ * Ocorrência subiam sem carimbo): `carimbo` são as linhas de baixo (frente, atividade); a obra entra sempre. Foto que já
+ * passou por carimbarFoto vai como está.
+ */
 export function useEnviarFoto() {
   const api = useApi();
-  return async (alvo: 'desvio' | 'restricao' | 'linha' | 'auditoria' | 'acao', alvoId: number, foto: Blob, extra?: { data?: string; legenda?: string }) => {
+  const obra = useObraOpcional()?.obra?.nome;
+  return async (alvo: 'desvio' | 'restricao' | 'linha' | 'auditoria' | 'acao' | 'registro', alvoId: number, foto: Blob,
+    extra?: { data?: string; legenda?: string; carimbo?: string[] }) => {
+    if (!carimbadas.has(foto)) {
+      try { foto = await carimbarFoto(foto, [...(extra?.carimbo ?? []), obra ?? '']); } catch { /* foto que o navegador não abre vai sem carimbo */ }
+    }
     const fd = new FormData();
     fd.append('alvo', alvo); fd.append('alvo_id', String(alvoId));
     if (extra?.data) fd.append('data', extra.data);
@@ -64,6 +80,24 @@ export function useEnviarFoto() {
     fd.append('arquivo', foto, 'foto.jpg');
     return api.post<{ id: number }>('/fotos', fd);
   };
+}
+
+/**
+ * Baixa a foto original (spec 119) com o nome que o servidor dá (data-hora-frente-tipo-id.jpg). No app nativo, onde o
+ * download do WebView não salva, abre o compartilhar do celular (Salvar imagem, WhatsApp…).
+ */
+export async function baixarFoto(api: ReturnType<typeof useApi>, id: number) {
+  const caminho = `/fotos/${id}/arquivo?baixar=true`;
+  try {
+    if (emAppNativo() && typeof navigator.canShare === 'function') {
+      const b = await api.blob(caminho);
+      const arq = new File([b], `foto-${id}.jpg`, { type: b.type || 'image/jpeg' });
+      if (navigator.canShare({ files: [arq] })) { await navigator.share({ files: [arq] }); return; }
+    }
+    await api.download(caminho, `foto-${id}.jpg`);
+  } catch (e) {
+    if ((e as Error).name !== 'AbortError') toast.error('Não consegui baixar a foto');
+  }
 }
 
 /** Miniatura de uma foto já enviada (abre em tela cheia ao tocar). */
@@ -84,6 +118,8 @@ export function Miniatura({ id, tamanho = 64 }: { id: number; tamanho?: number }
         <div role="dialog" aria-label="Foto" className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" onClick={() => setCheia(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={original.data ?? q.data} alt="Foto de campo" className="max-h-full max-w-full rounded-[10px]" />
+          <button type="button" aria-label="Baixar a foto" onClick={(e) => { e.stopPropagation(); void baixarFoto(api, id); }}
+            className="absolute left-4 top-4 flex h-11 items-center gap-2 rounded-full bg-white/15 px-4 text-[14px] font-semibold text-white"><Download size={18} /> Baixar</button>
           <button type="button" aria-label="Fechar" className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"><X size={22} /></button>
         </div>
       )}

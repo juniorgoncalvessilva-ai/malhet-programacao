@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -102,7 +102,9 @@ function Lancar() {
           referencia: ln.codigo_simova, frente: ln.area, atividade_impactada: ln.descricao, qtd_nao_cumprida: Math.round(((prev ?? 0) - (q ?? 0)) * 100) / 100, status: 1 })).id;
       }
       // foto da frente: prova do desvio, se houve; senão, da atividade naquele dia
-      for (const f of fotos) await (desvioId ? enviarFoto('desvio', desvioId, f) : enviarFoto('linha', ln.id, f, { data }));
+      // carimbo: data e hora da foto + frente + atividade (+ obra)
+      const carimbo = [`Frente: ${ln.area}`, `${ln.codigo_simova} · ${ln.descricao}`];
+      for (const f of fotos) await (desvioId ? enviarFoto('desvio', desvioId, f, { carimbo: ['OCORRÊNCIA', ...carimbo] }) : enviarFoto('linha', ln.id, f, { data, carimbo }));
       toast.success(`${ln.codigo_simova}: ${num(q)} ${ln.unidade ?? ''} lançado`);
       qc.invalidateQueries({ queryKey: ['campo'] });
       qc.invalidateQueries({ queryKey: ['programacao'] });
@@ -139,6 +141,10 @@ function Lancar() {
       {dia.isLoading && <Carregando />}
       {d && !d.programacao && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhuma programação emitida cobre {dataLonga(data)}.</p>}
       {d?.programacao && !linhas.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nada programado {d.so_minha_equipe ? 'para a sua equipe ' : ''}neste dia.</p>}
+      {/* spec 119: atividade que não está na programação também tem foto */}
+      <Link href={`/m/lancar/registrar?data=${data}`} className="flex min-h-[48px] items-center gap-2.5 rounded-[14px] border border-dashed border-m-stroke-strong px-3.5 text-[14px] font-medium text-m-accent">
+        <Camera size={18} aria-hidden="true" /> Registrar atividade fora da programação
+      </Link>
 
       {ln && (
         <>
@@ -214,7 +220,7 @@ function Lancar() {
           )}
           {editavel && (
             <section className="flex flex-col gap-2 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-[18px]">
-              <TirarFotos fotos={fotos} onChange={setFotos} />
+              <TirarFotos fotos={fotos} onChange={setFotos} carimbo={[ln.area, ln.codigo_simova]} />
               {ln.fotos.length > 0 && <div className="flex flex-wrap gap-2">{ln.fotos.map((id) => <Miniatura key={id} id={id} />)}</div>}
             </section>
           )}

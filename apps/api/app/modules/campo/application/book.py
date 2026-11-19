@@ -12,7 +12,9 @@ from app.modules.planejamento.application import servico as sv
 from app.modules.planejamento.infra.models import LinhaProgramacaoModel, ProgramacaoModel
 from app.modules.restricoes.infra.models import AcaoRestricaoModel
 
-TIPOS = {"atividade": "linha", "ocorrencia": "desvio", "restricao": "restricao", "auditoria": "auditoria", "acao": "acao"}
+# atividade = linha da programação ou atividade registrada fora dela (spec 119)
+TIPOS = {"atividade": ("linha", "registro"), "ocorrencia": ("desvio",), "restricao": ("restricao",), "auditoria": ("auditoria",),
+         "acao": ("acao",)}
 
 
 def _frentes(s: Session, obra_id: int) -> dict[int, dict]:
@@ -26,7 +28,7 @@ def _frentes(s: Session, obra_id: int) -> dict[int, dict]:
 
 
 def montar_book(s: Session, obra_id: int, de: date | None, ate: date | None, tipo: str | None, area_id: int | None) -> list[dict]:
-    alvos = [TIPOS[tipo]] if tipo in TIPOS else list(TIPOS.values())
+    alvos = list(TIPOS[tipo]) if tipo in TIPOS else [a for v in TIPOS.values() for a in v]
     fotos = list(s.execute(select(FotoCampoModel.id, FotoCampoModel.alvo, FotoCampoModel.alvo_id, FotoCampoModel.data,
                                   FotoCampoModel.legenda, FotoCampoModel.enviado_em, FotoCampoModel.enviado_por)
                            .where(FotoCampoModel.obra_id == obra_id, FotoCampoModel.alvo.in_(alvos))
@@ -62,6 +64,11 @@ def montar_book(s: Session, obra_id: int, de: date | None, ate: date | None, tip
     auditorias = {r.id: r for r in s.scalars(select(RegistroAuditoriaModel).where(RegistroAuditoriaModel.id.in_(ids_aud), RegistroAuditoriaModel.obra_id == obra_id))} if ids_aud else {}
     ids_acao = {f.alvo_id for f in fotos if f.alvo == "acao"}
     acoes = {a.id: a for a in s.scalars(select(AcaoModel).where(AcaoModel.id.in_(ids_acao), AcaoModel.obra_id == obra_id))} if ids_acao else {}
+    from app.modules.campo.infra.models import RegistroAtividadeModel
+
+    ids_reg = {f.alvo_id for f in fotos if f.alvo == "registro"}
+    registros = {r.id: r for r in s.scalars(select(RegistroAtividadeModel).where(
+        RegistroAtividadeModel.id.in_(ids_reg), RegistroAtividadeModel.obra_id == obra_id))} if ids_reg else {}
     ids_restr = {f.alvo_id for f in fotos if f.alvo == "restricao"}
     restricoes = {r.id: r for r in s.scalars(select(AcaoRestricaoModel).where(AcaoRestricaoModel.id.in_(ids_restr), AcaoRestricaoModel.obra_id == obra_id))} if ids_restr else {}
 
@@ -77,6 +84,14 @@ def montar_book(s: Session, obra_id: int, de: date | None, ate: date | None, tip
             item = {**base, **fr, "tipo": "atividade", "data": (f.data or f.enviado_em.date()).isoformat(),
                     "atividade": f"{ln['codigo']} · {ln['atividade']}", "cwp": ln["cwp"], "equipe": ln["equipe"],
                     "programacao": ln["programacao"], "titulo": None, "causa": None}
+        elif f.alvo == "registro":
+            r = registros.get(f.alvo_id)
+            if r is None:
+                continue
+            fr = frentes.get(r.area_id, sem_frente)
+            item = {**base, **fr, "tipo": "atividade", "data": r.data.isoformat(),
+                    "atividade": r.descricao_item or "Atividade fora da programação", "cwp": None, "equipe": None,
+                    "programacao": "Fora da programação", "titulo": r.descricao, "causa": None, "registro": True}
         elif f.alvo == "desvio":
             d = desvios.get(f.alvo_id)
             if d is None:

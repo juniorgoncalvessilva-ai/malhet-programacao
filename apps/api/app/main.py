@@ -32,6 +32,7 @@ from app.modules.lookahead.api.router import router as lookahead
 from app.modules.restricoes.api.router import router as restricoes
 from app.modules.campo.api.router import router as campo
 from app.modules.campo.api.fotos import router as fotos
+from app.modules.campo.api.registros import router as registros_campo
 from app.modules.obras.api.marca import router as marca
 from app.modules.planos.api.router import router as planos
 from app.modules.presenca.api.router import router as presenca
@@ -161,5 +162,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros, aderencia, lideres, portal_lider, exclusoes):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, registros_campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros, aderencia, lideres, portal_lider, exclusoes):
     app.include_router(r, prefix="/api")

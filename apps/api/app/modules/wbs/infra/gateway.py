@@ -115,3 +115,34 @@ def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], li
         if len(achados) == antes:
             vazios.append(i)
     return sorted(achados, key=lambda k: [int(p) if p.isdigit() else p for p in cods[k].codigo.replace(".", "-").split("-")]), vazios
+
+
+def itens_da_area(s: Session, obra_id: int, area_id: int) -> list[dict]:
+    """IWPs ativos da WBS de uma frente (CWA), com o CWP e o grupo — para registrar no campo uma atividade fora da
+    programação (spec 119). Frente sem WBS devolve lista vazia (aí vale o item da PQ)."""
+    todos = nos(s, obra_id)
+    raizes = {n.id for n in todos.values() if n.tipo == "area" and n.area_id == area_id and n.ativo}
+    if not raizes:
+        return []
+    grupos = {g.id: g for g in s.scalars(select(GrupoAtividadeModel).where(GrupoAtividadeModel.obra_id == obra_id))}
+    cods = codigos(s, obra_id, todos)
+
+    def area_de(n: WbsNoModel) -> int | None:
+        while n.pai_id:
+            n = todos[n.pai_id]
+            if not n.ativo:
+                return None
+        return n.id
+
+    out = []
+    for n in todos.values():
+        if n.tipo != "iwp" or not n.ativo or area_de(n) not in raizes:
+            continue
+        grupo = todos.get(n.pai_id)
+        cwp = todos.get(grupo.pai_id) if grupo else None
+        g = grupos.get(grupo.grupo_id) if grupo else None
+        out.append({"wbs_no_id": n.id, "codigo": cods[n.id].codigo, "item_pq": n.item_pq,
+                    "cwp": dom.texto_cwp(cwp.elemento, cwp.complemento) if cwp else None,
+                    "grupo": f"{g.numero} · {g.descricao}" if g else None})
+    out.sort(key=lambda x: x["codigo"])
+    return out

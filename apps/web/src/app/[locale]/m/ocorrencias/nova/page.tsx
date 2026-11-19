@@ -61,7 +61,7 @@ function NovaOcorrencia() {
           programacao_id: prog, linha_id: prog ? ln!.id : null,
           referencia: ln?.codigo_simova ?? null, frente: ln?.area ?? null, atividade_impactada: ln?.descricao ?? null,
         });
-        for (const f of it.fotos) await enviarFoto('desvio', d.id, f);
+        for (const f of it.fotos) await enviarFoto('desvio', d.id, f, { carimbo: ['OCORRÊNCIA', ln?.area ? `Frente: ${ln.area}` : '', ln ? `${ln.codigo_simova} · ${ln.descricao}` : ''] });
         feitos++;
       }
       qc.invalidateQueries({ queryKey: ['desvios'] }); qc.invalidateQueries({ queryKey: ['campo'] });
@@ -113,7 +113,7 @@ function NovaOcorrencia() {
           </div>
           <TextoM rotulo="O que aconteceu" value={it.texto} onChange={(e) => mudar(it.causa, { texto: e.target.value })} placeholder="Ex.: chuva forte parou a concretagem às 14 h" />
           <TextoM rotulo="Ação (opcional)" rows={2} value={it.acao} onChange={(e) => mudar(it.causa, { acao: e.target.value })} placeholder="Ex.: reprogramar para amanhã" />
-          <TirarFotos fotos={it.fotos} onChange={(f) => mudar(it.causa, { fotos: f })} rotulo="Fotos desta causa" />
+          <TirarFotos fotos={it.fotos} onChange={(f) => mudar(it.causa, { fotos: f })} rotulo="Fotos desta causa" carimbo={[ln?.area ?? '']} />
         </section>
       ))}
       <RodapeM>

@@ -29,6 +29,8 @@ def _alvo_existe(s: Session, obra_id: int, alvo: str, alvo_id: int) -> None:
         from app.modules.acoes.infra.models import AcaoModel as M
     elif alvo == "evento":
         from app.modules.preventivos.infra.models import EventoPreventivoModel as M
+    elif alvo == "registro":  # atividade fora da programação (spec 119)
+        from app.modules.campo.infra.models import RegistroAtividadeModel as M
     else:
         from app.modules.planejamento.infra.models import LinhaProgramacaoModel, ProgramacaoModel
 
@@ -98,13 +100,66 @@ def _foto(s: Session, c: ContextoObra, fid: int) -> FotoCampoModel:
     return f
 
 
+_ROTULO = {"linha": "atividade", "registro": "atividade", "desvio": "ocorrencia", "restricao": "restricao",
+           "auditoria": "auditoria", "acao": "acao-5w2h", "evento": "preventivo"}
+
+
+def _area_da_foto(s: Session, f: FotoCampoModel) -> int | None:
+    """Frente de onde a foto é, para o nome do arquivo baixado (spec 119)."""
+    from app.modules.planejamento.infra.models import LinhaProgramacaoModel
+
+    if f.alvo == "linha":
+        ln = s.get(LinhaProgramacaoModel, f.alvo_id)
+        return ln.area_id if ln else None
+    modelos = {"registro": ("app.modules.campo.infra.models", "RegistroAtividadeModel"),
+               "desvio": ("app.modules.indicadores.infra.models", "DesvioModel"),
+               "restricao": ("app.modules.restricoes.infra.models", "AcaoRestricaoModel"),
+               "auditoria": ("app.modules.auditorias.infra.models", "RegistroAuditoriaModel"),
+               "acao": ("app.modules.acoes.infra.models", "AcaoModel")}
+    if f.alvo not in modelos:
+        return None
+    import importlib
+
+    mod, nome = modelos[f.alvo]
+    x = s.get(getattr(importlib.import_module(mod), nome), f.alvo_id)
+    aid = getattr(x, "area_id", None) if x else None
+    if aid is None and f.alvo == "desvio" and x is not None and x.linha_id:
+        ln = s.get(LinhaProgramacaoModel, x.linha_id)
+        aid = ln.area_id if ln else None
+    return aid
+
+
+def nome_para_baixar(s: Session, f: FotoCampoModel, ext: str) -> str:
+    """AAAAMMDD-HHMM-<frente>-<tipo>-<id>.jpg — quem baixa vê quando e onde sem abrir a foto."""
+    import re
+    import unicodedata
+    from zoneinfo import ZoneInfo
+
+    from app.modules.frentes.infra.models import AreaFrenteModel
+
+    quando = f.enviado_em.astimezone(ZoneInfo("America/Sao_Paulo")) if f.enviado_em else None
+    dia = f.data.strftime("%Y%m%d") if f.data else (quando.strftime("%Y%m%d") if quando else "")
+    hora = quando.strftime("%H%M") if quando else ""
+    aid = _area_da_foto(s, f)
+    a = s.get(AreaFrenteModel, aid) if aid else None
+    partes = [dia + (f"-{hora}" if hora else ""), a.codigo if a else "", _ROTULO.get(f.alvo, f.alvo), str(f.id)]
+    nome = "-".join(x for x in partes if x)
+    nome = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode()
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", nome).strip("-") + f".{ext}"
+
+
 @router.get("/{fid}/arquivo")
-def arquivo(fid: int, mini: bool = False, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    """`?mini=true`: miniatura de até 480 px (≈30 KB) para listas e o book — o original só ao abrir a foto (spec 082)."""
+def arquivo(fid: int, mini: bool = False, baixar: bool = False, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """`?mini=true`: miniatura de até 480 px (≈30 KB) para listas e o book — o original só ao abrir a foto (spec 082).
+    `?baixar=true`: o original como anexo, com nome de data, frente e tipo (spec 119)."""
     f = _foto(s, c, fid)
+    mini = mini and not baixar
     dados = conteudo_da_foto(s, f, mini=mini)
     tipo = "image/jpeg" if mini else f.content_type
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[tipo]
+    if baixar:
+        return Response(dados, media_type=tipo, headers={"Content-Disposition": f'attachment; filename="{nome_para_baixar(s, f, ext)}"',
+                                                         "Cache-Control": "private, max-age=86400"})
     return Response(dados, media_type=tipo, headers={"Content-Disposition": f'inline; filename="foto-{f.id}{"-mini" if mini else ""}.{ext}"',
                                                      "Cache-Control": "private, max-age=86400"})
 

@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Printer, Trash2, X } from 'lucide-react';
+import { Download, Printer, Trash2, X } from 'lucide-react';
+import { baixarFoto } from '@/components/Mobile/Fotos';
 import { toast } from 'sonner';
 import { ExcluirComMotivo } from '@/components/Obra/ExcluirComMotivo';
 import { usePodeExcluir } from '@/lib/exclusoes';
@@ -20,6 +21,8 @@ interface FotoBook {
   id: number; tipo: Tipo; data: string; area_id: number | null; area: string; local: string | null; atividade: string | null;
   cwp: string | null; equipe: string | null; titulo: string | null; causa: string | null; acao?: string | null; status?: string;
   legenda: string | null; enviado_em: string | null; momento?: 'antes' | 'depois';
+  /** Spec 119: atividade registrada no campo fora da programação. */
+  registro?: boolean;
 }
 
 const dataBR = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -38,10 +41,13 @@ const TAMANHOS = { P: 130, M: 180, G: 240 } as const;
 
 function Cartao({ f, onAbrir, onExcluir }: { f: FotoBook; onAbrir: () => void; onExcluir?: () => void }) {
   const url = useFoto(f.id, true).data;
+  const api = useApi();
   return (
     <figure className="relative flex break-inside-avoid flex-col overflow-hidden rounded-m-md border border-m-stroke-subtle bg-m-surface-raised">
       {onExcluir && <button type="button" onClick={onExcluir} aria-label="Excluir a foto do book" title="Excluir (fica no histórico)"
         className="absolute right-1.5 top-1.5 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-m-danger shadow print:hidden"><Trash2 size={15} /></button>}
+      <button type="button" onClick={() => void baixarFoto(api, f.id)} aria-label="Baixar a foto" title="Baixar a foto original"
+        className="absolute left-1.5 top-1.5 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-m-text-secondary shadow print:hidden"><Download size={15} /></button>
       <button type="button" onClick={onAbrir} aria-label="Ver a foto ampliada" className="aspect-[4/3] w-full bg-m-surface-active">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {url ? <img src={url} alt={f.titulo ?? f.atividade ?? 'Foto de campo'} className="h-full w-full object-cover" /> : <span className="block h-full w-full animate-pulse" />}
@@ -49,6 +55,7 @@ function Cartao({ f, onAbrir, onExcluir }: { f: FotoBook; onAbrir: () => void; o
       <figcaption className="flex flex-col gap-0.5 p-1.5 text-[11px] leading-[14px] [&>span]:line-clamp-2">
         <span className="font-semibold text-m-text-primary">{dataBR(f.data)}{f.enviado_em ? ` · ${hora(f.enviado_em)}` : ''}</span>
         {f.causa && <span className="font-semibold uppercase tracking-[0.3px] text-m-warning">{f.causa}{f.momento ? <span className={`ml-1.5 rounded px-1 ${f.momento === 'depois' ? 'bg-m-success-subtle text-m-success' : 'bg-m-danger-subtle text-m-danger'}`}>{f.momento}</span> : null}</span>}
+        {f.registro && <span className="font-semibold uppercase tracking-[0.3px] text-m-info">Fora da programação</span>}
         {f.titulo && <span className="text-m-text-primary">{f.titulo}</span>}
         {f.atividade && <span className="text-m-text-secondary">{f.atividade}</span>}
         {f.cwp && <span className="text-m-info">CWP {f.cwp}</span>}
@@ -62,11 +69,14 @@ function Cartao({ f, onAbrir, onExcluir }: { f: FotoBook; onAbrir: () => void; o
 
 function Ampliada({ f, onFechar }: { f: FotoBook; onFechar: () => void }) {
   const url = useFoto(f.id).data;
+  const api = useApi();
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar(); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [onFechar]);
   return (
     <div role="dialog" aria-modal="true" aria-label="Foto ampliada" className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-3 bg-black/85 p-4 print:hidden" onClick={onFechar}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {url && <img src={url} alt={f.titulo ?? f.atividade ?? 'Foto'} className="max-h-[80vh] max-w-full rounded-m-md" />}
+      <button type="button" onClick={(e) => { e.stopPropagation(); void baixarFoto(api, f.id); }}
+        className="flex h-10 items-center gap-2 rounded-full bg-white/15 px-4 text-[13px] font-semibold text-white"><Download size={16} /> Baixar a foto</button>
       <p className="max-w-3xl text-center text-[13px] text-white">{dataBR(f.data)} · {f.area}{f.atividade ? ` · ${f.atividade}` : ''}{f.titulo ? ` · ${f.titulo}` : ''}</p>
       <button type="button" aria-label="Fechar" className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"><X size={22} /></button>
     </div>
