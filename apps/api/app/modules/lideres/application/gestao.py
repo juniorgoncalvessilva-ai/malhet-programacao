@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.lideres.application.portal import equipes_lideradas
+from app.modules.lideres.domain.portal import normalizar_codigo
 from app.modules.lideres.infra import sessao
 from app.modules.lideres.infra.models import LiderAcessoModel, LiderPedidoEquipeModel, LiderPortalModel
 from app.shared.errors import DomainError, NotFoundError
@@ -43,8 +44,8 @@ def listar(s: Session, obra_id: int) -> list[dict]:
     por_cod: dict[str, ColaboradorModel] = {}
     for p in pessoas:
         for k in (p.cracha, p.matricula):
-            if k:
-                por_cod.setdefault(k, p)
+            if normalizar_codigo(k):  # o mesmo número do login (spec 118): zero à esquerda, ponto e ".0" não separam
+                por_cod.setdefault(normalizar_codigo(k), p)
     por_id = {p.id: p for p in pessoas}
     origem: dict[int, set[str]] = {}
     fora: list[dict] = []
@@ -52,7 +53,7 @@ def listar(s: Session, obra_id: int) -> list[dict]:
         if not e.ativo:
             continue
         if e.encarregado_cracha:
-            p = por_cod.get(e.encarregado_cracha)
+            p = por_cod.get(normalizar_codigo(e.encarregado_cracha))
             if p:
                 origem.setdefault(p.id, set()).add("encarregado")
             else:

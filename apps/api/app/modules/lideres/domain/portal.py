@@ -19,6 +19,14 @@ HORAS_SESSAO = 12
 FUNCOES_DE_LIDER = re.compile(r"ENCARREG|L[IÍ]DER|MESTRE|SUPERVISOR|FEITOR", re.IGNORECASE)
 
 
+def normalizar_codigo(valor: object) -> str:
+    """Matrícula/crachá como a pessoa digita e como a planilha grava, iguais: "0115532", "115.532", "115532.0" (Excel)
+    e " 115532 " → "115532". Letras ficam (crachá de terceiro "T77")."""
+    t = re.sub(r"\.0+$", "", str(valor or "").strip())
+    t = "".join(ch for ch in t if ch.isalnum()).upper()
+    return (t.lstrip("0") or "0") if t else ""
+
+
 def funcao_de_lider(funcao: str | None) -> bool:
     """Quem tem função de liderança no efetivo entra no link mesmo sem equipe — para pedir a dele (spec 114)."""
     return bool(funcao and FUNCOES_DE_LIDER.search(funcao))
@@ -64,10 +72,11 @@ def equipes_do_lider(codigos: set[str], colaborador_id: int, extras: set[int], e
     """Equipes ativas que a pessoa lidera: é o encarregado (crachá/matrícula), o responsável, o supervisor ou recebeu
     a equipe no cadastro de líderes."""
     out = []
+    meus = {normalizar_codigo(c) for c in codigos} - {""}
     for e in equipes:
         if not e.ativo:
             continue
-        if (e.encarregado and e.encarregado in codigos) or colaborador_id in (e.responsavel_id, e.supervisor_id) or e.id in extras:
+        if (e.encarregado and normalizar_codigo(e.encarregado) in meus) or colaborador_id in (e.responsavel_id, e.supervisor_id) or e.id in extras:
             out.append(e.id)
     return out
 

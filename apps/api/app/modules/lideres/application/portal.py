@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.efetivo.infra.models import ColaboradorModel
@@ -19,6 +19,7 @@ from app.modules.lideres.domain.portal import (
     Tentativas,
     equipes_do_lider,
     funcao_de_lider,
+    normalizar_codigo,
     validar_nova_senha,
     validar_pedido,
 )
@@ -59,12 +60,25 @@ def equipes_lideradas(s: Session, obra_id: int, c: ColaboradorModel, acesso: Lid
     return [e for e in todas if e.id in ids]
 
 
+def _norm_sql(col):
+    """normalizar_codigo no banco: tira ".0" do fim, o que não é letra/número, maiúsculas e zeros à esquerda."""
+    t = func.regexp_replace(func.regexp_replace(func.coalesce(col, ""), r"\.0+$", ""), "[^0-9A-Za-z]", "", "g")
+    return func.ltrim(func.upper(t), "0")
+
+
+def _pelo_codigo(cod: str):
+    """Filtro de colaborador pela matrícula ou crachá, do jeito que for digitado (spec 118)."""
+    C = ColaboradorModel
+    alvo = cod.lstrip("0")
+    return or_(_norm_sql(C.matricula) == alvo, _norm_sql(C.cracha) == alvo)
+
+
 def _pessoa(s: Session, obra_id: int, codigo: str) -> ColaboradorModel | None:
-    cod = "".join(ch for ch in (codigo or "") if ch.isalnum())
+    cod = normalizar_codigo(codigo)
     if not cod:
         return None
     C = ColaboradorModel
-    return s.scalar(select(C).where(C.obra_id == obra_id, or_(C.matricula == cod, C.cracha == cod)).order_by(C.id))
+    return s.scalar(select(C).where(C.obra_id == obra_id, _pelo_codigo(cod)).order_by(C.id))
 
 
 @dataclass(frozen=True)
@@ -88,27 +102,63 @@ def _nome_obra(s: Session, obra_id: int) -> dict:
     return {"obra_id": obra_id, "obra": o.nome if o else "", "empresa": m.nome_contratada if m else None}
 
 
+def _encarregado_fora_do_efetivo(s: Session, cod: str, obras: set[int] | None, ja_tem: set[int]) -> list[ColaboradorModel]:
+    """Encarregado de equipe ativa cujo crachá não está no efetivo (aparece em Acesso dos líderes como "fora do
+    efetivo"): no primeiro acesso entra no efetivo como cadastro pendente, para o Planejamento conferir (spec 118)."""
+    from app.modules.efetivo.domain.efetivo import EMPRESA_PROPRIA, Situacao
+
+    q = select(EquipeModel).where(EquipeModel.ativo.is_(True), _norm_sql(EquipeModel.encarregado_cracha) == cod.lstrip("0"))
+    novos: list[ColaboradorModel] = []
+    for e in s.scalars(q.order_by(EquipeModel.obra_id, EquipeModel.id)):
+        if (obras is not None and e.obra_id not in obras) or e.obra_id in ja_tem or any(n.obra_id == e.obra_id for n in novos):
+            continue
+        if s.scalar(select(ColaboradorModel.id).where(ColaboradorModel.obra_id == e.obra_id, ColaboradorModel.chave == cod)):
+            continue
+        c = ColaboradorModel(obra_id=e.obra_id, chave=cod, empresa=EMPRESA_PROPRIA, matricula=cod, cracha=cod,
+                             nome=(e.encarregado_nome or f"ENCARREGADO {cod}").upper()[:150], funcao="ENCARREGADO",
+                             situacao=Situacao.MOBILIZADO.value, origem="simova", no_ultimo_arquivo=False,
+                             cadastro_pendente=True, cadastrado_por="portal do encarregado",
+                             cadastrado_em=datetime.now(timezone.utc))
+        s.add(c)
+        novos.append(c)
+    s.flush()
+    return novos
+
+
 def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int | None = None,
            obras: list[int] | None = None) -> dict:
-    """Endereço fixo dos encarregados (spec 115): a obra vem da matrícula. Matrícula em mais de uma obra (e a senha
-    confere nas duas) → devolve as obras para ele escolher e entrar de novo com `obra_id`."""
-    cod = "".join(ch for ch in (matricula or "") if ch.isalnum())
+    """Endereço dos encarregados (specs 115, 117 e 118): a obra vem da matrícula (ou do endereço). Matrícula em mais de
+    uma obra (e a senha confere nas duas) → devolve as obras para ele escolher e entrar de novo com `obra_id`.
+    Entra quem aparece em Acesso dos líderes: encarregado/responsável/supervisor de equipe ativa, líder cadastrado,
+    função de liderança no efetivo e o encarregado de equipe que ainda não está no efetivo."""
+    cod = normalizar_codigo(matricula)
     chave = f"{cod}:{aparelho}"
     agora = time.monotonic()
     if TENTATIVAS.bloqueado(chave, agora):
         raise DomainError("muitas tentativas: espere 15 minutos ou peça ao Planejamento para redefinir a senha", "senha")
+    if not cod:
+        raise DomainError("digite a sua matrícula", "matricula")
+    permitidas = {obra_id} if obra_id is not None else (set(obras) if obras is not None else None)
     C = ColaboradorModel
-    candidatos = list(s.scalars(select(C).where(or_(C.matricula == cod, C.cracha == cod)).order_by(C.obra_id))) if cod else []
-    if obra_id is not None:
-        candidatos = [c for c in candidatos if c.obra_id == obra_id]
-    if obras is not None:  # endereço da empresa (spec 117): só as obras dela
-        candidatos = [c for c in candidatos if c.obra_id in set(obras)]
-    validos, bloqueado = [], False
+    todos = list(s.scalars(select(C).where(_pelo_codigo(cod)).order_by(C.obra_id, C.id)))
+    candidatos = [c for c in todos if permitidas is None or c.obra_id in permitidas]
+    # uma pessoa por obra (a mesma matrícula de outra empresa terceira não duplica a tentativa)
+    vistos: set[int] = set()
+    candidatos = [c for c in candidatos if not (c.obra_id in vistos or vistos.add(c.obra_id))]
+    lideres, nao_lider, bloqueado = [], [], False
     for c in candidatos:
         acesso = s.scalar(select(LiderAcessoModel).where(LiderAcessoModel.obra_id == c.obra_id, LiderAcessoModel.colaborador_id == c.id))
         lidera = equipes_lideradas(s, c.obra_id, c, acesso)
         # spec 114: função de liderança no efetivo também entra (sem equipe ainda, para pedir a dele)
-        if not (lidera or (acesso and acesso.cadastrado) or funcao_de_lider(c.funcao)) or not _senha_confere(acesso, senha):
+        if lidera or (acesso and acesso.cadastrado) or funcao_de_lider(c.funcao):
+            lideres.append((c, acesso))
+        else:
+            nao_lider.append(c)
+    if (senha or "").strip() == SENHA_INICIAL:  # encarregado de equipe que não está no efetivo: entra no 1º acesso
+        lideres += [(c, None) for c in _encarregado_fora_do_efetivo(s, cod, permitidas, {c.obra_id for c in todos})]
+    validos = []
+    for c, acesso in lideres:
+        if not _senha_confere(acesso, senha):
             continue
         if acesso is not None and not acesso.ativo:
             bloqueado = True
@@ -117,8 +167,18 @@ def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int |
     if not validos:
         if bloqueado:
             raise DomainError("seu acesso está bloqueado: fale com o Planejamento", "matricula")
+        if lideres:  # é líder: a senha é que não confere
+            TENTATIVAS.errou(chave, agora)
+            ja_criou = any(a is not None and a.senha_hash for _c, a in lideres)
+            raise DomainError("senha não confere. " + ("Esqueceu a sua? Peça ao Planejamento para redefinir (volta a 123456)."
+                                                        if ja_criou else "No primeiro acesso a senha é 123456."), "senha")
         TENTATIVAS.errou(chave, agora)
-        raise DomainError("matrícula ou senha não conferem (só entram encarregados e líderes)", "senha")
+        if nao_lider:
+            raise DomainError(f"{nao_lider[0].nome}: não está como líder de equipe. O Planejamento inclui em Acesso dos líderes.",
+                              "matricula")
+        if permitidas is not None and any(c.obra_id not in permitidas for c in todos):
+            raise DomainError("sua matrícula não é desta obra: entre pelo endereço da sua obra (peça ao Planejamento)", "matricula")
+        raise DomainError(f"matrícula {cod} não encontrada entre os líderes. Confira o número com o Planejamento.", "matricula")
     TENTATIVAS.acertou(chave)
     if len(validos) > 1:
         return {"escolher": [_nome_obra(s, c.obra_id) for c, _a in validos]}

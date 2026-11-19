@@ -262,3 +262,50 @@ def test_endereco_por_empresa_e_obra(client):
     # pelo endereço da obra entra direto nela
     r = w.post("/api/portal/entrar", json={"matricula": "115011", "senha": "123456", "obra_id": o2}).json()
     assert r["obra_id"] == o2 and r["rota"]["obra"] == "tam-02"
+
+
+def test_quem_esta_em_acesso_dos_lideres_entra(client):
+    """Spec 118: todos da lista entram — matrícula gravada com zero/ponto/".0" do Excel, encarregado de equipe que não
+    está no efetivo — e a mensagem diz o motivo quando não entra."""
+    from app.core.db import SessionLocal
+    from app.modules.efetivo.infra.models import ColaboradorModel
+    from app.modules.lideres.domain.portal import normalizar_codigo
+
+    assert [normalizar_codigo(x) for x in ("0115532", "115.532", "115532.0", " 115532 ", "t77", "", None)] == \
+        ["115532", "115532", "115532", "115532", "T77", "", ""]
+    obra = int(client.headers["X-Obra-Id"])
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    cs = {c["nome"]: c for c in client.get("/api/efetivo/colaboradores").json()}
+    enc = cs["ENCARREGADO TESTE UM"]
+    client.post("/api/efetivo/equipes", json={"nome": "EQUIPE.1_FORMA", "encarregado_id": enc["id"]})
+    with SessionLocal() as s:  # a planilha gravou a matrícula como número do Excel e sem crachá
+        c = s.get(ColaboradorModel, enc["id"])
+        c.matricula, c.cracha = "115011.0", None
+        s.commit()
+    client.post("/api/equipes", json={"nome": "EQUIPE.9_SIMOVA", "encarregado_cracha": "0999888", "encarregado_nome": "Fulano Fora Efetivo", "composicao": []})
+    lista = client.get("/api/lideres").json()["lideres"]
+    assert any(x["nome"] == "ENCARREGADO TESTE UM" and x["equipes"] for x in lista)
+    assert any(x.get("fora_do_efetivo") and x["nome"] == "Fulano Fora Efetivo" for x in lista)
+
+    w = _publico()
+    entrar = lambda m, p="123456", **k: w.post("/api/portal/entrar", json={"matricula": m, "senha": p, **k})  # noqa: E731
+    assert entrar("115011").json()["trocar_senha"]  # "115011.0" no banco
+    assert entrar("0115011").json()["nome"] == "ENCARREGADO TESTE UM"
+    # encarregado de equipe que não está no efetivo: entra no 1º acesso e vira cadastro pendente
+    assert entrar("999888", "000000").json()["detail"].startswith("matrícula 999888 não encontrada")  # sem 123456 não cria
+    r = entrar("999888").json()
+    assert r["trocar_senha"] and r["nome"] == "FULANO FORA EFETIVO"
+    novo = next(x for x in client.get("/api/lideres").json()["lideres"] if x["nome"] == "FULANO FORA EFETIVO")
+    assert not novo.get("fora_do_efetivo") and [e["nome"] for e in novo["equipes"]] == ["EQUIPE.9_SIMOVA"]
+    with SessionLocal() as s:
+        assert s.get(ColaboradorModel, novo["colaborador_id"]).cadastro_pendente
+    assert entrar("999888").json()["trocar_senha"]  # não duplica
+    # mensagens que dizem o motivo
+    tok = entrar("115011").json()["token"]
+    w.post("/api/portal/senha", headers={"X-Portal-Token": tok}, json={"nova": "obra2026", "repetida": "obra2026"})
+    assert "Peça ao Planejamento para redefinir" in entrar("115011").json()["detail"]
+    assert "não está como líder" in entrar("115013").json()["detail"]
+    assert "não encontrada" in entrar("777777").json()["detail"]
+    outra = client.post("/api/admin/obras", json={"codigo": "OUT-9", "nome": "Outra"}).json()["id"]
+    assert "não é desta obra" in entrar("115011", "obra2026", obra_id=outra).json()["detail"]
+    assert entrar("115011", "obra2026", obra_id=obra).json()["obra_id"] == obra

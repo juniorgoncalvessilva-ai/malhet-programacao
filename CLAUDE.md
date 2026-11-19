@@ -66,6 +66,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   contratada e do código da obra (`lideres/domain/rota.py::slug`, sem contratada = `malhet`; `application/rotas.py::resolver`,
   `GET /portal/rota/{empresa}[/{obra}]`): marca antes do login, empresa só aceita as obras dela (`entrar(..., empresa)`), a obra
   manda (nome antigo da empresa corrige o endereço), `/encarregado` e links antigos herdam o endereço da obra (`guardarRota`).
+  Quem está em Acesso dos líderes entra (spec 118): matrícula comparada por `normalizar_codigo` (zero à esquerda, ponto, ".0" do
+  Excel; `_norm_sql` no banco) na lista e no login; encarregado de equipe fora do efetivo entra no 1º acesso e vira cadastro
+  pendente (`_encarregado_fora_do_efetivo`); a mensagem diz o motivo (senha, não é líder, outra obra, não encontrada).
   Marca da empresa (spec 113): `GET /portal/marca/{obra_id}` no navegador (obra lembrada no aparelho) — título, ícone (logo),
   `theme-color`, abertura com a logo e faixas de cima/baixo na cor (`textoSobre`, tokens no `.portal-lider`). Reivindicar equipe
   (spec 114): função de liderança entra sem equipe (`funcao_de_lider`), pede a equipe (`lider_pedido_equipe`) e o Planejamento
