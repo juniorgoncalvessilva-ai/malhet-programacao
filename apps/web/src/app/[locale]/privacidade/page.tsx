@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: 'Como o Malhet e o app Malhet Campo tratam dados pessoais (LGPD).',
 };
 
-const ATUALIZADA = '15/11/2026';
+const ATUALIZADA = '19/11/2026';
 const CONTATO = process.env.NEXT_PUBLIC_CONTATO_PRIVACIDADE;
 
 function Secao({ id, titulo, children }: { id?: string; titulo: string; children: ReactNode }) {
@@ -51,6 +51,8 @@ export default function PrivacidadePage() {
         <Secao titulo="2. Que dados tratamos">
           <ul className="list-disc pl-5">
             <li><b>Conta de acesso</b>: e-mail, nome de exibição, foto de perfil e telefone (opcionais) e o papel na obra.</li>
+            <li><b>Acesso dos líderes pelo link da obra</b>: a matrícula, a senha criada pelo encarregado (guardada só cifrada,
+              nunca legível) e a data do último acesso; cada mudança de equipe feita por ali fica no histórico com quem a fez.</li>
             <li><b>Efetivo da obra</b>: nome, matrícula, número do crachá, função, empresa, situação de mobilização, datas de
               admissão/demissão e dados de jornada e contrato (turno, horas, alojamento). <b>Não guardamos</b> CPF, RG, PIS,
               endereço, telefone pessoal, data de nascimento, filiação, raça/cor ou tipo sanguíneo dos trabalhadores.</li>
