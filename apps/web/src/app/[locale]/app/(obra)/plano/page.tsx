@@ -15,6 +15,7 @@ import { Link } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
 import type { AtividadePeriodo, ItemPlano, NoWbs, PlanoResposta, PreviaMigracao, RecursoP6, SituacaoPlano } from '@/lib/api/types';
 import { Carregando } from '@/components/Obra/Esqueleto';
+import { Exportar6wla } from '@/components/Plano/Exportar6wla';
 
 type Aba = '90' | '6' | 'pull' | 'migrar';
 const ROTULO: Record<SituacaoPlano, string> = { analisar: 'A analisar', restricao: 'Com restrição', liberado: 'Liberado', programado: 'Programado' };
@@ -72,6 +73,7 @@ export default function PlanoPage() {
       <Abas rotulo="Horizonte" ativa={aba} onTrocar={(a) => { setAba(a); setSel(null); }} abas={[
         { chave: '90', titulo: '90 dias' }, { chave: '6', titulo: '6 semanas' }, { chave: 'pull', titulo: 'Pull planning' }, { chave: 'migrar', titulo: 'Levar à programação' },
       ]} />
+      {aba === '6' && <Exportar6wla />}
       {plano.isLoading && <Carregando />}
       {(aba === '90' || aba === '6') && plano.data && <Grade dados={plano.data} seis={aba === '6'} sel={sel} onSel={(id) => setSel(sel === id ? null : id)}
         detalhe={item && <Detalhe item={item} marcos={itens.filter((i) => i.marco && i.id !== item.id)} onFechar={() => setSel(null)} />} />}

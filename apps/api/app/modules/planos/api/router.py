@@ -23,6 +23,7 @@ from app.modules.restricoes.infra.models import AcaoRestricaoModel
 from app.modules.wbs.infra.models import WbsNoModel
 from app.shared.errors import DomainError, NotFoundError
 from app.shared.memoria import pacote
+from app.shared.tempo import hoje_local
 
 router = APIRouter(prefix="/planos", tags=["Plano de 90 dias"])
 
@@ -619,3 +620,36 @@ def tirar_concluidas(s: Session = Depends(get_session), c: ContextoObra = Depend
             removidos += 1
     s.flush()
     return {"removidos": removidos, "mantidos": mantidos[:50]}
+
+
+# ---- 6WLA em Excel no layout da obra (spec 108) ------------------------------------------------------------------
+@router.get("/seis-semanas/versoes")
+def versoes_base(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Versões do cronograma importadas (para escolher a linha de base; padrão = a primeira)."""
+    from app.modules.planos.application.seis_semanas import versoes_cronograma
+
+    return versoes_cronograma(s, c.obra_id)
+
+
+@router.get("/seis-semanas/previa")
+def previa_seis_semanas(referencia: date | None = None, base_id: int | None = None, s: Session = Depends(get_session),
+                        c: ContextoObra = Depends(ler)):
+    from app.modules.planos.application.seis_semanas import previa
+
+    return previa(s, c.obra_id, referencia or hoje_local(), base_id)
+
+
+@router.get("/seis-semanas.xlsx")
+def exportar_seis_semanas(referencia: date | None = None, base_id: int | None = None, s: Session = Depends(get_session),
+                          c: ContextoObra = Depends(ler)):
+    """Sessão de Look Ahead (6WLA): semana corrente + 6 semanas, no layout "CRONOGRAMA 6WLA" da obra."""
+    from fastapi import Response
+
+    from app.modules.obras.infra.models import ObraModel
+    from app.modules.planos.application.seis_semanas import gerar
+
+    obra = s.get(ObraModel, c.obra_id)
+    conteudo, info = gerar(s, c.obra_id, referencia or hoje_local(), base_id, obra.nome if obra else "")
+    nome = f"6WLA_S{info['semana_corrente']}_a_S{info['semana_corrente'] + 6}.xlsx"
+    return Response(conteudo, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{nome}"', "X-Itens": str(info["atividades"])})

@@ -64,10 +64,10 @@ def test_resumo_do_dia(client):
     assert "4,5" not in sem_qtd
 
     # hoje: a restrição criada hoje aparece como nova
-    from datetime import date
+    from app.shared.tempo import hoje_local
 
     hoje = client.get("/api/campo/resumo-dia").json()
-    assert hoje["data"] == date.today().isoformat()
+    assert hoje["data"] == hoje_local().isoformat()  # dia da obra (Brasília), não o do servidor em UTC
     assert hoje["restricoes"]["total"] == 1 and hoje["restricoes"]["grupos"][0]["itens"][0]["marcador"] == "nova"
     assert "_(nova)_" in hoje["textos"]["restricoes"]
 

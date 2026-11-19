@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import ContextoObra, ler
 from app.core.db import get_session
+from app.shared.tempo import hoje_local
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.obras.domain.obra import PapelObra
 from app.modules.planejamento.application import servico as sv
@@ -28,7 +29,7 @@ def programacao_do_dia(s: Session, obra_id: int, d: date) -> ProgramacaoModel | 
 
 @router.get("/dia")
 def dia(data: date | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    hoje = date.today()
+    hoje = hoje_local()
     d = data or hoje
     p = programacao_do_dia(s, c.obra_id, d)
     base = {"data": d.isoformat(), "hoje": hoje.isoformat(), "programacao": None, "linhas": [], "pendentes": [],
@@ -87,6 +88,6 @@ def resumo_dia(data: date | None = None, qtd: bool = True, s: Session = Depends(
     from app.modules.campo.application.resumo_dia import montar
     from app.modules.campo.domain.resumo_dia import SECOES, juntar, textos
 
-    r = montar(s, c, data or date.today())
+    r = montar(s, c, data or hoje_local())
     t = textos(r, qtd)
     return {**r, "textos": t, "texto": juntar(t, SECOES)}
