@@ -12,11 +12,13 @@ import { itemMobileDe } from '@/components/Mobile/menu';
 import { BarraCampo, AvisoTeste } from '@/components/Mobile/BarraCampo';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { TutorialCelular } from '@/components/Tutorial/Tutoriais';
+import { useLogoNoCarimbo } from '@/components/Mobile/Fotos';
 
 /** Casca do app de campo: coluna de celular (até 480 px), conteúdo rolando e barra inferior fixa com alvos de 44 px+. */
 export function MobileShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { obra, carregando, podeVerMobile } = useObra();
+  useLogoNoCarimbo(); // spec 120: a logo da empresa fica no aparelho para carimbar as fotos, mesmo offline
   const router = useRouter();
   // telas liberadas para a pessoa (Acessos › Celular, spec 066); tela fora da lista volta para o Início
   const dona = itemMobileDe(pathname);

@@ -120,7 +120,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   frente (CWA) → IWP da WBS da frente com CWP e grupo (`wbs/infra/gateway.py::itens_da_area`, filtro) ou item da PQ → texto
   livre → fotos (`registro_atividade`, `campo/api/registros.py`, foto alvo `registro`; entra no book como atividade "Fora da
   programação"). Baixar foto: `GET /fotos/{id}/arquivo?baixar=true` (nome AAAAMMDD-HHMM-frente-tipo-id, `nome_para_baixar`),
-  `baixarFoto` (compartilhar no app nativo) na foto ampliada e no book.
+  `baixarFoto` (compartilhar no app nativo) na foto ampliada e no book. Logo da contratada (Marca da obra) no canto do carimbo
+  (spec 120, `useLogoNoCarimbo`: no `MobileShell`, `TirarFotos` e `useEnviarFoto`; guardada reduzida no aparelho por obra,
+  `malhet.logo-carimbo.<obra>`, para carimbar offline).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

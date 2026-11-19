@@ -5,6 +5,7 @@ import { Camera, Download, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useApi } from '@/hooks/programacao/useApi';
+import { useLogo, useMarcaObra } from '@/components/Obra/LogosObra';
 import { useObraOpcional } from '@/lib/obra/ObraProvider';
 import { emAppNativo } from '@/lib/presenca/leitores';
 
@@ -23,6 +24,40 @@ export async function reduzirFoto(arq: File, maior = 1600): Promise<Blob> {
 
 /** Momento em que cada foto foi tirada/escolhida (para o carimbo de data e hora). */
 export const momentoDaFoto = new WeakMap<Blob, Date>();
+/**
+ * Logo da empresa (contratada, da Marca da obra) que entra no carimbo de toda foto (spec 120). Fica guardada no aparelho
+ * por obra, reduzida, para carimbar também sem internet.
+ */
+let logoCarimbo: HTMLImageElement | null = null;
+const CHAVE_LOGO = 'malhet.logo-carimbo.';
+const abrirImagem = (src: string) => new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = src; });
+
+/** Carrega a logo da contratada da obra corrente para o carimbo (do aparelho na hora; da API quando muda). */
+export function useLogoNoCarimbo() {
+  const obraId = useObraOpcional()?.obra?.id;
+  const m = useMarcaObra();
+  const logo = useLogo('contratada', m.data?.contratada, m.data?.versao);
+  useEffect(() => {
+    if (!obraId) return;
+    try { const salvo = localStorage.getItem(CHAVE_LOGO + obraId); if (salvo) void abrirImagem(salvo).then((i) => { logoCarimbo = i; }).catch(() => undefined); } catch { /* sem storage */ }
+  }, [obraId]);
+  useEffect(() => {
+    if (!obraId || !m.data) return;
+    if (!m.data.contratada) { logoCarimbo = null; try { localStorage.removeItem(CHAVE_LOGO + obraId); } catch { /* sem storage */ } return; }
+    if (!logo.data) return;
+    void abrirImagem(logo.data).then((img) => {
+      // guarda reduzida (até 360 px de largura), em PNG para manter o fundo transparente
+      const k = Math.min(1, 360 / img.naturalWidth);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL('image/png');
+      try { localStorage.setItem(CHAVE_LOGO + obraId, url); } catch { /* cheio: fica só nesta sessão */ }
+      return abrirImagem(url).then((i) => { logoCarimbo = i; });
+    }).catch(() => undefined);
+  }, [obraId, m.data, logo.data]);
+}
+
 /** Fotos que já saíram de carimbarFoto: o envio não carimba de novo. */
 const carimbadas = new WeakSet<Blob>();
 export const dataHoraBR = (d: Date) => `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -47,11 +82,28 @@ export async function carimbarFoto(foto: Blob, linhas: string[], quando = moment
     grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.3, 'rgba(0,0,0,0.55)'); grad.addColorStop(1, 'rgba(0,0,0,0.7)');
     ctx.fillStyle = grad; ctx.fillRect(0, c.height - alt * 1.4, c.width, alt * 1.4);
     let y = c.height - alt + pad;
+    // logo da empresa no canto de baixo, à direita, num cartão branco (a logo costuma ser escura e sem fundo)
+    let reservado = 0;
+    const lg = logoCarimbo;
+    if (lg && lg.naturalWidth && lg.naturalHeight) {
+      const h = Math.min(alt - pad * 2, Math.round(base * 3.2));
+      const w = Math.min(Math.round(h * (lg.naturalWidth / lg.naturalHeight)), Math.round(c.width * 0.3));
+      const hh = Math.round(w * (lg.naturalHeight / lg.naturalWidth));
+      const m = Math.round(base * 0.35);
+      const x0 = c.width - pad - w - m * 2, y0 = c.height - pad - hh - m * 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      const r = Math.round(m * 1.2);
+      ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x0 + w + m * 2, y0, x0 + w + m * 2, y0 + hh + m * 2, r);
+      ctx.arcTo(x0 + w + m * 2, y0 + hh + m * 2, x0, y0 + hh + m * 2, r); ctx.arcTo(x0, y0 + hh + m * 2, x0, y0, r); ctx.arcTo(x0, y0, x0 + w + m * 2, y0, r);
+      ctx.closePath(); ctx.fill();
+      ctx.drawImage(lg, x0 + m, y0 + m, w, hh);
+      reservado = w + m * 2 + pad;
+    }
     ctx.textBaseline = 'top';
     for (const x of textos) {
       ctx.font = `${x.peso} ${x.px}px Figtree, system-ui, sans-serif`;
       ctx.lineWidth = Math.max(2, x.px / 8); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.fillStyle = x === textos[0] ? '#FFD54F' : '#FFFFFF';
-      ctx.strokeText(x.t, pad, y, c.width - pad * 2); ctx.fillText(x.t, pad, y, c.width - pad * 2);
+      ctx.strokeText(x.t, pad, y, c.width - pad * 2 - reservado); ctx.fillText(x.t, pad, y, c.width - pad * 2 - reservado);
       y += x.px * 1.3;
     }
     const pronta = await new Promise<Blob>((ok, falha) => c.toBlob((b) => (b ? ok(b) : falha(new Error('foto inválida'))), 'image/jpeg', 0.85));
@@ -68,6 +120,7 @@ export async function carimbarFoto(foto: Blob, linhas: string[], quando = moment
 export function useEnviarFoto() {
   const api = useApi();
   const obra = useObraOpcional()?.obra?.nome;
+  useLogoNoCarimbo();
   return async (alvo: 'desvio' | 'restricao' | 'linha' | 'auditoria' | 'acao' | 'registro', alvoId: number, foto: Blob,
     extra?: { data?: string; legenda?: string; carimbo?: string[] }) => {
     if (!carimbadas.has(foto)) {
@@ -135,6 +188,7 @@ export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [urls, setUrls] = useState<string[]>([]);
+  useLogoNoCarimbo(); // toda tela que tira foto já tem a logo pronta para o carimbo
   useEffect(() => { const u = fotos.map((f) => URL.createObjectURL(f)); setUrls(u); return () => u.forEach((x) => URL.revokeObjectURL(x)); }, [fotos]);
   return (
     <div className="flex flex-col gap-2">
