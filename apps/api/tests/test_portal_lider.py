@@ -47,7 +47,7 @@ def test_portal_do_encarregado(client):
 
     g = client.get("/api/lideres").json()
     obra = int(client.headers["X-Obra-Id"])
-    assert g["endereco"] == "/encarregado" and {x["nome"] for x in g["lideres"]} >= {"ENCARREGADO TESTE UM", "CANDIDATO TESTE"}
+    assert g["endereco"].startswith("/encarregado/malhet/") and g["endereco_empresa"] == "/encarregado/malhet" and {x["nome"] for x in g["lideres"]} >= {"ENCARREGADO TESTE UM", "CANDIDATO TESTE"}
     assert next(x for x in g["lideres"] if x["nome"] == "ENCARREGADO TESTE UM")["situacao"] == "nunca_entrou"
 
     w = _publico()
@@ -218,3 +218,47 @@ def test_endereco_fixo_matricula_em_duas_obras(client):
     assert eq["obra_id"] == o2 and [e["nome"] for e in eq["equipes"]] == [f"EQ.{o2}"]
     # com a senha nova, só a obra 311 confere: entra direto nela
     assert w.post("/api/portal/entrar", json={"matricula": "115011", "senha": "obra3112026"}).json()["obra_id"] == o2
+
+
+def test_endereco_por_empresa_e_obra(client):
+    """Spec 117: `/encarregado/<empresa>/<obra>` sai sozinho do nome da contratada e do código da obra; abre com a marca
+    antes do login e o endereço da empresa só aceita matrículas das obras dela."""
+    from app.modules.lideres.domain.rota import rota, slug
+
+    assert slug("Construtora Ação & Cia.") == "construtora-acao-cia" and slug("CT-001") == "ct-001"
+    assert rota(None, "CT 9")["endereco"] == "/encarregado/malhet/ct-9"
+    o1 = int(client.headers["X-Obra-Id"])
+    o2 = client.post("/api/admin/obras", json={"codigo": "TAM-02", "nome": "Tamanduá 2"}).json()["id"]
+    o3 = client.post("/api/admin/obras", json={"codigo": "OUT-01", "nome": "Outra empresa"}).json()["id"]
+    for o, emp, cor in ((o1, "Cardan Engenharia", "#C8102E"), (o2, "CARDAN ENGENHARIA", None), (o3, "Outra S.A.", "#003366")):
+        h = {"X-Obra-Id": str(o)}
+        client.put("/api/obra/marca/nomes", headers=h, json={"nome_contratada": emp, "nome_contratante": "Vale"})
+        if cor:
+            client.put("/api/obra/marca/cor", headers=h, json={"cor": cor})
+        client.post("/api/efetivo/importar", headers=h, files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+        enc = next(c for c in client.get("/api/efetivo/colaboradores", headers=h).json() if c["nome"] == "ENCARREGADO TESTE UM")
+        client.post("/api/efetivo/equipes", headers=h, json={"nome": f"EQ.{o}", "encarregado_id": enc["id"]})
+    g = client.get("/api/lideres", headers={"X-Obra-Id": str(o2)}).json()
+    assert (g["endereco"], g["endereco_empresa"]) == ("/encarregado/cardan-engenharia/tam-02", "/encarregado/cardan-engenharia")
+
+    w = _publico()
+    r = w.get("/api/portal/rota/cardan-engenharia/tam-02").json()
+    assert (r["obra_id"], r["obra"], r["marca"]["contratada"]) == (o2, "Tamanduá 2", "CARDAN ENGENHARIA")
+    # empresa: a marca mais completa entre as obras dela (a com cor), sem listar as obras
+    e = w.get("/api/portal/rota/Cardan-Engenharia").json()
+    assert e["obra_id"] is None and e["marca_obra_id"] == o1 and e["marca"]["cor"] == "#C8102E"
+    assert e["rota"]["endereco"] == "/encarregado/cardan-engenharia"
+    # empresa errada com a obra certa: abre pela obra e devolve o endereço certo
+    assert w.get("/api/portal/rota/nome-antigo/tam-02").json()["rota"]["endereco"] == "/encarregado/cardan-engenharia/tam-02"
+    assert w.get("/api/portal/rota/naoexiste").status_code == 404
+    assert w.get("/api/portal/rota/cardan-engenharia/naoexiste").status_code == 404
+    assert w.get(f"/api/portal/marca/{o3}").json()["rota"]["endereco"] == "/encarregado/outra-s-a/out-01"
+
+    # pelo endereço da empresa só as obras dela: escolhe entre as duas da Cardan, a da Outra não aparece
+    r = w.post("/api/portal/entrar", json={"matricula": "115011", "senha": "123456", "empresa": "cardan-engenharia"}).json()
+    assert sorted(x["obra_id"] for x in r["escolher"]) == sorted([o1, o2])
+    r = w.post("/api/portal/entrar", json={"matricula": "115011", "senha": "123456", "empresa": "outra-s-a"}).json()
+    assert r["obra_id"] == o3 and r["rota"]["endereco"] == "/encarregado/outra-s-a/out-01"
+    # pelo endereço da obra entra direto nela
+    r = w.post("/api/portal/entrar", json={"matricula": "115011", "senha": "123456", "obra_id": o2}).json()
+    assert r["obra_id"] == o2 and r["rota"]["obra"] == "tam-02"

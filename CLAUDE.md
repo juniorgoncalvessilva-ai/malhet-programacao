@@ -61,7 +61,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   da matrícula (`POST /portal/entrar`; em várias obras devolve `escolher`), vê as equipes que lidera, "Não está comigo" (vai para
   outro encarregado ou sem equipe) e "Trazer alguém" (busca no efetivo), tudo pelo `Alocador`; rotas públicas `/portal/*`
   (`X-Portal-Token`, sem código). Links antigos `/equipe/<codigo>` só redirecionam (`GET /portal/link/{codigo}` → `?obra=`).
-  Tela `/app/lideres`: endereço fixo (copiar/WhatsApp), líderes sem a função de encarregado com as equipes, redefinir/bloquear.
+  Tela `/app/lideres`: endereço da obra e da empresa (copiar/WhatsApp), líderes sem a função de encarregado, redefinir/bloquear.
+  Endereço por empresa e obra (spec 117): `/encarregado/<empresa>/<obra>` e `/encarregado/<empresa>` saem sozinhos do nome da
+  contratada e do código da obra (`lideres/domain/rota.py::slug`, sem contratada = `malhet`; `application/rotas.py::resolver`,
+  `GET /portal/rota/{empresa}[/{obra}]`): marca antes do login, empresa só aceita as obras dela (`entrar(..., empresa)`), a obra
+  manda (nome antigo da empresa corrige o endereço), `/encarregado` e links antigos herdam o endereço da obra (`guardarRota`).
   Marca da empresa (spec 113): `GET /portal/marca/{obra_id}` no navegador (obra lembrada no aparelho) — título, ícone (logo),
   `theme-color`, abertura com a logo e faixas de cima/baixo na cor (`textoSobre`, tokens no `.portal-lider`). Reivindicar equipe
   (spec 114): função de liderança entra sem equipe (`funcao_de_lider`), pede a equipe (`lider_pedido_equipe`) e o Planejamento

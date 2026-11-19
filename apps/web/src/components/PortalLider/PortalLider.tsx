@@ -1,12 +1,12 @@
 'use client';
 
 import { ArrowRightLeft, LogOut, Search, UserPlus, Users, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 import { API_URL } from '@/lib/api/client';
-import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type Sessao, guardarObra, guardarToken, lerObra, lerToken, portal } from '@/lib/portal/api';
+import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type RotaPortal, type Sessao, guardarObra, guardarRota, guardarToken, lerObra, lerRota, lerToken, portal } from '@/lib/portal/api';
 
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 const campo = 'h-12 w-full rounded-[14px] border border-m-stroke bg-m-surface-field px-3 text-[16px] text-m-text-primary outline-none focus:border-m-accent-strong focus:ring-2 focus:ring-m-accent/30';
@@ -14,7 +14,16 @@ const primario = 'h-12 w-full rounded-full bg-m-accent-strong text-[16px] font-s
 const secundario = 'h-11 rounded-full border border-m-stroke px-4 text-[14px] font-semibold text-m-text-secondary';
 
 export interface MarcaPortal { cor: string | null; contratada: string | null; contratante: string | null; logos: string[]; versao: number }
-export interface InfoPortal { obra: string; marca: MarcaPortal }
+export interface InfoPortal { obra: string | null; marca: MarcaPortal; rota?: RotaPortal }
+/** Spec 117: `/encarregado/<empresa>[/<obra>]` resolvido antes do login. */
+interface RotaResolvida extends InfoPortal { obra_id: number | null; marca_obra_id: number; rota: RotaPortal }
+
+/** Troca o endereço da barra sem recarregar (mantém o idioma: /pt-BR/encarregado/...). */
+function fixarEndereco(endereco: string) {
+  const idioma = window.location.pathname.split('/')[1];
+  const alvo = `/${idioma}${endereco}`;
+  if (window.location.pathname !== alvo) window.history.replaceState(null, '', alvo + window.location.search.replace(/[?&]obra=\d+/, ''));
+}
 
 const PADRAO = '#284E4F';
 /** Texto que se lê sobre a cor da empresa: branco em cor escura, quase preto em cor clara. */
@@ -31,9 +40,16 @@ function textoSobre(cor: string) {
  * da empresa (logo, cor nas faixas de cima e de baixo, botões, abertura, aba e barra do navegador). O aparelho lembra a
  * obra para abrir já com a marca na próxima vez.
  */
-export function PortalLider({ obraInicial }: { obraInicial?: number | null }) {
+export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null; rota?: { empresa: string; obra?: string } }) {
   const [obra, setObra] = useState<number | null>(obraInicial ?? null);
   const [info, setInfo] = useState<InfoPortal | null>(null);
+  // spec 117: endereço da empresa/obra — a marca vem antes do login e o login fica restrito a ela
+  const [marcaObra, setMarcaObra] = useState<number | null>(null); // obra de onde vêm cor e logo (empresa sem obra)
+  const [empresaRota, setEmpresaRota] = useState<string | null>(rota && !rota.obra ? rota.empresa : null);
+  const [naoAchou, setNaoAchou] = useState(false);
+  // aparelho com a sessão de outra obra abrindo o endereço desta: vale o endereço (pede o login desta obra)
+  const obraDaRota = useRef<number | null>(null);
+  const sessaoDe = useRef<number | null>(null);
   const [etapa, setEtapa] = useState<'entrar' | 'senha' | 'equipe'>('entrar');
   const [dados, setDados] = useState<MinhasEquipes | null>(null);
   const [abrindo, setAbrindo] = useState(true); // abertura com a logo da empresa
@@ -42,6 +58,8 @@ export function PortalLider({ obraInicial }: { obraInicial?: number | null }) {
   const carregar = useCallback(async () => {
     try {
       const d = await portal<MinhasEquipes>('/equipes');
+      if (obraDaRota.current && d.obra_id !== obraDaRota.current) { guardarToken(null); setEtapa('entrar'); return; }
+      sessaoDe.current = d.obra_id;
       setDados(d); setEtapa('equipe'); usarObra(d.obra_id);
     } catch (e) {
       if ((e as { campo?: string }).campo === 'sessao') { guardarToken(null); setEtapa('entrar'); } else toast.error((e as Error).message);
@@ -49,19 +67,38 @@ export function PortalLider({ obraInicial }: { obraInicial?: number | null }) {
   }, [usarObra]);
 
   useEffect(() => {
-    if (obra == null) { const lembrada = lerObra(); if (lembrada) setObra(lembrada); }
     const fim = () => setTimeout(() => setAbrindo(false), 650); // tempo de ver a marca, sem atrasar o uso
+    if (rota) {
+      // o endereço diz a empresa (e a obra): veste a marca antes de qualquer coisa
+      const caminho = `/rota/${encodeURIComponent(rota.empresa)}${rota.obra ? `/${encodeURIComponent(rota.obra)}` : ''}`;
+      portal<RotaResolvida>(caminho).then((r) => {
+        setInfo(r); setMarcaObra(r.marca_obra_id); fixarEndereco(r.rota.endereco);
+        if (r.obra_id) {
+          obraDaRota.current = r.obra_id; setObra(r.obra_id); setEmpresaRota(null);
+          if (sessaoDe.current && sessaoDe.current !== r.obra_id) { guardarToken(null); sessaoDe.current = null; setDados(null); setEtapa('entrar'); }
+        } else setEmpresaRota(r.rota.empresa);
+      }).catch(() => setNaoAchou(true));
+    } else {
+      // `/encarregado` puro: o aparelho que já entrou volta sozinho para o endereço da empresa/obra dele
+      const lembrada = lerRota();
+      if (lembrada) fixarEndereco(lembrada);
+      if (obra == null) { const o = lerObra(); if (o) setObra(o); }
+    }
     if (lerToken()) void carregar().finally(fim); else fim();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     if (obra == null) return;
-    portal<InfoPortal>(`/marca/${obra}`).then(setInfo).catch(() => setInfo(null));
+    portal<InfoPortal>(`/marca/${obra}`).then((r) => {
+      setInfo(r); setMarcaObra(obra);
+      if (r.rota) { guardarRota(r.rota.endereco); fixarEndereco(r.rota.endereco); } // herda o endereço da obra dele
+    }).catch(() => undefined);
   }, [obra]);
 
   const sair = () => { guardarToken(null); setDados(null); setEtapa('entrar'); };
   const cor = info?.marca.cor || PADRAO;
-  const logo = obra && info?.marca.logos.includes('contratada') ? `${API_URL}/portal/marca/${obra}/logo/contratada?v=${info.marca.versao}` : null;
+  const deOnde = marcaObra ?? obra;
+  const logo = deOnde && info?.marca.logos.includes('contratada') ? `${API_URL}/portal/marca/${deOnde}/logo/contratada?v=${info.marca.versao}` : null;
   // aba e barra do navegador do celular com a marca da empresa
   useEffect(() => {
     document.title = `${info?.marca.contratada || 'Malhet'} · Minha equipe`;
@@ -111,7 +148,9 @@ export function PortalLider({ obraInicial }: { obraInicial?: number | null }) {
           </div>
           {dados && <button type="button" onClick={sair} className="flex h-10 items-center gap-1.5 rounded-full border border-m-stroke px-3 text-[13px] font-semibold text-m-text-secondary"><LogOut size={15} aria-hidden="true" /> Sair</button>}
         </div>
-        {etapa === 'entrar' ? <Entrar onEntrou={(r) => { if (r.obra_id) usarObra(r.obra_id); if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
+        {naoAchou && <Aviso texto="Endereço não encontrado. Confira o link com o Planejamento ou entre pelo endereço geral." />}
+        {naoAchou && <a href={`/${typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : 'pt-BR'}/encarregado`} className={`${secundario} flex items-center justify-center`}>Ir para o endereço geral</a>}
+        {naoAchou ? null : etapa === 'entrar' ? <Entrar obraFixa={rota?.obra ? obra : null} empresa={empresaRota} onEntrou={(r) => { if (r.obra_id) usarObra(r.obra_id); if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
             : etapa === 'senha' ? <CriarSenha onPronto={() => void carregar()} />
               : dados ? <Equipes dados={dados} recarregar={carregar} /> : <Esqueleto className="h-40 w-full" />}
       </div>
@@ -126,7 +165,7 @@ function Aviso({ texto }: { texto: string }) {
   return <p role="alert" className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4 text-[15px]">{texto}</p>;
 }
 
-function Entrar({ onEntrou }: { onEntrou: (r: Sessao) => void }) {
+function Entrar({ onEntrou, obraFixa, empresa }: { onEntrou: (r: Sessao) => void; obraFixa?: number | null; empresa?: string | null }) {
   const [matricula, setMatricula] = useState('');
   const [senha, setSenha] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -135,7 +174,7 @@ function Entrar({ onEntrou }: { onEntrou: (r: Sessao) => void }) {
   const enviar = async (obraId?: number) => {
     setEnviando(true); setErro('');
     try {
-      const r = await portal<Sessao>('/entrar', { method: 'POST', body: { matricula, senha, obra_id: obraId ?? null } });
+      const r = await portal<Sessao>('/entrar', { method: 'POST', body: { matricula, senha, obra_id: obraId ?? obraFixa ?? null, empresa: empresa ?? null } });
       if (r.escolher) { setObras(r.escolher); return; }
       guardarToken(r.token ?? null);
       onEntrou(r);
@@ -162,7 +201,7 @@ function Entrar({ onEntrou }: { onEntrou: (r: Sessao) => void }) {
     <form onSubmit={entrar} className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
       <p className="text-[15px] text-m-text-secondary">Confira quem está na sua equipe e avise quem saiu ou chegou.</p>
       <label className="flex flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Matrícula
-        <input className={campo} inputMode="numeric" autoComplete="username" required value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="ex.: 115532" />
+        <input className={campo} inputMode="numeric" name="matricula" autoComplete="off" required value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="ex.: 115532" />
       </label>
       <label className="flex flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Senha
         <input className={campo} type="password" autoComplete="current-password" required value={senha} onChange={(e) => setSenha(e.target.value)} />

@@ -7,6 +7,7 @@ import { API_URL, ApiError } from '@/lib/api/client';
 
 const TOKEN = 'malhet.encarregado.token';
 const OBRA = 'malhet.encarregado.obra';
+const ROTA = 'malhet.encarregado.rota';
 
 export function lerToken(): string | null {
   try { return localStorage.getItem(TOKEN); } catch { return null; }
@@ -19,6 +20,14 @@ export function lerObra(): number | null {
 }
 export function guardarObra(obra: number) {
   try { localStorage.setItem(OBRA, String(obra)); } catch { /* sem storage */ }
+}
+
+/** Spec 117: o endereço da empresa/obra deste aparelho (`/encarregado/<empresa>/<obra>`); `/encarregado` volta para ele. */
+export function lerRota(): string | null {
+  try { const v = localStorage.getItem(ROTA); return v && v.startsWith('/encarregado/') ? v : null; } catch { return null; }
+}
+export function guardarRota(endereco: string) {
+  try { localStorage.setItem(ROTA, endereco); } catch { /* sem storage */ }
 }
 
 export async function portal<T>(caminho: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -49,4 +58,5 @@ export interface PedidoEquipe {
 }
 export interface MinhasEquipes { nome: string; matricula: string | null; funcao: string | null; equipes: EquipePortal[]; destinos: Destino[]; pedidos: PedidoEquipe[]; obra_id: number }
 export interface Achado { cracha: string; nome: string; matricula: string | null; funcao: string | null; equipe: string | null }
-export interface Sessao { token?: string; trocar_senha?: boolean; nome?: string; obra_id?: number; escolher?: ObraParaEscolher[] }
+export interface RotaPortal { empresa: string; obra: string | null; endereco: string; endereco_empresa: string }
+export interface Sessao { token?: string; trocar_senha?: boolean; nome?: string; obra_id?: number; escolher?: ObraParaEscolher[]; rota?: RotaPortal }

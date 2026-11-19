@@ -15,8 +15,11 @@ publico = APIRouter(prefix="/portal", tags=["Portal do encarregado"])
 
 @router.get("")
 def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    """Quem pode entrar no endereço fixo dos encarregados (spec 115: `/encarregado`, sem link por obra)."""
-    return {"endereco": "/encarregado", "lideres": gestao.listar(s, c.obra_id)}
+    """Quem entra e por onde: o endereço da obra e o da empresa saem do cadastro (spec 117)."""
+    from app.modules.lideres.application.rotas import rota_da_obra
+
+    r = rota_da_obra(s, c.obra_id)
+    return {"endereco": r["endereco"], "endereco_empresa": r["endereco_empresa"], "lideres": gestao.listar(s, c.obra_id)}
 
 
 class LiderIn(BaseModel):
@@ -95,18 +98,27 @@ def link_antigo(codigo: str, s: Session = Depends(get_session)):
 @publico.get("/marca/{obra_id}")
 def marca(obra_id: int, s: Session = Depends(get_session)):
     """Nome da obra e a marca da empresa (spec 113): a tela abre com a cor e a logo da contratada, não do Malhet."""
+    from app.modules.lideres.application.rotas import marca_publica, rota_da_obra
     from app.modules.obras.infra.models import MarcaObraModel, ObraModel
-    from app.shared.errors import NotFoundError
 
-    obra = s.get(ObraModel, obra_id)
-    if obra is None:
-        raise NotFoundError("obra", obra_id)
-    m = s.get(MarcaObraModel, obra_id)
-    logos = [q for q in ("contratada", "contratante") if m is not None and getattr(m, f"tipo_{q}")]
-    return {"obra": obra.nome,
-            "marca": {"cor": m.cor if m else None, "contratada": m.nome_contratada if m else None,
-                      "contratante": m.nome_contratante if m else None, "logos": logos,
-                      "versao": int(m.atualizado_em.timestamp()) if m and m.atualizado_em else 0}}
+    r = rota_da_obra(s, obra_id)
+    return {"obra": s.get(ObraModel, obra_id).nome, "marca": marca_publica(s.get(MarcaObraModel, obra_id)), "rota": r}
+
+
+@publico.get("/rota/{empresa}")
+def rota_empresa(empresa: str, s: Session = Depends(get_session)):
+    """`/encarregado/<empresa>` (spec 117): a marca da empresa antes do login; só entram matrículas das obras dela."""
+    from app.modules.lideres.application.rotas import resolver
+
+    return resolver(s, empresa)
+
+
+@publico.get("/rota/{empresa}/{obra}")
+def rota_obra(empresa: str, obra: str, s: Session = Depends(get_session)):
+    """`/encarregado/<empresa>/<obra>` (spec 117): a obra e a marca dela antes do login."""
+    from app.modules.lideres.application.rotas import resolver
+
+    return resolver(s, empresa, obra)
 
 
 @publico.get("/marca/{obra_id}/logo/{qual}")
@@ -126,12 +138,18 @@ def logo(obra_id: int, qual: str, s: Session = Depends(get_session)):
 class EntrarIn(BaseModel):
     matricula: str = Field(max_length=30)
     senha: str = Field(max_length=60)
-    obra_id: int | None = None  # a matrícula está em mais de uma obra: a escolhida
+    obra_id: int | None = None  # a matrícula está em mais de uma obra: a escolhida (ou a obra do endereço)
+    empresa: str | None = Field(None, max_length=60)  # endereço da empresa: só as obras dela (spec 117)
 
 
 @publico.post("/entrar")
 def entrar(d: EntrarIn, request: Request, s: Session = Depends(get_session)):
-    return pt.entrar(s, d.matricula, d.senha, _ip(request), d.obra_id)
+    obras = None
+    if d.empresa:
+        from app.modules.lideres.application.rotas import obras_da_empresa
+
+        obras = obras_da_empresa(s, d.empresa)
+    return pt.entrar(s, d.matricula, d.senha, _ip(request), d.obra_id, obras)
 
 
 class SenhaIn(BaseModel):

@@ -21,7 +21,7 @@ interface Lider {
   equipes?: { id: number; nome: string }[]; equipes_extras?: number[]; situacao?: 'nunca_entrou' | 'senha_inicial' | 'ativo' | 'bloqueado';
   ultimo_acesso?: string | null; fora_do_efetivo?: boolean; equipe?: string;
 }
-interface Resposta { endereco: string; lideres: Lider[] }
+interface Resposta { endereco: string; endereco_empresa: string; lideres: Lider[] }
 
 const SITUACAO = { nunca_entrou: ['Nunca entrou', 'neutro'], senha_inicial: ['Senha inicial (123456)', 'atencao'], ativo: ['Com senha própria', 'sucesso'], bloqueado: ['Bloqueado', 'perigo'] } as const;
 
@@ -41,7 +41,10 @@ export default function LideresPage() {
   const [editando, setEditando] = useState<number | null>(null);
   const [equipesEdit, setEquipesEdit] = useState<string[]>([]);
   const planejador = pode('planejador');
-  const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/pt-BR${q.data?.endereco ?? '/encarregado'}`; // fixo: igual para toda obra
+  // spec 117: endereço da obra e da empresa, montados sozinhos pelo nome da contratada e o código da obra
+  const origem = `${typeof window !== 'undefined' ? window.location.origin : ''}/pt-BR`;
+  const link = `${origem}${q.data?.endereco ?? '/encarregado'}`;
+  const linkEmpresa = `${origem}${q.data?.endereco_empresa ?? '/encarregado'}`;
   const mensagem = `Encarregados e líderes da ${obra?.nome ?? 'obra'}: confiram quem está na sua equipe e avisem quem saiu ou chegou.\n${link}\nEntre com a sua matrícula. Primeiro acesso: senha 123456 (em seguida você cria a sua).`;
   const opcoesEquipes = (equipes.data ?? []).filter((e) => e.ativo).map((e) => ({ valor: String(e.id), rotulo: `${e.nome}${e.encarregado_nome ? ` — Enc. ${e.encarregado_nome}` : ''}` }));
   const lideres = q.data?.lideres.filter((l) => !l.fora_do_efetivo) ?? [];
@@ -58,7 +61,7 @@ export default function LideresPage() {
         <Indicador rotulo="Bloqueados" valor={lideres.filter((l) => l.situacao === 'bloqueado').length} tom={lideres.some((l) => l.situacao === 'bloqueado') ? 'perigo' : undefined} />
       </div>
 
-      <Painel titulo="Onde o encarregado entra?" subtitulo="Endereço fixo, igual para todas as obras: ele entra com a matrícula; o primeiro acesso é ali mesmo (senha 123456 e ele cria a dele). A obra e a marca da empresa vêm da matrícula. Entram os líderes desta lista e quem tem função de liderança no efetivo (encarregado, líder, mestre, supervisor) — sem equipe, ele pede a dele e você aprova aqui.">
+      <Painel titulo="Onde o encarregado entra?" subtitulo="Endereço desta obra, com a marca da empresa desde a abertura: ele entra com a matrícula; o primeiro acesso é ali mesmo (senha 123456 e ele cria a dele). O endereço sai sozinho do nome da contratada (Marca da obra) e do código da obra. Entram os líderes desta lista e quem tem função de liderança no efetivo (encarregado, líder, mestre, supervisor) — sem equipe, ele pede a dele e você aprova aqui.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2 rounded-m-md border border-m-stroke-subtle px-3 py-2.5">
             <Link2 size={16} className="text-m-accent" aria-hidden="true" />
@@ -67,7 +70,12 @@ export default function LideresPage() {
             <a href={`https://wa.me/?text=${encodeURIComponent(mensagem)}`} target="_blank" rel="noreferrer"
               className="inline-flex h-10 items-center gap-2 rounded-full bg-m-accent-strong px-4 text-[13px] font-semibold text-m-on-accent"><MessageCircle size={16} /> Enviar no WhatsApp</a>
           </div>
-          <p className="text-[12.5px] text-m-text-tertiary">Para tirar alguém, bloqueie na lista abaixo. Cada transferência ou inclusão feita ali vai para Equipes › Movimentações (por “líder + matrícula”) e avisa o Planejamento no sino. Os links por obra enviados antes continuam funcionando: levam a este endereço.</p>
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-m-text-tertiary">
+            <span>Endereço da empresa (todas as obras dela; a obra sai da matrícula):</span>
+            <code className="break-all text-m-text-secondary">{linkEmpresa}</code>
+            <button type="button" className="font-semibold text-m-accent underline" onClick={() => navigator.clipboard.writeText(linkEmpresa).then(() => toast.success('Endereço da empresa copiado'))}>copiar</button>
+          </div>
+          <p className="text-[12.5px] text-m-text-tertiary">Para tirar alguém, bloqueie na lista abaixo. Cada transferência ou inclusão feita ali vai para Equipes › Movimentações (por “líder + matrícula”) e avisa o Planejamento no sino. Os links enviados antes (/equipe/… e /encarregado) continuam funcionando: levam a este endereço.</p>
         </div>
       </Painel>
 

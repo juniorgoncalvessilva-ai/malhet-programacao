@@ -88,7 +88,8 @@ def _nome_obra(s: Session, obra_id: int) -> dict:
     return {"obra_id": obra_id, "obra": o.nome if o else "", "empresa": m.nome_contratada if m else None}
 
 
-def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int | None = None) -> dict:
+def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int | None = None,
+           obras: list[int] | None = None) -> dict:
     """Endereço fixo dos encarregados (spec 115): a obra vem da matrícula. Matrícula em mais de uma obra (e a senha
     confere nas duas) → devolve as obras para ele escolher e entrar de novo com `obra_id`."""
     cod = "".join(ch for ch in (matricula or "") if ch.isalnum())
@@ -100,6 +101,8 @@ def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int |
     candidatos = list(s.scalars(select(C).where(or_(C.matricula == cod, C.cracha == cod)).order_by(C.obra_id))) if cod else []
     if obra_id is not None:
         candidatos = [c for c in candidatos if c.obra_id == obra_id]
+    if obras is not None:  # endereço da empresa (spec 117): só as obras dela
+        candidatos = [c for c in candidatos if c.obra_id in set(obras)]
     validos, bloqueado = [], False
     for c in candidatos:
         acesso = s.scalar(select(LiderAcessoModel).where(LiderAcessoModel.obra_id == c.obra_id, LiderAcessoModel.colaborador_id == c.id))
@@ -126,8 +129,10 @@ def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int |
     acesso.ultimo_acesso = datetime.now(timezone.utc)
     s.flush()
     trocar = not acesso.senha_hash
+    from app.modules.lideres.application.rotas import rota_da_obra
+
     return {"token": sessao.emitir(acesso.id, c.obra_id, acesso.versao, trocar), "trocar_senha": trocar, "nome": c.nome,
-            "obra_id": c.obra_id}
+            "obra_id": c.obra_id, "rota": rota_da_obra(s, c.obra_id)}
 
 
 def obra_do_token(token: str | None) -> int:
