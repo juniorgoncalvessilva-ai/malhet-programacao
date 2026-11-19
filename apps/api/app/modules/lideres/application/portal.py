@@ -1,6 +1,7 @@
 """Casos de uso do portal do líder (spec 111). Toda mudança de equipe passa pelo `Alocador` (spec 107): sai da outra
 equipe, vira movimento no histórico ("líder 115532") e o Planejamento é avisado."""
 import time
+from dataclasses import dataclass
 import unicodedata
 from datetime import datetime, timezone
 
@@ -36,7 +37,7 @@ def _sem_acento(t: str) -> str:
 
 def portal(s: Session, codigo: str) -> LiderPortalModel:
     p = s.scalar(select(LiderPortalModel).where(LiderPortalModel.codigo == (codigo or "").strip().lower()))
-    if p is None or not p.ativo:
+    if p is None:  # spec 115: só serve para levar os links antigos ao endereço fixo
         raise NotFoundError("link", codigo)
     return p
 
@@ -66,55 +67,86 @@ def _pessoa(s: Session, obra_id: int, codigo: str) -> ColaboradorModel | None:
     return s.scalar(select(C).where(C.obra_id == obra_id, or_(C.matricula == cod, C.cracha == cod)).order_by(C.id))
 
 
-def entrar(s: Session, codigo: str, matricula: str, senha: str, aparelho: str) -> dict:
-    p = portal(s, codigo)
-    chave = f"{p.obra_id}:{(matricula or '').strip()}:{aparelho}"
+@dataclass(frozen=True)
+class _Obra:
+    obra_id: int
+
+
+def _senha_confere(acesso: LiderAcessoModel | None, senha: str) -> bool:
+    if acesso is None or not acesso.senha_hash:
+        return (senha or "").strip() == SENHA_INICIAL
+    try:
+        return HASHER.verify(acesso.senha_hash, (senha or "").strip())
+    except (VerifyMismatchError, InvalidHashError):
+        return False
+
+
+def _nome_obra(s: Session, obra_id: int) -> dict:
+    from app.modules.obras.infra.models import MarcaObraModel, ObraModel
+
+    o, m = s.get(ObraModel, obra_id), s.get(MarcaObraModel, obra_id)
+    return {"obra_id": obra_id, "obra": o.nome if o else "", "empresa": m.nome_contratada if m else None}
+
+
+def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int | None = None) -> dict:
+    """Endereço fixo dos encarregados (spec 115): a obra vem da matrícula. Matrícula em mais de uma obra (e a senha
+    confere nas duas) → devolve as obras para ele escolher e entrar de novo com `obra_id`."""
+    cod = "".join(ch for ch in (matricula or "") if ch.isalnum())
+    chave = f"{cod}:{aparelho}"
     agora = time.monotonic()
     if TENTATIVAS.bloqueado(chave, agora):
         raise DomainError("muitas tentativas: espere 15 minutos ou peça ao Planejamento para redefinir a senha", "senha")
-    c = _pessoa(s, p.obra_id, matricula)
-    acesso = s.scalar(select(LiderAcessoModel).where(LiderAcessoModel.obra_id == p.obra_id,
-                                                     LiderAcessoModel.colaborador_id == c.id)) if c else None
-    lidera = equipes_lideradas(s, p.obra_id, c, acesso) if c else []
-    ok_senha = False
-    # spec 114: função de liderança no efetivo também entra (sem equipe ainda, para pedir a dele)
-    if c is not None and (lidera or (acesso and acesso.cadastrado) or funcao_de_lider(c.funcao)):
-        if acesso is None or not acesso.senha_hash:
-            ok_senha = (senha or "").strip() == SENHA_INICIAL
-        else:
-            try:
-                ok_senha = HASHER.verify(acesso.senha_hash, (senha or "").strip())
-            except (VerifyMismatchError, InvalidHashError):
-                ok_senha = False
-    if not ok_senha:
+    C = ColaboradorModel
+    candidatos = list(s.scalars(select(C).where(or_(C.matricula == cod, C.cracha == cod)).order_by(C.obra_id))) if cod else []
+    if obra_id is not None:
+        candidatos = [c for c in candidatos if c.obra_id == obra_id]
+    validos, bloqueado = [], False
+    for c in candidatos:
+        acesso = s.scalar(select(LiderAcessoModel).where(LiderAcessoModel.obra_id == c.obra_id, LiderAcessoModel.colaborador_id == c.id))
+        lidera = equipes_lideradas(s, c.obra_id, c, acesso)
+        # spec 114: função de liderança no efetivo também entra (sem equipe ainda, para pedir a dele)
+        if not (lidera or (acesso and acesso.cadastrado) or funcao_de_lider(c.funcao)) or not _senha_confere(acesso, senha):
+            continue
+        if acesso is not None and not acesso.ativo:
+            bloqueado = True
+            continue
+        validos.append((c, acesso))
+    if not validos:
+        if bloqueado:
+            raise DomainError("seu acesso está bloqueado: fale com o Planejamento", "matricula")
         TENTATIVAS.errou(chave, agora)
-        raise DomainError("matrícula ou senha não conferem (só entram encarregados e líderes cadastrados)", "senha")
-    if acesso is not None and not acesso.ativo:
-        raise DomainError("seu acesso está bloqueado: fale com o Planejamento", "matricula")
+        raise DomainError("matrícula ou senha não conferem (só entram encarregados e líderes)", "senha")
     TENTATIVAS.acertou(chave)
+    if len(validos) > 1:
+        return {"escolher": [_nome_obra(s, c.obra_id) for c, _a in validos]}
+    c, acesso = validos[0]
     if acesso is None:
-        acesso = LiderAcessoModel(obra_id=p.obra_id, colaborador_id=c.id, ativo=True, cadastrado=False, equipes=[], versao=0)
+        acesso = LiderAcessoModel(obra_id=c.obra_id, colaborador_id=c.id, ativo=True, cadastrado=False, equipes=[], versao=0)
         s.add(acesso)
     acesso.ultimo_acesso = datetime.now(timezone.utc)
     s.flush()
     trocar = not acesso.senha_hash
-    return {"token": sessao.emitir(acesso.id, p.obra_id, acesso.versao, trocar), "trocar_senha": trocar, "nome": c.nome}
+    return {"token": sessao.emitir(acesso.id, c.obra_id, acesso.versao, trocar), "trocar_senha": trocar, "nome": c.nome,
+            "obra_id": c.obra_id}
 
 
-def _sessao(s: Session, codigo: str, token: str | None, aceita_trocar: bool = False) -> tuple[LiderPortalModel, LiderAcessoModel, ColaboradorModel]:
-    p = portal(s, codigo)
+def obra_do_token(token: str | None) -> int:
+    return int(sessao.ler(token)["obra"])
+
+
+def _sessao(s: Session, token: str | None, aceita_trocar: bool = False) -> tuple[_Obra, LiderAcessoModel, ColaboradorModel]:
     d = sessao.ler(token)
     acesso = s.get(LiderAcessoModel, int(d["sub"]))
-    if acesso is None or acesso.obra_id != p.obra_id or d.get("obra") != p.obra_id or acesso.versao != d.get("v") or not acesso.ativo:
+    if acesso is None or acesso.obra_id != d.get("obra") or acesso.versao != d.get("v") or not acesso.ativo:
         raise DomainError("sessão encerrada: entre de novo com a matrícula e a senha", "sessao")
     if d.get("trocar") and not aceita_trocar:
         raise DomainError("crie a sua senha antes de continuar", "sessao")
     c = s.get(ColaboradorModel, acesso.colaborador_id)
-    return p, acesso, c
+    return _Obra(acesso.obra_id), acesso, c
 
 
-def trocar_senha(s: Session, codigo: str, token: str | None, nova: str, repetida: str) -> dict:
-    p, acesso, c = _sessao(s, codigo, token, aceita_trocar=True)
+def trocar_senha(s: Session, token: str | None, nova: str, repetida: str) -> dict:
+    p, acesso, c = _sessao(s, token, aceita_trocar=True)
     acesso.senha_hash = HASHER.hash(validar_nova_senha(nova, repetida))
     acesso.versao += 1
     s.flush()
@@ -127,8 +159,8 @@ def _membro_out(m, pessoas: dict[str, ColaboradorModel]) -> dict:
             "matricula": p.matricula if p else None}
 
 
-def minhas_equipes(s: Session, codigo: str, token: str | None) -> dict:
-    p, acesso, c = _sessao(s, codigo, token)
+def minhas_equipes(s: Session, token: str | None) -> dict:
+    p, acesso, c = _sessao(s, token)
     todas = _equipes(s, p.obra_id)
     minhas = equipes_lideradas(s, p.obra_id, c, acesso, todas)
     cods = {m.cracha for e in minhas for m in e.membros}
@@ -151,8 +183,8 @@ def minhas_equipes(s: Session, codigo: str, token: str | None) -> dict:
     }
 
 
-def buscar(s: Session, codigo: str, token: str | None, termo: str) -> list[dict]:
-    p, _acesso, _c = _sessao(s, codigo, token)
+def buscar(s: Session, token: str | None, termo: str) -> list[dict]:
+    p, _acesso, _c = _sessao(s, token)
     t = _sem_acento((termo or "").strip())
     if len(t) < 2:
         return []
@@ -186,8 +218,8 @@ def _minha(s: Session, p, acesso, c, equipe_id: int) -> EquipeModel:
     return e
 
 
-def incluir(s: Session, codigo: str, token: str | None, equipe_id: int, cracha: str) -> dict:
-    p, acesso, c = _sessao(s, codigo, token)
+def incluir(s: Session, token: str | None, equipe_id: int, cracha: str) -> dict:
+    p, acesso, c = _sessao(s, token)
     e = _minha(s, p, acesso, c, equipe_id)
     x = _pessoa(s, p.obra_id, cracha)
     if x is None or not (x.cracha or x.matricula):
@@ -202,8 +234,8 @@ def incluir(s: Session, codigo: str, token: str | None, equipe_id: int, cracha: 
     return {"ok": True, "saiu_de": saiu}
 
 
-def transferir(s: Session, codigo: str, token: str | None, equipe_id: int, cracha: str, para_equipe_id: int | None) -> dict:
-    p, acesso, c = _sessao(s, codigo, token)
+def transferir(s: Session, token: str | None, equipe_id: int, cracha: str, para_equipe_id: int | None) -> dict:
+    p, acesso, c = _sessao(s, token)
     origem = _minha(s, p, acesso, c, equipe_id)
     m = next((x for x in origem.membros if x.cracha == cracha), None)
     if m is None:
@@ -243,9 +275,9 @@ def onde_esta(s: Session, obra_id: int) -> dict[str, str]:
     return onde
 
 
-def pedir_equipe(s: Session, codigo: str, token: str | None, disciplina: str, crachas: list[str], observacao: str | None) -> dict:
+def pedir_equipe(s: Session, token: str | None, disciplina: str, crachas: list[str], observacao: str | None) -> dict:
     """O líder aponta quem está com ele; nada muda nas equipes até o Planejamento aprovar. Pedido pendente é substituído."""
-    p, acesso, c = _sessao(s, codigo, token)
+    p, acesso, c = _sessao(s, token)
     disc, cods = validar_pedido(disciplina, crachas)
     onde = onde_esta(s, p.obra_id)
     membros, nao_achou = [], []
@@ -275,8 +307,8 @@ def pedir_equipe(s: Session, codigo: str, token: str | None, disciplina: str, cr
     return _pedido_out(ped)
 
 
-def cancelar_pedido(s: Session, codigo: str, token: str | None, pid: int) -> None:
-    p, _acesso, c = _sessao(s, codigo, token)
+def cancelar_pedido(s: Session, token: str | None, pid: int) -> None:
+    p, _acesso, c = _sessao(s, token)
     ped = s.get(LiderPedidoEquipeModel, pid)
     if ped is None or ped.obra_id != p.obra_id or ped.colaborador_id != c.id or ped.situacao != "pendente":
         raise DomainError("esse pedido não está mais pendente", "pedido")

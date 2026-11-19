@@ -15,26 +15,8 @@ publico = APIRouter(prefix="/portal", tags=["Portal do encarregado"])
 
 @router.get("")
 def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    p = gestao.garantir_portal(s, c.obra_id)
-    return {"link": {"codigo": p.codigo, "ativo": p.ativo}, "lideres": gestao.listar(s, c.obra_id)}
-
-
-class LinkIn(BaseModel):
-    ativo: bool
-
-
-@router.put("/link")
-def ligar_link(d: LinkIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    p = gestao.garantir_portal(s, c.obra_id)
-    p.ativo = d.ativo
-    return {"codigo": p.codigo, "ativo": p.ativo}
-
-
-@router.post("/link/novo")
-def trocar_link(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    """Link novo: o antigo para de funcionar (ex.: vazou para fora do grupo)."""
-    p = gestao.novo_link(s, c.obra_id)
-    return {"codigo": p.codigo, "ativo": p.ativo}
+    """Quem pode entrar no endereço fixo dos encarregados (spec 115: `/encarregado`, sem link por obra)."""
+    return {"endereco": "/encarregado", "lideres": gestao.listar(s, c.obra_id)}
 
 
 class LiderIn(BaseModel):
@@ -95,38 +77,46 @@ def remover(colaborador_id: int, s: Session = Depends(get_session), c: ContextoO
     gestao.remover(s, c.obra_id, colaborador_id)
 
 
-# ---- portal (público, pelo link) -----------------------------------------------------------------------------
+# ---- portal (público): endereço fixo dos encarregados (spec 115) ------------------------------------------------
 def _ip(request: Request) -> str:
     return (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "") or "?").split(",")[0].strip()
 
 
-@publico.get("/{codigo}")
-def info(codigo: str, s: Session = Depends(get_session)):
-    """Nome da obra e a marca da empresa (spec 113): o link abre com a cor e a logo da contratada, não do Malhet."""
-    from app.modules.obras.infra.models import MarcaObraModel, ObraModel
+def _mudou(token: str | None) -> None:
+    mudancas.registrar(str(pt.obra_do_token(token)))  # as telas do Planejamento da obra se atualizam
 
-    p = pt.portal(s, codigo)
-    obra = s.get(ObraModel, p.obra_id)
-    m = s.get(MarcaObraModel, p.obra_id)
+
+@publico.get("/link/{codigo}")
+def link_antigo(codigo: str, s: Session = Depends(get_session)):
+    """Links por obra enviados antes do endereço fixo: devolvem a obra, para abrir já com a marca dela."""
+    return {"obra_id": pt.portal(s, codigo).obra_id}
+
+
+@publico.get("/marca/{obra_id}")
+def marca(obra_id: int, s: Session = Depends(get_session)):
+    """Nome da obra e a marca da empresa (spec 113): a tela abre com a cor e a logo da contratada, não do Malhet."""
+    from app.modules.obras.infra.models import MarcaObraModel, ObraModel
+    from app.shared.errors import NotFoundError
+
+    obra = s.get(ObraModel, obra_id)
+    if obra is None:
+        raise NotFoundError("obra", obra_id)
+    m = s.get(MarcaObraModel, obra_id)
     logos = [q for q in ("contratada", "contratante") if m is not None and getattr(m, f"tipo_{q}")]
-    return {"obra": obra.nome if obra else "",
+    return {"obra": obra.nome,
             "marca": {"cor": m.cor if m else None, "contratada": m.nome_contratada if m else None,
                       "contratante": m.nome_contratante if m else None, "logos": logos,
                       "versao": int(m.atualizado_em.timestamp()) if m and m.atualizado_em else 0}}
 
 
-@publico.get("/{codigo}/logo/{qual}")
-def logo(codigo: str, qual: str, s: Session = Depends(get_session)):
-    """Logo da contratada/contratante pelo link (sem login): é a identidade da empresa na tela do encarregado."""
+@publico.get("/marca/{obra_id}/logo/{qual}")
+def logo(obra_id: int, qual: str, s: Session = Depends(get_session)):
     from fastapi import Response
 
     from app.modules.obras.infra.models import MarcaObraModel
     from app.shared.errors import NotFoundError
 
-    if qual not in ("contratada", "contratante"):
-        raise NotFoundError("logo", qual)
-    p = pt.portal(s, codigo)
-    m = s.get(MarcaObraModel, p.obra_id)
+    m = s.get(MarcaObraModel, obra_id) if qual in ("contratada", "contratante") else None
     tipo = getattr(m, f"tipo_{qual}") if m else None
     if not tipo:
         raise NotFoundError("logo", qual)
@@ -136,11 +126,12 @@ def logo(codigo: str, qual: str, s: Session = Depends(get_session)):
 class EntrarIn(BaseModel):
     matricula: str = Field(max_length=30)
     senha: str = Field(max_length=60)
+    obra_id: int | None = None  # a matrícula está em mais de uma obra: a escolhida
 
 
-@publico.post("/{codigo}/entrar")
-def entrar(codigo: str, d: EntrarIn, request: Request, s: Session = Depends(get_session)):
-    return pt.entrar(s, codigo, d.matricula, d.senha, _ip(request))
+@publico.post("/entrar")
+def entrar(d: EntrarIn, request: Request, s: Session = Depends(get_session)):
+    return pt.entrar(s, d.matricula, d.senha, _ip(request), d.obra_id)
 
 
 class SenhaIn(BaseModel):
@@ -148,19 +139,19 @@ class SenhaIn(BaseModel):
     repetida: str = Field(max_length=60)
 
 
-@publico.post("/{codigo}/senha")
-def senha(codigo: str, d: SenhaIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
-    return pt.trocar_senha(s, codigo, x_portal_token, d.nova, d.repetida)
+@publico.post("/senha")
+def senha(d: SenhaIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return pt.trocar_senha(s, x_portal_token, d.nova, d.repetida)
 
 
-@publico.get("/{codigo}/equipes")
-def equipes(codigo: str, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
-    return pt.minhas_equipes(s, codigo, x_portal_token)
+@publico.get("/equipes")
+def equipes(s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return {**pt.minhas_equipes(s, x_portal_token), "obra_id": pt.obra_do_token(x_portal_token)}
 
 
-@publico.get("/{codigo}/buscar")
-def buscar(codigo: str, q: str = "", s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
-    return pt.buscar(s, codigo, x_portal_token, q)
+@publico.get("/buscar")
+def buscar(q: str = "", s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return pt.buscar(s, x_portal_token, q)
 
 
 class IncluirIn(BaseModel):
@@ -168,10 +159,10 @@ class IncluirIn(BaseModel):
     cracha: str = Field(max_length=30)
 
 
-@publico.post("/{codigo}/incluir")
-def incluir(codigo: str, d: IncluirIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
-    r = pt.incluir(s, codigo, x_portal_token, d.equipe_id, d.cracha)
-    mudancas.registrar(str(pt.portal(s, codigo).obra_id))  # as telas do Planejamento se atualizam
+@publico.post("/incluir")
+def incluir(d: IncluirIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = pt.incluir(s, x_portal_token, d.equipe_id, d.cracha)
+    _mudou(x_portal_token)
     return r
 
 
@@ -181,10 +172,10 @@ class TransferirIn(BaseModel):
     para_equipe_id: int | None = None  # vazio = não sabe para onde foi (fica sem equipe)
 
 
-@publico.post("/{codigo}/transferir")
-def transferir(codigo: str, d: TransferirIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
-    r = pt.transferir(s, codigo, x_portal_token, d.equipe_id, d.cracha, d.para_equipe_id)
-    mudancas.registrar(str(pt.portal(s, codigo).obra_id))
+@publico.post("/transferir")
+def transferir(d: TransferirIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = pt.transferir(s, x_portal_token, d.equipe_id, d.cracha, d.para_equipe_id)
+    _mudou(x_portal_token)
     return r
 
 
@@ -194,14 +185,14 @@ class PedidoIn(BaseModel):
     observacao: str | None = Field(None, max_length=500)
 
 
-@publico.post("/{codigo}/pedidos")
-def pedir(codigo: str, d: PedidoIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+@publico.post("/pedidos")
+def pedir(d: PedidoIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
     """Reivindicar equipe (spec 114): fica pendente até o Planejamento/administrador aprovar."""
-    r = pt.pedir_equipe(s, codigo, x_portal_token, d.disciplina, d.membros, d.observacao)
-    mudancas.registrar(str(pt.portal(s, codigo).obra_id))
+    r = pt.pedir_equipe(s, x_portal_token, d.disciplina, d.membros, d.observacao)
+    _mudou(x_portal_token)
     return r
 
 
-@publico.delete("/{codigo}/pedidos/{pid}", status_code=204)
-def cancelar(codigo: str, pid: int, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
-    pt.cancelar_pedido(s, codigo, x_portal_token, pid)
+@publico.delete("/pedidos/{pid}", status_code=204)
+def cancelar(pid: int, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    pt.cancelar_pedido(s, x_portal_token, pid)

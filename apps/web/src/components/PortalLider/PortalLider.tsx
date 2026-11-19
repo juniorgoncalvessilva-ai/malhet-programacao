@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 import { API_URL } from '@/lib/api/client';
-import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type PedidoEquipe, type Sessao, guardarToken, lerToken, portal } from '@/lib/portal/api';
+import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type Sessao, guardarObra, guardarToken, lerObra, lerToken, portal } from '@/lib/portal/api';
 
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 const campo = 'h-12 w-full rounded-[14px] border border-m-stroke bg-m-surface-field px-3 text-[16px] text-m-text-primary outline-none focus:border-m-accent-strong focus:ring-2 focus:ring-m-accent/30';
@@ -25,47 +25,60 @@ function textoSobre(cor: string) {
 }
 
 /**
- * Portal do líder (specs 111 e 113): o encarregado abre o link da obra (grupo do WhatsApp), entra com a matrícula e a
- * senha (a primeira é 123456 e ele cria a dele), confere a equipe que está no Malhet, informa quem foi para outro
- * encarregado e traz quem está com ele. Tudo na identidade da empresa dona do link: logo, cor nas faixas de cima e de
- * baixo, botões e a abertura do app.
+ * Portal do encarregado (specs 111, 113 e 115): endereço fixo `/encarregado` (sem link por obra). Ele entra com a
+ * matrícula e a senha — o primeiro acesso é ali mesmo (123456 e ele cria a dele) —, confere a equipe, informa quem foi
+ * para outro encarregado, traz quem está com ele ou pede a equipe. A obra sai da matrícula; com ela, a tela veste a marca
+ * da empresa (logo, cor nas faixas de cima e de baixo, botões, abertura, aba e barra do navegador). O aparelho lembra a
+ * obra para abrir já com a marca na próxima vez.
  */
-export function PortalLider({ codigo, inicial }: { codigo: string; inicial?: InfoPortal | null }) {
-  const [info, setInfo] = useState<InfoPortal | null>(inicial ?? null);
-  const [erroLink, setErroLink] = useState<string | null>(inicial === null ? 'Este link não está mais ativo. Peça o link novo ao Planejamento.' : null);
+export function PortalLider({ obraInicial }: { obraInicial?: number | null }) {
+  const [obra, setObra] = useState<number | null>(obraInicial ?? null);
+  const [info, setInfo] = useState<InfoPortal | null>(null);
   const [etapa, setEtapa] = useState<'entrar' | 'senha' | 'equipe'>('entrar');
   const [dados, setDados] = useState<MinhasEquipes | null>(null);
   const [abrindo, setAbrindo] = useState(true); // abertura com a logo da empresa
 
+  const usarObra = useCallback((id: number) => { guardarObra(id); setObra(id); }, []);
   const carregar = useCallback(async () => {
-    try { setDados(await portal<MinhasEquipes>(codigo, '/equipes')); setEtapa('equipe'); } catch (e) {
-      if ((e as { campo?: string }).campo === 'sessao') { guardarToken(codigo, null); setEtapa('entrar'); } else toast.error((e as Error).message);
+    try {
+      const d = await portal<MinhasEquipes>('/equipes');
+      setDados(d); setEtapa('equipe'); usarObra(d.obra_id);
+    } catch (e) {
+      if ((e as { campo?: string }).campo === 'sessao') { guardarToken(null); setEtapa('entrar'); } else toast.error((e as Error).message);
     }
-  }, [codigo]);
+  }, [usarObra]);
 
   useEffect(() => {
-    if (inicial === undefined) portal<InfoPortal>(codigo, '').then(setInfo).catch((e) => setErroLink((e as Error).message));
+    if (obra == null) { const lembrada = lerObra(); if (lembrada) setObra(lembrada); }
     const fim = () => setTimeout(() => setAbrindo(false), 650); // tempo de ver a marca, sem atrasar o uso
-    if (lerToken(codigo)) void carregar().finally(fim); else fim();
-  }, [codigo, carregar, inicial]);
-
-  const sair = () => { guardarToken(codigo, null); setDados(null); setEtapa('entrar'); };
-  const cor = info?.marca.cor || PADRAO;
-  // ícone da aba = logo da empresa (o favicon padrão do app vem antes no <head>; aqui ele dá lugar à empresa)
+    if (lerToken()) void carregar().finally(fim); else fim();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
-    if (!info?.marca.logos.includes('contratada')) return;
-    const href = `${API_URL}/portal/${encodeURIComponent(codigo)}/logo/contratada?v=${info.marca.versao}`;
+    if (obra == null) return;
+    portal<InfoPortal>(`/marca/${obra}`).then(setInfo).catch(() => setInfo(null));
+  }, [obra]);
+
+  const sair = () => { guardarToken(null); setDados(null); setEtapa('entrar'); };
+  const cor = info?.marca.cor || PADRAO;
+  const logo = obra && info?.marca.logos.includes('contratada') ? `${API_URL}/portal/marca/${obra}/logo/contratada?v=${info.marca.versao}` : null;
+  // aba e barra do navegador do celular com a marca da empresa
+  useEffect(() => {
+    document.title = `${info?.marca.contratada || 'Malhet'} · Minha equipe`;
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
+    meta.content = cor;
+    if (!logo) return;
     const trocar = () => document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach((l) => {
-      if (!l.href.endsWith(href)) l.href = href;
+      if (!l.href.endsWith(logo)) l.href = logo;
     });
     trocar();
     const obs = new MutationObserver(trocar); // o Next ainda pode pôr o favicon padrão depois
     obs.observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
     return () => obs.disconnect();
-  }, [info, codigo]);
+  }, [info, cor, logo]);
   const sobre = textoSobre(cor);
   const empresa = info?.marca.contratada || 'Malhet';
-  const logo = info?.marca.logos.includes('contratada') ? `${API_URL}/portal/${encodeURIComponent(codigo)}/logo/contratada?v=${info.marca.versao}` : null;
   // a cor da empresa vira o acento da tela inteira (botões, foco, seleção), como o app faz dentro da obra
   const tokens = `.portal-lider{--m-accent:${cor};--m-accent-strong:${cor};--m-accent-hover:color-mix(in srgb,${cor} 80%,black);--m-accent-subtle:color-mix(in srgb,${cor} 12%,white);--m-on-accent:${sobre}}`;
   const Marca = ({ grande }: { grande?: boolean }) => logo
@@ -98,10 +111,9 @@ export function PortalLider({ codigo, inicial }: { codigo: string; inicial?: Inf
           </div>
           {dados && <button type="button" onClick={sair} className="flex h-10 items-center gap-1.5 rounded-full border border-m-stroke px-3 text-[13px] font-semibold text-m-text-secondary"><LogOut size={15} aria-hidden="true" /> Sair</button>}
         </div>
-        {erroLink ? <Aviso texto={erroLink} />
-          : etapa === 'entrar' ? <Entrar codigo={codigo} onEntrou={(r) => { if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
-            : etapa === 'senha' ? <CriarSenha codigo={codigo} onPronto={() => void carregar()} />
-              : dados ? <Equipes codigo={codigo} dados={dados} recarregar={carregar} /> : <Esqueleto className="h-40 w-full" />}
+        {etapa === 'entrar' ? <Entrar onEntrou={(r) => { if (r.obra_id) usarObra(r.obra_id); if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
+            : etapa === 'senha' ? <CriarSenha onPronto={() => void carregar()} />
+              : dados ? <Equipes dados={dados} recarregar={carregar} /> : <Esqueleto className="h-40 w-full" />}
       </div>
       <footer className="pb-[max(env(safe-area-inset-bottom),12px)] pt-3 text-center text-[12px]" style={{ background: cor, color: sobre }}>
         <span className="font-semibold">{empresa}</span>{info?.marca.contratante ? ` · ${info.marca.contratante}` : ''} <span className="opacity-75">· com Malhet</span>
@@ -114,20 +126,38 @@ function Aviso({ texto }: { texto: string }) {
   return <p role="alert" className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4 text-[15px]">{texto}</p>;
 }
 
-function Entrar({ codigo, onEntrou }: { codigo: string; onEntrou: (r: Sessao) => void }) {
+function Entrar({ onEntrou }: { onEntrou: (r: Sessao) => void }) {
   const [matricula, setMatricula] = useState('');
   const [senha, setSenha] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
-  const entrar = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const [obras, setObras] = useState<ObraParaEscolher[] | null>(null); // matrícula em mais de uma obra
+  const enviar = async (obraId?: number) => {
     setEnviando(true); setErro('');
     try {
-      const r = await portal<Sessao>(codigo, '/entrar', { method: 'POST', body: { matricula, senha } });
-      guardarToken(codigo, r.token);
+      const r = await portal<Sessao>('/entrar', { method: 'POST', body: { matricula, senha, obra_id: obraId ?? null } });
+      if (r.escolher) { setObras(r.escolher); return; }
+      guardarToken(r.token ?? null);
       onEntrou(r);
     } catch (er) { setErro((er as Error).message); } finally { setEnviando(false); }
   };
+  const entrar = (e: React.FormEvent) => { e.preventDefault(); void enviar(); };
+  if (obras) {
+    return (
+      <section className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
+        <h2 className="text-[18px] font-semibold">Em qual obra você está?</h2>
+        <p className="text-[14px] text-m-text-tertiary">Sua matrícula está em mais de uma obra.</p>
+        {obras.map((o) => (
+          <button key={o.obra_id} type="button" disabled={enviando} onClick={() => void enviar(o.obra_id)}
+            className="flex min-h-[56px] flex-col items-start justify-center rounded-[14px] border border-m-stroke px-4 text-left disabled:opacity-50">
+            <span className="text-[15px] font-semibold">{o.obra}</span>{o.empresa && <span className="text-[12.5px] text-m-text-muted">{o.empresa}</span>}
+          </button>
+        ))}
+        {erro && <p role="alert" className="text-[14px] text-m-danger">{erro}</p>}
+        <button type="button" className={secundario} onClick={() => setObras(null)}>Voltar</button>
+      </section>
+    );
+  }
   return (
     <form onSubmit={entrar} className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
       <p className="text-[15px] text-m-text-secondary">Confira quem está na sua equipe e avise quem saiu ou chegou.</p>
@@ -144,7 +174,7 @@ function Entrar({ codigo, onEntrou }: { codigo: string; onEntrou: (r: Sessao) =>
   );
 }
 
-function CriarSenha({ codigo, onPronto }: { codigo: string; onPronto: () => void }) {
+function CriarSenha({ onPronto }: { onPronto: () => void }) {
   const [nova, setNova] = useState('');
   const [repetida, setRepetida] = useState('');
   const [erro, setErro] = useState('');
@@ -153,8 +183,8 @@ function CriarSenha({ codigo, onPronto }: { codigo: string; onPronto: () => void
     e.preventDefault();
     setEnviando(true); setErro('');
     try {
-      const r = await portal<Sessao>(codigo, '/senha', { method: 'POST', body: { nova, repetida } });
-      guardarToken(codigo, r.token);
+      const r = await portal<Sessao>('/senha', { method: 'POST', body: { nova, repetida } });
+      guardarToken(r.token ?? null);
       toast.success('Senha criada');
       onPronto();
     } catch (er) { setErro((er as Error).message); } finally { setEnviando(false); }
@@ -171,7 +201,7 @@ function CriarSenha({ codigo, onPronto }: { codigo: string; onPronto: () => void
   );
 }
 
-function Equipes({ codigo, dados, recarregar }: { codigo: string; dados: MinhasEquipes; recarregar: () => Promise<void> }) {
+function Equipes({ dados, recarregar }: { dados: MinhasEquipes; recarregar: () => Promise<void> }) {
   const [sel, setSel] = useState(dados.equipes[0]?.id ?? 0);
   const [saindo, setSaindo] = useState<Membro | null>(null);
   const [trazendo, setTrazendo] = useState(false);
@@ -182,7 +212,7 @@ function Equipes({ codigo, dados, recarregar }: { codigo: string; dados: MinhasE
   if (!equipe || formando || pendente) {
     return (
       <>
-        <Reivindicar codigo={codigo} dados={dados} onEnviado={recarregar} />
+        <Reivindicar dados={dados} onEnviado={recarregar} />
         {equipe && !pendente && <button type="button" onClick={() => setFormando(false)} className={secundario}>Voltar para a minha equipe</button>}
       </>
     );
@@ -215,8 +245,8 @@ function Equipes({ codigo, dados, recarregar }: { codigo: string; dados: MinhasE
       </section>
       <button type="button" onClick={() => setTrazendo(true)} className={`${primario} flex items-center justify-center gap-2`}><UserPlus size={18} aria-hidden="true" /> Trazer alguém para a equipe</button>
       <button type="button" onClick={() => setFormando(true)} className="text-[13.5px] font-semibold text-m-accent underline">Formar outra equipe (vai para aprovação)</button>
-      {saindo && <Transferir codigo={codigo} equipe={equipe} membro={saindo} destinos={dados.destinos} onFechar={() => setSaindo(null)} onFeito={async () => { setSaindo(null); await recarregar(); }} />}
-      {trazendo && <Trazer codigo={codigo} equipe={equipe} onFechar={() => setTrazendo(false)} onFeito={async () => { await recarregar(); }} />}
+      {saindo && <Transferir equipe={equipe} membro={saindo} destinos={dados.destinos} onFechar={() => setSaindo(null)} onFeito={async () => { setSaindo(null); await recarregar(); }} />}
+      {trazendo && <Trazer equipe={equipe} onFechar={() => setTrazendo(false)} onFeito={async () => { await recarregar(); }} />}
     </>
   );
 }
@@ -236,8 +266,8 @@ function Folha({ titulo, onFechar, children }: { titulo: string; onFechar: () =>
   );
 }
 
-function Transferir({ codigo, equipe, membro, destinos, onFechar, onFeito }: {
-  codigo: string; equipe: EquipePortal; membro: Membro; destinos: Destino[]; onFechar: () => void; onFeito: () => Promise<void>;
+function Transferir({ equipe, membro, destinos, onFechar, onFeito }: {
+  equipe: EquipePortal; membro: Membro; destinos: Destino[]; onFechar: () => void; onFeito: () => Promise<void>;
 }) {
   const [busca, setBusca] = useState('');
   const [para, setPara] = useState<number | 'nao-sei' | null>(null);
@@ -249,7 +279,7 @@ function Transferir({ codigo, equipe, membro, destinos, onFechar, onFeito }: {
   const enviar = async () => {
     setEnviando(true);
     try {
-      await portal(codigo, '/transferir', { method: 'POST', body: { equipe_id: equipe.id, cracha: membro.cracha, para_equipe_id: para === 'nao-sei' ? null : para } });
+      await portal('/transferir', { method: 'POST', body: { equipe_id: equipe.id, cracha: membro.cracha, para_equipe_id: para === 'nao-sei' ? null : para } });
       const d = destinos.find((x) => x.id === para);
       toast.success(d ? `${membro.nome.split(' ')[0]} foi para a equipe de ${d.encarregado}` : `${membro.nome.split(' ')[0]} saiu da sua equipe`);
       await onFeito();
@@ -283,7 +313,7 @@ function Transferir({ codigo, equipe, membro, destinos, onFechar, onFeito }: {
   );
 }
 
-function Trazer({ codigo, equipe, onFechar, onFeito }: { codigo: string; equipe: EquipePortal; onFechar: () => void; onFeito: () => Promise<void> }) {
+function Trazer({ equipe, onFechar, onFeito }: { equipe: EquipePortal; onFechar: () => void; onFeito: () => Promise<void> }) {
   const [q, setQ] = useState('');
   const [achados, setAchados] = useState<Achado[] | null>(null);
   const [enviando, setEnviando] = useState<string | null>(null);
@@ -291,14 +321,14 @@ function Trazer({ codigo, equipe, onFechar, onFeito }: { codigo: string; equipe:
     const t = q.trim();
     if (t.length < 2) { setAchados(null); return; }
     const h = setTimeout(() => {
-      portal<Achado[]>(codigo, `/buscar?q=${encodeURIComponent(t)}`).then(setAchados).catch((e) => toast.error((e as Error).message));
+      portal<Achado[]>(`/buscar?q=${encodeURIComponent(t)}`).then(setAchados).catch((e) => toast.error((e as Error).message));
     }, 300);
     return () => clearTimeout(h);
-  }, [q, codigo]);
+  }, [q]);
   const trazer = async (a: Achado) => {
     setEnviando(a.cracha);
     try {
-      const r = await portal<{ saiu_de: string[] }>(codigo, '/incluir', { method: 'POST', body: { equipe_id: equipe.id, cracha: a.cracha } });
+      const r = await portal<{ saiu_de: string[] }>('/incluir', { method: 'POST', body: { equipe_id: equipe.id, cracha: a.cracha } });
       toast.success(`${a.nome.split(' ')[0]} está na sua equipe${r.saiu_de.length ? ` (saiu da ${r.saiu_de.join(', ')})` : ''}`);
       setQ(''); setAchados(null);
       await onFeito();
@@ -332,7 +362,7 @@ function Trazer({ codigo, equipe, onFechar, onFeito }: { codigo: string; equipe:
  * Reivindicar equipe (spec 114): o líder sem equipe aponta quem está com ele (matrícula ou nome) e a disciplina; a equipe
  * só nasce quando o Planejamento ou o administrador aprova — assim a informação é validada antes de valer.
  */
-function Reivindicar({ codigo, dados, onEnviado }: { codigo: string; dados: MinhasEquipes; onEnviado: () => Promise<void> }) {
+function Reivindicar({ dados, onEnviado }: { dados: MinhasEquipes; onEnviado: () => Promise<void> }) {
   const pendente = dados.pedidos.find((p) => p.situacao === 'pendente');
   const ultimo: PedidoEquipe | undefined = dados.pedidos[0];
   const [editando, setEditando] = useState(!pendente);
@@ -345,13 +375,13 @@ function Reivindicar({ codigo, dados, onEnviado }: { codigo: string; dados: Minh
   useEffect(() => {
     const t = q.trim();
     if (t.length < 2) { setAchados(null); return; }
-    const h = setTimeout(() => { portal<Achado[]>(codigo, `/buscar?q=${encodeURIComponent(t)}`).then(setAchados).catch((e) => toast.error((e as Error).message)); }, 300);
+    const h = setTimeout(() => { portal<Achado[]>(`/buscar?q=${encodeURIComponent(t)}`).then(setAchados).catch((e) => toast.error((e as Error).message)); }, 300);
     return () => clearTimeout(h);
-  }, [q, codigo]);
+  }, [q]);
   const enviar = async () => {
     setEnviando(true);
     try {
-      await portal(codigo, '/pedidos', { method: 'POST', body: { disciplina, membros: escolhidos.map((a) => a.cracha), observacao: observacao || null } });
+      await portal('/pedidos', { method: 'POST', body: { disciplina, membros: escolhidos.map((a) => a.cracha), observacao: observacao || null } });
       toast.success('Pedido enviado. O Planejamento confere e aprova a sua equipe.');
       setEditando(false);
       await onEnviado();
@@ -359,7 +389,7 @@ function Reivindicar({ codigo, dados, onEnviado }: { codigo: string; dados: Minh
   };
   const cancelar = async () => {
     if (!pendente) return;
-    try { await portal(codigo, `/pedidos/${pendente.id}`, { method: 'DELETE' }); toast.success('Pedido cancelado'); await onEnviado(); } catch (e) { toast.error((e as Error).message); }
+    try { await portal(`/pedidos/${pendente.id}`, { method: 'DELETE' }); toast.success('Pedido cancelado'); await onEnviado(); } catch (e) { toast.error((e as Error).message); }
   };
 
   if (pendente && !editando) {

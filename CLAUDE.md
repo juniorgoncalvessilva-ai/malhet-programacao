@@ -56,11 +56,13 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   estar em várias), tudo por `equipes/application/alocacao.py::Alocador` com movimento `EQUIPE` (`de_equipe_id`/`para_equipe_id`);
   aba Movimentações (`GET /equipes/movimentacoes`). Nome padrão `equipe_config` (`EQUIPE.{n}_{disciplina}`, número automático,
   `disciplina_padrao`, aba Configuração). Spec 107.
-  Link dos líderes (`lideres/`, spec 111): `/equipe/<codigo>` sem conta do Malhet — matrícula + senha (inicial 123456, cria a
-  dele; Argon2, JWT próprio com `versao`, `Tentativas`), vê as equipes que lidera, "Não está comigo" (vai para outro encarregado
-  ou sem equipe) e "Trazer alguém" (busca no efetivo), tudo pelo `Alocador`; rotas públicas `/portal/{codigo}` (`X-Portal-Token`).
-  Tela `/app/lideres`: link (WhatsApp, novo, ligar), líderes sem a função de encarregado com as equipes, redefinir/bloquear.
-  Link com a marca da empresa (spec 113): página montada no servidor com `GET /portal/{codigo}` (marca) — título, ícone (logo),
+  Acesso dos líderes (`lideres/`, spec 111; endereço fixo spec 115): `/encarregado` sem conta do Malhet — matrícula + senha
+  (inicial 123456, cria a dele no primeiro acesso ali mesmo; Argon2, JWT próprio com `obra` e `versao`, `Tentativas`); a obra sai
+  da matrícula (`POST /portal/entrar`; em várias obras devolve `escolher`), vê as equipes que lidera, "Não está comigo" (vai para
+  outro encarregado ou sem equipe) e "Trazer alguém" (busca no efetivo), tudo pelo `Alocador`; rotas públicas `/portal/*`
+  (`X-Portal-Token`, sem código). Links antigos `/equipe/<codigo>` só redirecionam (`GET /portal/link/{codigo}` → `?obra=`).
+  Tela `/app/lideres`: endereço fixo (copiar/WhatsApp), líderes sem a função de encarregado com as equipes, redefinir/bloquear.
+  Marca da empresa (spec 113): `GET /portal/marca/{obra_id}` no navegador (obra lembrada no aparelho) — título, ícone (logo),
   `theme-color`, abertura com a logo e faixas de cima/baixo na cor (`textoSobre`, tokens no `.portal-lider`). Reivindicar equipe
   (spec 114): função de liderança entra sem equipe (`funcao_de_lider`), pede a equipe (`lider_pedido_equipe`) e o Planejamento
   aprova (cria no padrão de nome, líder = encarregado, pessoas pelo `Alocador`) ou recusa com motivo em Acesso dos líderes.

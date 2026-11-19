@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Copy, KeyRound, Link2, Lock, MessageCircle, RefreshCw, Trash2, Unlock, UserPlus } from 'lucide-react';
+import { Copy, KeyRound, Link2, Lock, MessageCircle, Trash2, Unlock, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { BuscaEfetivo } from '@/components/Obra/BuscaEfetivo';
@@ -21,12 +21,12 @@ interface Lider {
   equipes?: { id: number; nome: string }[]; equipes_extras?: number[]; situacao?: 'nunca_entrou' | 'senha_inicial' | 'ativo' | 'bloqueado';
   ultimo_acesso?: string | null; fora_do_efetivo?: boolean; equipe?: string;
 }
-interface Resposta { link: { codigo: string; ativo: boolean }; lideres: Lider[] }
+interface Resposta { endereco: string; lideres: Lider[] }
 
 const SITUACAO = { nunca_entrou: ['Nunca entrou', 'neutro'], senha_inicial: ['Senha inicial (123456)', 'atencao'], ativo: ['Com senha própria', 'sucesso'], bloqueado: ['Bloqueado', 'perigo'] } as const;
 
 /**
- * Acesso dos líderes (spec 111): o link da obra para o grupo do WhatsApp e quem pode entrar nele — encarregados,
+ * Acesso dos líderes (specs 111 e 115): o endereço fixo dos encarregados (`/encarregado`) e quem pode entrar — encarregados,
  * responsáveis e supervisores das equipes (automático) e líderes sem a função de encarregado, cadastrados aqui.
  */
 export default function LideresPage() {
@@ -41,8 +41,8 @@ export default function LideresPage() {
   const [editando, setEditando] = useState<number | null>(null);
   const [equipesEdit, setEquipesEdit] = useState<string[]>([]);
   const planejador = pode('planejador');
-  const link = q.data ? `${typeof window !== 'undefined' ? window.location.origin : ''}/pt-BR/equipe/${q.data.link.codigo}` : '';
-  const mensagem = `Encarregados e líderes da ${obra?.nome ?? 'obra'}: confiram quem está na sua equipe no Malhet e avisem quem saiu ou chegou.\n${link}\nEntre com a sua matrícula. Primeiro acesso: senha 123456 (em seguida você cria a sua).`;
+  const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/pt-BR${q.data?.endereco ?? '/encarregado'}`; // fixo: igual para toda obra
+  const mensagem = `Encarregados e líderes da ${obra?.nome ?? 'obra'}: confiram quem está na sua equipe e avisem quem saiu ou chegou.\n${link}\nEntre com a sua matrícula. Primeiro acesso: senha 123456 (em seguida você cria a sua).`;
   const opcoesEquipes = (equipes.data ?? []).filter((e) => e.ativo).map((e) => ({ valor: String(e.id), rotulo: `${e.nome}${e.encarregado_nome ? ` — Enc. ${e.encarregado_nome}` : ''}` }));
   const lideres = q.data?.lideres.filter((l) => !l.fora_do_efetivo) ?? [];
   const fora = q.data?.lideres.filter((l) => l.fora_do_efetivo) ?? [];
@@ -50,7 +50,7 @@ export default function LideresPage() {
 
   return (
     <>
-      <Cabecalho eyebrow="Efetivo · acesso dos líderes" titulo={q.data ? `${lideres.length} líder(es) podem conferir a equipe pelo link` : 'Acesso dos líderes'} />
+      <Cabecalho eyebrow="Efetivo · acesso dos líderes" titulo={q.data ? `${lideres.length} líder(es) podem conferir a equipe pelo endereço dos encarregados` : 'Acesso dos líderes'} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Indicador rotulo="Líderes" valor={lideres.length} />
         <Indicador rotulo="Já criaram a senha" valor={lideres.filter((l) => l.situacao === 'ativo').length} tom="sucesso" />
@@ -58,28 +58,17 @@ export default function LideresPage() {
         <Indicador rotulo="Bloqueados" valor={lideres.filter((l) => l.situacao === 'bloqueado').length} tom={lideres.some((l) => l.situacao === 'bloqueado') ? 'perigo' : undefined} />
       </div>
 
-      <Painel titulo="Qual link vai para o grupo?" subtitulo="O encarregado entra com a matrícula; a primeira senha é 123456 e ele cria a dele. Entram os líderes desta lista e quem tem função de liderança no efetivo (encarregado, líder, mestre, supervisor) — sem equipe, ele pede a dele e você aprova aqui."
-        acoes={planejador && q.data && <div className="flex flex-wrap gap-2">
-          <Botao variante="secundario" onClick={async () => {
-            if (!(await confirmar({ titulo: 'Gerar um link novo?', mensagem: 'O link atual para de funcionar na hora. Use se ele foi parar fora do grupo.' }))) return;
-            await exec(api.post('/lideres/link/novo'), 'Link novo gerado: envie de novo ao grupo');
-          }}><RefreshCw size={16} /> Link novo</Botao>
-          <Botao variante="secundario" onClick={() => exec(api.put('/lideres/link', { ativo: !q.data!.link.ativo }), q.data!.link.ativo ? 'Link desligado' : 'Link ligado')}>
-            {q.data.link.ativo ? <><Lock size={16} /> Desligar link</> : <><Unlock size={16} /> Ligar link</>}</Botao>
-        </div>}>
-        {!q.data ? <LinhasCarregando colunas={1} linhas={1} /> : (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2 rounded-m-md border border-m-stroke-subtle px-3 py-2.5">
-              <Link2 size={16} className="text-m-accent" aria-hidden="true" />
-              <code className="min-w-0 flex-1 break-all text-[13px] text-m-text-primary">{link}</code>
-              {!q.data.link.ativo && <Pilula tom="perigo">desligado</Pilula>}
-              <Botao variante="secundario" onClick={() => navigator.clipboard.writeText(mensagem).then(() => toast.success('Mensagem com o link copiada'))}><Copy size={16} /> Copiar mensagem</Botao>
-              <a href={`https://wa.me/?text=${encodeURIComponent(mensagem)}`} target="_blank" rel="noreferrer"
-                className="inline-flex h-10 items-center gap-2 rounded-full bg-m-accent-strong px-4 text-[13px] font-semibold text-m-on-accent"><MessageCircle size={16} /> Enviar no WhatsApp</a>
-            </div>
-            <p className="text-[12.5px] text-m-text-tertiary">Cada transferência ou inclusão feita pelo link vai para Equipes › Movimentações (por “líder + matrícula”) e avisa o Planejamento no sino.</p>
+      <Painel titulo="Onde o encarregado entra?" subtitulo="Endereço fixo, igual para todas as obras: ele entra com a matrícula; o primeiro acesso é ali mesmo (senha 123456 e ele cria a dele). A obra e a marca da empresa vêm da matrícula. Entram os líderes desta lista e quem tem função de liderança no efetivo (encarregado, líder, mestre, supervisor) — sem equipe, ele pede a dele e você aprova aqui.">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-m-md border border-m-stroke-subtle px-3 py-2.5">
+            <Link2 size={16} className="text-m-accent" aria-hidden="true" />
+            <code className="min-w-0 flex-1 break-all text-[13px] text-m-text-primary">{link}</code>
+            <Botao variante="secundario" onClick={() => navigator.clipboard.writeText(mensagem).then(() => toast.success('Mensagem com o endereço copiada'))}><Copy size={16} /> Copiar mensagem</Botao>
+            <a href={`https://wa.me/?text=${encodeURIComponent(mensagem)}`} target="_blank" rel="noreferrer"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-m-accent-strong px-4 text-[13px] font-semibold text-m-on-accent"><MessageCircle size={16} /> Enviar no WhatsApp</a>
           </div>
-        )}
+          <p className="text-[12.5px] text-m-text-tertiary">Para tirar alguém, bloqueie na lista abaixo. Cada transferência ou inclusão feita ali vai para Equipes › Movimentações (por “líder + matrícula”) e avisa o Planejamento no sino. Os links por obra enviados antes continuam funcionando: levam a este endereço.</p>
+        </div>
       </Painel>
 
       <PedidosEquipe podeDecidir={planejador} />
@@ -91,7 +80,7 @@ export default function LideresPage() {
             <MultiSelecao rotulo="Equipes que controla" largura="w-[320px]" comNa={false} valor={equipesNovo} opcoes={opcoesEquipes} onChange={setEquipesNovo} />
             <Botao disabled={!novo} onClick={async () => {
               if (!novo) return;
-              await exec(api.post('/lideres', { colaborador_id: novo.id, equipes: equipesNovo.map(Number) }), `${novo.nome} pode entrar pelo link (senha 123456)`);
+              await exec(api.post('/lideres', { colaborador_id: novo.id, equipes: equipesNovo.map(Number) }), `${novo.nome} pode entrar no endereço dos encarregados (senha 123456)`);
               setNovo(null); setEquipesNovo([]);
             }}><UserPlus size={16} /> Incluir líder</Botao>
           </div>
@@ -99,7 +88,7 @@ export default function LideresPage() {
         </Painel>
       )}
 
-      <Painel titulo="Quem pode entrar pelo link?" subtitulo="Encarregados, responsáveis e supervisores das equipes entram sozinhos; os cadastrados acima, pelas equipes escolhidas.">
+      <Painel titulo="Quem pode entrar?" subtitulo="Encarregados, responsáveis e supervisores das equipes entram sozinhos; os cadastrados acima, pelas equipes escolhidas.">
         <Tabela cabecalho={['Líder', 'Como lidera', 'Equipes', 'Senha', 'Último acesso', '']} vazio={!q.data ? undefined : !lideres.length && 'Nenhuma equipe com encarregado ainda.'}>
           {!q.data && <LinhasCarregando colunas={6} linhas={4} />}
           {lideres.map((l) => {
@@ -120,7 +109,7 @@ export default function LideresPage() {
                   <button type="button" title={l.situacao === 'bloqueado' ? 'Liberar' : 'Bloquear'} aria-label={`${l.situacao === 'bloqueado' ? 'Liberar' : 'Bloquear'} ${l.nome}`} className="rounded-full p-2 text-m-text-muted hover:bg-m-surface-hover hover:text-m-text-primary"
                     onClick={async () => {
                       const bloquear = l.situacao !== 'bloqueado';
-                      if (bloquear && !(await confirmar({ titulo: `Bloquear ${l.nome}?`, mensagem: 'Ele sai do link na hora e não entra mais até ser liberado.' }))) return;
+                      if (bloquear && !(await confirmar({ titulo: `Bloquear ${l.nome}?`, mensagem: 'Ele sai na hora e não entra mais até ser liberado.' }))) return;
                       await exec(api.put(`/lideres/${l.colaborador_id}`, { ativo: !bloquear }), bloquear ? 'Bloqueado' : 'Liberado');
                     }}>{l.situacao === 'bloqueado' ? <Unlock size={16} /> : <Lock size={16} />}</button>
                   {l.cadastrado && <button type="button" title="Tirar da lista de líderes" aria-label={`Tirar ${l.nome} dos líderes`} className="rounded-full p-2 text-m-text-muted hover:bg-m-surface-hover hover:text-m-danger"
