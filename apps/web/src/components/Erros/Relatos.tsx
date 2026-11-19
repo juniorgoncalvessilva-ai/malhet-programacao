@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { comentarRelato, configurarRelatos, enviarFila, EVENTO_AVISO, relatarErro, type AvisoErro } from '@/lib/erros/relatar';
-import { ehVersaoVelha, recarregarParaVersaoNova } from '@/lib/erros/versaoNova';
+import { abaDeVersaoAntiga, ehVersaoVelha, tratarVersaoVelha } from '@/lib/erros/versaoNova';
 
 /**
  * Spec 098. `CapturaErros` fica na raiz do app (inclusive login e página principal): pega erro de script, promessa sem
@@ -18,13 +18,17 @@ export function CapturaErros() {
   useEffect(() => { configurarRelatos(getToken); }, [getToken]);
   useEffect(() => {
     const erro = (e: ErrorEvent) => {
-      if ((ehVersaoVelha(e.message) || ehVersaoVelha(e.error)) && recarregarParaVersaoNova()) return; // deploy novo (spec 109)
-      relatarErro({ tipo: 'js', mensagem: e.message || String(e.error ?? ''), pilha: e.error?.stack });
+      const relatar = () => relatarErro({ tipo: 'js', mensagem: e.message || String(e.error ?? ''), pilha: e.error?.stack });
+      if (ehVersaoVelha(e.message) || ehVersaoVelha(e.error)) { void tratarVersaoVelha().then((vai) => { if (!vai) relatar(); }); return; } // deploy novo
+      relatar();
     };
     const promessa = (e: PromiseRejectionEvent) => {
       const r = e.reason as { message?: string; stack?: string; name?: string; status?: number } | undefined;
       if (r && typeof r.status === 'number') return; // ApiError: a própria chamada já relatou se foi do servidor
-      if (ehVersaoVelha(r ?? String(e.reason ?? '')) && recarregarParaVersaoNova()) return; // deploy novo (spec 109)
+      if (ehVersaoVelha(r ?? String(e.reason ?? ''))) { // deploy novo (specs 109/113)
+        void tratarVersaoVelha().then((vai) => { if (!vai) relatarErro({ tipo: 'promessa', mensagem: r?.message ?? String(e.reason ?? ''), pilha: r?.stack }); });
+        return;
+      }
       relatarErro({ tipo: 'promessa', mensagem: r?.message ?? String(e.reason ?? ''), pilha: r?.stack });
     };
     const mostrar = (e: Event) => setAviso((e as CustomEvent<AvisoErro>).detail);
@@ -34,7 +38,20 @@ export function CapturaErros() {
     window.addEventListener(EVENTO_AVISO, mostrar);
     window.addEventListener('online', online);
     void enviarFila(); // o que ficou guardado sem internet
+    // spec 113: qualquer página (login, cadastro, link dos líderes…) — ao voltar para a aba, build novo no ar = recarrega
+    // antes do clique cair num pedaço que não existe mais. Não recarrega com a pessoa digitando.
+    let ultimaConferencia = 0;
+    const voltou = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - ultimaConferencia < 60_000) return;
+      ultimaConferencia = Date.now();
+      void abaDeVersaoAntiga().then((antiga) => {
+        const el = document.activeElement;
+        if (antiga && !(el && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) window.location.reload();
+      });
+    };
+    document.addEventListener('visibilitychange', voltou);
     return () => {
+      document.removeEventListener('visibilitychange', voltou);
       window.removeEventListener('error', erro);
       window.removeEventListener('unhandledrejection', promessa);
       window.removeEventListener(EVENTO_AVISO, mostrar);

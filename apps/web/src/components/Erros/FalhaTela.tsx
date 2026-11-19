@@ -3,7 +3,7 @@
 import { RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { relatarErro, type AvisoErro } from '@/lib/erros/relatar';
-import { ehVersaoVelha, recarregarParaVersaoNova } from '@/lib/erros/versaoNova';
+import { ehVersaoVelha, tratarVersaoVelha } from '@/lib/erros/versaoNova';
 import { FormComentario } from './Relatos';
 
 /**
@@ -15,9 +15,10 @@ export function FalhaTela({ error, reset, inicio }: { error: Error & { digest?: 
   const [contou, setContou] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
   useEffect(() => {
-    // versão nova no ar (deploy): recarrega em vez de relatar (spec 109)
-    if (ehVersaoVelha(error) && recarregarParaVersaoNova()) { setAtualizando(true); return; }
-    setAviso(relatarErro({ tipo: 'tela', mensagem: error.message || 'A tela não abriu', pilha: [error.stack, error.digest && `digest ${error.digest}`].filter(Boolean).join('\n') }));
+    const relatar = () => setAviso(relatarErro({ tipo: 'tela', mensagem: error.message || 'A tela não abriu', pilha: [error.stack, error.digest && `digest ${error.digest}`].filter(Boolean).join('\n') }));
+    // versão nova no ar (deploy): recarrega em vez de relatar (specs 109 e 113)
+    if (ehVersaoVelha(error)) { setAtualizando(true); void tratarVersaoVelha().then((vai) => { if (!vai) { setAtualizando(false); relatar(); } }); return; }
+    relatar();
   }, [error]);
   if (atualizando) {
     return <p role="status" className="mx-auto my-10 text-center text-[14px] text-m-text-tertiary">Há uma versão nova do Malhet. Atualizando…</p>;

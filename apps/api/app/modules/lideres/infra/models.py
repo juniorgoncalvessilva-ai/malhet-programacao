@@ -35,3 +35,22 @@ class LiderAcessoModel(Base):
     ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     criado_por: Mapped[str | None] = mapped_column(String(80))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LiderPedidoEquipeModel(Base):
+    """Pedido de equipe (spec 114): o líder sem equipe aponta as pessoas que estão com ele; a equipe só nasce quando o
+    Planejamento/administrador aprova (valida a informação)."""
+
+    __tablename__ = "lider_pedido_equipe"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    colaborador_id: Mapped[int] = mapped_column(ForeignKey("colaborador.id", ondelete="CASCADE"), index=True)  # o líder
+    disciplina: Mapped[str | None] = mapped_column(String(60))  # vira o nome no padrão da obra (EQUIPE.{n}_{disciplina})
+    membros: Mapped[list] = mapped_column(JSONB, default=list)  # [{cracha, nome, funcao, equipe (onde estava)}]
+    observacao: Mapped[str | None] = mapped_column(String(500))
+    situacao: Mapped[str] = mapped_column(String(10), default="pendente", index=True)  # pendente | aprovado | recusado
+    motivo: Mapped[str | None] = mapped_column(String(500))  # da recusa
+    equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
+    decidido_por: Mapped[str | None] = mapped_column(String(320))
+    decidido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

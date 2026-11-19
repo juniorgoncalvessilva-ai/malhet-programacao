@@ -60,6 +60,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   dele; Argon2, JWT próprio com `versao`, `Tentativas`), vê as equipes que lidera, "Não está comigo" (vai para outro encarregado
   ou sem equipe) e "Trazer alguém" (busca no efetivo), tudo pelo `Alocador`; rotas públicas `/portal/{codigo}` (`X-Portal-Token`).
   Tela `/app/lideres`: link (WhatsApp, novo, ligar), líderes sem a função de encarregado com as equipes, redefinir/bloquear.
+  Link com a marca da empresa (spec 113): página montada no servidor com `GET /portal/{codigo}` (marca) — título, ícone (logo),
+  `theme-color`, abertura com a logo e faixas de cima/baixo na cor (`textoSobre`, tokens no `.portal-lider`). Reivindicar equipe
+  (spec 114): função de liderança entra sem equipe (`funcao_de_lider`), pede a equipe (`lider_pedido_equipe`) e o Planejamento
+  aprova (cria no padrão de nome, líder = encarregado, pessoas pelo `Alocador`) ou recusa com motivo em Acesso dos líderes.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e
@@ -238,7 +242,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (500 com `erro_id`/`erro_ref`). Dado pessoal mascarado em `erros/domain/relato.py::limpar`. Super admin: `/app/admin/erros`
   (grupos, resolver/voltou). Erro novo em tela nova não precisa de nada: já é capturado. 502/503 por até 90 s = deploy: nem relato
   nem aviso (`apiRespondeu`; servidor descarta `Relato.transitorio`); depois, um único "API indisponível". Spec 106. Chunk do build
-  antigo ("Loading chunk failed") recarrega a página uma vez em vez de relatar (`lib/erros/versaoNova.ts`). Spec 109.
+  antigo ("Loading chunk failed") recarrega a página uma vez em vez de relatar (`lib/erros/versaoNova.ts`). Spec 109. Aba de build
+  antigo recarrega sem relatar (`tratarVersaoVelha`) e toda página confere a versão ao voltar para a aba. Spec 113.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

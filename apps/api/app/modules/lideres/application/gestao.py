@@ -7,7 +7,7 @@ from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.lideres.application.portal import equipes_lideradas
 from app.modules.lideres.infra import sessao
-from app.modules.lideres.infra.models import LiderAcessoModel, LiderPortalModel
+from app.modules.lideres.infra.models import LiderAcessoModel, LiderPedidoEquipeModel, LiderPortalModel
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -131,4 +131,88 @@ def remover(s: Session, obra_id: int, colaborador_id: int) -> None:
     """Tira o líder cadastrado à mão. Quem é encarregado/responsável de equipe continua podendo entrar (bloqueie)."""
     a = _acesso(s, obra_id, colaborador_id)
     s.delete(a)
+    s.flush()
+
+
+# ---- pedidos de equipe (spec 114) -----------------------------------------------------------------------------
+def pedidos(s: Session, obra_id: int, situacao: str | None = "pendente") -> list[dict]:
+    from app.modules.equipes.application.nome import nome_da_nova_equipe
+    from app.modules.lideres.application.portal import _pedido_out, onde_esta
+
+    q = select(LiderPedidoEquipeModel).where(LiderPedidoEquipeModel.obra_id == obra_id)
+    if situacao:
+        q = q.where(LiderPedidoEquipeModel.situacao == situacao)
+    onde = onde_esta(s, obra_id)
+    out = []
+    for x in s.scalars(q.order_by(LiderPedidoEquipeModel.id.desc()).limit(100)):
+        lider = s.get(ColaboradorModel, x.colaborador_id)
+        try:
+            sugerido = nome_da_nova_equipe(s, obra_id, x.disciplina)
+        except DomainError:
+            sugerido = None
+        out.append({**_pedido_out(x), "nome_sugerido": sugerido, "decidido_por": x.decidido_por,
+                    "lider": {"id": lider.id, "nome": lider.nome, "matricula": lider.matricula, "funcao": lider.funcao} if lider else None,
+                    # onde cada um está agora (pode ter mudado desde o pedido)
+                    "membros": [{**m, "equipe_agora": onde.get(m.get("cracha"))} for m in (x.membros or [])]})
+    return out
+
+
+def _pedido(s: Session, obra_id: int, pid: int) -> LiderPedidoEquipeModel:
+    x = s.get(LiderPedidoEquipeModel, pid)
+    if x is None or x.obra_id != obra_id:
+        raise NotFoundError("pedido de equipe", pid)
+    if x.situacao != "pendente":
+        raise DomainError(f"esse pedido já foi {x.situacao}", "pedido")
+    return x
+
+
+def aprovar_pedido(s: Session, obra_id: int, pid: int, nome: str | None, por: str, por_email: str | None) -> dict:
+    """Cria a equipe (nome no padrão da obra, o líder como encarregado) e traz as pessoas pelo Alocador: saem da outra
+    equipe e a troca vai para o histórico."""
+    from datetime import datetime, timezone
+
+    from app.modules.equipes.application.alocacao import Alocador
+    from app.modules.equipes.application.nome import nome_da_nova_equipe
+
+    x = _pedido(s, obra_id, pid)
+    lider = s.get(ColaboradorModel, x.colaborador_id)
+    if lider is None or not (lider.cracha or lider.matricula):
+        raise DomainError("o líder do pedido não está mais no efetivo", "pedido")
+    nome_final = " ".join((nome or "").split())[:120] or nome_da_nova_equipe(s, obra_id, x.disciplina)
+    if s.scalar(select(EquipeModel.id).where(EquipeModel.obra_id == obra_id, EquipeModel.nome == nome_final)):
+        raise DomainError(f"já existe a equipe {nome_final}", "nome")
+    usados = [int(v) for v in s.scalars(select(EquipeModel.codigo_simova).where(EquipeModel.obra_id == obra_id)) if v and str(v).isdigit()]
+    cod_lider = lider.cracha or lider.matricula
+    nova = EquipeModel(obra_id=obra_id, nome=nome_final, encarregado_cracha=cod_lider, encarregado_nome=lider.nome,
+                       jornada_horas=9.0, turno="Diurno", codigo_simova=str(max(usados, default=0) + 1), ativo=True,
+                       observacao=f"Formada pelo pedido do líder (Nº {x.id})")
+    s.add(nova)
+    s.flush()
+    al = Alocador(s, obra_id, f"aprovado por {por_email or por}"[:80])
+    for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == obra_id, EquipeModel.id != nova.id)):
+        for mb in [m for m in e.membros if m.cracha in {lider.cracha, lider.matricula}]:
+            e.membros.remove(mb)  # o líder vira o encarregado da equipe nova
+            al.registrar(mb.cracha, e, nova)
+    entraram = 0
+    for m in x.membros or []:
+        cod = m.get("cracha")
+        if not cod or cod == cod_lider or any(mb.cracha == cod for mb in nova.membros):
+            continue
+        al.incluir(nova, cod, m.get("nome") or cod)
+        entraram += 1
+    x.situacao, x.equipe_id = "aprovado", nova.id
+    x.decidido_por, x.decidido_em = por_email or por, datetime.now(timezone.utc)
+    s.flush()
+    return {"equipe_id": nova.id, "nome": nova.nome, "membros": entraram}
+
+
+def recusar_pedido(s: Session, obra_id: int, pid: int, motivo: str, por: str, por_email: str | None) -> None:
+    from datetime import datetime, timezone
+
+    x = _pedido(s, obra_id, pid)
+    m = " ".join((motivo or "").split())
+    if len(m) < 5:
+        raise DomainError("diga ao líder por que o pedido foi recusado (mín. 5 caracteres)", "motivo")
+    x.situacao, x.motivo = "recusado", m[:500]
+    x.decidido_por, x.decidido_em = por_email or por, datetime.now(timezone.utc)
     s.flush()

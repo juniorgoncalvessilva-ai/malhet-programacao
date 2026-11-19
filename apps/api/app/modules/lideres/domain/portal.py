@@ -4,6 +4,7 @@ WhatsApp), entrando com a matrícula e a senha. A senha inicial é 123456 e, no 
 Quem pode entrar: o encarregado de uma equipe ativa, o responsável e o supervisor das equipes e os líderes
 cadastrados pelo Planejamento (quem não tem a função de encarregado). Cada um vê as equipes que lidera.
 """
+import re
 from collections import deque
 from dataclasses import dataclass
 
@@ -13,6 +14,30 @@ SENHA_INICIAL = "123456"
 TENTATIVAS = 5  # erros de senha por matrícula/aparelho…
 JANELA_S = 15 * 60  # …a cada 15 minutos
 HORAS_SESSAO = 12
+
+
+FUNCOES_DE_LIDER = re.compile(r"ENCARREG|L[IÍ]DER|MESTRE|SUPERVISOR|FEITOR", re.IGNORECASE)
+
+
+def funcao_de_lider(funcao: str | None) -> bool:
+    """Quem tem função de liderança no efetivo entra no link mesmo sem equipe — para pedir a dele (spec 114)."""
+    return bool(funcao and FUNCOES_DE_LIDER.search(funcao))
+
+
+def validar_pedido(disciplina: str | None, membros: list[str], maximo: int = 80) -> tuple[str, list[str]]:
+    d = " ".join((disciplina or "").split()).upper()[:60]
+    if len(d) < 2:
+        raise DomainError("diga a disciplina da equipe (ex.: FORMA, CONCRETO)", "disciplina")
+    vistos: list[str] = []
+    for m in membros:
+        m = (m or "").strip()
+        if m and m not in vistos:
+            vistos.append(m)
+    if not vistos:
+        raise DomainError("aponte ao menos uma pessoa que está com você", "membros")
+    if len(vistos) > maximo:
+        raise DomainError(f"até {maximo} pessoas por pedido", "membros")
+    return d, vistos
 
 
 def validar_nova_senha(nova: str, repetida: str | None = None) -> str:

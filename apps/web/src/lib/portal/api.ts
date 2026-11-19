@@ -33,6 +33,11 @@ export async function portal<T>(codigo: string, caminho: string, init: { method?
 export interface Membro { cracha: string; nome: string; funcao: string | null; matricula: string | null }
 export interface EquipePortal { id: number; nome: string; encarregado: string | null; membros: Membro[] }
 export interface Destino { id: number; nome: string; encarregado: string }
-export interface MinhasEquipes { nome: string; matricula: string | null; funcao: string | null; equipes: EquipePortal[]; destinos: Destino[] }
+export interface MembroPedido { cracha: string; nome: string; matricula: string | null; funcao: string | null; equipe: string | null }
+export interface PedidoEquipe {
+  id: number; disciplina: string | null; membros: MembroPedido[]; observacao: string | null; situacao: 'pendente' | 'aprovado' | 'recusado';
+  motivo: string | null; equipe_id: number | null; criado_em: string | null; decidido_em: string | null;
+}
+export interface MinhasEquipes { nome: string; matricula: string | null; funcao: string | null; equipes: EquipePortal[]; destinos: Destino[]; pedidos: PedidoEquipe[] }
 export interface Achado { cracha: string; nome: string; matricula: string | null; funcao: string | null; equipe: string | null }
 export interface Sessao { token: string; trocar_senha: boolean; nome: string }

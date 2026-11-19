@@ -12,9 +12,17 @@ from sqlalchemy.orm import Session
 from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.equipes.application.alocacao import Alocador
 from app.modules.equipes.infra.models import EquipeModel
-from app.modules.lideres.domain.portal import SENHA_INICIAL, EquipeDoLider, Tentativas, equipes_do_lider, validar_nova_senha
+from app.modules.lideres.domain.portal import (
+    SENHA_INICIAL,
+    EquipeDoLider,
+    Tentativas,
+    equipes_do_lider,
+    funcao_de_lider,
+    validar_nova_senha,
+    validar_pedido,
+)
 from app.modules.lideres.infra import sessao
-from app.modules.lideres.infra.models import LiderAcessoModel, LiderPortalModel
+from app.modules.lideres.infra.models import LiderAcessoModel, LiderPedidoEquipeModel, LiderPortalModel
 from app.shared.errors import DomainError, NotFoundError
 
 HASHER = PasswordHasher()
@@ -69,7 +77,8 @@ def entrar(s: Session, codigo: str, matricula: str, senha: str, aparelho: str) -
                                                      LiderAcessoModel.colaborador_id == c.id)) if c else None
     lidera = equipes_lideradas(s, p.obra_id, c, acesso) if c else []
     ok_senha = False
-    if c is not None and (lidera or (acesso and acesso.cadastrado)):
+    # spec 114: função de liderança no efetivo também entra (sem equipe ainda, para pedir a dele)
+    if c is not None and (lidera or (acesso and acesso.cadastrado) or funcao_de_lider(c.funcao)):
         if acesso is None or not acesso.senha_hash:
             ok_senha = (senha or "").strip() == SENHA_INICIAL
         else:
@@ -133,6 +142,9 @@ def minhas_equipes(s: Session, codigo: str, token: str | None) -> dict:
         "nome": c.nome, "matricula": c.matricula, "funcao": c.funcao,
         "equipes": [{"id": e.id, "nome": e.nome, "encarregado": e.encarregado_nome,
                      "membros": [_membro_out(m, pessoas) for m in sorted(e.membros, key=lambda m: m.nome)]} for e in minhas],
+        "pedidos": [_pedido_out(x) for x in s.scalars(select(LiderPedidoEquipeModel).where(
+            LiderPedidoEquipeModel.obra_id == p.obra_id, LiderPedidoEquipeModel.colaborador_id == c.id)
+            .order_by(LiderPedidoEquipeModel.id.desc()).limit(5))],
         # para onde transferir: as outras equipes ativas, pelo encarregado
         "destinos": sorted(({"id": e.id, "nome": e.nome, "encarregado": e.encarregado_nome or "sem encarregado"}
                             for e in todas if e.ativo and e.id not in ids), key=lambda x: (x["encarregado"], x["nome"])),
@@ -161,11 +173,10 @@ def buscar(s: Session, codigo: str, token: str | None, termo: str) -> list[dict]
     return out
 
 
-def _avisar(s: Session, obra_id: int, titulo: str, texto: str) -> None:
+def _avisar(s: Session, obra_id: int, titulo: str, texto: str, url: str = "/app/equipes") -> None:
     from app.modules.notificacoes.application import notificar
 
-    notificar(s, obra_id, tipo="equipe", titulo=titulo, texto=texto, papeis=["planejador", "admin"], url="/app/equipes",
-              gravidade="info")
+    notificar(s, obra_id, tipo="equipe", titulo=titulo, texto=texto, papeis=["planejador", "admin"], url=url, gravidade="info")
 
 
 def _minha(s: Session, p, acesso, c, equipe_id: int) -> EquipeModel:
@@ -215,3 +226,59 @@ def transferir(s: Session, codigo: str, token: str | None, equipe_id: int, crach
     _avisar(s, p.obra_id, f"{c.nome}: {m.nome} saiu da {origem.nome}", f"Informado pelo link dos líderes: foi {para}.")
     s.flush()
     return {"ok": True}
+
+
+# ---- pedido de equipe (spec 114) ------------------------------------------------------------------------------
+def _pedido_out(x: LiderPedidoEquipeModel) -> dict:
+    return {"id": x.id, "disciplina": x.disciplina, "membros": x.membros or [], "observacao": x.observacao, "situacao": x.situacao,
+            "motivo": x.motivo, "equipe_id": x.equipe_id, "criado_em": x.criado_em.isoformat() if x.criado_em else None,
+            "decidido_em": x.decidido_em.isoformat() if x.decidido_em else None}
+
+
+def onde_esta(s: Session, obra_id: int) -> dict[str, str]:
+    onde: dict[str, str] = {}
+    for e in _equipes(s, obra_id):
+        for m in e.membros:
+            onde.setdefault(m.cracha, e.nome)
+    return onde
+
+
+def pedir_equipe(s: Session, codigo: str, token: str | None, disciplina: str, crachas: list[str], observacao: str | None) -> dict:
+    """O líder aponta quem está com ele; nada muda nas equipes até o Planejamento aprovar. Pedido pendente é substituído."""
+    p, acesso, c = _sessao(s, codigo, token)
+    disc, cods = validar_pedido(disciplina, crachas)
+    onde = onde_esta(s, p.obra_id)
+    membros, nao_achou = [], []
+    for cod in cods:
+        x = _pessoa(s, p.obra_id, cod)
+        if x is None or not (x.cracha or x.matricula):
+            nao_achou.append(cod)
+            continue
+        if x.id == c.id:
+            continue  # o próprio líder vira o encarregado da equipe
+        k = x.cracha or x.matricula
+        membros.append({"cracha": k, "nome": x.nome, "matricula": x.matricula, "funcao": x.funcao, "equipe": onde.get(k)})
+    if nao_achou:
+        raise DomainError(f"não achei no efetivo: {', '.join(nao_achou[:5])}", "membros")
+    if not membros:
+        raise DomainError("aponte ao menos uma pessoa além de você", "membros")
+    ped = s.scalar(select(LiderPedidoEquipeModel).where(LiderPedidoEquipeModel.obra_id == p.obra_id,
+                                                        LiderPedidoEquipeModel.colaborador_id == c.id,
+                                                        LiderPedidoEquipeModel.situacao == "pendente"))
+    if ped is None:
+        ped = LiderPedidoEquipeModel(obra_id=p.obra_id, colaborador_id=c.id, situacao="pendente")
+        s.add(ped)
+    ped.disciplina, ped.membros, ped.observacao = disc, membros, ((observacao or "").strip()[:500] or None)
+    s.flush()
+    _avisar(s, p.obra_id, f"{c.nome} pediu a formação de uma equipe ({disc})",
+            f"{len(membros)} pessoa(s) apontada(s) pelo link dos líderes. Aprove ou recuse em Acesso dos líderes.", url="/app/lideres")
+    return _pedido_out(ped)
+
+
+def cancelar_pedido(s: Session, codigo: str, token: str | None, pid: int) -> None:
+    p, _acesso, c = _sessao(s, codigo, token)
+    ped = s.get(LiderPedidoEquipeModel, pid)
+    if ped is None or ped.obra_id != p.obra_id or ped.colaborador_id != c.id or ped.situacao != "pendente":
+        raise DomainError("esse pedido não está mais pendente", "pedido")
+    s.delete(ped)
+    s.flush()

@@ -8,6 +8,7 @@ import { BuscaEfetivo } from '@/components/Obra/BuscaEfetivo';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { LinhasCarregando } from '@/components/Obra/Esqueleto';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
+import { PedidosEquipe } from '@/components/Obra/PedidosEquipe';
 import { Botao, Cabecalho, Indicador, Painel, Pilula, Tabela, td } from '@/components/Obra/ui';
 import { useEfetivo } from '@/hooks/programacao/planejamento';
 import { useEquipes } from '@/hooks/programacao/queries';
@@ -57,7 +58,7 @@ export default function LideresPage() {
         <Indicador rotulo="Bloqueados" valor={lideres.filter((l) => l.situacao === 'bloqueado').length} tom={lideres.some((l) => l.situacao === 'bloqueado') ? 'perigo' : undefined} />
       </div>
 
-      <Painel titulo="Qual link vai para o grupo?" subtitulo="O encarregado entra com a matrícula; a primeira senha é 123456 e ele cria a dele. Só entram os líderes desta lista."
+      <Painel titulo="Qual link vai para o grupo?" subtitulo="O encarregado entra com a matrícula; a primeira senha é 123456 e ele cria a dele. Entram os líderes desta lista e quem tem função de liderança no efetivo (encarregado, líder, mestre, supervisor) — sem equipe, ele pede a dele e você aprova aqui."
         acoes={planejador && q.data && <div className="flex flex-wrap gap-2">
           <Botao variante="secundario" onClick={async () => {
             if (!(await confirmar({ titulo: 'Gerar um link novo?', mensagem: 'O link atual para de funcionar na hora. Use se ele foi parar fora do grupo.' }))) return;
@@ -80,6 +81,8 @@ export default function LideresPage() {
           </div>
         )}
       </Painel>
+
+      <PedidosEquipe podeDecidir={planejador} />
 
       {planejador && (
         <Painel titulo="Quem mais lidera equipe?" subtitulo="Líderes sem a função de encarregado (ex.: líder de turma, mestre): escolha a pessoa no efetivo e as equipes que ela controla.">

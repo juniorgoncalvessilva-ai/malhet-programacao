@@ -65,6 +65,31 @@ def redefinir(colaborador_id: int, s: Session = Depends(get_session), c: Context
     return {"ok": True, "senha": "123456"}
 
 
+@router.get("/pedidos")
+def pedidos(situacao: str | None = "pendente", s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Pedidos de equipe dos líderes (spec 114): `situacao` vazia = todos."""
+    return gestao.pedidos(s, c.obra_id, situacao or None)
+
+
+class AprovarIn(BaseModel):
+    nome: str | None = Field(None, max_length=120)  # vazio = o nome no padrão da obra
+
+
+@router.post("/pedidos/{pid}/aprovar")
+def aprovar(pid: int, d: AprovarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    return gestao.aprovar_pedido(s, c.obra_id, pid, d.nome, c.usuario.id, c.usuario.email)
+
+
+class RecusarIn(BaseModel):
+    motivo: str = Field(max_length=500)
+
+
+@router.post("/pedidos/{pid}/recusar")
+def recusar(pid: int, d: RecusarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    gestao.recusar_pedido(s, c.obra_id, pid, d.motivo, c.usuario.id, c.usuario.email)
+    return {"ok": True}
+
+
 @router.delete("/{colaborador_id}", status_code=204)
 def remover(colaborador_id: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     gestao.remover(s, c.obra_id, colaborador_id)
@@ -77,11 +102,35 @@ def _ip(request: Request) -> str:
 
 @publico.get("/{codigo}")
 def info(codigo: str, s: Session = Depends(get_session)):
-    from app.modules.obras.infra.models import ObraModel
+    """Nome da obra e a marca da empresa (spec 113): o link abre com a cor e a logo da contratada, não do Malhet."""
+    from app.modules.obras.infra.models import MarcaObraModel, ObraModel
 
     p = pt.portal(s, codigo)
     obra = s.get(ObraModel, p.obra_id)
-    return {"obra": obra.nome if obra else ""}
+    m = s.get(MarcaObraModel, p.obra_id)
+    logos = [q for q in ("contratada", "contratante") if m is not None and getattr(m, f"tipo_{q}")]
+    return {"obra": obra.nome if obra else "",
+            "marca": {"cor": m.cor if m else None, "contratada": m.nome_contratada if m else None,
+                      "contratante": m.nome_contratante if m else None, "logos": logos,
+                      "versao": int(m.atualizado_em.timestamp()) if m and m.atualizado_em else 0}}
+
+
+@publico.get("/{codigo}/logo/{qual}")
+def logo(codigo: str, qual: str, s: Session = Depends(get_session)):
+    """Logo da contratada/contratante pelo link (sem login): é a identidade da empresa na tela do encarregado."""
+    from fastapi import Response
+
+    from app.modules.obras.infra.models import MarcaObraModel
+    from app.shared.errors import NotFoundError
+
+    if qual not in ("contratada", "contratante"):
+        raise NotFoundError("logo", qual)
+    p = pt.portal(s, codigo)
+    m = s.get(MarcaObraModel, p.obra_id)
+    tipo = getattr(m, f"tipo_{qual}") if m else None
+    if not tipo:
+        raise NotFoundError("logo", qual)
+    return Response(getattr(m, f"logo_{qual}"), media_type=tipo, headers={"Cache-Control": "public, max-age=3600"})
 
 
 class EntrarIn(BaseModel):
@@ -137,3 +186,22 @@ def transferir(codigo: str, d: TransferirIn, s: Session = Depends(get_session), 
     r = pt.transferir(s, codigo, x_portal_token, d.equipe_id, d.cracha, d.para_equipe_id)
     mudancas.registrar(str(pt.portal(s, codigo).obra_id))
     return r
+
+
+class PedidoIn(BaseModel):
+    disciplina: str = Field(max_length=60)
+    membros: list[str] = Field(max_length=200)  # matrículas/crachás
+    observacao: str | None = Field(None, max_length=500)
+
+
+@publico.post("/{codigo}/pedidos")
+def pedir(codigo: str, d: PedidoIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    """Reivindicar equipe (spec 114): fica pendente até o Planejamento/administrador aprovar."""
+    r = pt.pedir_equipe(s, codigo, x_portal_token, d.disciplina, d.membros, d.observacao)
+    mudancas.registrar(str(pt.portal(s, codigo).obra_id))
+    return r
+
+
+@publico.delete("/{codigo}/pedidos/{pid}", status_code=204)
+def cancelar(codigo: str, pid: int, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    pt.cancelar_pedido(s, codigo, x_portal_token, pid)

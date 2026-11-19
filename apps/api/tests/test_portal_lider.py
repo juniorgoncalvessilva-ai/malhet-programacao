@@ -119,3 +119,78 @@ def test_muitas_tentativas_bloqueiam(client):
         w.post(f"/api/portal/{cod}/entrar", json={"matricula": "115011", "senha": "errada1"})
     r = w.post(f"/api/portal/{cod}/entrar", json={"matricula": "115011", "senha": "123456"})
     assert r.status_code == 422 and "muitas tentativas" in r.json()["detail"]
+
+
+def test_link_com_a_marca_da_empresa(client):
+    """Spec 113: o link abre com a cor, o nome e a logo da contratada — sem login."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    b = BytesIO()
+    Image.new("RGB", (60, 20), (200, 30, 30)).save(b, "PNG")
+    png = b.getvalue()
+    cod = client.get("/api/lideres").json()["link"]["codigo"]
+    w = _publico()
+    sem = w.get(f"/api/portal/{cod}").json()["marca"]
+    assert (sem["cor"], sem["logos"]) == (None, [])
+    client.put("/api/obra/marca/cor", json={"cor": "#C8102E"})
+    client.put("/api/obra/marca/nomes", json={"nome_contratada": "Cardan", "nome_contratante": "Vale"})
+    client.post("/api/obra/marca/logo/contratada", files={"arquivo": ("l.png", png, "image/png")})
+    m = w.get(f"/api/portal/{cod}").json()["marca"]
+    assert (m["cor"], m["contratada"], m["contratante"], m["logos"]) == ("#C8102E", "Cardan", "Vale", ["contratada"]) and m["versao"]
+    r = w.get(f"/api/portal/{cod}/logo/contratada")
+    assert r.status_code == 200 and r.content == png and r.headers["content-type"] == "image/png"
+    assert w.get(f"/api/portal/{cod}/logo/contratante").status_code == 404
+    assert w.get(f"/api/portal/{cod}/logo/outra").status_code == 404
+    assert w.get("/api/portal/errado/logo/contratada").status_code == 404
+
+
+def test_reivindicar_equipe_com_aprovacao(client):
+    """Spec 114: líder sem equipe aponta quem está com ele; a equipe só nasce quando o Planejamento aprova."""
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    x = client.post("/api/equipes", json={"nome": "EQ.X", "membros": [{"cracha": "115014", "nome": "SERVENTE"}]}).json()
+    cod = client.get("/api/lideres").json()["link"]["codigo"]
+    w = _publico()
+    # quem não tem função de liderança e não lidera equipe não entra
+    assert w.post(f"/api/portal/{cod}/entrar", json={"matricula": "115013", "senha": "123456"}).status_code == 422
+    r = w.post(f"/api/portal/{cod}/entrar", json={"matricula": "115011", "senha": "123456"}).json()  # ENCARREGADO DE FORMAS, sem equipe
+    h = {"X-Portal-Token": w.post(f"/api/portal/{cod}/senha", headers={"X-Portal-Token": r["token"]},
+                                  json={"nova": "forma2026", "repetida": "forma2026"}).json()["token"]}
+    eq = w.get(f"/api/portal/{cod}/equipes", headers=h).json()
+    assert eq["equipes"] == [] and eq["pedidos"] == []
+    assert w.post(f"/api/portal/{cod}/pedidos", headers=h, json={"disciplina": "", "membros": ["115013"]}).status_code == 422
+    assert w.post(f"/api/portal/{cod}/pedidos", headers=h, json={"disciplina": "forma", "membros": ["999999"]}).status_code == 422
+    p1 = w.post(f"/api/portal/{cod}/pedidos", headers=h, json={"disciplina": "forma", "membros": ["115013"]}).json()
+    # reenviar substitui o pendente (não duplica); o próprio líder não entra como membro
+    p2 = w.post(f"/api/portal/{cod}/pedidos", headers=h, json={"disciplina": "forma", "membros": ["115013", "115014", "115011"],
+                                                                "observacao": "turma do galpão"}).json()
+    assert p2["id"] == p1["id"] and [m["cracha"] for m in p2["membros"]] == ["115013", "115014"]
+    assert p2["membros"][1]["equipe"] == "EQ.X" and p2["situacao"] == "pendente"
+    # nada mudou nas equipes ainda
+    assert [m["cracha"] for m in next(e for e in client.get("/api/equipes").json() if e["id"] == x["id"])["membros"]] == ["115014"]
+
+    pend = client.get("/api/lideres/pedidos").json()
+    assert len(pend) == 1 and pend[0]["lider"]["nome"] == "ENCARREGADO TESTE UM" and pend[0]["nome_sugerido"] == "EQUIPE.1_FORMA"
+    assert client.post(f"/api/lideres/pedidos/{p1['id']}/recusar", json={"motivo": "x"}).status_code == 422
+    a = client.post(f"/api/lideres/pedidos/{p1['id']}/aprovar", json={}).json()
+    assert (a["nome"], a["membros"]) == ("EQUIPE.1_FORMA", 2)
+    assert client.post(f"/api/lideres/pedidos/{p1['id']}/aprovar", json={}).status_code == 422  # já aprovado
+    eqs = {e["nome"]: e for e in client.get("/api/equipes").json()}
+    nova = eqs["EQUIPE.1_FORMA"]
+    assert nova["encarregado_cracha"] == "115011" and {m["cracha"] for m in nova["membros"]} == {"115013", "115014"}
+    assert not eqs["EQ.X"]["membros"]  # o servente saiu da outra equipe
+    hist = client.get("/api/equipes/movimentacoes").json()["itens"]
+    assert ("SERVENTE TESTE TRES", "EQ.X", "EQUIPE.1_FORMA") in [(i["nome"], i["de"], i["para"]) for i in hist]
+    # o líder agora vê a equipe e o pedido aprovado
+    eq = w.get(f"/api/portal/{cod}/equipes", headers=h).json()
+    assert [e["nome"] for e in eq["equipes"]] == ["EQUIPE.1_FORMA"] and eq["pedidos"][0]["situacao"] == "aprovado"
+
+    # recusa com motivo e cancelamento do pendente
+    p3 = w.post(f"/api/portal/{cod}/pedidos", headers=h, json={"disciplina": "concreto", "membros": ["115013"]}).json()
+    assert client.post(f"/api/lideres/pedidos/{p3['id']}/recusar", json={"motivo": "Esse pedreiro já está na forma"}).status_code == 200
+    assert w.get(f"/api/portal/{cod}/equipes", headers=h).json()["pedidos"][0]["motivo"] == "Esse pedreiro já está na forma"
+    p4 = w.post(f"/api/portal/{cod}/pedidos", headers=h, json={"disciplina": "concreto", "membros": ["115013"]}).json()
+    assert w.delete(f"/api/portal/{cod}/pedidos/{p4['id']}", headers=h).status_code == 204
+    assert client.get("/api/lideres/pedidos").json() == []
+    assert len(client.get("/api/lideres/pedidos", params={"situacao": ""}).json()) == 2

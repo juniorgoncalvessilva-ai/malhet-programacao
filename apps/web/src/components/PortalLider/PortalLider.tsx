@@ -5,57 +5,107 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
-import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type Sessao, guardarToken, lerToken, portal } from '@/lib/portal/api';
+import { API_URL } from '@/lib/api/client';
+import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type PedidoEquipe, type Sessao, guardarToken, lerToken, portal } from '@/lib/portal/api';
 
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 const campo = 'h-12 w-full rounded-[14px] border border-m-stroke bg-m-surface-field px-3 text-[16px] text-m-text-primary outline-none focus:border-m-accent-strong focus:ring-2 focus:ring-m-accent/30';
 const primario = 'h-12 w-full rounded-full bg-m-accent-strong text-[16px] font-semibold text-m-on-accent disabled:opacity-40';
 const secundario = 'h-11 rounded-full border border-m-stroke px-4 text-[14px] font-semibold text-m-text-secondary';
 
+export interface MarcaPortal { cor: string | null; contratada: string | null; contratante: string | null; logos: string[]; versao: number }
+export interface InfoPortal { obra: string; marca: MarcaPortal }
+
+const PADRAO = '#284E4F';
+/** Texto que se lê sobre a cor da empresa: branco em cor escura, quase preto em cor clara. */
+function textoSobre(cor: string) {
+  const h = cor.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#0B0D12' : '#FFFFFF';
+}
+
 /**
- * Portal do líder (spec 111): o encarregado abre o link da obra (grupo do WhatsApp), entra com a matrícula e a senha
- * (a primeira é 123456 e ele cria a dele), confere a equipe que está no Malhet, informa quem foi para outro encarregado
- * e traz quem está com ele pela matrícula ou pelo nome. Cada mudança vai para o histórico e avisa o Planejamento.
+ * Portal do líder (specs 111 e 113): o encarregado abre o link da obra (grupo do WhatsApp), entra com a matrícula e a
+ * senha (a primeira é 123456 e ele cria a dele), confere a equipe que está no Malhet, informa quem foi para outro
+ * encarregado e traz quem está com ele. Tudo na identidade da empresa dona do link: logo, cor nas faixas de cima e de
+ * baixo, botões e a abertura do app.
  */
-export function PortalLider({ codigo }: { codigo: string }) {
-  const [obra, setObra] = useState<string | null>(null);
-  const [erroLink, setErroLink] = useState<string | null>(null);
+export function PortalLider({ codigo, inicial }: { codigo: string; inicial?: InfoPortal | null }) {
+  const [info, setInfo] = useState<InfoPortal | null>(inicial ?? null);
+  const [erroLink, setErroLink] = useState<string | null>(inicial === null ? 'Este link não está mais ativo. Peça o link novo ao Planejamento.' : null);
   const [etapa, setEtapa] = useState<'entrar' | 'senha' | 'equipe'>('entrar');
   const [dados, setDados] = useState<MinhasEquipes | null>(null);
+  const [abrindo, setAbrindo] = useState(true); // abertura com a logo da empresa
 
   const carregar = useCallback(async () => {
     try { setDados(await portal<MinhasEquipes>(codigo, '/equipes')); setEtapa('equipe'); } catch (e) {
-      const st = (e as { status?: number; campo?: string }).campo;
-      if (st === 'sessao') { guardarToken(codigo, null); setEtapa('entrar'); } else toast.error((e as Error).message);
+      if ((e as { campo?: string }).campo === 'sessao') { guardarToken(codigo, null); setEtapa('entrar'); } else toast.error((e as Error).message);
     }
   }, [codigo]);
 
   useEffect(() => {
-    portal<{ obra: string }>(codigo, '').then((r) => setObra(r.obra)).catch((e) => setErroLink((e as Error).message));
-    if (lerToken(codigo)) void carregar();
-  }, [codigo, carregar]);
+    if (inicial === undefined) portal<InfoPortal>(codigo, '').then(setInfo).catch((e) => setErroLink((e as Error).message));
+    const fim = () => setTimeout(() => setAbrindo(false), 650); // tempo de ver a marca, sem atrasar o uso
+    if (lerToken(codigo)) void carregar().finally(fim); else fim();
+  }, [codigo, carregar, inicial]);
 
   const sair = () => { guardarToken(codigo, null); setDados(null); setEtapa('entrar'); };
+  const cor = info?.marca.cor || PADRAO;
+  // ícone da aba = logo da empresa (o favicon padrão do app vem antes no <head>; aqui ele dá lugar à empresa)
+  useEffect(() => {
+    if (!info?.marca.logos.includes('contratada')) return;
+    const href = `${API_URL}/portal/${encodeURIComponent(codigo)}/logo/contratada?v=${info.marca.versao}`;
+    const trocar = () => document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach((l) => {
+      if (!l.href.endsWith(href)) l.href = href;
+    });
+    trocar();
+    const obs = new MutationObserver(trocar); // o Next ainda pode pôr o favicon padrão depois
+    obs.observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+    return () => obs.disconnect();
+  }, [info, codigo]);
+  const sobre = textoSobre(cor);
+  const empresa = info?.marca.contratada || 'Malhet';
+  const logo = info?.marca.logos.includes('contratada') ? `${API_URL}/portal/${encodeURIComponent(codigo)}/logo/contratada?v=${info.marca.versao}` : null;
+  // a cor da empresa vira o acento da tela inteira (botões, foco, seleção), como o app faz dentro da obra
+  const tokens = `.portal-lider{--m-accent:${cor};--m-accent-strong:${cor};--m-accent-hover:color-mix(in srgb,${cor} 80%,black);--m-accent-subtle:color-mix(in srgb,${cor} 12%,white);--m-on-accent:${sobre}}`;
+  const Marca = ({ grande }: { grande?: boolean }) => logo
+    // eslint-disable-next-line @next/next/no-img-element
+    ? <img src={logo} alt={empresa} className={grande ? 'max-h-24 max-w-[70vw] object-contain' : 'h-9 max-w-[150px] object-contain'} />
+    : <span className={grande ? 'text-[28px] font-semibold' : 'text-[17px] font-semibold'}>{empresa}</span>;
 
   return (
-    <main className="min-h-dvh bg-m-surface font-[Figtree,system-ui,sans-serif] text-m-text-primary">
-      <div className="mx-auto flex w-full max-w-[520px] flex-col gap-4 px-4 pb-[max(env(safe-area-inset-bottom),24px)] pt-6">
-        <header className="flex items-start justify-between gap-3">
+    <main className="portal-lider flex min-h-dvh flex-col bg-m-surface font-[Figtree,system-ui,sans-serif] text-m-text-primary">
+      <style>{tokens}</style>
+      {abrindo && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-5 bg-m-surface-raised transition-opacity" role="status" aria-label={`Abrindo ${empresa}`}>
+          <Marca grande />
+          <span className="h-1 w-24 overflow-hidden rounded-full" style={{ background: `color-mix(in srgb, ${cor} 20%, white)` }}>
+            <span className="block h-1 w-1/2 animate-pulse rounded-full" style={{ background: cor }} />
+          </span>
+        </div>
+      )}
+      <header className="pt-[env(safe-area-inset-top)]" style={{ background: cor, color: sobre }}>
+        <div className="mx-auto flex w-full max-w-[520px] items-center gap-3 px-4 py-3">
+          <span className={`flex min-h-[44px] items-center ${logo ? 'rounded-[10px] bg-white px-2 py-1' : ''}`}><Marca /></span>
+          <span className="min-w-0 flex-1 truncate text-right text-[12.5px] font-semibold opacity-90">{info?.obra ?? ''}</span>
+        </div>
+      </header>
+      <div className="mx-auto flex w-full max-w-[520px] flex-1 flex-col gap-4 px-4 pb-6 pt-5">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.48px] text-m-text-muted">
-              <span className="h-2 w-2 rounded-[2px] bg-m-accent" aria-hidden="true" />{obra ?? 'Malhet'}
-            </span>
             <h1 className="text-[24px] font-semibold leading-8">{dados ? `Olá, ${dados.nome.split(' ')[0]}` : 'Minha equipe'}</h1>
             {dados && <p className="text-[13px] text-m-text-tertiary">{[dados.matricula, dados.funcao].filter(Boolean).join(' · ')}</p>}
           </div>
           {dados && <button type="button" onClick={sair} className="flex h-10 items-center gap-1.5 rounded-full border border-m-stroke px-3 text-[13px] font-semibold text-m-text-secondary"><LogOut size={15} aria-hidden="true" /> Sair</button>}
-        </header>
+        </div>
         {erroLink ? <Aviso texto={erroLink} />
           : etapa === 'entrar' ? <Entrar codigo={codigo} onEntrou={(r) => { if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
             : etapa === 'senha' ? <CriarSenha codigo={codigo} onPronto={() => void carregar()} />
               : dados ? <Equipes codigo={codigo} dados={dados} recarregar={carregar} /> : <Esqueleto className="h-40 w-full" />}
-        <p className="pt-2 text-center text-[12px] text-m-text-muted">Malhet · as mudanças vão para o Planejamento da obra</p>
       </div>
+      <footer className="pb-[max(env(safe-area-inset-bottom),12px)] pt-3 text-center text-[12px]" style={{ background: cor, color: sobre }}>
+        <span className="font-semibold">{empresa}</span>{info?.marca.contratante ? ` · ${info.marca.contratante}` : ''} <span className="opacity-75">· com Malhet</span>
+      </footer>
     </main>
   );
 }
@@ -80,7 +130,7 @@ function Entrar({ codigo, onEntrou }: { codigo: string; onEntrou: (r: Sessao) =>
   };
   return (
     <form onSubmit={entrar} className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
-      <p className="text-[15px] text-m-text-secondary">Confira quem está na sua equipe no Malhet e avise quem saiu ou chegou.</p>
+      <p className="text-[15px] text-m-text-secondary">Confira quem está na sua equipe e avise quem saiu ou chegou.</p>
       <label className="flex flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Matrícula
         <input className={campo} inputMode="numeric" autoComplete="username" required value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="ex.: 115532" />
       </label>
@@ -125,8 +175,18 @@ function Equipes({ codigo, dados, recarregar }: { codigo: string; dados: MinhasE
   const [sel, setSel] = useState(dados.equipes[0]?.id ?? 0);
   const [saindo, setSaindo] = useState<Membro | null>(null);
   const [trazendo, setTrazendo] = useState(false);
+  const [formando, setFormando] = useState(false);
   const equipe = dados.equipes.find((e) => e.id === sel) ?? dados.equipes[0];
-  if (!equipe) return <Aviso texto="Você ainda não lidera nenhuma equipe no Malhet. Fale com o Planejamento da obra." />;
+  const pendente = dados.pedidos.find((p) => p.situacao === 'pendente');
+  // spec 114: sem equipe (ou pedindo outra) — monta a equipe e manda para aprovação
+  if (!equipe || formando || pendente) {
+    return (
+      <>
+        <Reivindicar codigo={codigo} dados={dados} onEnviado={recarregar} />
+        {equipe && !pendente && <button type="button" onClick={() => setFormando(false)} className={secundario}>Voltar para a minha equipe</button>}
+      </>
+    );
+  }
   return (
     <>
       {dados.equipes.length > 1 && (
@@ -140,7 +200,7 @@ function Equipes({ codigo, dados, recarregar }: { codigo: string; dados: MinhasE
       <section className="flex flex-col rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised">
         <div className="flex items-center gap-2 border-b border-m-stroke-subtle px-4 py-3">
           <Users size={18} className="text-m-accent" aria-hidden="true" />
-          <div className="flex-1"><b className="text-[16px]">{equipe.nome}</b><span className="block text-[12.5px] text-m-text-muted">{equipe.membros.length} pessoa(s) no Malhet</span></div>
+          <div className="flex-1"><b className="text-[16px]">{equipe.nome}</b><span className="block text-[12.5px] text-m-text-muted">{equipe.membros.length} pessoa(s) cadastrada(s)</span></div>
         </div>
         <ul className="flex flex-col">
           {equipe.membros.map((m) => (
@@ -154,6 +214,7 @@ function Equipes({ codigo, dados, recarregar }: { codigo: string; dados: MinhasE
         </ul>
       </section>
       <button type="button" onClick={() => setTrazendo(true)} className={`${primario} flex items-center justify-center gap-2`}><UserPlus size={18} aria-hidden="true" /> Trazer alguém para a equipe</button>
+      <button type="button" onClick={() => setFormando(true)} className="text-[13.5px] font-semibold text-m-accent underline">Formar outra equipe (vai para aprovação)</button>
       {saindo && <Transferir codigo={codigo} equipe={equipe} membro={saindo} destinos={dados.destinos} onFechar={() => setSaindo(null)} onFeito={async () => { setSaindo(null); await recarregar(); }} />}
       {trazendo && <Trazer codigo={codigo} equipe={equipe} onFechar={() => setTrazendo(false)} onFeito={async () => { await recarregar(); }} />}
     </>
@@ -264,5 +325,102 @@ function Trazer({ codigo, equipe, onFechar, onFeito }: { codigo: string; equipe:
         {achados && !achados.length && <li className="py-3 text-[14px] text-m-text-muted">Ninguém no efetivo com esse nome ou matrícula. Avise o Planejamento.</li>}
       </ul>
     </Folha>
+  );
+}
+
+/**
+ * Reivindicar equipe (spec 114): o líder sem equipe aponta quem está com ele (matrícula ou nome) e a disciplina; a equipe
+ * só nasce quando o Planejamento ou o administrador aprova — assim a informação é validada antes de valer.
+ */
+function Reivindicar({ codigo, dados, onEnviado }: { codigo: string; dados: MinhasEquipes; onEnviado: () => Promise<void> }) {
+  const pendente = dados.pedidos.find((p) => p.situacao === 'pendente');
+  const ultimo: PedidoEquipe | undefined = dados.pedidos[0];
+  const [editando, setEditando] = useState(!pendente);
+  const [disciplina, setDisciplina] = useState(pendente?.disciplina ?? '');
+  const [escolhidos, setEscolhidos] = useState<Achado[]>(pendente?.membros.map((m) => ({ ...m })) ?? []);
+  const [observacao, setObservacao] = useState(pendente?.observacao ?? '');
+  const [q, setQ] = useState('');
+  const [achados, setAchados] = useState<Achado[] | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  useEffect(() => {
+    const t = q.trim();
+    if (t.length < 2) { setAchados(null); return; }
+    const h = setTimeout(() => { portal<Achado[]>(codigo, `/buscar?q=${encodeURIComponent(t)}`).then(setAchados).catch((e) => toast.error((e as Error).message)); }, 300);
+    return () => clearTimeout(h);
+  }, [q, codigo]);
+  const enviar = async () => {
+    setEnviando(true);
+    try {
+      await portal(codigo, '/pedidos', { method: 'POST', body: { disciplina, membros: escolhidos.map((a) => a.cracha), observacao: observacao || null } });
+      toast.success('Pedido enviado. O Planejamento confere e aprova a sua equipe.');
+      setEditando(false);
+      await onEnviado();
+    } catch (e) { toast.error((e as Error).message); } finally { setEnviando(false); }
+  };
+  const cancelar = async () => {
+    if (!pendente) return;
+    try { await portal(codigo, `/pedidos/${pendente.id}`, { method: 'DELETE' }); toast.success('Pedido cancelado'); await onEnviado(); } catch (e) { toast.error((e as Error).message); }
+  };
+
+  if (pendente && !editando) {
+    return (
+      <section className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
+        <span className="w-fit rounded-full bg-m-warning-subtle px-3 py-1 text-[12.5px] font-semibold text-m-warning">Aguardando aprovação do Planejamento</span>
+        <h2 className="text-[18px] font-semibold">Equipe de {pendente.disciplina}</h2>
+        <ul className="flex flex-col">{pendente.membros.map((m) => (
+          <li key={m.cracha} className="border-b border-m-stroke-subtle py-2 last:border-b-0"><span className="block text-[15px]">{m.nome}</span>
+            <span className="text-[12.5px] text-m-text-muted">{[m.matricula, m.funcao].filter(Boolean).join(' · ')}{m.equipe ? ` · hoje na ${m.equipe}` : ''}</span></li>
+        ))}</ul>
+        <p className="text-[13px] text-m-text-tertiary">Quando aprovarem, as pessoas passam para a sua equipe e saem da equipe em que estão hoje.</p>
+        <div className="flex gap-2"><button type="button" className={secundario} onClick={() => setEditando(true)}>Corrigir o pedido</button>
+          <button type="button" className={`${secundario} text-m-danger`} onClick={cancelar}>Cancelar pedido</button></div>
+      </section>
+    );
+  }
+  const ja = new Set(escolhidos.map((a) => a.cracha));
+  return (
+    <section className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
+      <h2 className="text-[18px] font-semibold">{dados.equipes.length ? 'Formar outra equipe' : 'Você ainda não tem equipe cadastrada'}</h2>
+      <p className="text-[14px] text-m-text-tertiary">Aponte quem está trabalhando com você. A equipe passa a valer quando o Planejamento aprovar.</p>
+      {ultimo?.situacao === 'recusado' && !pendente && (
+        <p role="alert" className="rounded-[12px] bg-m-danger-subtle px-3 py-2 text-[13.5px] text-m-danger">Seu último pedido foi recusado: {ultimo.motivo}</p>
+      )}
+      <label className="flex flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Disciplina
+        <input className={campo} value={disciplina} onChange={(e) => setDisciplina(e.target.value)} placeholder="FORMA, CONCRETO, ARMAÇÃO…" />
+      </label>
+      <label className="flex items-center gap-2 rounded-[14px] border-2 border-m-accent-strong px-3">
+        <Search size={18} className="text-m-text-muted" aria-hidden="true" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Matrícula ou nome de quem está com você" aria-label="Buscar colaborador"
+          className="h-12 min-w-0 flex-1 border-0 bg-transparent p-0 text-[16px] outline-none focus:ring-0" />
+      </label>
+      {achados && (
+        <ul className="flex max-h-[40dvh] flex-col overflow-y-auto">
+          {achados.map((a) => (
+            <li key={a.cracha} className="flex items-center gap-3 border-b border-m-stroke-subtle py-2">
+              <div className="min-w-0 flex-1"><span className="block truncate text-[15px]">{a.nome}</span>
+                <span className="block text-[12.5px] text-m-text-muted">{[a.matricula, a.funcao].filter(Boolean).join(' · ')}{a.equipe ? ` · hoje na ${a.equipe}` : ' · sem equipe'}</span></div>
+              {ja.has(a.cracha) ? <span className="text-[13px] text-m-text-muted">incluído</span>
+                : <button type="button" className={secundario} onClick={() => { setEscolhidos([...escolhidos, a]); setQ(''); setAchados(null); }}>Incluir</button>}
+            </li>
+          ))}
+          {!achados.length && <li className="py-2 text-[14px] text-m-text-muted">Ninguém no efetivo com esse nome ou matrícula.</li>}
+        </ul>
+      )}
+      <div className="flex flex-col">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Na equipe ({escolhidos.length})</span>
+        {escolhidos.map((a) => (
+          <div key={a.cracha} className="flex items-center gap-3 border-b border-m-stroke-subtle py-2 last:border-b-0">
+            <div className="min-w-0 flex-1"><span className="block truncate text-[15px]">{a.nome}</span><span className="text-[12.5px] text-m-text-muted">{a.matricula ?? a.cracha}</span></div>
+            <button type="button" aria-label={`Tirar ${a.nome}`} onClick={() => setEscolhidos(escolhidos.filter((x) => x.cracha !== a.cracha))} className="grid h-10 w-10 place-items-center rounded-full border border-m-stroke"><X size={16} /></button>
+          </div>
+        ))}
+        {!escolhidos.length && <span className="py-2 text-[14px] text-m-text-muted">Busque acima e inclua as pessoas.</span>}
+      </div>
+      <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={2} maxLength={500} placeholder="Observação para o Planejamento (opcional)"
+        className="rounded-[14px] border border-m-stroke bg-m-surface-field p-3 text-[15px] outline-none focus:border-m-accent-strong" />
+      <button type="button" className={primario} disabled={enviando || !escolhidos.length || disciplina.trim().length < 2} onClick={enviar}>
+        {enviando ? 'Enviando…' : pendente ? 'Atualizar o pedido' : 'Enviar para aprovação'}</button>
+      {pendente && <button type="button" className={secundario} onClick={() => setEditando(false)}>Voltar</button>}
+    </section>
   );
 }
