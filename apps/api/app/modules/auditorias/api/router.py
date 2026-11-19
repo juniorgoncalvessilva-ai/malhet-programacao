@@ -284,6 +284,13 @@ def excluir_registro(rid: int, s: Session = Depends(get_session), c: ContextoObr
         raise DomainError("só a segurança exclui registro já enviado")
     if r.acao_id:
         raise DomainError("o registro tem ação 5W2H: cancele a ação antes")
+    # spec 112: a exclusão vai para o histórico (rascunho, ou enviado pela segurança)
+    from app.modules.exclusoes.application.servico import registrar
+    from app.modules.exclusoes.domain.exclusao import resumo_auditoria
+
+    registrar(s, c.obra_id, "auditoria", str(r.id), resumo_auditoria(r.numero, None, r.data.strftime("%d/%m/%Y") if r.data else None,
+                                                                      r.local or r.area_texto),
+              {**ap.como_dict(r), "auditor_id": r.auditor_id}, f"excluída como {r.status}", c.usuario.id, c.usuario.email)
     s.delete(r)
 
 

@@ -29,3 +29,4 @@ from app.modules.mobilizacao.infra import models as _mobilizacao  # noqa: F401
 from app.modules.erros.infra import models as _erros  # noqa: F401
 from app.modules.aderencia.infra import models as _aderencia  # noqa: F401
 from app.modules.lideres.infra import models as _lideres  # noqa: F401  (spec 111)
+from app.modules.exclusoes.infra import models as _exclusoes  # noqa: F401  (spec 112)

@@ -114,4 +114,10 @@ def excluir(fid: int, s: Session = Depends(get_session), c: ContextoObra = Depen
     f = _foto(s, c, fid)
     if f.enviado_por != c.usuario.id and not c.papel.pode(PapelObra.PLANEJADOR):
         raise DomainError("só quem enviou (ou o planejamento) exclui a foto")
+    # spec 112: toda exclusão de foto vai para o histórico de exclusões
+    from app.modules.exclusoes.application.servico import _foto_dados, registrar
+    from app.modules.exclusoes.domain.exclusao import resumo_foto
+
+    registrar(s, c.obra_id, "foto", str(f.id), resumo_foto(f.alvo, f.legenda, f.data.strftime("%d/%m/%Y") if f.data else None),
+              _foto_dados(f), "excluída por quem enviou / Planejamento", c.usuario.id, c.usuario.email)
     s.delete(f)

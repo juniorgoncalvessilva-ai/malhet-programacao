@@ -1,6 +1,9 @@
 'use client';
 
-import { Copy, Send } from 'lucide-react';
+import { Copy, Send, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { ExcluirComMotivo } from '@/components/Obra/ExcluirComMotivo';
+import { usePodeExcluir } from '@/lib/exclusoes';
 import { toast } from 'sonner';
 import { Miniatura } from '@/components/Mobile/Fotos';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -15,6 +18,8 @@ export const corStatusRegistro = (s: RegistroAuditoria['status']) => COR[s];
 /** Um registro de auditoria: dados, fotos (antes/depois), ação gerada e reenvio pelo WhatsApp. */
 export function DetalheRegistro({ r }: { r: RegistroAuditoria }) {
   const api = useApi();
+  const podeExcluir = usePodeExcluir(); // spec 112: super admin ou habilitado
+  const [excluindo, setExcluindo] = useState(false);
   const enviar = async () => {
     try {
       const { texto } = await api.get<{ texto: string }>(`/auditorias/registros/${r.id}/texto`);
@@ -50,12 +55,19 @@ export function DetalheRegistro({ r }: { r: RegistroAuditoria }) {
           ))}
         </div>
       )}
-      {r.status !== 'rascunho' && (
+      {(r.status !== 'rascunho' || podeExcluir) && (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={enviar} className="inline-flex h-11 items-center gap-2 rounded-full bg-[#1F8F4E] px-4 text-[14px] font-semibold text-white"><Send size={16} /> Enviar no WhatsApp</button>
-          <button type="button" onClick={copiar} className="inline-flex h-11 items-center gap-2 rounded-full border border-m-stroke px-4 text-[14px] font-semibold"><Copy size={16} /> Copiar texto</button>
+          {r.status !== 'rascunho' && <>
+            <button type="button" onClick={enviar} className="inline-flex h-11 items-center gap-2 rounded-full bg-[#1F8F4E] px-4 text-[14px] font-semibold text-white"><Send size={16} /> Enviar no WhatsApp</button>
+            <button type="button" onClick={copiar} className="inline-flex h-11 items-center gap-2 rounded-full border border-m-stroke px-4 text-[14px] font-semibold"><Copy size={16} /> Copiar texto</button>
+          </>}
+          {podeExcluir && <button type="button" onClick={() => setExcluindo(true)} className="inline-flex h-11 items-center gap-2 rounded-full border border-m-danger/40 px-4 text-[14px] font-semibold text-m-danger"><Trash2 size={16} /> Excluir auditoria</button>}
         </div>
       )}
+      {excluindo && <ExcluirComMotivo titulo={`Excluir a auditoria Nº ${r.numero}?`}
+        descricao={`Sai o registro e as ${r.fotos.length} foto(s) dele.${r.acao ? ` A ação 5W2H Nº ${r.acao.numero} continua, marcada como "auditoria excluída".` : ''}`}
+        onFechar={() => setExcluindo(false)}
+        onConfirmar={async (motivo) => { await api.post(`/exclusoes/auditorias/${r.id}`, { motivo }); toast.success(`Auditoria Nº ${r.numero} excluída e registrada no histórico`); setExcluindo(false); }} />}
     </div>
   );
 }

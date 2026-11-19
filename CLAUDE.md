@@ -121,6 +121,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`acoes/`: `acao_5w2h`, eventos andamento/concluir com evidência/verificar eficácia/cancelar, `candidatas` e `de-origem`
   de ocorrências e restrições). Web `/app/auditorias`, `/app/auditorias/modelos`, `/app/acoes`; celular `/m/auditorias`,
   `/m/acoes` (`components/Auditoria/`, `src/lib/auditorias`). Spec 064.
+  Exclusão com autoridade (`exclusoes/`, spec 112): auditoria feita e foto do book saem só pelo super admin ou por quem ele
+  habilitar (`exclusao_permissao`), com motivo; histórico `exclusao_registro` (cópia dos dados, quem, quando, por quê; também
+  habilitar/desabilitar e as exclusões comuns). Ação 5W2H da auditoria fica ("auditoria excluída"). Tela `/app/exclusoes`,
+  `ExcluirComMotivo`, `usePodeExcluir`.
   Offline (spec 072): fila genérica no aparelho (`src/lib/offline/{db,fila}.ts`, `SincronizarFila`, `registrarEnvio`) — grava tudo
   antes de enviar; `POST /auditorias/registros/completo` (tudo ou nada, `id_local` idempotente); listas com `comCopia`; SW `aquecer`.
 - Controle preventivo — etilômetro (`preventivos/`, spec 073): faixas configuráveis (`domain/etilometro.py`), aparelhos com

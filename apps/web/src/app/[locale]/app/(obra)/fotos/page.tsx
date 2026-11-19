@@ -1,7 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Printer, X } from 'lucide-react';
+import { Printer, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { ExcluirComMotivo } from '@/components/Obra/ExcluirComMotivo';
+import { usePodeExcluir } from '@/lib/exclusoes';
 import { useEffect, useMemo, useState } from 'react';
 import { Abas } from '@/components/Obra/Abas';
 import { LogosObra } from '@/components/Obra/LogosObra';
@@ -33,10 +36,12 @@ function useFoto(id: number, mini = false) {
 /** Largura mínima da miniatura no book (px): a grade cabe quantas couberem na linha. */
 const TAMANHOS = { P: 130, M: 180, G: 240 } as const;
 
-function Cartao({ f, onAbrir }: { f: FotoBook; onAbrir: () => void }) {
+function Cartao({ f, onAbrir, onExcluir }: { f: FotoBook; onAbrir: () => void; onExcluir?: () => void }) {
   const url = useFoto(f.id, true).data;
   return (
-    <figure className="flex break-inside-avoid flex-col overflow-hidden rounded-m-md border border-m-stroke-subtle bg-m-surface-raised">
+    <figure className="relative flex break-inside-avoid flex-col overflow-hidden rounded-m-md border border-m-stroke-subtle bg-m-surface-raised">
+      {onExcluir && <button type="button" onClick={onExcluir} aria-label="Excluir a foto do book" title="Excluir (fica no histórico)"
+        className="absolute right-1.5 top-1.5 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-m-danger shadow print:hidden"><Trash2 size={15} /></button>}
       <button type="button" onClick={onAbrir} aria-label="Ver a foto ampliada" className="aspect-[4/3] w-full bg-m-surface-active">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {url ? <img src={url} alt={f.titulo ?? f.atividade ?? 'Foto de campo'} className="h-full w-full object-cover" /> : <span className="block h-full w-full animate-pulse" />}
@@ -83,6 +88,8 @@ export default function BookFotosPage() {
   const [area, setArea] = useState('');
   const [busca, setBusca] = useState('');
   const [aberta, setAberta] = useState<FotoBook | null>(null);
+  const podeExcluir = usePodeExcluir(); // spec 112: super admin ou habilitado
+  const [excluir, setExcluir] = useState<FotoBook | null>(null);
   const [tamanho, setTamanhoEstado] = useState<keyof typeof TAMANHOS>(() => {
     try { const v = localStorage.getItem('malhet.book.tamanho'); return v && v in TAMANHOS ? (v as keyof typeof TAMANHOS) : 'P'; } catch { return 'P'; }
   });
@@ -170,13 +177,16 @@ export default function BookFotosPage() {
             <div key={k2} className="flex flex-col gap-2">
               <h3 className="text-[13px] font-semibold text-m-text-secondary">{rot(k2, 2)}</h3>
               <div className="grid gap-2 print:grid-cols-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${TAMANHOS[tamanho]}px, 1fr))` }}>
-                {lista.map((f) => <Cartao key={f.id} f={f} onAbrir={() => setAberta(f)} />)}
+                {lista.map((f) => <Cartao key={f.id} f={f} onAbrir={() => setAberta(f)} onExcluir={podeExcluir ? () => setExcluir(f) : undefined} />)}
               </div>
             </div>
           ))}
         </section>
       ))}
       {aberta && <Ampliada f={aberta} onFechar={() => setAberta(null)} />}
+      {excluir && <ExcluirComMotivo titulo="Excluir esta foto do book?" descricao={[dataBR(excluir.data), excluir.titulo ?? excluir.atividade, excluir.area].filter(Boolean).join(' · ')}
+        onFechar={() => setExcluir(null)}
+        onConfirmar={async (motivo) => { await api.post(`/exclusoes/fotos/${excluir.id}`, { motivo }); toast.success('Foto excluída e registrada no histórico'); setExcluir(null); }} />}
     </>
   );
 }

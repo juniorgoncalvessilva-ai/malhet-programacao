@@ -26,7 +26,7 @@ TELAS_WEB: dict[str, str | None] = {
     # Cadastros
     "/app/frentes": None, "/app/catalogo": None, "/app/importacoes": None,
     # Administrar
-    "/app/acessos": ADMIN, "/app/marca": ADMIN, "/app/menu-celular": ADMIN, "/app/armazenamento": ADMIN,
+    "/app/acessos": ADMIN, "/app/marca": ADMIN, "/app/menu-celular": ADMIN, "/app/armazenamento": ADMIN, "/app/exclusoes": ADMIN,
 }
 SEMPRE = ("/app/vigente",)
 SEMPRE_ADMIN = ("/app/acessos", "/app/menu-celular")
