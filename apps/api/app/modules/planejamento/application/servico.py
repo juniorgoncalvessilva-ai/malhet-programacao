@@ -18,6 +18,7 @@ from app.modules.equipes.infra.composicao import composicao_efetiva
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
 from app.modules.integracao_simova.domain import layout
+from app.modules.planejamento.domain import acumulado as acum
 from app.modules.planejamento.domain.periodo import DIAS, dias, janelas_ft
 from app.modules.planejamento.infra.models import (
     ConclusaoModel,
@@ -361,6 +362,8 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
         reg = por_area[a.id][-1]
         feito = (reg["realizado_anterior"] or 0) + reg["total_realizado"]
         reg["restante"] = round(reg["qtd_projeto"] - feito, 4) if reg["qtd_projeto"] is not None else None
+        reg["conferencia"] = acum.conferir(reg["qtd_projeto"], reg["realizado_anterior"], reg["total_realizado"],
+                                           programado_do_periodo(ln.qtd_periodo, reg["total_previsto"])).como_dict()
         sugestao_capacidade(reg, fatores)
     # dentro de cada área, as linhas seguem a estrutura do Primavera (ordem da atividade do cronograma no P6);
     # linhas sem atividade do cronograma vêm depois, na ordem em que foram incluídas
@@ -395,6 +398,117 @@ def visao(s: Session, p: ProgramacaoModel) -> dict:
             "total_hh_realizado": round(sum(ln["calc"]["total_hh_realizado"] for ln in todas), 2),
             "dias": [{"data": d.isoformat(), "dia": DIAS[d.weekday()]} for d in datas],
             "locais": saida_locais, "linhas": sum(len(v) for v in por_area.values())}
+
+
+def programado_do_periodo(qtd_periodo: float | None, total_previsto: float | None) -> float | None:
+    """Total programado no período: a quantidade do período; sem ela, a soma do previsto dos dias."""
+    return qtd_periodo if qtd_periodo else (total_previsto or None)
+
+
+def qtd_projeto_das_linhas(s: Session, p: ProgramacaoModel, linhas: list[LinhaProgramacaoModel]) -> dict[int, float | None]:
+    """Total de execução do projeto por linha: a quantidade de projeto da linha; vazia = take-off da TAG da área."""
+    out = {ln.id: ln.qtd_projeto for ln in linhas}
+    faltam = [ln for ln in linhas if ln.qtd_projeto is None and ln.item_pq]
+    if not faltam:
+        return out
+    vig = ResolvedorReferencias(s, p.obra_id).versoes_vigentes()
+    if "PQ" not in vig:
+        return out
+    tags = {a.id: a.tag for a in s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.id.in_({ln.area_id for ln in faltam})))}
+    qtd = {(x.item, x.tag): x.quantidade for x in s.scalars(select(PqQuantidadeTagModel).where(
+        PqQuantidadeTagModel.versao_id == vig["PQ"], PqQuantidadeTagModel.item.in_({ln.item_pq for ln in faltam})))}
+    for ln in faltam:
+        out[ln.id] = qtd.get((ln.item_pq, tags.get(ln.area_id))) if tags.get(ln.area_id) else None
+    return out
+
+
+def conferir_realizado(s: Session, p: ProgramacaoModel, linha_ids: list[int], aceitar_excesso: bool) -> list[dict]:
+    """Depois de lançar o realizado: o acumulado (antes + período) cabe no total do projeto? (spec 116).
+    Passar do projeto trava até confirmar; passar do programado no período só avisa."""
+    linhas = [ln for ln in p.linhas if ln.id in set(linha_ids)]
+    if not linhas:
+        return []
+    s.flush()
+    anterior = realizado_anterior(s, p)
+    projeto = qtd_projeto_das_linhas(s, p, linhas)
+    tipos = {t.id: t for t in s.scalars(select(TipoAtividadeModel).where(TipoAtividadeModel.id.in_({ln.tipo_id for ln in linhas})))}
+    confs = []
+    for ln in linhas:
+        real = sum(float(v.realizado) for v in ln.valores if v.realizado is not None)
+        prev = sum(float(v.previsto) for v in ln.valores if v.previsto is not None)
+        c = acum.conferir(projeto.get(ln.id), anterior.get(_chave_linha(ln)), real, programado_do_periodo(ln.qtd_periodo, prev))
+        t = tipos.get(ln.tipo_id)
+        confs.append((ln, c, t.descricao if t else f"linha {ln.id}", t.unidade if t else None))
+    acum.exigir_dentro_do_projeto([(nome, c, un) for _ln, c, nome, un in confs], aceitar_excesso)
+    return [{"linha_id": ln.id, **c.como_dict(), "mensagem": c.mensagem(un)} for ln, c, _n, un in confs]
+
+
+def _chave_importacao(ln: LinhaProgramacaoModel) -> tuple:
+    """Mesma atividade em duas programações: o IWP/etapa da WBS; sem WBS, área + tipo + item + PQ + etapa."""
+    return ("wbs", ln.wbs_no_id) if ln.wbs_no_id else ("linha", *_chave_linha(ln), ln.etapa_nome)
+
+
+SSMA_COPIADOS = ("tecnico", "rac", "pts", "art", "ata", "pto")
+
+
+def previa_importacao(s: Session, destino: ProgramacaoModel, origem: ProgramacaoModel) -> list[dict]:
+    """Linhas da programação de origem com o que acontece ao importar: entra, já está, ou já concluída no projeto."""
+    if origem.id == destino.id:
+        raise DomainError("escolha outra programação para importar")
+    v = visao(s, origem)
+    ja = {_chave_importacao(ln) for ln in destino.linhas}
+    modelo = {ln.id: ln for ln in origem.linhas}
+    out = []
+    for loc in v["locais"]:
+        for a in loc["areas"]:
+            for ln in a["linhas"]:
+                m = modelo[ln["id"]]
+                prog = programado_do_periodo(ln["qtd_periodo"], ln["total_previsto"])
+                saldo_periodo = max(0.0, round((prog or 0) - ln["total_realizado"], 4)) if prog else None
+                restante = ln["restante"]
+                if saldo_periodo is not None and restante is not None:
+                    saldo_periodo = max(0.0, min(saldo_periodo, restante))
+                sit = ("ja_esta" if _chave_importacao(m) in ja
+                       else "concluida" if restante is not None and restante <= acum.TOLERANCIA else "entra")
+                out.append({"id": ln["id"], "local": loc["codigo"], "area": f"{a['codigo']} · {a['descricao']}",
+                            "codigo_simova": ln["codigo_simova"], "descricao": ln["descricao_reduzida"], "cwp": (ln.get("cwp") or {}).get("texto"),
+                            "unidade": ln["unidade"], "equipe": ln["equipe"], "encarregado": ln["encarregado"],
+                            "qtd_projeto": ln["qtd_projeto"], "programado_periodo": prog, "realizado_periodo": ln["total_realizado"],
+                            "restante": restante, "saldo_periodo": saldo_periodo, "situacao": sit})
+    return out
+
+
+def importar_linhas(s: Session, destino: ProgramacaoModel, origem: ProgramacaoModel, ids: list[int] | None,
+                    quantidade: str = "vazia", incluir_concluidas: bool = False) -> dict:
+    """Reaproveita as linhas de outra programação (spec 116): área, tipo, item, WBS, cronograma, equipe, responsável,
+    SSMA/PTO e observação; sem os valores do dia. quantidade = vazia | saldo (o que faltou do período anterior).
+    Linha que já está no destino não duplica; atividade concluída no projeto só vem se pedida."""
+    exigir_rascunho(destino)
+    if quantidade not in ("vazia", "saldo"):
+        raise DomainError("quantidade: vazia ou saldo", "quantidade")
+    previa = {x["id"]: x for x in previa_importacao(s, destino, origem)}
+    escolhidas = [ln for ln in origem.linhas if ids is None or ln.id in set(ids)]
+    ordem = max([x.ordem for x in destino.linhas], default=0)
+    feitas = ja = concluidas = 0
+    for x in sorted(escolhidas, key=lambda ln: ln.ordem):
+        info = previa[x.id]
+        if info["situacao"] == "ja_esta":
+            ja += 1
+            continue
+        if info["situacao"] == "concluida" and not incluir_concluidas:
+            concluidas += 1
+            continue
+        ordem += 1
+        destino.linhas.append(LinhaProgramacaoModel(
+            area_id=x.area_id, tipo_id=x.tipo_id, item_simova_id=x.item_simova_id, item_pq=x.item_pq, wbs_no_id=x.wbs_no_id,
+            id_crono=x.id_crono, plano_item_id=x.plano_item_id, equipe_id=x.equipe_id, etapa_nome=x.etapa_nome,
+            etapa_percentual=x.etapa_percentual, sem_avanco=x.sem_avanco, qtd_projeto=x.qtd_projeto, observacao=x.observacao,
+            qtd_periodo=(info["saldo_periodo"] or None) if quantidade == "saldo" else None,
+            ordem=ordem, natureza=x.natureza, responsavel=x.responsavel,
+            **{f"ssma_{k}": getattr(x, f"ssma_{k}") for k in SSMA_COPIADOS}))
+        feitas += 1
+    s.flush()
+    return {"importadas": feitas, "ja_estavam": ja, "concluidas_fora": concluidas}
 
 
 def exigir_aberta(p: ProgramacaoModel) -> None:

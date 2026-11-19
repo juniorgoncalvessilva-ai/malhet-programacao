@@ -125,6 +125,8 @@ export interface LinhaVisao {
   qtd_periodo: number | null; natureza: 'P' | 'O' | 'E'; responsavel: string | null; turno: string | null;
   jornada: number | null; equipe_codigo: string | null; status_crono: string | null;
   realizado_anterior: number | null; restante: number | null; ssma: Ssma;
+  /** Spec 116: realizado acumulado × total do projeto e × programado do período. */
+  conferencia?: ConferenciaRealizado | null;
   /** Como o previsto foi feito: botão "Pela capacidade", filling do encarregado, ou capacidade ajustada à mão. */
   modo_previsto?: ModoPrevisto;
 }
@@ -304,7 +306,7 @@ export interface DiaCampo {
   data: string; hoje: string; dia_semana?: string; anterior?: string; seguinte?: string; so_minha_equipe: boolean;
   programacao: { id: number; titulo: string; status: string; tipo: string; editavel: boolean; inicio: string; fim: string } | null;
   linhas: (LinhaCampo & { previsto: number | null; realizado: number | null; capacidade: number | null; previsto_periodo: number; fotos: number[];
-    realizado_periodo: number; desvios: { id: number; causa: string | null; descricao: string }[] })[];
+    realizado_periodo: number; conferencia?: ConferenciaRealizado | null; desvios: { id: number; causa: string | null; descricao: string }[] })[];
   pendentes: (LinhaCampo & { data: string; dia: string; previsto: number })[];
 }
 
@@ -405,3 +407,18 @@ export interface VagaContratacao {
 }
 export interface VagasResposta { vagas: VagaContratacao[]; memorias: Record<string, MemoriaCalculo> }
 export interface TreinamentoPrevisto { funcao_chave: string; funcao: string; pessoas: number; em_mobilizacao: boolean; dias: number | null; horas: number | null; clausula: string | null; horas_sugeridas: number | null }
+
+/** Spec 116: conferência do realizado acumulado (feito antes + período) com o projeto e o programado do período. */
+export interface ConferenciaRealizado {
+  situacao: 'sem_projeto' | 'em_andamento' | 'concluiu' | 'acima_do_projeto';
+  acumulado: number; feito_antes: number; realizado_periodo: number;
+  qtd_projeto: number | null; saldo_projeto: number | null; programado_periodo: number | null;
+  acima_do_programado: boolean; percentual_projeto: number | null; mensagem?: string;
+}
+
+/** Spec 116: linha de outra programação vista antes de importar. */
+export interface LinhaImportacao {
+  id: number; local: string; area: string; codigo_simova: string; descricao: string; cwp: string | null; unidade: string | null;
+  equipe: string | null; encarregado: string | null; qtd_projeto: number | null; programado_periodo: number | null;
+  realizado_periodo: number; restante: number | null; saldo_periodo: number | null; situacao: 'entra' | 'ja_esta' | 'concluida';
+}

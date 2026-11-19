@@ -12,6 +12,9 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { Carregando } from '@/components/Obra/Esqueleto';
+import { useConfirmar } from '@/components/Obra/Confirmar';
+import { ApiError } from '@/lib/api/client';
+import { COR_TOM, FUNDO_TOM, conferirAoVivo, tomConferencia } from '@/lib/programacao/acumulado';
 
 export default function LancarPage() {
   return <Suspense fallback={<Carregando />}><Lancar /></Suspense>;
@@ -27,6 +30,7 @@ function Lancar() {
   const api = useApi();
   const qc = useQueryClient();
   const { pode } = useObra();
+  const confirmar = useConfirmar();
   const data = params.get('data') ?? hojeIso();
   const dia = useDiaCampo(data);
   const causas = useCausas();
@@ -61,6 +65,10 @@ function Lancar() {
   const pct = prev && q != null ? q / prev : null;
   const abaixo = prev != null && q != null && q < prev - 0.005;
   const passo = passoDe(prev);
+  // spec 116: o acumulado com este lançamento (feito antes + período, trocando o valor deste dia) × projeto × programado
+  const conf = ln?.conferencia && q != null && !Number.isNaN(q)
+    ? conferirAoVivo(ln.conferencia, ln.conferencia.realizado_periodo - (ln.realizado ?? 0) + q) : ln?.conferencia ?? null;
+  const tomConf = conf ? tomConferencia(conf) : 'neutro';
   const somar = (delta: number) => setValor(String(Math.max(0, Math.round(((q ?? 0) + delta) * 100) / 100)));
   // navegar entre as atividades do dia: setas e arrastar para o lado (spec 061)
   const toque = useRef<{ x: number; y: number } | null>(null);
@@ -79,7 +87,14 @@ function Lancar() {
     if (q != null && (Number.isNaN(q) || q < 0)) { toast.error('Quantidade inválida'); return; }
     setSalvando(true);
     try {
-      await api.put(`/programacoes/${d.programacao.id}/linhas/${ln.id}/valores`, { campo: 'realizado', valores: [{ data, valor: q }] });
+      const pid = d.programacao.id;
+      const lancar = (aceitar: boolean) => api.put(`/programacoes/${pid}/linhas/${ln.id}/valores`, { campo: 'realizado', valores: [{ data, valor: q }], aceitar_excesso: aceitar });
+      try { await lancar(false); } catch (e) {
+        // passa do total do projeto: confirma (aditivo ainda não lançado) ou volta para corrigir
+        if (!(e instanceof ApiError && e.campo === 'excesso_projeto')) throw e;
+        if (!(await confirmar({ titulo: 'Passa do total do projeto', perigo: false, acao: 'Lançar assim mesmo', mensagem: `${e.message} Se está certo, confirme; senão, corrija a quantidade.` }))) return;
+        await lancar(true);
+      }
       let desvioId: number | null = null;
       if (abaixo && causa) {
         const nome = causas.data?.find((c) => c.id === causa)?.descricao ?? 'Desvio';
@@ -167,6 +182,19 @@ function Lancar() {
                 </>
               )}
               {prev == null && <span className="text-[12px] text-m-text-muted">Sem previsto neste dia: lance só o que foi feito.</span>}
+              {conf && conf.qtd_projeto != null && (
+                <div className="mt-1 flex flex-col gap-1 rounded-[14px] border border-m-stroke-subtle p-3" aria-label="Acumulado da atividade">
+                  <div className="flex justify-between text-[12px] leading-4">
+                    <span className="text-m-text-secondary">Acumulado no projeto</span>
+                    <span className={`font-semibold tabular-nums ${tomConf === 'neutro' ? 'text-m-text-primary' : COR_TOM[tomConf]}`}>{num(conf.acumulado)} de {num(conf.qtd_projeto)} {ln.unidade ?? ''}</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-m-stroke-subtle"><div className={`h-full rounded-full ${FUNDO_TOM[tomConf]}`} style={{ width: `${Math.min(100, (conf.percentual_projeto ?? 0) * 100)}%` }} /></div>
+                  {conf.programado_periodo != null && <span className="text-[12px] text-m-text-muted">No período: {num(conf.realizado_periodo)} de {num(conf.programado_periodo)} programados</span>}
+                  {conf.situacao === 'acima_do_projeto' && <span className="text-[12px] font-semibold text-m-danger">Passa {num(-(conf.saldo_projeto ?? 0))} {ln.unidade ?? ''} do total do projeto: confira a quantidade.</span>}
+                  {conf.situacao !== 'acima_do_projeto' && conf.acima_do_programado && <span className="text-[12px] font-semibold text-m-warning">Acima do programado no período.</span>}
+                  {conf.situacao === 'concluiu' && <span className="text-[12px] font-semibold text-m-success">Com este lançamento a atividade fecha o projeto.</span>}
+                </div>
+              )}
             </div>
           </section>
 

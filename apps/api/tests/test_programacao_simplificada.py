@@ -157,7 +157,7 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     assert client.put(f"/api/programacoes/{p['id']}/linhas/{lid}/valores",
                       json={"campo": "previsto", "valores": vals}).status_code == 422
     assert client.put(f"/api/programacoes/{p['id']}/linhas/{lid}/valores",
-                      json={"campo": "realizado", "valores": [{"data": "2026-11-06", "valor": 4}]}).status_code == 204
+                      json={"campo": "realizado", "valores": [{"data": "2026-11-06", "valor": 4}]}).status_code == 200
     client.put(f"/api/frentes/areas/{galpao['id']}", json={"local_id": galpao["local_id"], "cwa": "004.05",
                                                            "descricao": galpao["descricao"]})
     foto = client.get(f"/api/programacoes/{p['id']}/emissoes/0").json()
@@ -212,7 +212,7 @@ def test_fluxo_frentes_catalogo_programacao_ft(client):
     assert client.post(f"/api/programacoes/{pid}/concluir").status_code == 422
     assert client.post(f"/api/programacoes/{pid}/revisar", json={"motivo": ""}).status_code == 422
     assert client.post(f"/api/programacoes/{pid}/revisar", json={"motivo": "Realizado do sábado lançado errado"}).json() == {"conclusao_revisada": 1}
-    assert client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json=real).status_code == 204
+    assert client.put(f"/api/programacoes/{pid}/linhas/{lid}/valores", json=real).status_code == 200
     assert client.post(f"/api/programacoes/{pid}/concluir").json() == {"conclusao": 2}
     v = client.get(f"/api/programacoes/{pid}").json()
     assert v["status"] == "concluida" and [k["numero"] for k in v["conclusoes"]] == [1, 2]

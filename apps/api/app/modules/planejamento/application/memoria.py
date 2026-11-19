@@ -294,6 +294,38 @@ def memorias_linha(s: Session, p: ProgramacaoModel, linha_id: int) -> dict:
                             (Fonte("Quantidade de projeto", f"{num(ln['qtd_projeto'])} {un}", "abra a quantidade de projeto"),
                              Fonte("Feito antes", f"{num(ln['realizado_anterior'] or 0)} {un}", "programações anteriores"),
                              Fonte("Realizado no período", f"{num(ln['total_realizado'])} {un}", prog, f"linha {ln['n']}"))))
+    cf = ln.get("conferencia") or {}
+    if cf:  # spec 116: o acumulado confere com o total do projeto e o programado do período?
+        passos = [Passo("Acumulado", f"{num(cf['feito_antes'])} feito antes + {num(cf['realizado_periodo'])} no período",
+                        f"{num(cf['acumulado'])} {un}", True)]
+        if cf["qtd_projeto"] is not None:
+            passos.append(Passo("Total do projeto", f"{num(cf['qtd_projeto'])} − {num(cf['acumulado'])}",
+                                f"saldo {num(cf['saldo_projeto'])} {un}" + (" (passou do projeto)" if cf["situacao"] == "acima_do_projeto" else "")))
+        if cf["programado_periodo"] is not None:
+            passos.append(Passo("Programado no período", f"{num(cf['realizado_periodo'])} de {num(cf['programado_periodo'])}",
+                                "acima do programado" if cf["acima_do_programado"] else "dentro do programado"))
+        mems.append(Memoria("acumulado", "Realizado acumulado", f"{num(cf['acumulado'])} {un}",
+                            "acumulado = feito antes deste período + realizado neste período; comparado com o total de execução "
+                            "do projeto (passar trava o lançamento até confirmar) e com o programado do período (só avisa)",
+                            tuple(passos),
+                            (Fonte("Feito antes", f"{num(cf['feito_antes'])} {un}", "programações anteriores"),
+                             Fonte("Realizado no período", f"{num(cf['realizado_periodo'])} {un}", prog, f"linha {ln['n']}"),
+                             Fonte("Total do projeto", f"{num(cf['qtd_projeto'])} {un}" if cf["qtd_projeto"] is not None else "—",
+                                   "quantidade de projeto da linha, senão o take-off da TAG"),
+                             Fonte("Programado no período", f"{num(cf['programado_periodo'])} {un}" if cf["programado_periodo"] is not None else "—",
+                                   "quantidade do período, senão a soma do previsto dos dias"))))
+        if cf["programado_periodo"] is not None:  # o que faltou do período: vira a quantidade ao importar com saldo
+            bruto = max(0.0, cf["programado_periodo"] - cf["realizado_periodo"])
+            saldo = min(bruto, max(0.0, ln["restante"])) if ln["restante"] is not None else bruto
+            passos = [Passo("Faltou no período", f"máx(0; {num(cf['programado_periodo'])} − {num(cf['realizado_periodo'])})", f"{num(bruto)} {un}")]
+            if ln["restante"] is not None:
+                passos.append(Passo("Limitado ao que resta do projeto", f"mín({num(bruto)}; {num(max(0.0, ln['restante']))})", f"{num(saldo)} {un}", True))
+            mems.append(Memoria("saldo_periodo", "O que faltou do período", f"{num(saldo)} {un}",
+                                "programado no período − realizado no período, sem passar do que resta do projeto; "
+                                "é a quantidade levada ao importar esta linha com o saldo",
+                                tuple(passos),
+                                (Fonte("Programado no período", f"{num(cf['programado_periodo'])} {un}", prog, f"linha {ln['n']}"),
+                                 Fonte("Realizado no período", f"{num(cf['realizado_periodo'])} {un}", prog, f"linha {ln['n']}"))))
     return pacote(*mems)
 
 

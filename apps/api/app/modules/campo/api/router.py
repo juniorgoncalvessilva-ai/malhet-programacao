@@ -69,6 +69,7 @@ def dia(data: date | None = None, s: Session = Depends(get_session), c: Contexto
                     linhas.append({**comum, "previsto": prev, "realizado": real,
                                    "capacidade": (ln["calc"].get("capacidade_dia") or [None] * len(datas))[i],
                                    "fotos": fotos_dia.get(ln["id"], []), "previsto_periodo": ln["total_previsto"], "realizado_periodo": ln["total_realizado"],
+                                   "conferencia": ln.get("conferencia"),
                                    "desvios": [{"id": x.id, "causa": causas.get(x.causa_id), "descricao": x.descricao}
                                                for x in desvios if x.linha_id == ln["id"] and x.data == d]})
                 # dias anteriores (até ontem) com previsto e sem realizado lançado

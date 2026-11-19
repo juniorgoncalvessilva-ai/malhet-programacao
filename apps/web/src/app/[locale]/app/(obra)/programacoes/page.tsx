@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, Tabela, dataBR, td } from '@/components/Obra/ui';
 import { k, useAcao, useProgramacoes } from '@/hooks/programacao/planejamento';
@@ -18,6 +18,7 @@ export default function ProgramacoesPage() {
   const [tipo, setTipo] = useState<'SEMANAL' | 'MENSAL'>('SEMANAL');
   const [ref, setRef] = useState(hoje());
   const [copiar, setCopiar] = useState('');
+  const [escolheuCopiar, setEscolheuCopiar] = useState(false);
   const [filtro, setFiltro] = useState<'TODAS' | 'SEMANAL' | 'MENSAL'>('TODAS');
   const criar = useAcao(
     (api, d: { tipo: string; referencia: string; copiar_de: number | null }) => api.post<ProgramacaoResumo>('/programacoes', d),
@@ -25,6 +26,8 @@ export default function ProgramacoesPage() {
   );
   const itens = (lista.data ?? []).filter((p) => filtro === 'TODAS' || p.tipo === filtro);
   const semanais = (lista.data ?? []).filter((p) => p.tipo === tipo);
+  // spec 116: a nova já vem sugerindo reaproveitar os itens da anterior do mesmo tipo (a mais recente)
+  useEffect(() => { if (!escolheuCopiar) setCopiar(semanais[0] ? String(semanais[0].id) : ''); }, [tipo, lista.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -45,12 +48,13 @@ export default function ProgramacoesPage() {
               <Chip ativo={tipo === 'MENSAL'} onClick={() => setTipo('MENSAL')}>Mensal</Chip>
             </div>
             <Campo rotulo={tipo === 'SEMANAL' ? 'Data da semana' : 'Um dia do mês'} type="date" required value={ref} onChange={(e) => setRef(e.target.value)} className="w-[180px]" />
-            <Selecao rotulo="Copiar linhas de" value={copiar} onChange={(e) => setCopiar(e.target.value)} className="min-w-[260px]">
+            <Selecao rotulo="Reaproveitar itens de" value={copiar} onChange={(e) => { setCopiar(e.target.value); setEscolheuCopiar(true); }} className="min-w-[260px]">
               <option value="">— começar vazia —</option>
-              {semanais.map((p) => <option key={p.id} value={p.id}>{p.titulo}</option>)}
+              {semanais.map((p, i) => <option key={p.id} value={p.id}>{p.titulo}{i === 0 ? ' · anterior' : ''}</option>)}
             </Selecao>
             <Botao type="submit" disabled={criar.isPending}><Plus size={16} /> Criar</Botao>
           </form>
+          <p className="mt-2 text-[12px] text-m-text-muted">Os itens vêm sem os valores do dia; atividades já concluídas no projeto ficam de fora. Dentro da programação, &ldquo;Importar itens&rdquo; escolhe item a item.</p>
           <Erro erro={criar.error} />
         </Painel>
       )}

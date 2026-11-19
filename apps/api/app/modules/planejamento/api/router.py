@@ -35,7 +35,9 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 class NovaIn(BaseModel):
     tipo: TipoProgramacao
     referencia: date
-    copiar_de: int | None = None  # copia as linhas (sem valores) de outra programação
+    copiar_de: int | None = None  # reaproveita as linhas (sem valores) de outra programação (spec 116)
+    quantidade: str = "vazia"  # vazia | saldo (o que faltou do período da origem)
+    incluir_concluidas: bool = False  # atividade já concluída no projeto fica fora, salvo se pedida
 
 
 class ResumoOut(BaseModel):
@@ -77,6 +79,7 @@ class ValorIn(BaseModel):
 class ValoresIn(BaseModel):
     campo: str = "previsto"  # previsto | realizado
     valores: list[ValorIn]
+    aceitar_excesso: bool = False  # realizado acumulado acima do total do projeto, confirmado (spec 116)
 
 
 class LinhaSalvarIn(BaseModel):
@@ -89,6 +92,7 @@ class LinhaSalvarIn(BaseModel):
 
 class SalvarIn(BaseModel):
     linhas: list[LinhaSalvarIn]
+    aceitar_excesso: bool = False
 
 
 class SsmaLinhaIn(BaseModel):
@@ -127,18 +131,48 @@ def nova(d: NovaIn, s: Session = Depends(get_session), c: ContextoObra = Depends
         raise DomainError(f"já existe programação {d.tipo.value.lower()} começando em {ini:%d/%m/%Y}")
     p = ProgramacaoModel(obra_id=c.obra_id, tipo=d.tipo.value, inicio=ini, fim=fim, titulo=titulo(d.tipo, ini, fim),
                          status="rascunho", revisao=0, criado_por=c.usuario.id)
-    if d.copiar_de:
-        origem = sv.obter(s, c.obra_id, d.copiar_de)
-        p.linhas = [LinhaProgramacaoModel(area_id=x.area_id, tipo_id=x.tipo_id, item_simova_id=x.item_simova_id,
-                                          item_pq=x.item_pq, wbs_no_id=x.wbs_no_id, id_crono=x.id_crono, equipe_id=x.equipe_id,
-                                          etapa_nome=x.etapa_nome, etapa_percentual=x.etapa_percentual, sem_avanco=x.sem_avanco,
-                                          qtd_projeto=x.qtd_projeto, observacao=x.observacao, ordem=x.ordem,
-                                          natureza=x.natureza, responsavel=x.responsavel,
-                                          **{f"ssma_{k}": getattr(x, f"ssma_{k}") for k in SSMA_CAMPOS})
-                    for x in origem.linhas]
     s.add(p)
     s.flush()
+    if d.copiar_de:
+        sv.importar_linhas(s, p, sv.obter(s, c.obra_id, d.copiar_de), None, d.quantidade, d.incluir_concluidas)
     return _resumo(p)
+
+
+class ImportarIn(BaseModel):
+    de: int
+    linhas: list[int] | None = None  # None = todas as que entram
+    quantidade: str = "vazia"
+    incluir_concluidas: bool = False
+
+
+def _anterior(s: Session, p: ProgramacaoModel) -> ProgramacaoModel | None:
+    """A programação anterior do mesmo tipo (a que começa mais perto antes desta)."""
+    return s.scalar(select(ProgramacaoModel).where(ProgramacaoModel.obra_id == p.obra_id, ProgramacaoModel.tipo == p.tipo,
+                                                   ProgramacaoModel.id != p.id, ProgramacaoModel.inicio < p.inicio)
+                    .order_by(ProgramacaoModel.inicio.desc()).limit(1))
+
+
+@router.get("/programacoes/{pid}/importar/origens")
+def origens_importacao(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """De onde importar: a anterior do mesmo tipo vem primeiro (sugerida), depois as outras."""
+    p = sv.obter(s, c.obra_id, pid)
+    ant = _anterior(s, p)
+    outras = s.scalars(select(ProgramacaoModel).where(ProgramacaoModel.obra_id == c.obra_id, ProgramacaoModel.id != p.id)
+                       .order_by(ProgramacaoModel.inicio.desc()))
+    lista = ([ant] if ant else []) + [x for x in outras if not ant or x.id != ant.id]
+    return {"sugerida": ant.id if ant else None, "origens": [_resumo(x) for x in lista]}
+
+
+@router.get("/programacoes/{pid}/importar/{de}")
+def previa_importacao(pid: int, de: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    p, o = sv.obter(s, c.obra_id, pid), sv.obter(s, c.obra_id, de)
+    return {"origem": _resumo(o), "linhas": sv.previa_importacao(s, p, o)}
+
+
+@router.post("/programacoes/{pid}/importar")
+def importar(pid: int, d: ImportarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    p, o = sv.obter(s, c.obra_id, pid), sv.obter(s, c.obra_id, d.de)
+    return sv.importar_linhas(s, p, o, d.linhas, d.quantidade, d.incluir_concluidas)
 
 
 @router.get("/programacoes/vigente")
@@ -329,12 +363,17 @@ def excluir_linha(pid: int, lid: int, s: Session = Depends(get_session), c: Cont
     s.flush()
 
 
-@router.put("/programacoes/{pid}/linhas/{lid}/valores", status_code=204)
+@router.put("/programacoes/{pid}/linhas/{lid}/valores")
 def valores(pid: int, lid: int, d: ValoresIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Realizado: confere o acumulado com o total do projeto e o programado do período (spec 116)."""
     if d.campo not in ("previsto", "realizado"):
         raise DomainError("campo deve ser previsto ou realizado", "campo")
     p = sv.obter(s, c.obra_id, pid)
     sv.salvar_valores(s, p, lid, [v.model_dump() for v in d.valores], d.campo)
+    if d.campo == "previsto":
+        return Response(status_code=204)
+    conf = sv.conferir_realizado(s, p, [lid], d.aceitar_excesso)
+    return {"conferencia": conf[0] if conf else None}
 
 
 class LigacaoIn(BaseModel):
@@ -682,7 +721,8 @@ def salvar(pid: int, d: SalvarIn, s: Session = Depends(get_session), c: Contexto
             sv.salvar_valores(s, p, ln.id, [v.model_dump() for v in ln_in.realizado], "realizado")
             n += len(ln_in.realizado)
     s.flush()
-    return {"alteracoes": n}
+    conf = sv.conferir_realizado(s, p, [x.id for x in d.linhas if x.realizado], d.aceitar_excesso)
+    return {"alteracoes": n, "conferencia": conf}
 
 
 @router.put("/programacoes/{pid}/ssma")

@@ -7,7 +7,7 @@ import { Abas } from '@/components/Obra/Abas';
 import { ResumoProgramacao } from '@/components/Obra/ResumoProgramacao';
 import { AgruparPor, SequenciaProgramacao } from '@/components/Obra/SequenciaProgramacao';
 import { useQuery } from '@tanstack/react-query';
-import { Calculator, Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Calculator, CopyPlus, Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { Calculado } from '@/components/Obra/Calculado';
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -27,6 +27,10 @@ import { usePreferencia } from '@/lib/preferencia';
 import { RevisoesProgramacao } from '@/components/Obra/RevisoesProgramacao';
 import { TrocarItemPq } from '@/components/Obra/TrocarItemPq';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
+import { ImportarProgramacao } from '@/components/Obra/ImportarProgramacao';
+import { ApiError } from '@/lib/api/client';
+import { COR_TOM, conferirAoVivo, tomConferencia } from '@/lib/programacao/acumulado';
+import type { ConferenciaRealizado } from '@/lib/api/types';
 
 interface FormLinha {
   wbs_no_id: string; area_id: string; grupo_id: string; tipo_id: string; complemento: string; item_pq: string;
@@ -89,6 +93,7 @@ export default function MontarPage() {
   const [qPq, setQPq] = useState('');
   const [qAt, setQAt] = useState('');
   const [pend, setPend] = useState<Pendentes>({});
+  const [importando, setImportando] = useState(false);
   const nPend = Object.keys(pend).length;
   useEffect(() => {
     if (!nPend) return;
@@ -137,7 +142,7 @@ export default function MontarPage() {
   const concluir = useAcao((a) => a.post<{ conclusao: number }>(`/programacoes/${id}/concluir`), chave);
   const revisar = useAcao((a, motivo: string) => a.post(`/programacoes/${id}/revisar`, { motivo }), chave);
   const [motivo, setMotivo] = useState<string | null>(null);
-  const salvarTudo = useAcao((a, p: Pendentes) => {
+  const salvarTudo = useAcao((a, { p, aceitar }: { p: Pendentes; aceitar?: boolean }) => {
     const por: Record<number, { id: number; qtd_periodo?: number | null; mudar_qtd_periodo?: boolean; previsto: { data: string; valor: number | null }[]; realizado: { data: string; valor: number | null }[] }> = {};
     for (const [chave, val] of Object.entries(p)) {
       const [lid, campo, data] = chave.split('|');
@@ -145,11 +150,21 @@ export default function MontarPage() {
       const num = val.trim() === '' ? null : Number(val.replace(',', '.'));
       if (campo === 'periodo') { ln.qtd_periodo = num; ln.mudar_qtd_periodo = true; } else ln[campo as 'previsto' | 'realizado'].push({ data, valor: num });
     }
-    return a.put<{ alteracoes: number }>(`/programacoes/${id}/salvar`, { linhas: Object.values(por) });
+    return a.put<{ alteracoes: number; conferencia: (ConferenciaRealizado & { linha_id: number })[] }>(`/programacoes/${id}/salvar`, { linhas: Object.values(por), aceitar_excesso: !!aceitar });
   }, [[...k.programacao(id)], [...k.programacoes], ['desvios']]);
-  const salvar = () => salvarTudo.mutate(pend, {
-    onSuccess: (r) => { setPend({}); toast.success(`Programação salva (${r.alteracoes} alteraç${r.alteracoes === 1 ? 'ão' : 'ões'})`); },
-    onError: (e) => toast.error(e.message),
+  // spec 116: o realizado acumulado passa do total do projeto? a API trava e a pessoa confirma (ou corrige)
+  const salvar = (aceitar = false) => salvarTudo.mutate({ p: pend, aceitar }, {
+    onSuccess: (r) => {
+      setPend({});
+      toast.success(`Programação salva (${r.alteracoes} alteraç${r.alteracoes === 1 ? 'ão' : 'ões'})`);
+      const acima = r.conferencia.filter((c) => c.acima_do_programado || c.situacao === 'acima_do_projeto');
+      if (acima.length) toast.warning(acima.map((c) => c.mensagem).join(' | '), { duration: 9000 });
+    },
+    onError: async (e) => {
+      if (e instanceof ApiError && e.campo === 'excesso_projeto' && await confirmar({ titulo: 'Realizado acima do total do projeto', perigo: false, acao: 'Lançar assim mesmo',
+        mensagem: `${e.message} Se a quantidade está certa (ex.: aditivo ainda não lançado no projeto), confirme; senão, cancele e corrija o valor.` })) salvar(true);
+      else if (!(e instanceof ApiError && e.campo === 'excesso_projeto')) toast.error(e.message);
+    },
   });
   const valorCel = (ln: LinhaVisao, campo: 'previsto' | 'realizado', di: number, data: string) =>
     pend[`${ln.id}|${campo}|${data}`] ?? (ln[campo][di] != null ? String(ln[campo][di]) : '');
@@ -248,7 +263,8 @@ export default function MontarPage() {
         titulo={`${v.titulo}: ${v.linhas} linha${v.linhas === 1 ? '' : 's'}`}
         acoes={<>
           <Pilula tom={concluida ? 'sucesso' : rascunho ? 'neutro' : 'acento'}>{concluida ? `Concluída${(v.conclusoes?.length ?? 0) > 1 ? ` · revisão ${(v.conclusoes?.length ?? 1) - 1}` : ''}` : rascunho ? (v.revisao ? `Reaberta · rev. ${v.revisao}` : 'Rascunho') : `Emitida · rev. ${v.revisao - 1}`}</Pilula>
-          {nPend > 0 && <Botao onClick={salvar} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação ({nPend})</Botao>}
+          {nPend > 0 && <Botao onClick={() => salvar()} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação ({nPend})</Botao>}
+          {rascunho && pode('planejador') && !importando && <Botao variante="secundario" onClick={() => setImportando(true)} title="Reaproveitar os itens de outra programação (a anterior vem sugerida)"><CopyPlus size={16} /> Importar itens</Botao>}
           {pode('planejador') && !concluida && (
             <label className="flex items-center gap-1.5 text-[12px] text-m-text-secondary" title="Qual capacidade a programação usa para o aviso de acima da capacidade; a outra aparece de referência em cada linha">
               Capacidade por
@@ -281,6 +297,12 @@ export default function MontarPage() {
       {abaProg === 'resumo' && <ResumoProgramacao v={v} nomes={nomes} />}
       {abaProg === 'sequencia' && <SequenciaProgramacao pid={id} v={v} nomes={nomes} editar={!concluida && pode('encarregado')} />}
       <div className={abaProg !== 'montar' ? 'hidden' : 'contents'}>
+      {importando && <ImportarProgramacao pid={id} onFechar={() => setImportando(false)} />}
+      {!importando && rascunho && pode('planejador') && v.linhas === 0 && (
+        <Painel titulo="Começar pelos itens da programação anterior?" subtitulo="Reaproveite as linhas (frente, item, equipe, SSMA/PTO) e ajuste só as quantidades.">
+          <Botao onClick={() => setImportando(true)}><CopyPlus size={16} /> Importar itens da anterior</Botao>
+        </Painel>
+      )}
 
       {motivo !== null && (
         <Painel titulo="Abrir revisão da programação concluída">
@@ -517,6 +539,7 @@ export default function MontarPage() {
                           )); })()}
                           <td className="whitespace-nowrap px-2 py-2 text-right font-semibold text-m-text-primary">
                             {fmt(modo === 'previsto' ? ln.total_previsto : ln.total_realizado)}
+                            {modo === 'realizado' && ln.conferencia && <ConferenciaCelula pid={id} ln={ln} realizadoPeriodo={v.dias.reduce((s, d, di) => s + (Number(valorCel(ln, 'realizado', di, d.data).replace(',', '.')) || 0), 0)} />}
                             {ln.calc?.hh_un ? <div className="text-[11px] font-normal text-m-text-muted"><Calculado rota={`/programacoes/${id}/linhas/${ln.id}/memoria`} chave={modo === 'previsto' ? 'total_hh_previsto' : 'total_hh_realizado'}>{`${fmt(modo === 'previsto' ? ln.calc.total_hh_previsto : ln.calc.total_hh_realizado, 1)} HH`}</Calculado></div> : null}
                           </td>
                           <td className="whitespace-nowrap px-1 py-1.5">
@@ -556,7 +579,7 @@ export default function MontarPage() {
           <div className="flex items-center justify-end gap-3 border-t border-m-stroke-subtle pt-3">
             <span className="text-[13px] text-m-text-secondary">{nPend} alteraç{nPend === 1 ? 'ão' : 'ões'} não salva{nPend === 1 ? '' : 's'}</span>
             <Botao variante="secundario" onClick={() => setPend({})}>Descartar</Botao>
-            <Botao onClick={salvar} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação</Botao>
+            <Botao onClick={() => salvar()} disabled={salvarTudo.isPending}><Save size={16} /> Salvar programação</Botao>
           </div>
         )}
         <Erro erro={salvarTudo.error ?? emitir.error ?? excluir.error} />
@@ -614,6 +637,25 @@ function Calculo({ ln, pid, detalhe }: { ln: LinhaVisao; pid: number; detalhe: b
         })()}
       </> : c.composicao ? <><Calculado rota={rota} chave="hh_un">{c.composicao}</Calculado> · sem mão de obra na CPU</> : null}
       {c.alertas.map((a) => <div key={a} className="text-m-warning">{a.includes('capacidade zero') ? <Calculado rota={rota} chave="capacidade">{a}</Calculado> : a}</div>)}
+    </div>
+  );
+}
+
+/** Spec 116: acumulado (feito antes + período) × total do projeto e × programado do período, ao vivo com o que foi digitado. */
+function ConferenciaCelula({ pid, ln, realizadoPeriodo }: { pid: number; ln: LinhaVisao; realizadoPeriodo: number }) {
+  const base = ln.conferencia!;
+  const vivo = Math.abs(realizadoPeriodo - base.realizado_periodo) > 0.0001;
+  const c = vivo ? conferirAoVivo(base, realizadoPeriodo) : base;
+  const tom = tomConferencia(c);
+  const un = ln.unidade ?? '';
+  const dica = c.situacao === 'acima_do_projeto' ? `Passa ${fmt(-(c.saldo_projeto ?? 0))} ${un} do total do projeto`
+    : c.acima_do_programado ? `Acima dos ${fmt(c.programado_periodo)} ${un} programados no período`
+      : c.situacao === 'concluiu' ? 'Atividade concluída no projeto' : 'Acumulado dentro do projeto';
+  const valor = c.qtd_projeto != null ? `${fmt(c.acumulado)} / ${fmt(c.qtd_projeto)}` : fmt(c.acumulado);
+  return (
+    <div className={`text-[11px] font-normal ${COR_TOM[tom]}`} title={dica}>
+      acum. {vivo ? <span>{valor}</span> : <Calculado rota={`/programacoes/${pid}/linhas/${ln.id}/memoria`} chave="acumulado">{valor}</Calculado>}
+      {tom !== 'neutro' && <div className="font-semibold">{c.situacao === 'acima_do_projeto' ? 'passou do projeto' : c.acima_do_programado ? 'acima do programado' : 'concluída'}</div>}
     </div>
   );
 }
