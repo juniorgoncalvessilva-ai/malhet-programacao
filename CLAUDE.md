@@ -98,7 +98,12 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   minimizar/ver todos) e cálculo da CPU por linha recolhível (`usePreferencia`, `lib/preferencia.ts`). Spec 105. Excluir revisão emitida só pelo super admin (`DELETE /programacoes/{pid}/emissoes/{rev}`,
   `excluir_emissao`; a anterior volta a vigente; última de concluída não sai; `RevisoesProgramacao`). Spec 060. Trocar o item da PQ da
   linha também emitida (`PUT …/linhas/{lid}/item-pq`, `item_pq_linha.py`, `TrocarItemPq`; tipo do item novo ou criado no grupo,
-  IWP da WBS junto; a revisão emitida não muda, sai na próxima). Spec 099. Super admin renumera as revisões emitidas
+  IWP da WBS junto; a revisão emitida não muda, sai na próxima). Spec 099.
+  Importar itens de outra programação (spec 116, `importar_linhas`, `ImportarProgramacao`): a anterior do mesmo tipo vem sugerida
+  (`/importar/origens`, prévia `/importar/{de}`, `POST /importar`; criação com `copiar_de` usa a mesma regra), sem valores do dia,
+  quantidade vazia ou o que faltou (`saldo_periodo`), concluída no projeto fica fora e linha repetida não duplica. Realizado confere o
+  acumulado (`domain/acumulado.py`, `conferencia` na linha, memória `acumulado`): passar do total do projeto trava até
+  `aceitar_excesso` (`excesso_projeto`, web e `/m/lancar`), passar do programado no período só avisa (`lib/programacao/acumulado.ts`). Super admin renumera as revisões emitidas
   (`PUT …/emissoes/numeracao`, `domain/revisoes.py`: sem repetir nem inverter a ordem; foto, fatos e conclusão). Spec 100.
 - App de campo (`src/app/[locale]/m`): aba Programação (`m/vigente`) com `DetalheAtividade` (frente, quantitativo, efetivo,
   atalhos Lançar/Ocorrência com `?data=&linha=`); Lançar com setas/arrastar e frente em destaque; ocorrência com várias
