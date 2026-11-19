@@ -57,6 +57,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Presença do dia', url: '/app/presenca', icone: ScanFace },
       { titulo: 'Crachá e rosto', url: '/app/efetivo/identificacao', icone: Fingerprint, minimo: 'planejador' },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users },
+      { titulo: 'Acesso dos líderes', url: '/app/lideres', icone: KeyRound, minimo: 'planejador' },
       { titulo: 'Setores da obra', url: '/app/efetivo/setores', icone: Network },
       { titulo: 'Organograma', url: '/app/efetivo/organograma', icone: GitFork },
       { titulo: 'De-para de funções', url: '/app/efetivo/funcoes', icone: Shuffle },

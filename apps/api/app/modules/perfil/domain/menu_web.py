@@ -22,7 +22,7 @@ TELAS_WEB: dict[str, str | None] = {
     "/app/ssma": SSMA, "/app/ssma/cadastros": SSMA, "/app/preventivos": None, "/app/lgpd": SSMA,
     # Efetivo e mobilização
     "/app/efetivo": None, "/app/efetivo/mobilizacao": None, "/app/presenca": None, "/app/efetivo/identificacao": PLANEJADOR,
-    "/app/equipes": None, "/app/efetivo/setores": None, "/app/efetivo/organograma": None, "/app/efetivo/funcoes": None,
+    "/app/equipes": None, "/app/lideres": PLANEJADOR, "/app/efetivo/setores": None, "/app/efetivo/organograma": None, "/app/efetivo/funcoes": None,
     # Cadastros
     "/app/frentes": None, "/app/catalogo": None, "/app/importacoes": None,
     # Administrar

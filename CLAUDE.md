@@ -56,6 +56,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   estar em várias), tudo por `equipes/application/alocacao.py::Alocador` com movimento `EQUIPE` (`de_equipe_id`/`para_equipe_id`);
   aba Movimentações (`GET /equipes/movimentacoes`). Nome padrão `equipe_config` (`EQUIPE.{n}_{disciplina}`, número automático,
   `disciplina_padrao`, aba Configuração). Spec 107.
+  Link dos líderes (`lideres/`, spec 111): `/equipe/<codigo>` sem conta do Malhet — matrícula + senha (inicial 123456, cria a
+  dele; Argon2, JWT próprio com `versao`, `Tentativas`), vê as equipes que lidera, "Não está comigo" (vai para outro encarregado
+  ou sem equipe) e "Trazer alguém" (busca no efetivo), tudo pelo `Alocador`; rotas públicas `/portal/{codigo}` (`X-Portal-Token`).
+  Tela `/app/lideres`: link (WhatsApp, novo, ligar), líderes sem a função de encarregado com as equipes, redefinir/bloquear.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e

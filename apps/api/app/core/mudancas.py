@@ -15,7 +15,7 @@ BOOT = uuid.uuid4().hex[:8]
 _GERAL = "geral"
 _contador: dict[str, int] = defaultdict(int)
 _ESCRITA = {"POST", "PUT", "PATCH", "DELETE"}
-_IGNORAR = ("/api/auth/", "/api/erros")  # login, refresh de token e relatos de erro (spec 098) não mudam dados da obra
+_IGNORAR = ("/api/auth/", "/api/erros", "/api/portal/")  # portal do líder (spec 111) registra a obra na rota  # login, refresh de token e relatos de erro (spec 098) não mudam dados da obra
 _SO_LEITURA = ("/previa",)  # POST que só consulta (prévias)
 
 
