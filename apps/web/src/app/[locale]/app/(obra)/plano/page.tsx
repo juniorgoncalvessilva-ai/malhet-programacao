@@ -541,9 +541,14 @@ function FormDoCronograma({ marcos, onFechar }: { marcos: ItemPlano[]; onFechar:
       .then((r) => { setPv(r); setMarcadas(new Set(r!.atividades.filter((a) => !a.no_plano).map((a) => a.id_crono))); })
       .catch((er) => toast.error(er.message)).finally(() => setCarregando(false));
   };
-  const puxar = () => api.post<{ novos: number; atualizados: number }>('/planos/itens/do-cronograma', { ...corpo(), ids: [...marcadas],
+  const puxar = () => api.post<{ novos: number; atualizados: number; recusadas?: string[] }>('/planos/itens/do-cronograma', { ...corpo(), ids: [...marcadas],
     equipe_id: f.equipe_id ? Number(f.equipe_id) : null, marco_id: f.marco_id ? Number(f.marco_id) : null })
-    .then((r) => { toast.success(`${r.novos} atividade(s) no plano${r.atualizados ? ` · ${r.atualizados} atualizada(s) pelo cronograma` : ''}`); atualizar(); onFechar(); })
+    .then((r) => {
+      toast.success(`${r.novos} atividade(s) no plano${r.atualizados ? ` · ${r.atualizados} atualizada(s) pelo cronograma` : ''}`);
+      // spec 109: a que não passa fica de fora e avisa, sem derrubar as outras
+      if (r.recusadas?.length) toast.warning(`${r.recusadas.length} ficou(aram) de fora: ${r.recusadas.slice(0, 3).join(' · ')}${r.recusadas.length > 3 ? '…' : ''}`, { duration: 12000 });
+      atualizar(); onFechar();
+    })
     .catch((er) => toast.error(er.message));
   const lista = pv?.atividades ?? [];
   const todas = lista.length > 0 && lista.every((a) => marcadas.has(a.id_crono));

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { comentarRelato, configurarRelatos, enviarFila, EVENTO_AVISO, relatarErro, type AvisoErro } from '@/lib/erros/relatar';
+import { ehVersaoVelha, recarregarParaVersaoNova } from '@/lib/erros/versaoNova';
 
 /**
  * Spec 098. `CapturaErros` fica na raiz do app (inclusive login e página principal): pega erro de script, promessa sem
@@ -16,10 +17,14 @@ export function CapturaErros() {
   const [aviso, setAviso] = useState<AvisoErro | null>(null);
   useEffect(() => { configurarRelatos(getToken); }, [getToken]);
   useEffect(() => {
-    const erro = (e: ErrorEvent) => relatarErro({ tipo: 'js', mensagem: e.message || String(e.error ?? ''), pilha: e.error?.stack });
+    const erro = (e: ErrorEvent) => {
+      if ((ehVersaoVelha(e.message) || ehVersaoVelha(e.error)) && recarregarParaVersaoNova()) return; // deploy novo (spec 109)
+      relatarErro({ tipo: 'js', mensagem: e.message || String(e.error ?? ''), pilha: e.error?.stack });
+    };
     const promessa = (e: PromiseRejectionEvent) => {
       const r = e.reason as { message?: string; stack?: string; name?: string; status?: number } | undefined;
       if (r && typeof r.status === 'number') return; // ApiError: a própria chamada já relatou se foi do servidor
+      if (ehVersaoVelha(r ?? String(e.reason ?? '')) && recarregarParaVersaoNova()) return; // deploy novo (spec 109)
       relatarErro({ tipo: 'promessa', mensagem: r?.message ?? String(e.reason ?? ''), pilha: r?.stack });
     };
     const mostrar = (e: Event) => setAviso((e as CustomEvent<AvisoErro>).detail);

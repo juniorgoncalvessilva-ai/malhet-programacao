@@ -2,10 +2,14 @@
 
 import { useEffect } from 'react';
 import { relatarErro } from '@/lib/erros/relatar';
+import { ehVersaoVelha, recarregarParaVersaoNova } from '@/lib/erros/versaoNova';
 
 /** Último recurso (spec 098): até o layout raiz quebrou — relata e oferece recarregar, sem depender do resto do app. */
 export default function ErroGeral({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => { relatarErro({ tipo: 'tela', mensagem: error.message || 'O app não abriu', pilha: error.stack }); }, [error]);
+  useEffect(() => {
+    if (ehVersaoVelha(error) && recarregarParaVersaoNova()) return; // deploy novo: recarrega (spec 109)
+    relatarErro({ tipo: 'tela', mensagem: error.message || 'O app não abriu', pilha: error.stack });
+  }, [error]);
   return (
     <html lang="pt-BR">
       <body style={{ fontFamily: 'system-ui, sans-serif', background: '#F6F8F8', color: '#070911', display: 'grid', placeItems: 'center', minHeight: '100vh', margin: 0 }}>

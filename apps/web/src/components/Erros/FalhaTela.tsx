@@ -3,6 +3,7 @@
 import { RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { relatarErro, type AvisoErro } from '@/lib/erros/relatar';
+import { ehVersaoVelha, recarregarParaVersaoNova } from '@/lib/erros/versaoNova';
 import { FormComentario } from './Relatos';
 
 /**
@@ -12,9 +13,15 @@ import { FormComentario } from './Relatos';
 export function FalhaTela({ error, reset, inicio }: { error: Error & { digest?: string }; reset: () => void; inicio: string }) {
   const [aviso, setAviso] = useState<AvisoErro | null>(null);
   const [contou, setContou] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
   useEffect(() => {
+    // versão nova no ar (deploy): recarrega em vez de relatar (spec 109)
+    if (ehVersaoVelha(error) && recarregarParaVersaoNova()) { setAtualizando(true); return; }
     setAviso(relatarErro({ tipo: 'tela', mensagem: error.message || 'A tela não abriu', pilha: [error.stack, error.digest && `digest ${error.digest}`].filter(Boolean).join('\n') }));
   }, [error]);
+  if (atualizando) {
+    return <p role="status" className="mx-auto my-10 text-center text-[14px] text-m-text-tertiary">Há uma versão nova do Malhet. Atualizando…</p>;
+  }
   return (
     <div className="mx-auto my-10 flex w-full max-w-md flex-col gap-4 rounded-m-xl border border-m-stroke-subtle bg-m-surface-raised p-6 text-m-text-primary">
       <span className="text-[11px] font-semibold uppercase tracking-[0.48px] text-m-text-muted">Algo não saiu como devia</span>

@@ -157,7 +157,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   pendente). Abas 90 dias | 6 semanas | Pull planning | Levar à programação em `/app/plano`. Aba do navegador
   "Contratada | Obra" + favicon da contratada (`TituloAba`, `marca_obra.nome_contratada`). Spec 043. Puxar de um período do
   cronograma (`/planos/itens/do-cronograma`, excluir concluídas) com os recursos do P6 (`atividade_cronograma.recursos`
-  ← TASKRSRC, copiados em `plano_item.recursos`); `/planos/tirar-concluidas`. Spec 044.
+  ← TASKRSRC, copiados em `plano_item.recursos`); `/planos/tirar-concluidas`. Spec 044. Janela do item até 1100 dias
+  (`MAX_DIAS_JANELA`; atividades longas do P6) e puxar recusa só a que não passa (`recusadas`). Spec 109.
   Plano no padrão da programação (Local → Área → CWP → atividades, cores S27) e "Inserir pela WBS" em árvore com caixas
   (inclusive fora do cronograma). Spec 081.
   6WLA em Excel no layout da obra (aba 6 semanas, `Exportar6wla`): cronograma vigente + plano nas 7 semanas, WBS do P6, linha de
@@ -228,7 +229,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   → `lib/erros/relatar.ts` (fila no aparelho, código E-XXXXXX, "contar o que fazia"); exceção não tratada da API vira relato
   (500 com `erro_id`/`erro_ref`). Dado pessoal mascarado em `erros/domain/relato.py::limpar`. Super admin: `/app/admin/erros`
   (grupos, resolver/voltou). Erro novo em tela nova não precisa de nada: já é capturado. 502/503 por até 90 s = deploy: nem relato
-  nem aviso (`apiRespondeu`; servidor descarta `Relato.transitorio`); depois, um único "API indisponível". Spec 106.
+  nem aviso (`apiRespondeu`; servidor descarta `Relato.transitorio`); depois, um único "API indisponível". Spec 106. Chunk do build
+  antigo ("Loading chunk failed") recarrega a página uma vez em vez de relatar (`lib/erros/versaoNova.ts`). Spec 109.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

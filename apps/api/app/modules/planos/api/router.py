@@ -497,21 +497,32 @@ def do_cronograma(d: DoCronogramaIn, s: Session = Depends(get_session), c: Conte
         lista = [x for x in lista if x["id_crono"] in quer]
     existentes = {i.id_crono: i for i in s.scalars(select(PlanoItemModel).where(
         PlanoItemModel.obra_id == c.obra_id, PlanoItemModel.id_crono.in_([x["id_crono"] for x in lista] or [""])))}
+    if d.equipe_id is not None or d.marco_id is not None:  # erro do formulário vale para todas: recusa de uma vez
+        _preencher(s, c, PlanoItemModel(obra_id=c.obra_id), ItemIn(descricao="validar", inicio=d.inicio, fim=d.inicio,
+                                                                   equipe_id=d.equipe_id, marco_id=d.marco_id))
     novos = atualizados = 0
+    recusadas: list[str] = []
     for x in lista:
         it = existentes.get(x["id_crono"])
-        if it is not None:
-            it.inicio, it.fim, it.recursos = x["inicio"], x["fim"], x["recursos"] or None
-            atualizados += 1
-            continue
-        it = PlanoItemModel(obra_id=c.obra_id, numero=_proximo(s, c.obra_id), criado_por=c.usuario.id)
-        _preencher(s, c, it, ItemIn(descricao=x["atividade"][:300], wbs_no_id=x["wbs_no_id"], area_id=x["area_id"],
-                                    inicio=x["inicio"], fim=x["fim"], equipe_id=d.equipe_id, marco_id=d.marco_id))
-        it.id_crono, it.recursos = x["id_crono"], x["recursos"] or None
-        s.add(it)
-        s.flush()
-        novos += 1
-    return {"novos": novos, "atualizados": atualizados, "concluidas_excluidas": concluidas}
+        try:
+            with s.begin_nested():  # uma atividade que não passa não derruba as outras (spec 109)
+                if it is not None:
+                    it.inicio, it.fim = dom.validar_janela(x["inicio"], x["fim"])
+                    it.recursos = x["recursos"] or None
+                    s.flush()
+                    atualizados += 1
+                    continue
+                it = PlanoItemModel(obra_id=c.obra_id, numero=_proximo(s, c.obra_id), criado_por=c.usuario.id)
+                _preencher(s, c, it, ItemIn(descricao=x["atividade"][:300] or x["id_crono"], wbs_no_id=x["wbs_no_id"],
+                                            area_id=x["area_id"], inicio=x["inicio"], fim=x["fim"], equipe_id=d.equipe_id,
+                                            marco_id=d.marco_id))
+                it.id_crono, it.recursos = x["id_crono"], x["recursos"] or None
+                s.add(it)
+                s.flush()
+                novos += 1
+        except DomainError as er:
+            recusadas.append(f"{x['id_crono']}: {er.mensagem}")
+    return {"novos": novos, "atualizados": atualizados, "concluidas_excluidas": concluidas, "recusadas": recusadas[:30]}
 
 
 # ---- puxar da programação corrente (spec 084) ----

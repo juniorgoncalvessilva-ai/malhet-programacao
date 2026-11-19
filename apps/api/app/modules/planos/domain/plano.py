@@ -19,7 +19,8 @@ from app.shared.memoria import Fonte, Memoria, Passo, num
 
 SEMANAS_90 = 13
 SEMANAS_6 = 6
-MAX_DIAS = 400
+MAX_DIAS = 400  # período de busca (puxar do cronograma)
+MAX_DIAS_JANELA = 1100  # janela de um item: atividades do P6 de longa duração (administração local, verbas) vão a ~500 dias
 
 
 def segunda(d: date) -> date:
@@ -37,8 +38,8 @@ def validar_janela(inicio: date | None, fim: date | None) -> tuple[date, date]:
         raise DomainError("informe o início e o fim da atividade no plano", "inicio")
     if fim < inicio:
         raise DomainError("o fim vem depois do início", "fim")
-    if (fim - inicio).days > MAX_DIAS:
-        raise DomainError(f"janela de até {MAX_DIAS} dias", "fim")
+    if (fim - inicio).days > MAX_DIAS_JANELA:
+        raise DomainError(f"janela de até {MAX_DIAS_JANELA} dias", "fim")
     return inicio, fim
 
 
