@@ -1,6 +1,8 @@
 """Spec 111 — `/lideres` (Planejamento: link e acesso dos líderes) e `/portal/{codigo}` (o link aberto no celular do
 encarregado; sem conta do Malhet: sessão própria pela matrícula e senha, cabeçalho X-Portal-Token)."""
-from fastapi import APIRouter, Depends, Header, Request
+from datetime import date
+
+from fastapi import APIRouter, Depends, File, Form, Header, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -214,3 +216,105 @@ def pedir(d: PedidoIn, s: Session = Depends(get_session), x_portal_token: str | 
 @publico.delete("/pedidos/{pid}", status_code=204)
 def cancelar(pid: int, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
     pt.cancelar_pedido(s, x_portal_token, pid)
+
+
+
+# ---- fotos de atividade pelo endereço do encarregado (spec 121) ---------------------------------------------------
+class RegistroPortalIn(BaseModel):
+    data: date | None = None
+    area_id: int
+    wbs_no_id: int | None = None
+    item_pq: str | None = Field(None, max_length=40)
+    descricao: str = Field(max_length=500)
+
+
+@publico.get("/frentes")
+def frentes(s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    from app.modules.campo.application import registros as rg
+
+    obra, _c, _por = pt.quem(s, x_portal_token)
+    return rg.frentes(s, obra)
+
+
+@publico.get("/registros/opcoes")
+def opcoes_registro(area_id: int, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    from app.modules.campo.application import registros as rg
+
+    obra, _c, _por = pt.quem(s, x_portal_token)
+    return {"itens": rg.opcoes(s, obra, area_id)}
+
+
+@publico.get("/pq")
+def pq(q: str = "", s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    from app.modules.campo.application import registros as rg
+
+    obra, _c, _por = pt.quem(s, x_portal_token)
+    return rg.buscar_pq(s, obra, q)
+
+
+@publico.get("/registros")
+def registros_do_dia(data: date | None = None, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    """Os registros que o próprio líder fez no dia (padrão: hoje), com as fotos."""
+    from app.modules.campo.application import registros as rg
+    from app.shared.tempo import hoje_local
+
+    obra, _c, por = pt.quem(s, x_portal_token)
+    return rg.do_dia(s, obra, data or hoje_local(), por)
+
+
+@publico.post("/registros", status_code=201)
+def registrar(d: RegistroPortalIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    """Atividade feita (na programação ou fora dela) com foto: frente, item da WBS ou da PQ e o que foi feito."""
+    from app.modules.campo.application import registros as rg
+    from app.modules.frentes.infra.models import AreaFrenteModel
+
+    obra, _c, por = pt.quem(s, x_portal_token)
+    r = rg.registrar(s, obra, d.area_id, d.wbs_no_id, d.item_pq, d.descricao, d.data, por)
+    _mudou(x_portal_token)
+    return rg.como_dict(r, s.get(AreaFrenteModel, r.area_id), [])
+
+
+def _registro_do_lider(s: Session, obra: int, por: str, rid: int):
+    from app.modules.campo.infra.models import RegistroAtividadeModel
+    from app.shared.errors import NotFoundError
+
+    r = s.get(RegistroAtividadeModel, rid)
+    if r is None or r.obra_id != obra or r.criado_por != por:
+        raise NotFoundError("Registro", rid)
+    return r
+
+
+@publico.post("/registros/{rid}/fotos", status_code=201)
+def foto_do_registro(rid: int, arquivo: UploadFile = File(...), data: date | None = Form(None),
+                     s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    from app.modules.campo.application.arquivos import nova_foto
+    from app.modules.campo.domain.foto import LIMITE
+
+    obra, _c, por = pt.quem(s, x_portal_token)
+    r = _registro_do_lider(s, obra, por, rid)
+    f = nova_foto(s, obra, "registro", r.id, data or r.data, None, arquivo.file.read(LIMITE + 1), por)
+    s.flush()
+    _mudou(x_portal_token)
+    return {"id": f.id}
+
+
+@publico.get("/fotos/{fid}")
+def ver_foto(fid: int, mini: bool = False, baixar: bool = False, s: Session = Depends(get_session),
+             x_portal_token: str | None = Header(None)):
+    """Só as fotos que o próprio líder registrou."""
+    from fastapi import Response
+
+    from app.modules.campo.api.fotos import nome_para_baixar
+    from app.modules.campo.application.arquivos import conteudo
+    from app.modules.campo.infra.models import FotoCampoModel
+    from app.shared.errors import NotFoundError
+
+    obra, _c, por = pt.quem(s, x_portal_token)
+    f = s.get(FotoCampoModel, fid)
+    if f is None or f.obra_id != obra or f.alvo != "registro" or f.enviado_por != por:
+        raise NotFoundError("Foto", fid)
+    mini = mini and not baixar
+    tipo = "image/jpeg" if mini else f.content_type
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[tipo]
+    disp = f'attachment; filename="{nome_para_baixar(s, f, ext)}"' if baixar else "inline"
+    return Response(conteudo(s, f, mini=mini), media_type=tipo, headers={"Content-Disposition": disp, "Cache-Control": "private, max-age=86400"})

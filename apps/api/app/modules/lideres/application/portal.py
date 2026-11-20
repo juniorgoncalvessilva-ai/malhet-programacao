@@ -210,6 +210,12 @@ def _sessao(s: Session, token: str | None, aceita_trocar: bool = False) -> tuple
     return _Obra(acesso.obra_id), acesso, c
 
 
+def quem(s: Session, token: str | None) -> tuple[int, ColaboradorModel, str]:
+    """Obra, líder e a assinatura dele nos registros do campo (spec 121: fotos de atividade pelo endereço do encarregado)."""
+    p, _acesso, c = _sessao(s, token)
+    return p.obra_id, c, f"líder {c.matricula or c.cracha or c.id} · {c.nome}"[:80]
+
+
 def trocar_senha(s: Session, token: str | None, nova: str, repetida: str) -> dict:
     p, acesso, c = _sessao(s, token, aceita_trocar=True)
     acesso.senha_hash = HASHER.hash(validar_nova_senha(nova, repetida))

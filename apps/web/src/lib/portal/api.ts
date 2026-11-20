@@ -34,9 +34,11 @@ export async function portal<T>(caminho: string, init: { method?: string; body?:
   const headers: Record<string, string> = {};
   const token = lerToken();
   if (token) headers['X-Portal-Token'] = token;
-  if (init.body !== undefined) headers['Content-Type'] = 'application/json';
+  const form = init.body instanceof FormData;
+  if (init.body !== undefined && !form) headers['Content-Type'] = 'application/json';
   const res = await fetch(`${API_URL}/portal${caminho}`, {
-    method: init.method ?? 'GET', headers, body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    method: init.method ?? 'GET', headers,
+    body: init.body === undefined ? undefined : form ? (init.body as FormData) : JSON.stringify(init.body),
   });
   if (!res.ok) {
     let msg = 'Não deu certo agora. Tente de novo.';
@@ -60,3 +62,17 @@ export interface MinhasEquipes { nome: string; matricula: string | null; funcao:
 export interface Achado { cracha: string; nome: string; matricula: string | null; funcao: string | null; equipe: string | null }
 export interface RotaPortal { empresa: string; obra: string | null; endereco: string; endereco_empresa: string }
 export interface Sessao { token?: string; trocar_senha?: boolean; nome?: string; obra_id?: number; escolher?: ObraParaEscolher[]; rota?: RotaPortal }
+
+/** Arquivo (foto) do portal com o token do líder: o <img> sozinho não manda o cabeçalho. */
+export async function portalBlob(caminho: string): Promise<Blob> {
+  return (await portalArquivo(caminho)).blob;
+}
+
+/** O arquivo e o nome que o servidor deu (Content-Disposition), para baixar com data, frente e tipo no nome. */
+export async function portalArquivo(caminho: string): Promise<{ blob: Blob; nome: string | null }> {
+  const token = lerToken();
+  const res = await fetch(`${API_URL}/portal${caminho}`, { headers: token ? { 'X-Portal-Token': token } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'Não consegui abrir a foto');
+  const nome = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? null;
+  return { blob: await res.blob(), nome };
+}

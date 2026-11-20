@@ -86,7 +86,7 @@ function Registrar() {
 
   return (
     <>
-      <TopoM titulo="Registrar atividade" sub={`Fora da programação · ${dataLonga(data)}`} voltar="/m/lancar" />
+      <TopoM titulo="Registrar atividade" sub={`Na programação ou fora dela · ${dataLonga(data)}`} voltar="/m" />
 
       <section className={cartaoM} aria-label="Frente">
         <span className="text-[13px] font-medium text-m-text-secondary">1. Onde? <span className="font-normal text-m-text-muted">Frente (CWA)</span></span>
@@ -195,7 +195,7 @@ function Registrar() {
       )}
 
       <RodapeM>
-        <button type="button" className={botaoSecundarioM} onClick={() => router.push('/m/lancar')}>Voltar</button>
+        <button type="button" className={botaoSecundarioM} onClick={() => router.push('/m')}>Voltar</button>
         <button type="button" className={botaoPrimarioM} disabled={salvando || !pode('encarregado')} onClick={salvar}>
           <span className="inline-flex items-center gap-2"><Camera size={18} aria-hidden="true" />{salvando ? 'Salvando…' : 'Registrar atividade'}</span>
         </button>

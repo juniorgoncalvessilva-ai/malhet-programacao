@@ -142,7 +142,7 @@ function Lancar() {
       {d && !d.programacao && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nenhuma programação emitida cobre {dataLonga(data)}.</p>}
       {d?.programacao && !linhas.length && <p className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-[14px] text-m-text-secondary">Nada programado {d.so_minha_equipe ? 'para a sua equipe ' : ''}neste dia.</p>}
       {/* spec 119: atividade que não está na programação também tem foto */}
-      <Link href={`/m/lancar/registrar?data=${data}`} className="flex min-h-[48px] items-center gap-2.5 rounded-[14px] border border-dashed border-m-stroke-strong px-3.5 text-[14px] font-medium text-m-accent">
+      <Link href={`/m/fotos?data=${data}`} className="flex min-h-[48px] items-center gap-2.5 rounded-[14px] border border-dashed border-m-stroke-strong px-3.5 text-[14px] font-medium text-m-accent">
         <Camera size={18} aria-hidden="true" /> Registrar atividade fora da programação
       </Link>
 

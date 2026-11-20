@@ -68,3 +68,47 @@ def test_registrar_atividade_fora_da_programacao(client):
     # registro com foto não sai; sem foto sai
     assert client.delete(f"/api/campo/registros/{r['id']}").status_code == 422
     assert client.delete(f"/api/campo/registros/{r3['id']}").status_code == 204
+
+
+def test_fotos_de_atividade_pelo_endereco_do_encarregado(client):
+    """Spec 121: o líder, sem conta do Malhet, registra a atividade com foto pelo /encarregado e vê só as dele."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from tests.test_auditorias import _jpeg
+    from tests.test_efetivo import efetivo
+
+    client.post("/api/importar/takeoff", data={"rotulo": "PQ"}, files={"arquivo": ("pq.xlsx", pq_contrato())})
+    area = client.post("/api/frentes/importar", json={"texto": LISTA}).json()[0]["areas"][0]
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    enc = next(c for c in client.get("/api/efetivo/colaboradores").json() if c["nome"] == "ENCARREGADO TESTE UM")
+    client.post("/api/efetivo/equipes", json={"nome": "EQUIPE.1_FORMA", "encarregado_id": enc["id"]})
+
+    w = TestClient(app)
+    assert w.get("/api/portal/frentes").status_code == 422  # sem sessão
+    tok = w.post("/api/portal/entrar", json={"matricula": "115011", "senha": "123456"}).json()["token"]
+    tok = w.post("/api/portal/senha", headers={"X-Portal-Token": tok}, json={"nova": "obra2026", "repetida": "obra2026"}).json()["token"]
+    h = {"X-Portal-Token": tok}
+    fr = w.get("/api/portal/frentes", headers=h).json()
+    assert [x["id"] for x in fr] == [area["id"]] and fr[0]["codigo"] == "004.05"
+    assert w.get("/api/portal/registros/opcoes", headers=h, params={"area_id": area["id"]}).json() == {"itens": []}
+    achados = w.get("/api/portal/pq", headers=h, params={"q": "1.8.3"}).json()
+    assert achados and achados[0]["item"].startswith("1.8.3")
+    r = w.post("/api/portal/registros", headers=h, json={"area_id": area["id"], "item_pq": achados[0]["item"], "descricao": "Limpeza da frente"}).json()
+    assert r["criado_por"].startswith("líder 115011")
+    f = w.post(f"/api/portal/registros/{r['id']}/fotos", headers=h, files={"arquivo": ("f.jpg", _jpeg(), "image/jpeg")})
+    assert f.status_code == 201
+    dia = w.get("/api/portal/registros", headers=h).json()
+    assert len(dia) == 1 and dia[0]["fotos"] == [f.json()["id"]]
+    assert w.get(f"/api/portal/fotos/{f.json()['id']}", headers=h, params={"mini": True}).status_code == 200
+    assert w.get(f"/api/portal/fotos/{f.json()['id']}", headers=h, params={"baixar": True}).headers["content-disposition"].startswith("attachment")
+    # a foto vai para o book como as do app
+    assert any(x["titulo"] == "Limpeza da frente" for x in client.get("/api/fotos/book").json())
+    # registro e foto de outro (pelo app) não aparecem nem abrem para o líder
+    outro = client.post("/api/campo/registros", json={"area_id": area["id"], "descricao": "Feito pelo planejamento"}).json()
+    from tests.test_auditorias import _foto_leg
+    _foto_leg(client, "registro", outro["id"], None)
+    fid_outro = client.get("/api/campo/registros").json()[0]["fotos"][0]
+    assert len(w.get("/api/portal/registros", headers=h).json()) == 1
+    assert w.get(f"/api/portal/fotos/{fid_outro}", headers=h).status_code == 404
+    assert w.post(f"/api/portal/registros/{outro['id']}/fotos", headers=h, files={"arquivo": ("f.jpg", _jpeg(), "image/jpeg")}).status_code == 404

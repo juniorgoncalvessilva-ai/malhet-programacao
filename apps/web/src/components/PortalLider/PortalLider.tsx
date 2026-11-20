@@ -1,10 +1,12 @@
 'use client';
 
-import { ArrowRightLeft, LogOut, Search, UserPlus, Users, X } from 'lucide-react';
+import { ArrowRightLeft, Camera, LogOut, Search, UserPlus, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
+import { definirLogoCarimbo } from '@/components/Mobile/Fotos';
+import { FotosAtividade } from '@/components/PortalLider/FotosAtividade';
 import { API_URL } from '@/lib/api/client';
 import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type RotaPortal, type Sessao, guardarObra, guardarRota, guardarToken, lerObra, lerRota, lerToken, portal } from '@/lib/portal/api';
 
@@ -53,6 +55,7 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
   const [etapa, setEtapa] = useState<'entrar' | 'senha' | 'equipe'>('entrar');
   const [dados, setDados] = useState<MinhasEquipes | null>(null);
   const [abrindo, setAbrindo] = useState(true); // abertura com a logo da empresa
+  const [aba, setAba] = useState<'equipe' | 'fotos'>('equipe'); // spec 121: fotos da atividade
 
   const usarObra = useCallback((id: number) => { guardarObra(id); setObra(id); }, []);
   const carregar = useCallback(async () => {
@@ -99,6 +102,7 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
   const cor = info?.marca.cor || PADRAO;
   const deOnde = marcaObra ?? obra;
   const logo = deOnde && info?.marca.logos.includes('contratada') ? `${API_URL}/portal/marca/${deOnde}/logo/contratada?v=${info.marca.versao}` : null;
+  useEffect(() => { definirLogoCarimbo(logo); }, [logo]); // spec 121: a logo da empresa no carimbo das fotos
   // aba e barra do navegador do celular com a marca da empresa
   useEffect(() => {
     document.title = `${info?.marca.contratada || 'Malhet'} · Minha equipe`;
@@ -152,7 +156,19 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
         {naoAchou && <a href={`/${typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : 'pt-BR'}/encarregado`} className={`${secundario} flex items-center justify-center`}>Ir para o endereço geral</a>}
         {naoAchou ? null : etapa === 'entrar' ? <Entrar obraFixa={rota?.obra ? obra : null} empresa={empresaRota} onEntrou={(r) => { if (r.obra_id) usarObra(r.obra_id); if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
             : etapa === 'senha' ? <CriarSenha onPronto={() => void carregar()} />
-              : dados ? <Equipes dados={dados} recarregar={carregar} /> : <Esqueleto className="h-40 w-full" />}
+              : dados ? (
+                <>
+                  <div role="tablist" aria-label="O que fazer" className="grid grid-cols-2 gap-1 rounded-full border border-m-stroke bg-m-surface-raised p-1">
+                    {([['equipe', 'Minha equipe', Users], ['fotos', 'Fotos da atividade', Camera]] as const).map(([k, rotulo, I]) => (
+                      <button key={k} type="button" role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
+                        className={`flex h-11 items-center justify-center gap-1.5 rounded-full text-[14px] font-semibold ${aba === k ? 'bg-m-accent-strong text-m-on-accent' : 'text-m-text-secondary'}`}>
+                        <I size={16} aria-hidden="true" />{rotulo}
+                      </button>
+                    ))}
+                  </div>
+                  {aba === 'equipe' ? <Equipes dados={dados} recarregar={carregar} /> : <FotosAtividade obra={info?.obra ?? null} />}
+                </>
+              ) : <Esqueleto className="h-40 w-full" />}
       </div>
       <footer className="pb-[max(env(safe-area-inset-bottom),12px)] pt-3 text-center text-[12px]" style={{ background: cor, color: sobre }}>
         <span className="font-semibold">{empresa}</span>{info?.marca.contratante ? ` · ${info.marca.contratante}` : ''} <span className="opacity-75">· com Malhet</span>

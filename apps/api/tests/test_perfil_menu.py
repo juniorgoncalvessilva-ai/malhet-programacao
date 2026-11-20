@@ -38,3 +38,16 @@ def test_menu_do_celular_por_perfil_e_pessoal(client):
     # super admin testa o menu de outro perfil
     assert client.get("/api/menu-mobile", params={"papel": "seguranca"}).json()["meu"]["destaque"] == "/m/preventivos"
     assert client.delete("/api/menu-mobile/perfis/admin").json()["admin"]["personalizado"] is False
+
+
+def test_fotos_entra_na_barra_salva_do_encarregado():
+    """Spec 121: a tela Fotos entra depois do Lançar; o atalho que sobra vai para Mais."""
+    from app.modules.perfil.domain.menu import PADRAO, incluir_na_barra
+
+    assert "/m/fotos" in PADRAO["encarregado"]["barra"]
+    f = lambda b, d="/m/presenca": incluir_na_barra(b, d, "/m/fotos", "/m/lancar")  # noqa: E731
+    assert f(["/m", "/m/vigente", "/m/lancar", "/m/pendencias"]) == ["/m", "/m/vigente", "/m/lancar", "/m/fotos"]
+    assert f(["/m", "/m/lancar"]) == ["/m", "/m/lancar", "/m/fotos"]
+    assert f(["/m", "/m/ocorrencias", "/m/vigente", "/m/pendencias"]) == ["/m", "/m/ocorrencias", "/m/vigente", "/m/fotos"]
+    assert f(["/m", "/m/fotos", "/m/lancar"]) == ["/m", "/m/lancar", "/m/fotos"]
+    assert f(["/m", "/m/lancar"], "/m/fotos") == ["/m", "/m/lancar"]  # já é o botão do meio

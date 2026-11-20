@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, Send, ShieldAlert, ShieldCheck, UserRound, Wind, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Bell, Camera, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, Send, ShieldAlert, ShieldCheck, UserRound, Wind, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 /**
@@ -17,6 +17,7 @@ export const MENU_MOBILE: ItemMobile[] = [
   { url: '/m', titulo: 'Início', icone: House, barra: true, fixo: true, descricao: 'Meta do dia e atalhos' },
   { url: '/m/vigente', titulo: 'Programação', icone: Eye, barra: true, fixo: true, descricao: 'Programação vigente e detalhe da atividade' },
   { url: '/m/lancar', titulo: 'Lançar', icone: Plus, barra: true, minimo: 'encarregado', descricao: 'Lançar a produção do dia' },
+  { url: '/m/fotos', titulo: 'Fotos da atividade', curto: 'Fotos', icone: Camera, barra: true, minimo: 'encarregado', descricao: 'Registrar a atividade com foto, na programação ou fora dela' },
   { url: '/m/presenca', titulo: 'Presença', icone: ScanFace, barra: true, destaque: true, minimo: 'encarregado', descricao: 'Ler crachá, NFC ou rosto' },
   { url: '/m/ocorrencias', titulo: 'Ocorrências', icone: AlertTriangle, barra: true, descricao: 'Registrar e ver ocorrências' },
   { url: '/m/restricoes', titulo: 'Restrições', icone: Fish, barra: true, descricao: 'Restrições do 6WLA' },
@@ -32,7 +33,7 @@ export const MENU_MOBILE: ItemMobile[] = [
 
 /** Menu padrão do sistema por perfil (o mesmo de apps/api/app/modules/perfil/domain/menu.py — vale sem internet). */
 export const MENU_PADRAO: Record<PapelObra, { barra: string[]; destaque: string | null }> = {
-  encarregado: { barra: ['/m', '/m/vigente', '/m/lancar', '/m/ocorrencias'], destaque: '/m/presenca' },
+  encarregado: { barra: ['/m', '/m/lancar', '/m/fotos', '/m/ocorrencias'], destaque: '/m/presenca' },
   planejador: { barra: ['/m', '/m/vigente', '/m/restricoes', '/m/ocorrencias'], destaque: '/m/presenca' },
   admin: { barra: ['/m', '/m/vigente', '/m/restricoes', '/m/ocorrencias'], destaque: '/m/presenca' },
   seguranca: { barra: ['/m', '/m/auditorias', '/m/acoes', '/m/lgpd'], destaque: '/m/preventivos' },

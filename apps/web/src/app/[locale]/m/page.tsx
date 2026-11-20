@@ -120,8 +120,8 @@ export default function CampoInicio() {
           <ChevronRight size={18} className="text-m-text-muted" aria-hidden="true" />
         </Link>
         )}
-        {ver('/m/lancar') && (
-        <Link href="/m/lancar/registrar" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
+        {ver('/m/fotos') && (
+        <Link href="/m/fotos" className="flex min-h-[60px] items-center gap-3 rounded-[14px] border border-m-stroke-subtle bg-m-surface-raised px-3.5">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-m-accent-subtle text-m-accent"><Camera size={18} /></span>
           <span className="flex flex-1 flex-col"><span className="text-[15px] font-medium leading-5">Registrar atividade</span>
             <span className="text-[12px] leading-4 text-m-text-muted">Fora da programação · foto, frente e o que foi feito</span></span>

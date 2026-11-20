@@ -32,6 +32,12 @@ let logoCarimbo: HTMLImageElement | null = null;
 const CHAVE_LOGO = 'malhet.logo-carimbo.';
 const abrirImagem = (src: string) => new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = src; });
 
+/** Logo do carimbo por endereço (o portal do encarregado, sem conta do Malhet, já tem a URL pública da logo). */
+export function definirLogoCarimbo(src: string | null) {
+  if (!src) { logoCarimbo = null; return; }
+  void abrirImagem(src).then((i) => { logoCarimbo = i; }).catch(() => undefined);
+}
+
 /** Carrega a logo da contratada da obra corrente para o carimbo (do aparelho na hora; da API quando muda). */
 export function useLogoNoCarimbo() {
   const obraId = useObraOpcional()?.obra?.id;

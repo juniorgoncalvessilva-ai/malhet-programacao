@@ -122,7 +122,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   programação"). Baixar foto: `GET /fotos/{id}/arquivo?baixar=true` (nome AAAAMMDD-HHMM-frente-tipo-id, `nome_para_baixar`),
   `baixarFoto` (compartilhar no app nativo) na foto ampliada e no book. Logo da contratada (Marca da obra) no canto do carimbo
   (spec 120, `useLogoNoCarimbo`: no `MobileShell`, `TirarFotos` e `useEnviarFoto`; guardada reduzida no aparelho por obra,
-  `malhet.logo-carimbo.<obra>`, para carimbar offline).
+  `malhet.logo-carimbo.<obra>`, para carimbar offline). "Fotos" (`/m/fotos`, a mesma tela) na barra do encarregado (spec 121:
+  `MENU_PADRAO`/`PADRAO`, migração 0057 põe nos menus já salvos com `incluir_na_barra`) e aba "Fotos da atividade" no
+  `/encarregado` (`FotosAtividade`, rotas `/portal/frentes|registros|registros/opcoes|pq|fotos/{id}`; o líder vê e baixa só as
+  dele; `campo/application/registros.py` é o caso de uso dos dois; logo do carimbo por `definirLogoCarimbo`).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
