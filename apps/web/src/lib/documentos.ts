@@ -1,3 +1,4 @@
+import type { MemoriaCalculo } from '@/components/Obra/Calculado';
 /** Spec 123 — documentos controlados (ISO 9001:2015, 7.5): tipos da API e rótulos. */
 export type SituacaoRevisao = 'vigente' | 'em_analise' | 'superada' | 'cancelada';
 export type FormatoRevisao = 'png' | 'pdf' | 'original' | 'dxf';
@@ -38,3 +39,23 @@ export const SITUACAO: Record<SituacaoRevisao, { rotulo: string; tom: 'sucesso' 
   cancelada: { rotulo: 'Cancelada', tom: 'perigo' },
 };
 export const ALVO = { area: 'Frente', wbs: 'WBS', grupo: 'Grupo de atividade', documento: 'Documento' } as const;
+
+// ---- take-off pelo projeto (spec 124) ----
+
+export interface LinhaTakeoff {
+  id: number; documento_id: number; documento: string; titulo: string; revisao_id: number; revisao: string;
+  situacao_revisao: SituacaoRevisao | null; origem: 'quadro' | 'anotacao' | 'camada' | 'bloco'; chave: string; descricao: string;
+  quantidade: number; unidade: string; fator: number; quantidade_final: number; memoria: MemoriaCalculo; avisos: string[];
+  confere: boolean | null; situacao: 'extraido' | 'aceito' | 'descartado'; item_pq: string | null; item_descricao: string | null;
+  item_unid: string | null; item_sugerido: string | null; sugerido_descricao: string | null; area_id: number | null; area: string | null;
+  anterior: { revisao: string; quantidade: number } | null; delta: number | null; nova: boolean; wbs_no_id: number | null;
+  decidido_por: string | null;
+}
+export interface ComparacaoTakeoff {
+  item_pq: string; item_descricao: string | null; unidade: string; area_id: number; area: string | null; tag: string | null;
+  projeto: number; planilha: number | null; iwp: number | null; diferenca: number | null; diferenca_pct: number | null;
+  iwps: { id: number; codigo: string; quantidade: number | null; tem_etapas: boolean }[]; linhas: number[];
+  memorias: { projeto: MemoriaCalculo; planilha: MemoriaCalculo };
+}
+export interface Takeoff { linhas: LinhaTakeoff[]; comparacao: ComparacaoTakeoff[] }
+export const ORIGEM_TAKEOFF: Record<LinhaTakeoff['origem'], string> = { quadro: 'quadro do desenho', anotacao: 'anotação', camada: 'camada', bloco: 'bloco' };

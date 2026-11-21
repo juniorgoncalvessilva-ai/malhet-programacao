@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import ContextoObra, ler, planejar, programar
 from app.core.db import get_session
 from app.modules.documentos.application import planilhas, servico as sv
+from app.modules.documentos.application import takeoff as to
 from app.modules.documentos.domain import documento as dom
 from app.modules.documentos.infra import dwg
 
@@ -140,6 +141,50 @@ def confirmar(vid: int, s: Session = Depends(get_session), c: ContextoObra = Dep
 @router.delete("/vinculos/{vid}", status_code=204)
 def remover(vid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     sv.remover_vinculo(s, c.obra_id, vid)
+
+
+# ---- take-off pelo projeto (spec 124) ----
+class DecisaoIn(BaseModel):
+    situacao: str | None = None
+    item_pq: str | None = Field(None, max_length=40)
+    area_id: int | None = None
+    fator: float | None = None
+
+
+class UsarIwpIn(BaseModel):
+    item_pq: str = Field(min_length=1, max_length=40)
+    area_id: int
+    iwp_id: int | None = None
+
+
+@router.get("/takeoff")
+def takeoff(documento_id: int | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Quantidades lidas dos desenhos (com Δ da revisão anterior) e a comparação projeto × planilha × IWP."""
+    return to.listar(s, c.obra_id, documento_id)
+
+
+@router.get("/takeoff/itens-pq")
+def takeoff_itens(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    from app.modules.referencias.infra.pq_gateway import itens_pq
+    return [{"item": i.item, "descricao": i.descricao, "unid": i.unid} for i in itens_pq(s, c.obra_id).values() if i.folha]
+
+
+@router.post("/revisoes/{rid}/takeoff")
+def takeoff_extrair(rid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Lê de novo o desenho da revisão (mantém as decisões já tomadas)."""
+    return {"quantidades": to.extrair(s, c.obra_id, rid)}
+
+
+@router.put("/takeoff/{tid}", status_code=204)
+def takeoff_decidir(tid: int, d: DecisaoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    to.decidir(s, c.obra_id, tid, _quem(c), situacao=d.situacao, item_pq=d.item_pq, area_id=d.area_id, fator=d.fator,
+               campos=set(d.model_fields_set) - {"situacao"})
+
+
+@router.post("/takeoff/iwp")
+def takeoff_iwp(d: UsarIwpIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Leva o total do projeto (aceitas das revisões vigentes) para a quantidade do IWP, com a origem anotada."""
+    return to.usar_no_iwp(s, c.obra_id, d.item_pq, d.area_id, _quem(c), d.iwp_id)
 
 
 # ---- documento ----

@@ -228,13 +228,22 @@ def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, 
     if grd_id and not s.scalar(select(GrdItemModel.id).where(GrdItemModel.grd_id == grd_id, GrdItemModel.revisao_id == r.id)):
         s.add(GrdItemModel(grd_id=grd_id, documento_id=d.id, revisao_id=r.id, revisao=rev, finalidade=fin))
     sugeridas = _sugerir_frentes(s, obra_id, d, r.tags or [], por)
+    quantidades = 0
+    if dxf:  # take-off pelo projeto (spec 124): falha na leitura não impede guardar a revisão
+        from app.modules.documentos.application import takeoff
+        try:
+            with s.begin_nested():
+                quantidades = takeoff.extrair(s, obra_id, r.id, dxf)
+        except Exception as e:  # noqa: BLE001
+            avisos.append(f"não foi possível levantar as quantidades do desenho ({type(e).__name__})")
+            r.avisos = avisos
     revs = _revisoes(s, [d.id]).get(d.id, [])
     vigente_agora = dom.vigente(_info(revs)) == r.id
     if vigente_agora:
         _avisar_vigente(s, obra_id, d, r)
     s.flush()
     return {"documento": _doc_dict(d, revs), "revisao": _rev_dict(r, revs), "sugeridas": sugeridas, "avisos": avisos,
-            "nova_vigente": vigente_agora}
+            "nova_vigente": vigente_agora, "quantidades": quantidades}
 
 
 def _tipo(tipo: str | None, ext: str) -> str:

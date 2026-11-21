@@ -7,6 +7,7 @@ import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
 import { DetalheDocumento } from '@/components/Documentos/DetalheDocumento';
 import { GrafoDocumentos } from '@/components/Documentos/GrafoDocumentos';
+import { TakeoffProjeto } from '@/components/Documentos/TakeoffProjeto';
 import { Abas } from '@/components/Obra/Abas';
 import { Carregando } from '@/components/Obra/Esqueleto';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
@@ -15,7 +16,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { type DocumentoResumo, type Grafo, type GrdResumo, type OpcoesDocumentos, SITUACAO } from '@/lib/documentos';
 import { useObra } from '@/lib/obra/ObraProvider';
 
-type Aba = 'lista' | 'grds' | 'conexoes' | 'importar';
+type Aba = 'lista' | 'takeoff' | 'grds' | 'conexoes' | 'importar';
 const dataBR = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—');
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -26,7 +27,7 @@ export default function DocumentosPage() {
 /**
  * Documentos controlados (spec 123 · ISO 9001:2015, 7.5): a LDO da obra com a revisão que vale no campo, as GRDs de entrada
  * e saída, o mapa de conexões (Zettelkasten) e a importação da LDO. Revisão nova entra pelo arquivo: o DWG vira folha
- * (PDF/PNG) e o carimbo preenche código, revisão e finalidade.
+ * (PDF/PNG) e o carimbo preenche código, revisão e finalidade; as quantidades do desenho vão para o take-off (spec 124).
  */
 function Documentos() {
   const api = useApi();
@@ -60,7 +61,7 @@ function Documentos() {
         <Indicador rotulo="Ligações a confirmar" valor={sugestoes} tom={sugestoes ? 'atencao' : undefined} detalhe="sugeridas pela TAG do desenho" />
       </div>
       <Abas rotulo="Documentos" ativa={aba} onTrocar={setAba}
-        abas={[{ chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões' },
+        abas={[{ chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'takeoff', titulo: 'Take-off do projeto' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões' },
           { chave: 'importar', titulo: 'Importar LDO', visivel: planejador }]} />
 
       {aba === 'lista' && (
@@ -87,6 +88,11 @@ function Documentos() {
             </Tabela>
           </Painel>
         </>
+      )}
+      {aba === 'takeoff' && (
+        <Painel titulo="Quanto o projeto pede?" subtitulo="Quantidades lidas dos desenhos (DWG/DXF): tabela de ferros e resumo de aço conferidos pela NBR 7480, anotações com unidade, camadas e blocos. Aceite com o item da PQ e a frente, compare com o take-off da planilha e leve ao IWP.">
+          <TakeoffProjeto />
+        </Painel>
       )}
       {aba === 'grds' && <Grds docs={docs} planejador={planejador} />}
       {aba === 'conexoes' && <Conexoes onAbrir={setAberto} />}

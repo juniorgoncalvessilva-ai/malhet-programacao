@@ -141,6 +141,13 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   ao grupo (`GET /documentos/campo?linha_id|area_id`): `/m/documentos`, seção no `DetalheAtividade`, aba Projetos no `/encarregado`
   (`/portal/documentos`). Arquivos no acervo (`zettel` pasta `05-documentos`, tipos `documento`/`documento-visual`). Tela
   `/app/documentos` (LDO | GRDs | Conexões | Importar), `VerRevisao` (zoom, PDF, original).
+  Take-off pelo projeto (spec 124, `documentos/domain/takeoff.py` + `infra/desenho.py::levantar` + `application/takeoff.py`):
+  quadros montados pela posição dos textos (TABELA DE FERROS, RESUMO AÇO conferido pela NBR 7480 e pela soma da tabela, lista de
+  materiais), anotações com unidade, camadas e blocos (unidade do desenho + `fator`); `takeoff_projeto` por revisão com memória,
+  chave estável (Δ da revisão anterior, decisões herdadas, aceitar de novo), item da PQ sugerido (nunca vincula sozinho; unidade
+  igual ou kg↔t, `fator_de_conversao`) e frente pela ligação do documento. Comparação projeto × planilha (TAG) × IWP e
+  `POST /documentos/takeoff/iwp` (`wbs/infra/gateway.py::iwps_do_item|definir_quantidade_iwp`, origem na observação do IWP). Aba
+  "Take-off do projeto" e seção no `DetalheDocumento` (`TakeoffProjeto`).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

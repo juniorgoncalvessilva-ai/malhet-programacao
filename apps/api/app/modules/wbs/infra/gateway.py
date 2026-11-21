@@ -146,3 +146,34 @@ def itens_da_area(s: Session, obra_id: int, area_id: int) -> list[dict]:
                     "grupo": f"{g.numero} · {g.descricao}" if g else None})
     out.sort(key=lambda x: x["codigo"])
     return out
+
+
+@dataclass(frozen=True)
+class IwpDoItem:
+    id: int
+    codigo: str
+    quantidade: float | None
+    tem_etapas: bool
+
+
+def iwps_do_item(s: Session, obra_id: int, area_id: int, item_pq: str) -> list[IwpDoItem]:
+    """IWPs ativos da área (CWA) com o item da PQ — destino do take-off pelo projeto (spec 124)."""
+    todos = nos(s, obra_id)
+    cods = codigos(s, obra_id, todos)
+
+    def area_de(n: WbsNoModel) -> int | None:
+        while n.tipo != "area" and n.pai_id in todos:
+            n = todos[n.pai_id]
+        return n.area_id if n.tipo == "area" else None
+
+    com_etapa = {n.pai_id for n in todos.values() if n.tipo == "etapa"}
+    return [IwpDoItem(n.id, cods[n.id].codigo, n.quantidade, n.id in com_etapa) for n in todos.values()
+            if n.tipo == "iwp" and n.ativo and n.item_pq == item_pq and area_de(n) == area_id]
+
+
+def definir_quantidade_iwp(s: Session, obra_id: int, no_id: int, quantidade: float, observacao: str) -> None:
+    n = s.get(WbsNoModel, no_id)
+    if n is None or n.obra_id != obra_id or n.tipo != "iwp":
+        raise NotFoundError("IWP", no_id)
+    n.quantidade = dom.validar_quantidade(quantidade)
+    n.observacao = observacao[:300]

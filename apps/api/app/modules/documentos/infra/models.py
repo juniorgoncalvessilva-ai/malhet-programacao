@@ -2,7 +2,7 @@
 Zettelkasten, GRDs e o registro de quem abriu qual revisão (ISO 9001:2015, 7.5)."""
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -106,3 +106,32 @@ class DocumentoLeituraModel(Base):
     via: Mapped[str] = mapped_column(String(8))  # web | campo | portal
     formato: Mapped[str] = mapped_column(String(8))  # png | pdf | original | dxf
     em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TakeoffProjetoModel(Base):
+    """Quantidade lida do desenho de uma revisão (spec 124): quadro, anotação, camada ou bloco, com a memória da conta.
+    O planejador aceita (item da PQ, frente, fator) e leva ao IWP; a revisão nova reaproveita as decisões pela chave."""
+
+    __tablename__ = "takeoff_projeto"
+    __table_args__ = (UniqueConstraint("revisao_id", "chave", name="uq_takeoff_projeto_chave"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    documento_id: Mapped[int] = mapped_column(ForeignKey("documento.id", ondelete="CASCADE"), index=True)
+    revisao_id: Mapped[int] = mapped_column(ForeignKey("documento_revisao.id", ondelete="CASCADE"), index=True)
+    origem: Mapped[str] = mapped_column(String(10))  # quadro | anotacao | camada | bloco
+    chave: Mapped[str] = mapped_column(String(200))
+    descricao: Mapped[str] = mapped_column(String(300))
+    quantidade: Mapped[float] = mapped_column(Float)
+    unidade: Mapped[str] = mapped_column(String(20))
+    memoria: Mapped[dict | None] = mapped_column(JSONB)  # fórmula, passos e fontes (local no desenho)
+    avisos: Mapped[list | None] = mapped_column(JSONB)
+    confere: Mapped[bool | None] = mapped_column(Boolean)
+    item_sugerido: Mapped[str | None] = mapped_column(String(40))
+    item_pq: Mapped[str | None] = mapped_column(String(40))
+    area_id: Mapped[int | None] = mapped_column(ForeignKey("area_frente.id", ondelete="SET NULL"))
+    fator: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
+    situacao: Mapped[str] = mapped_column(String(10), default="extraido", server_default="extraido")  # extraido | aceito | descartado
+    decidido_por: Mapped[str | None] = mapped_column(String(150))
+    decidido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    wbs_no_id: Mapped[int | None] = mapped_column(ForeignKey("wbs_no.id", ondelete="SET NULL"))  # IWP que recebeu
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

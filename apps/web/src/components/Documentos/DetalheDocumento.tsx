@@ -5,6 +5,7 @@ import { Check, Eye, Link2, Pencil, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { TakeoffProjeto } from '@/components/Documentos/TakeoffProjeto';
 import { VerRevisao } from '@/components/Documentos/VerRevisao';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Carregando } from '@/components/Obra/Esqueleto';
@@ -138,6 +139,13 @@ export function DetalheDocumento({ id, opcoes, documentos, onFechar, onAbrir }: 
                 </div>
               )}
             </section>
+
+            {d.historico.some((r) => r.formatos.includes('dxf')) && (
+              <section>
+                <div className="mb-2 text-[13px] font-semibold">Quantidades do projeto (take-off)</div>
+                <TakeoffProjeto documentoId={d.id} />
+              </section>
+            )}
 
             {d.grds.length > 0 && (
               <section className="text-[13px]">
