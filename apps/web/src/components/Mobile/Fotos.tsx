@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useLogo, useMarcaObra } from '@/components/Obra/LogosObra';
+import { BotaoMarcar } from '@/components/Mobile/MarcarFoto';
 import { useObraOpcional } from '@/lib/obra/ObraProvider';
 import { emAppNativo } from '@/lib/presenca/leitores';
 
@@ -209,7 +210,7 @@ export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 
           try { const b = await reduzirFoto(arq); momentoDaFoto.set(b, new Date()); onChange([...fotos, b]); } catch { toast.error('Não consegui ler a foto'); }
         }} />
       {carimbo && fotos.length > 0 && (
-        <span className="text-[12px] leading-4 text-m-text-muted">Carimbo na foto: data e hora{carimbo.filter(Boolean).length ? ` · ${carimbo.filter(Boolean).join(' · ')}` : ''}</span>
+        <span className="text-[12px] leading-4 text-m-text-muted">Toque no lápis para marcar na foto. Carimbo: data e hora{carimbo.filter(Boolean).length ? ` · ${carimbo.filter(Boolean).join(' · ')}` : ''}</span>
       )}
       {urls.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -222,6 +223,7 @@ export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 
                   {dataHoraBR(momentoDaFoto.get(fotos[k]) ?? new Date())}
                 </span>
               )}
+              <BotaoMarcar foto={fotos[k]} onMarcada={(b) => onChange(fotos.map((f, j) => (j === k ? b : f)))} className="absolute -left-2 -top-2" />
               <button type="button" aria-label={`Tirar a foto ${k + 1}`} onClick={() => onChange(fotos.filter((_, j) => j !== k))} className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-m-surface-raised text-m-text-secondary shadow"><X size={14} /></button>
             </span>
           ))}

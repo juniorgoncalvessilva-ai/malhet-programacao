@@ -15,7 +15,7 @@ self.addEventListener('activate', (e) => e.waitUntil((async () => {
 })()));
 
 const ehCampo = (url) => /^\/[a-z]{2}(-[A-Z]{2})?\/m(\/|$)/.test(url.pathname);
-const ehEstatico = (url) => url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/models/')
+const ehEstatico = (url) => url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/models/') || url.pathname.startsWith('/excalidraw/')
   || url.pathname.startsWith('/brand/') || url.pathname === '/manifest.webmanifest';
 
 async function redePrimeiro(req) {

@@ -41,3 +41,4 @@ next-env.d.ts
 
 # modelos da leitura facial (copiados do npm no build)
 /public/models/face/
+/public/excalidraw/

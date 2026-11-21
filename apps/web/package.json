@@ -11,10 +11,11 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "predev": "node scripts/copiar-modelos-face.mjs",
-    "prebuild": "node scripts/copiar-modelos-face.mjs"
+    "predev": "node scripts/copiar-modelos-face.mjs && node scripts/copiar-excalidraw.mjs",
+    "prebuild": "node scripts/copiar-modelos-face.mjs && node scripts/copiar-excalidraw.mjs"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@fontsource-variable/figtree": "^5.3.0",
     "@hookform/resolvers": "^5.1.0",
     "@radix-ui/react-dialog": "^1.1.14",

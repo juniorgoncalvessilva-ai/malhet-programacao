@@ -125,7 +125,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `malhet.logo-carimbo.<obra>`, para carimbar offline). "Fotos" (`/m/fotos`, a mesma tela) na barra do encarregado (spec 121:
   `MENU_PADRAO`/`PADRAO`, migração 0057 põe nos menus já salvos com `incluir_na_barra`) e aba "Fotos da atividade" no
   `/encarregado` (`FotosAtividade`, rotas `/portal/frentes|registros|registros/opcoes|pq|fotos/{id}`; o líder vê e baixa só as
-  dele; `campo/application/registros.py` é o caso de uso dos dois; logo do carimbo por `definirLogoCarimbo`).
+  dele; `campo/application/registros.py` é o caso de uso dos dois; logo do carimbo por `definirLogoCarimbo`). Marcar na foto
+  (spec 122): lápis em cada foto ainda não enviada (`TirarFotos` e `FotosAtividade`) abre o Excalidraw (`MarcarFoto` →
+  `MarcarFotoEditor`, carregado só ao tocar; foto travada no fundo, traço vermelho) e devolve a foto do mesmo tamanho marcada
+  (o carimbo entra depois, no envio). Fontes em `public/excalidraw` (`scripts/copiar-excalidraw.mjs`, fora do git, SW guarda).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
