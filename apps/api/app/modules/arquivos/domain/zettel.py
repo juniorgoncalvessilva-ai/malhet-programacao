@@ -21,6 +21,7 @@ RAIZ = "Malhet"
 FUSO = timezone(timedelta(hours=-3))  # nomes na hora da obra
 
 PASTAS = {
+    "05-documentos": "Documentos controlados (LDO): projetos, procedimentos e normas, por revisão (spec 123)",
     "10-programacoes": "Programações emitidas e concluídas",
     "20-campo-fotos": "Fotos das atividades no campo",
     "30-ocorrencias-restricoes": "Fotos de ocorrências (desvios) e restrições",
@@ -34,6 +35,8 @@ PASTAS = {
 
 # tipo do arquivo → (pasta, rótulo curto no nome)
 TIPOS = {
+    "documento": ("05-documentos", "DOC"),  # spec 123: o arquivo da revisão como chegou (DWG, PDF…)
+    "documento-visual": ("05-documentos", "DOCVIS"),  # spec 123: PDF/PNG/DXF gerados para ver no campo
     "foto-linha": ("20-campo-fotos", "FOTO"),
     "foto-desvio": ("30-ocorrencias-restricoes", "OCORRENCIA"),
     "foto-restricao": ("30-ocorrencias-restricoes", "RESTRICAO"),
@@ -52,7 +55,8 @@ EXTENSOES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "app
              "application/vnd.ms-excel": "xls",
              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
              "application/msword": "doc",
-             "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx", "text/markdown": "md", "text/plain": "txt"}
+             "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx", "text/markdown": "md", "text/plain": "txt",
+             "image/vnd.dwg": "dwg", "image/vnd.dxf": "dxf"}
 
 
 def curto(texto: str | None, limite: int = 40) -> str:

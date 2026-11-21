@@ -129,6 +129,18 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (spec 122): lápis em cada foto ainda não enviada (`TirarFotos` e `FotosAtividade`) abre o Excalidraw (`MarcarFoto` →
   `MarcarFotoEditor`, carregado só ao tocar; foto travada no fundo, traço vermelho) e devolve a foto do mesmo tamanho marcada
   (o carimbo entra depois, no envio). Fontes em `public/excalidraw` (`scripts/copiar-excalidraw.mjs`, fora do git, SW guarda).
+- Documentos controlados (`documentos/`, spec 123 · ISO 9001:2015 7.5): LDO (`documento`, código do cliente único por obra,
+  importar planilha `POST /documentos/ldo`, Excel `GET /documentos/ldo.xlsx`), revisões pelo arquivo (`POST /documentos/revisoes`:
+  DWG → DXF no conversor separado `apps/api/conversor/dwg2dxf.mjs` — GPL/LibreDWG, só no servidor, Node copiado na imagem da API —,
+  DXF → carimbo/TAGs/folha PDF+PNG com ezdxf em `infra/desenho.py`; revisão existente não é sobrescrita). Vigente calculada
+  (`domain/documento.py::vigente`: a mais nova que libera o uso — para construção/aprovado/liberado/como construído; letras antes de
+  números; anterior = superada; cancelada na última = nenhuma). Ligações Zettelkasten (`documento_vinculo`: aplica_a/referencia/
+  baseado_em/substitui → frente, WBS, grupo, documento; TAG do desenho sugere a frente, `sugerido` até confirmar), citado por, grafo
+  (`GET /documentos/grafo`, `GrafoDocumentos`), GRD recebida/emitida com itens, ciência e Excel (`grd`, `grd_item`), leituras
+  (`documento_leitura`: quem abriu qual revisão, web/campo/portal). Campo só vê a vigente ligada (confirmada) à frente, ao IWP/CWP ou
+  ao grupo (`GET /documentos/campo?linha_id|area_id`): `/m/documentos`, seção no `DetalheAtividade`, aba Projetos no `/encarregado`
+  (`/portal/documentos`). Arquivos no acervo (`zettel` pasta `05-documentos`, tipos `documento`/`documento-visual`). Tela
+  `/app/documentos` (LDO | GRDs | Conexões | Importar), `VerRevisao` (zoom, PDF, original).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

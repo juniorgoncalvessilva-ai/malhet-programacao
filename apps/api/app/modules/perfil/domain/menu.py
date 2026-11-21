@@ -4,7 +4,7 @@ sistema. A permissão continua valendo: tela não liberada para a pessoa nunca a
 from app.shared.errors import DomainError
 
 # telas do app de campo (as mesmas urls de src/components/Mobile/menu.ts)
-TELAS = ("/m", "/m/vigente", "/m/lancar", "/m/fotos", "/m/presenca", "/m/ocorrencias", "/m/restricoes", "/m/pendencias", "/m/auditorias",
+TELAS = ("/m", "/m/vigente", "/m/lancar", "/m/fotos", "/m/documentos", "/m/presenca", "/m/ocorrencias", "/m/restricoes", "/m/pendencias", "/m/auditorias",
          "/m/acoes", "/m/preventivos", "/m/lgpd", "/m/notificacoes", "/m/perfil", "/m/resumo")
 MAX_BARRA = 4
 

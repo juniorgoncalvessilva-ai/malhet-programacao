@@ -1,11 +1,22 @@
 # API Python (FastAPI) + auth-kit. Na subida aplica as migrações (Alembic) e cria/garante o Super Admin.
+# Spec 123: conversor DWG → DXF (programa separado, GPL — LibreDWG). Instalado aqui e copiado para a imagem da API.
+FROM node:20-slim AS conversor
+WORKDIR /conversor
+COPY conversor/package.json ./
+RUN npm install --omit=dev --no-audit --no-fund
+COPY conversor/dwg2dxf.mjs conversor/LICENSE.md ./
+
 FROM python:3.12-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --upgrade pip && pip install "fastapi>=0.115" "uvicorn[standard]>=0.30" "sqlalchemy>=2.0" \
     "psycopg[binary]>=3.2" "alembic>=1.13" "pydantic-settings>=2.4" "openpyxl>=3.1" "xlrd>=2.0.1" "python-multipart>=0.0.9" \
-    "pyjwt[crypto]>=2.9" "httpx>=0.27" "cryptography>=43" "argon2-cffi>=23.1" "pillow>=10.4" "python-pptx>=1.0"
+    "pyjwt[crypto]>=2.9" "httpx>=0.27" "cryptography>=43" "argon2-cffi>=23.1" "pillow>=10.4" "python-pptx>=1.0" \
+    "ezdxf>=1.4" "matplotlib>=3.9"
+COPY --from=conversor /usr/local/bin/node /usr/local/bin/node
+COPY --from=conversor /conversor /app/conversor
+ENV MPLCONFIGDIR=/tmp/matplotlib
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app

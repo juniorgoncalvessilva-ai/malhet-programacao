@@ -318,3 +318,35 @@ def ver_foto(fid: int, mini: bool = False, baixar: bool = False, s: Session = De
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[tipo]
     disp = f'attachment; filename="{nome_para_baixar(s, f, ext)}"' if baixar else "inline"
     return Response(conteudo(s, f, mini=mini), media_type=tipo, headers={"Content-Disposition": disp, "Cache-Control": "private, max-age=86400"})
+
+
+# ---- projetos e procedimentos vigentes pelo endereço do encarregado (spec 123) ---------------------------------------
+@publico.get("/documentos")
+def documentos_vigentes(area_id: int | None = None, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    """Só o que vale no campo: documentos com revisão vigente — da frente escolhida, ou todos."""
+    from app.modules.documentos.application import servico as dsv
+
+    obra, _c, _por = pt.quem(s, x_portal_token)
+    if area_id:
+        return dsv.para_atividade(s, obra, area_id)
+    return [d for d in dsv.listar(s, obra) if d["vigente"]]
+
+
+@publico.get("/documentos/revisoes/{rid}/arquivo")
+def documento_arquivo(rid: int, formato: str = "png", s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    from fastapi import Response
+
+    from app.modules.documentos.application import servico as dsv
+    from app.modules.documentos.domain import documento as ddom
+    from app.modules.documentos.infra.models import DocumentoRevisaoModel
+    from app.shared.errors import NotFoundError
+
+    obra, _c, por = pt.quem(s, x_portal_token)
+    r = s.get(DocumentoRevisaoModel, rid)
+    if r is None or r.obra_id != obra:
+        raise NotFoundError("Revisão", rid)
+    revs = dsv._revisoes(s, [r.documento_id]).get(r.documento_id, [])
+    if ddom.vigente(dsv._info(revs)) != r.id:  # o encarregado nunca abre revisão superada
+        raise NotFoundError("Revisão vigente", rid)
+    dados, mime, nome = dsv.arquivo_da_revisao(s, obra, rid, formato if formato in ("png", "pdf") else "png", por, "portal")
+    return Response(dados, media_type=mime, headers={"Content-Disposition": f'inline; filename="{nome}"', "Cache-Control": "private, max-age=3600"})

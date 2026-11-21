@@ -1,4 +1,4 @@
-import { AlertTriangle, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2 } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu { titulo: string; url: string; icone: LucideIcon; minimo?: PapelObra; superadmin?: boolean; ssma?: boolean }
@@ -19,6 +19,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'WBS de execução', url: '/app/wbs', icone: ListTree },
       { titulo: 'Critério de avanço', url: '/app/criterios', icone: Percent },
       { titulo: 'Plano de 90 dias', url: '/app/plano', icone: CalendarClock },
+      { titulo: 'Documentos (LDO e GRD)', url: '/app/documentos', icone: FolderOpen },
       { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange },
       { titulo: 'Look-ahead das equipes', url: '/app/lookahead', icone: Columns3 },
       { titulo: 'Restrições (6WLA)', url: '/app/restricoes', icone: Fish },

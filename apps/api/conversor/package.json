@@ -1,0 +1,11 @@
+{
+  "name": "malhet-conversor-dwg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Spec 123: converte DWG em DXF no servidor (programa separado, chamado pela API). Usa o LibreDWG (GPL-3.0).",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "dependencies": {
+    "@mlightcad/libredwg-web": "0.8.9"
+  }
+}

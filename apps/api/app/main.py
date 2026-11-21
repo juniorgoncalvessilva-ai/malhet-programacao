@@ -33,6 +33,7 @@ from app.modules.restricoes.api.router import router as restricoes
 from app.modules.campo.api.router import router as campo
 from app.modules.campo.api.fotos import router as fotos
 from app.modules.campo.api.registros import router as registros_campo
+from app.modules.documentos.api.router import router as documentos
 from app.modules.obras.api.marca import router as marca
 from app.modules.planos.api.router import router as planos
 from app.modules.presenca.api.router import router as presenca
@@ -54,6 +55,7 @@ from app.modules.arquivos.application import fila as fila_arquivos
 import app.modules.campo.application.arquivos  # noqa: F401  (registra as fotos na fila de arquivos)
 import app.modules.ssma.application.arquivos  # noqa: F401  (registra os anexos de SSMA)
 import app.modules.aderencia.application.importar  # noqa: F401  (registra os modelos de apresentação)
+import app.modules.documentos.application.servico  # noqa: F401  (registra os documentos no acervo)
 from app.shared.errors import DomainError, NotFoundError
 
 
@@ -162,5 +164,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, registros_campo, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros, aderencia, lideres, portal_lider, exclusoes):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, registros_campo, documentos, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros, aderencia, lideres, portal_lider, exclusoes):
     app.include_router(r, prefix="/api")

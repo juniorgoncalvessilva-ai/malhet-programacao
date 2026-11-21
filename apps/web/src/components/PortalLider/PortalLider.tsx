@@ -1,12 +1,13 @@
 'use client';
 
-import { ArrowRightLeft, Camera, LogOut, Search, UserPlus, Users, X } from 'lucide-react';
+import { ArrowRightLeft, Camera, FolderOpen, LogOut, Search, UserPlus, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 import { definirLogoCarimbo } from '@/components/Mobile/Fotos';
 import { FotosAtividade } from '@/components/PortalLider/FotosAtividade';
+import { ProjetosPortal } from '@/components/PortalLider/ProjetosPortal';
 import { API_URL } from '@/lib/api/client';
 import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type RotaPortal, type Sessao, guardarObra, guardarRota, guardarToken, lerObra, lerRota, lerToken, portal } from '@/lib/portal/api';
 
@@ -55,7 +56,7 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
   const [etapa, setEtapa] = useState<'entrar' | 'senha' | 'equipe'>('entrar');
   const [dados, setDados] = useState<MinhasEquipes | null>(null);
   const [abrindo, setAbrindo] = useState(true); // abertura com a logo da empresa
-  const [aba, setAba] = useState<'equipe' | 'fotos'>('equipe'); // spec 121: fotos da atividade
+  const [aba, setAba] = useState<'equipe' | 'fotos' | 'projetos'>('equipe'); // spec 121: fotos da atividade
 
   const usarObra = useCallback((id: number) => { guardarObra(id); setObra(id); }, []);
   const carregar = useCallback(async () => {
@@ -128,7 +129,7 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
     : <span className={grande ? 'text-[28px] font-semibold' : 'text-[17px] font-semibold'}>{empresa}</span>;
 
   return (
-    <main className="portal-lider flex min-h-dvh flex-col bg-m-surface font-[Figtree,system-ui,sans-serif] text-m-text-primary">
+    <main className="portal-lider flex min-h-dvh flex-col bg-m-surface-base font-[Figtree,system-ui,sans-serif] text-m-text-primary">
       <style>{tokens}</style>
       {abrindo && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-5 bg-m-surface-raised transition-opacity" role="status" aria-label={`Abrindo ${empresa}`}>
@@ -158,15 +159,15 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
             : etapa === 'senha' ? <CriarSenha onPronto={() => void carregar()} />
               : dados ? (
                 <>
-                  <div role="tablist" aria-label="O que fazer" className="grid grid-cols-2 gap-1 rounded-full border border-m-stroke bg-m-surface-raised p-1">
-                    {([['equipe', 'Minha equipe', Users], ['fotos', 'Fotos da atividade', Camera]] as const).map(([k, rotulo, I]) => (
+                  <div role="tablist" aria-label="O que fazer" className="grid grid-cols-3 gap-1 rounded-full border border-m-stroke bg-m-surface-raised p-1">
+                    {([['equipe', 'Equipe', Users], ['fotos', 'Fotos', Camera], ['projetos', 'Projetos', FolderOpen]] as const).map(([k, rotulo, I]) => (
                       <button key={k} type="button" role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
                         className={`flex h-11 items-center justify-center gap-1.5 rounded-full text-[14px] font-semibold ${aba === k ? 'bg-m-accent-strong text-m-on-accent' : 'text-m-text-secondary'}`}>
                         <I size={16} aria-hidden="true" />{rotulo}
                       </button>
                     ))}
                   </div>
-                  {aba === 'equipe' ? <Equipes dados={dados} recarregar={carregar} /> : <FotosAtividade obra={info?.obra ?? null} />}
+                  {aba === 'equipe' ? <Equipes dados={dados} recarregar={carregar} /> : aba === 'fotos' ? <FotosAtividade obra={info?.obra ?? null} /> : <ProjetosPortal />}
                 </>
               ) : <Esqueleto className="h-40 w-full" />}
       </div>

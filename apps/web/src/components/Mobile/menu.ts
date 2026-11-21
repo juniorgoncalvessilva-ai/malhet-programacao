@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, Camera, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, Send, ShieldAlert, ShieldCheck, UserRound, Wind, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Bell, Camera, FolderOpen, ClipboardCheck, Eye, Fish, House, ListChecks, Plus, ScanFace, Send, ShieldAlert, ShieldCheck, UserRound, Wind, type LucideIcon } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 /**
@@ -18,6 +18,7 @@ export const MENU_MOBILE: ItemMobile[] = [
   { url: '/m/vigente', titulo: 'Programação', icone: Eye, barra: true, fixo: true, descricao: 'Programação vigente e detalhe da atividade' },
   { url: '/m/lancar', titulo: 'Lançar', icone: Plus, barra: true, minimo: 'encarregado', descricao: 'Lançar a produção do dia' },
   { url: '/m/fotos', titulo: 'Fotos da atividade', curto: 'Fotos', icone: Camera, barra: true, minimo: 'encarregado', descricao: 'Registrar a atividade com foto, na programação ou fora dela' },
+  { url: '/m/documentos', titulo: 'Projetos e procedimentos', curto: 'Projetos', icone: FolderOpen, descricao: 'Desenhos e procedimentos vigentes da frente' },
   { url: '/m/presenca', titulo: 'Presença', icone: ScanFace, barra: true, destaque: true, minimo: 'encarregado', descricao: 'Ler crachá, NFC ou rosto' },
   { url: '/m/ocorrencias', titulo: 'Ocorrências', icone: AlertTriangle, barra: true, descricao: 'Registrar e ver ocorrências' },
   { url: '/m/restricoes', titulo: 'Restrições', icone: Fish, barra: true, descricao: 'Restrições do 6WLA' },

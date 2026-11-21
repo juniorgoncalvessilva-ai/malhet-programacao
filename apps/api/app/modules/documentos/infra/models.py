@@ -1,0 +1,108 @@
+"""Documentos controlados (spec 123): lista de documentos (LDO), revisões com os arquivos no acervo, ligações
+Zettelkasten, GRDs e o registro de quem abriu qual revisão (ISO 9001:2015, 7.5)."""
+from datetime import date, datetime
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.db import Base
+
+
+class DocumentoModel(Base):
+    __tablename__ = "documento"
+    __table_args__ = (UniqueConstraint("obra_id", "codigo", name="uq_documento_codigo"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    codigo: Mapped[str] = mapped_column(String(80))  # código do cliente (ex.: 1870AA-C-51890)
+    codigo_contratada: Mapped[str | None] = mapped_column(String(80))
+    titulo: Mapped[str] = mapped_column(String(300))
+    tipo: Mapped[str] = mapped_column(String(4), default="DES")  # DES | PRO | NOR | ESP | MEM | LIS | IT | OUT
+    disciplina: Mapped[str | None] = mapped_column(String(40))
+    projeto: Mapped[str | None] = mapped_column(String(150))
+    origem: Mapped[str] = mapped_column(String(10), default="manual")  # ldo | carimbo | manual
+    observacao: Mapped[str | None] = mapped_column(String(500))
+    criado_por: Mapped[str] = mapped_column(String(150))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentoRevisaoModel(Base):
+    __tablename__ = "documento_revisao"
+    __table_args__ = (UniqueConstraint("documento_id", "revisao", name="uq_documento_revisao"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    documento_id: Mapped[int] = mapped_column(ForeignKey("documento.id", ondelete="CASCADE"), index=True)
+    revisao: Mapped[str] = mapped_column(String(6))
+    finalidade: Mapped[str] = mapped_column(String(40))  # PARA CONSTRUÇÃO, PARA APROVAÇÃO…
+    data_emissao: Mapped[date | None] = mapped_column(Date)
+    nome_original: Mapped[str | None] = mapped_column(String(200))
+    arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))  # como veio
+    pdf_arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    png_arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    dxf_arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    carimbo: Mapped[dict | None] = mapped_column(JSONB)  # atributos lidos do carimbo
+    tags: Mapped[list | None] = mapped_column(JSONB)  # TAGs citadas no desenho
+    avisos: Mapped[list | None] = mapped_column(JSONB)
+    grd_id: Mapped[int | None] = mapped_column(ForeignKey("grd.id", ondelete="SET NULL"))  # GRD em que chegou
+    enviado_por: Mapped[str] = mapped_column(String(150))
+    enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentoVinculoModel(Base):
+    """Ligação Zettelkasten: o documento aplica-se a uma frente/IWP/grupo, ou referencia/baseia-se em outro documento."""
+
+    __tablename__ = "documento_vinculo"
+    __table_args__ = (UniqueConstraint("documento_id", "relacao", "alvo_tipo", "alvo_id", name="uq_documento_vinculo"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    documento_id: Mapped[int] = mapped_column(ForeignKey("documento.id", ondelete="CASCADE"), index=True)
+    relacao: Mapped[str] = mapped_column(String(12))  # aplica_a | referencia | baseado_em | substitui
+    alvo_tipo: Mapped[str] = mapped_column(String(10))  # area | wbs | grupo | documento
+    alvo_id: Mapped[int] = mapped_column(Integer, index=True)
+    sugerido: Mapped[bool] = mapped_column(Boolean, default=False)  # veio da TAG do desenho; falta confirmar
+    criado_por: Mapped[str] = mapped_column(String(150))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GrdModel(Base):
+    """Guia de remessa de documentos: o que chegou (do cliente/projetista) ou saiu (para fornecedor, campo)."""
+
+    __tablename__ = "grd"
+    __table_args__ = (UniqueConstraint("obra_id", "numero", name="uq_grd_numero"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    numero: Mapped[str] = mapped_column(String(40))
+    numero_externo: Mapped[str | None] = mapped_column(String(80))  # número da GRD de quem mandou
+    sentido: Mapped[str] = mapped_column(String(9))  # recebida | emitida
+    data: Mapped[date] = mapped_column(Date)
+    remetente: Mapped[str] = mapped_column(String(150))
+    destinatario: Mapped[str] = mapped_column(String(150))
+    observacao: Mapped[str | None] = mapped_column(Text)
+    ciente_por: Mapped[str | None] = mapped_column(String(150))  # quem deu ciência do recebimento
+    ciente_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    criado_por: Mapped[str] = mapped_column(String(150))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GrdItemModel(Base):
+    __tablename__ = "grd_item"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    grd_id: Mapped[int] = mapped_column(ForeignKey("grd.id", ondelete="CASCADE"), index=True)
+    documento_id: Mapped[int] = mapped_column(ForeignKey("documento.id", ondelete="CASCADE"), index=True)
+    revisao_id: Mapped[int | None] = mapped_column(ForeignKey("documento_revisao.id", ondelete="SET NULL"))
+    revisao: Mapped[str] = mapped_column(String(6))
+    finalidade: Mapped[str] = mapped_column(String(40))
+    ordem: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class DocumentoLeituraModel(Base):
+    """Quem abriu qual revisão, quando e por onde (computador, app de campo, link do encarregado)."""
+
+    __tablename__ = "documento_leitura"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    revisao_id: Mapped[int] = mapped_column(ForeignKey("documento_revisao.id", ondelete="CASCADE"), index=True)
+    quem: Mapped[str] = mapped_column(String(150))
+    via: Mapped[str] = mapped_column(String(8))  # web | campo | portal
+    formato: Mapped[str] = mapped_column(String(8))  # png | pdf | original | dxf
+    em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

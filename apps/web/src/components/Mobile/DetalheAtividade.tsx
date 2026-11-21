@@ -1,6 +1,10 @@
 'use client';
 
-import { AlertTriangle, Plus, Users, X } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Plus, Users, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ListaCampo } from '@/components/Documentos/ListaCampo';
+import { useApi } from '@/hooks/programacao/useApi';
+import type { DocumentoResumo } from '@/lib/documentos';
 import { useEffect } from 'react';
 import { dataLonga, num } from '@/components/Mobile/campo';
 import { useEquipes } from '@/hooks/programacao/queries';
@@ -24,6 +28,9 @@ export function DetalheAtividade({ ln, local, area, data, k, nomes, onFechar }: 
 }) {
   const { pode, podeVerMobile: ver } = useObra();
   const equipes = useEquipes();
+  const api = useApi();
+  // spec 123: projetos e procedimentos vigentes da frente, do IWP/CWP e do grupo desta atividade
+  const docs = useQuery({ queryKey: ['documentos', 'campo', 'linha', ln.id], queryFn: () => api.get<DocumentoResumo[]>(`/documentos/campo?linha_id=${ln.id}`) });
   const eq = equipes.data?.find((e) => e.id === ln.equipe_id);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar(); };
@@ -72,6 +79,12 @@ export function DetalheAtividade({ ln, local, area, data, k, nomes, onFechar }: 
               {ver('/m/ocorrencias') && <Link href={`/m/ocorrencias/nova${q}`} className="flex h-[52px] items-center justify-center gap-1.5 rounded-full border-2 border-m-warning text-[15px] font-semibold text-m-warning"><AlertTriangle size={18} /> Ocorrência</Link>}
             </div>
           )}
+
+          <section className="flex flex-col gap-2">
+            <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-m-text-secondary"><FolderOpen size={15} /> Projetos e procedimentos</h3>
+            {docs.isLoading ? <Esqueleto className="h-14 w-full" /> : <ListaCampo docs={docs.data ?? []} abrir={(rid, f) => api.blob(`/documentos/revisoes/${rid}/arquivo?formato=${f}&via=campo`)}
+              vazio="Nenhum documento vigente ligado a esta atividade." />}
+          </section>
 
           <section className="flex flex-col gap-2">
             <h3 className="text-[13px] font-semibold text-m-text-secondary">Quantitativo</h3>
