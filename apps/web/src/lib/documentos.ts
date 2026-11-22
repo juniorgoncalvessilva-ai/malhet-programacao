@@ -67,3 +67,35 @@ export interface ComparacaoTakeoff {
 }
 export interface Takeoff { linhas: LinhaTakeoff[]; comparacao: ComparacaoTakeoff[] }
 export const ORIGEM_TAKEOFF: Record<LinhaTakeoff['origem'], string> = { quadro: 'quadro do desenho', anotacao: 'anotação', camada: 'camada', bloco: 'bloco' };
+
+// ---- pastas e consolidado (spec 129) ----
+export interface PastaDoc {
+  id: number; codigo: string; nome: string; descricao: string | null; do_modelo: boolean; tipos: string[]; disciplinas: string[];
+  pacotes: string[]; documentos: number; vigentes: number; ultima: string | null; por_pacote: Record<string, number>;
+  por_disciplina: Record<string, number>;
+}
+export interface Pastas {
+  pastas: PastaDoc[]; sem_pasta: number; sugestao: { nome: string; tipos: string[]; documentos: number } | null; documentos: number;
+  faltam_do_modelo: string[]; armazenamento: { documentos: number; obra: number; limite: number };
+}
+export interface ItemConsolidado {
+  tipo: 'revisao' | 'grd'; id: number; documento_id: number | null; codigo: string; titulo: string; revisao: string | null;
+  finalidade: string | null; data: string; pacote: string | null; situacao: 'assinado' | 'pendente'; detalhe: string; quem: string;
+}
+export interface Consolidado {
+  inicio: string; fim: string; periodo: 'semana' | 'mes'; itens: ItemConsolidado[];
+  totais: { itens: number; assinado: number; pendente: number; revisoes: number; grds: number };
+}
+
+/** Letra do TE (tipo de emissão) pela finalidade — a mesma tabela da API (`TIPO_EMISSAO`). */
+const TE: Record<string, string> = {
+  PRELIMINAR: 'A', 'PARA APROVAÇÃO': 'B', 'PARA CONHECIMENTO': 'C', 'PARA COTAÇÃO': 'D', 'PARA CONSTRUÇÃO': 'E',
+  'CONFORME COMPRADO': 'F', 'CONFORME CONSTRUÍDO': 'G', CANCELADO: 'H',
+};
+const limpo = (t: string) => t.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9.-]+/g, '-').replace(/^-|-$/g, '');
+
+/** Nome de todo arquivo que sai do Malhet (spec 129): OBRA_CÓDIGO_Rrev_TE.ext — o código da obra abre o nome, como no vídeo. */
+export function nomeArquivo(obra: string | undefined, codigo: string, revisao: string | null, finalidade: string | null, ext: string) {
+  const te = finalidade ? TE[finalidade] : undefined;
+  return [obra && limpo(obra), limpo(codigo), revisao && `R${limpo(revisao)}`, te].filter(Boolean).join('_') + (ext ? `.${ext.replace(/^\./, '')}` : '');
+}

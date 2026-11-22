@@ -144,3 +144,22 @@ class TakeoffProjetoModel(Base):
     decidido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     wbs_no_id: Mapped[int | None] = mapped_column(ForeignKey("wbs_no.id", ondelete="SET NULL"))  # IWP que recebeu
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentoPastaModel(Base):
+    """Pasta de documentos da obra (spec 129): cópia da pasta-modelo do Malhet, ajustável. Pasta é regra (tipos, disciplinas,
+    pacotes), não lugar — o documento aparece em toda pasta cuja regra cumpre; nenhum arquivo é movido."""
+
+    __tablename__ = "documento_pasta"
+    __table_args__ = (UniqueConstraint("obra_id", "codigo", name="uq_documento_pasta_codigo"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    codigo: Mapped[str] = mapped_column(String(6))  # 10, 20… (ordem)
+    nome: Mapped[str] = mapped_column(String(80))
+    descricao: Mapped[str | None] = mapped_column(String(200))
+    tipos: Mapped[list | None] = mapped_column(JSONB)
+    disciplinas: Mapped[list | None] = mapped_column(JSONB)
+    pacotes: Mapped[list | None] = mapped_column(JSONB)
+    do_modelo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    criado_por: Mapped[str] = mapped_column(String(150))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

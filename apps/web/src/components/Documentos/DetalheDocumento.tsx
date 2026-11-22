@@ -12,7 +12,7 @@ import { Carregando } from '@/components/Obra/Esqueleto';
 import { Botao, Campo, Pilula, Selecao } from '@/components/Obra/ui';
 import { useCatalogo, useFrentes2 } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
-import { ALVO, type DocumentoDetalhe, type DocumentoResumo, type OpcoesDocumentos, type RevisaoDoc, SITUACAO } from '@/lib/documentos';
+import { ALVO, nomeArquivo, type DocumentoDetalhe, type DocumentoResumo, type OpcoesDocumentos, type RevisaoDoc, SITUACAO } from '@/lib/documentos';
 import { useObra } from '@/lib/obra/ObraProvider';
 
 const dataBR = (iso: string | null) => (iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString('pt-BR') : '—');
@@ -25,7 +25,7 @@ export function DetalheDocumento({ id, opcoes, documentos, onFechar, onAbrir }: 
   const api = useApi();
   const qc = useQueryClient();
   const confirmar = useConfirmar();
-  const { pode } = useObra();
+  const { pode, obra } = useObra();
   const planejador = pode('planejador');
   const q = useQuery({ queryKey: ['documentos', id], queryFn: () => api.get<DocumentoDetalhe>(`/documentos/${id}`) });
   const frentes = useFrentes2();
@@ -169,7 +169,8 @@ export function DetalheDocumento({ id, opcoes, documentos, onFechar, onAbrir }: 
       </aside>
       {ver && d && <VerRevisao titulo={`${d.codigo} · rev. ${ver.revisao}`} sub={`${d.titulo} · ${SITUACAO[ver.situacao].rotulo}`} onFechar={() => setVer(null)}
         png={ver.formatos.includes('png') ? arquivo(ver, 'png') : undefined} pdf={ver.formatos.includes('pdf') ? arquivo(ver, 'pdf') : undefined}
-        original={ver.formatos.includes('original') ? () => api.download(`/documentos/revisoes/${ver.id}/arquivo?formato=original&baixar=true`, `${d.codigo}.dwg`).then(() => undefined) : undefined} />}
+        original={ver.formatos.includes('original') ? () => api.download(`/documentos/revisoes/${ver.id}/arquivo?formato=original&baixar=true`,
+          nomeArquivo(obra?.codigo, d.codigo, ver.revisao, ver.finalidade, (ver.nome_original ?? '').split('.').pop() || 'dwg')).then(() => undefined) : undefined} />}
     </div>,
     document.body,
   );

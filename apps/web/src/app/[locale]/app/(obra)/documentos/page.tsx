@@ -6,7 +6,9 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
 import { DetalheDocumento } from '@/components/Documentos/DetalheDocumento';
+import { ConsolidadoDocumentos } from '@/components/Documentos/ConsolidadoDocumentos';
 import { GrafoDocumentos } from '@/components/Documentos/GrafoDocumentos';
+import { PastasDocumentos } from '@/components/Documentos/PastasDocumentos';
 import { Abas } from '@/components/Obra/Abas';
 import { Carregando } from '@/components/Obra/Esqueleto';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
@@ -15,7 +17,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { type DocumentoResumo, type Grafo, type GrdResumo, type OpcoesDocumentos, type ResultadoLdo, SITUACAO } from '@/lib/documentos';
 import { useObra } from '@/lib/obra/ObraProvider';
 
-type Aba = 'lista' | 'grds' | 'conexoes' | 'importar';
+type Aba = 'pastas' | 'lista' | 'consolidado' | 'grds' | 'conexoes' | 'importar';
 const dataBR = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—');
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -24,7 +26,7 @@ export default function DocumentosPage() {
 }
 
 /**
- * Documentos controlados (spec 123 · ISO 9001:2015, 7.5): a LDO da obra com a revisão que vale no campo, as GRDs de entrada
+ * Documentos controlados (spec 123 · ISO 9001:2015, 7.5; pastas e consolidado — spec 129): a LDO da obra com a revisão que vale no campo, as GRDs de entrada
  * e saída, o mapa de conexões (Zettelkasten) e a importação da LDO. Revisão nova entra pelo arquivo: o DWG vira folha
  * (PDF/PNG) e o carimbo preenche código, revisão e finalidade. As quantidades do desenho ficam na tela Take-off do projeto (spec 127); Conexões só para o super admin por enquanto.
  */
@@ -34,7 +36,7 @@ function Documentos() {
   const params = useSearchParams();
   const { pode, superadmin } = useObra();
   const planejador = pode('planejador');
-  const [aba, setAba] = useState<Aba>('lista');
+  const [aba, setAba] = useState<Aba>(params.get('doc') ? 'lista' : 'pastas');
   const [busca, setBusca] = useState('');
   const [tipo, setTipo] = useState('');
   const [pacote, setPacote] = useState('');
@@ -63,7 +65,7 @@ function Documentos() {
         <Indicador rotulo="Ligações a confirmar" valor={sugestoes} tom={sugestoes ? 'atencao' : undefined} detalhe="sugeridas pela TAG do desenho" />
       </div>
       <Abas rotulo="Documentos" ativa={aba} onTrocar={setAba}
-        abas={[{ chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões', visivel: superadmin },
+        abas={[{ chave: 'pastas', titulo: 'Pastas' }, { chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'consolidado', titulo: 'Consolidado' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões', visivel: superadmin },
           { chave: 'importar', titulo: 'Importar LDO', visivel: planejador }]} />
 
       {aba === 'lista' && (
@@ -96,6 +98,9 @@ function Documentos() {
           </Painel>
         </>
       )}
+      {aba === 'pastas' && <PastasDocumentos opcoes={opcoes.data} docs={docs} onAbrir={setAberto}
+        onAcao={(a) => setAba(a === 'enviar' ? 'lista' : a === 'ldo' ? 'importar' : 'grds')} />}
+      {aba === 'consolidado' && <ConsolidadoDocumentos onAbrir={setAberto} />}
       {aba === 'grds' && <Grds docs={docs} planejador={planejador} />}
       {aba === 'conexoes' && superadmin && <Conexoes onAbrir={setAberto} />}
       {aba === 'importar' && planejador && <ImportarLdo onPronto={atualizar} onAbrir={setAberto} />}

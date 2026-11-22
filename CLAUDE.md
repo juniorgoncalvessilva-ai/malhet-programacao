@@ -140,7 +140,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`documento_leitura`: quem abriu qual revisão, web/campo/portal). Campo só vê a vigente ligada (confirmada) à frente, ao IWP/CWP ou
   ao grupo (`GET /documentos/campo?linha_id|area_id`): `/m/documentos`, seção no `DetalheAtividade`, aba Projetos no `/encarregado`
   (`/portal/documentos`). Arquivos no acervo (`zettel` pasta `05-documentos`, tipos `documento`/`documento-visual`). Tela
-  `/app/documentos` (LDO | GRDs | Conexões | Importar), `VerRevisao` (zoom, PDF, original).
+  `/app/documentos` (Pastas | LDO | Consolidado | GRDs | Conexões | Importar), `VerRevisao` (zoom, PDF, original).
   Take-off pelo projeto (spec 124, `documentos/domain/takeoff.py` + `infra/desenho.py::levantar` + `application/takeoff.py`):
   quadros montados pela posição dos textos (TABELA DE FERROS, RESUMO AÇO conferido pela NBR 7480 e pela soma da tabela, lista de
   materiais), anotações com unidade, camadas e blocos (unidade do desenho + `fator`); `takeoff_projeto` por revisão com memória,
@@ -154,6 +154,12 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (sigla/nome), Observações = CWA/local → `casar_local` (código confirma; TAG/nome da área sugere), revisão com `motivo`,
   `ldo_enviada_em`, `apresentado`, `apresentado_para`, `ldo`. Frentes pela planilha de CWAs (`frentes/domain/planilha_cwa.py`,
   `POST /frentes/planilha/previa` e `/frentes/planilha`): a aba da contratada filtrada pela coluna Empresa é a WBS de execução.
+  Pastas e Consolidado (spec 129, `documentos/domain/pastas.py` + `application/pastas.py`, `documento_pasta`): pasta = regra
+  (tipos/disciplinas/pacotes), não lugar — o documento aparece em toda pasta que cumpre, nada é movido; a obra recebe a cópia da
+  pasta-modelo (10 Contrato e listas · 20 Projetos · 30 Especificações · 40 Procedimentos · 50 Normas · 60 Complementares),
+  "Sem pasta" com sugestão, restaurar o modelo; `GET /documentos?pasta_id=` (0 = sem pasta). Arquivo baixado = `OBRA_CÓDIGO_Rrev_TE`
+  (`nome_padrao`/`nomeArquivo`). Consolidado `GET /documentos/consolidado` (semana/mês; assinado = arquivo/ciência, pendente).
+  Abas Pastas (padrão) · Lista · Consolidado · GRDs · Conexões · Importar (`PastasDocumentos`, `ConsolidadoDocumentos`).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

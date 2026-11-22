@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 from app.core.auth import ContextoObra, ler, planejar, programar
 from app.core.db import get_session
 from app.modules.documentos.application import planilhas, servico as sv
+from app.modules.documentos.application import pastas as pst
 from app.modules.documentos.application import takeoff as to
 from app.modules.documentos.domain import documento as dom
 from app.modules.documentos.infra import dwg
+from app.shared.errors import DomainError
 
 router = APIRouter(prefix="/documentos", tags=["documentos controlados"])
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -22,8 +24,59 @@ def _quem(c: ContextoObra) -> str:
 
 
 @router.get("")
-def listar(busca: str | None = None, area_id: int | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
-    return sv.listar(s, c.obra_id, busca, area_id)
+def listar(busca: str | None = None, area_id: int | None = None, pasta_id: int | None = None,
+           s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    docs = sv.listar(s, c.obra_id, busca, area_id)
+    if pasta_id is not None:  # spec 129: 0 = sem pasta
+        ids = pst.ids_da_pasta(s, c.obra_id, pasta_id)
+        docs = [d for d in docs if d["id"] in ids]
+    return docs
+
+
+# ---- pastas e consolidado (spec 129) ----
+class PastaIn(BaseModel):
+    nome: str = Field(min_length=3, max_length=80)
+    descricao: str | None = Field(None, max_length=200)
+    tipos: list[str] = []
+    disciplinas: list[str] = []
+    pacotes: list[str] = []
+
+
+@router.get("/pastas")
+def pastas(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Pastas da obra (cópia da pasta-modelo), com contagens, "sem pasta", a sugestão e o armazenamento."""
+    return pst.listar(s, c.obra_id, _quem(c))
+
+
+@router.post("/pastas", status_code=201)
+def nova_pasta(d: PastaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes)
+
+
+@router.post("/pastas/restaurar")
+def restaurar_pastas(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    return {"restauradas": pst.restaurar_modelo(s, c.obra_id, _quem(c))}
+
+
+@router.put("/pastas/{pid}")
+def editar_pasta(pid: int, d: PastaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes, pasta_id=pid)
+
+
+@router.delete("/pastas/{pid}", status_code=204)
+def excluir_pasta(pid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    pst.excluir(s, c.obra_id, pid)
+
+
+@router.get("/consolidado")
+def consolidado(periodo: str = "mes", ref: date | None = None, situacao: str | None = None,
+                s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Tudo o que entrou ou saiu na semana/mês: revisões e GRDs, assinado (comprovado) ou pendente."""
+    from app.shared.tempo import hoje_local
+
+    if situacao not in (None, "", "assinado", "pendente"):
+        raise DomainError("situação: assinado ou pendente", "situacao")
+    return pst.consolidado(s, c.obra_id, periodo, ref or hoje_local(), situacao or None)
 
 
 @router.get("/opcoes")
