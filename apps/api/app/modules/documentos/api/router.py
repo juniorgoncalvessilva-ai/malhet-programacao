@@ -101,6 +101,48 @@ def recebido_descartar(rid: int, s: Session = Depends(get_session), c: ContextoO
     envio.descartar(s, c.obra_id, rid, _quem(c))
 
 
+# ---- controle de projetos por ativo (spec 133) ----
+@router.post("/ativos/previa")
+def ativos_previa(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    from app.modules.documentos.application import controle_ativo as cta
+
+    return cta.previa(s, c.obra_id, arquivo.file.read(sv.LIMITE + 1))
+
+
+@router.post("/ativos")
+def ativos_importar(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    from app.modules.documentos.application import controle_ativo as cta
+
+    return cta.importar(s, c.obra_id, arquivo.file.read(sv.LIMITE + 1), _quem(c))
+
+
+@router.get("/ativos")
+def ativos_listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    from app.modules.documentos.application import controle_ativo as cta
+
+    return cta.listar(s, c.obra_id)
+
+
+@router.get("/ativos/situacao")
+def ativos_situacao(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Situação de projeto por frente (área): o pior status dos ativos dela e projetos com revisão vigente, com memória."""
+    from app.modules.documentos.application import controle_ativo as cta
+
+    return {str(k): v for k, v in cta.situacao_por_frente(s, c.obra_id).items()}
+
+
+class FrenteAtivoIn(BaseModel):
+    indice: int = 0
+    area_id: int | None = None
+
+
+@router.put("/ativos/{cid}/frente")
+def ativos_frente(cid: int, d: FrenteAtivoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    from app.modules.documentos.application import controle_ativo as cta
+
+    return cta.definir_frente(s, c.obra_id, cid, d.indice, d.area_id, _quem(c))
+
+
 # ---- pastas e consolidado (spec 129) ----
 class PastaIn(BaseModel):
     nome: str = Field(min_length=3, max_length=80)

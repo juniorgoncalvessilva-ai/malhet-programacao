@@ -212,3 +212,40 @@ class DocumentoRecebidoModel(Base):
     enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolvido_por: Mapped[str | None] = mapped_column(String(150))
     resolvido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ControleAtivoModel(Base):
+    """Controle de projetos por ativo (spec 133): uma linha por ativo da planilha da obra, com o grupo, a situação dos projetos e
+    as referências (CWA/TAG) já casadas com as frentes (`refs`: texto, cwa, tag, descricao, area_id, confirmada, como).
+    Reimportar substitui o controle da obra; as ligações documento → frente ficam."""
+
+    __tablename__ = "controle_ativo"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    grupo: Mapped[str | None] = mapped_column(String(80))
+    texto: Mapped[str] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(12))  # ok | parcial | pendente | critico | sem_projeto | revisao | outro
+    status_texto: Mapped[str | None] = mapped_column(String(120))
+    refs: Mapped[list] = mapped_column(JSONB, default=list)
+    ordem: Mapped[int] = mapped_column(Integer, default=0)
+    linha: Mapped[int | None] = mapped_column(Integer)
+    importado_por: Mapped[str] = mapped_column(String(150))
+    importado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ControleAtivoProjetoModel(Base):
+    """Projeto listado no ativo: número, revisão citada, o que ele é naquele ativo (disciplina), observação e se foi cancelado."""
+
+    __tablename__ = "controle_ativo_projeto"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    controle_id: Mapped[int] = mapped_column(ForeignKey("controle_ativo.id", ondelete="CASCADE"), index=True)
+    codigo: Mapped[str | None] = mapped_column(String(80), index=True)
+    revisao: Mapped[str | None] = mapped_column(String(6))
+    disciplina: Mapped[str | None] = mapped_column(String(200))
+    obs: Mapped[str | None] = mapped_column(String(300))
+    nota: Mapped[str | None] = mapped_column(String(120))  # "SEM PROJETOS", "EM ADEQUAÇÃO"
+    cancelado: Mapped[bool] = mapped_column(Boolean, default=False)
+    documento_id: Mapped[int | None] = mapped_column(ForeignKey("documento.id", ondelete="SET NULL"))
+    ordem: Mapped[int] = mapped_column(Integer, default=0)
+    linha: Mapped[int | None] = mapped_column(Integer)

@@ -9,6 +9,7 @@ import { DetalheDocumento } from '@/components/Documentos/DetalheDocumento';
 import { ConsolidadoDocumentos } from '@/components/Documentos/ConsolidadoDocumentos';
 import { EnviarDocumentos } from '@/components/Documentos/EnviarDocumentos';
 import { GrafoDocumentos } from '@/components/Documentos/GrafoDocumentos';
+import { ProjetosPorAtivo } from '@/components/Documentos/ProjetosPorAtivo';
 import { PastasDocumentos } from '@/components/Documentos/PastasDocumentos';
 import { Abas } from '@/components/Obra/Abas';
 import { Carregando } from '@/components/Obra/Esqueleto';
@@ -214,11 +215,20 @@ function Grds({ docs, planejador }: { docs: DocumentoResumo[]; planejador: boole
 
 function Conexoes({ onAbrir }: { onAbrir: (id: number) => void }) {
   const api = useApi();
-  const q = useQuery({ queryKey: ['documentos', 'grafo'], queryFn: () => api.get<Grafo>('/documentos/grafo') });
+  const [vista, setVista] = useState<'ativos' | 'mapa'>('ativos');
+  const q = useQuery({ queryKey: ['documentos', 'grafo'], enabled: vista === 'mapa', queryFn: () => api.get<Grafo>('/documentos/grafo') });
   return (
-    <Painel titulo="Como os documentos se ligam?" subtitulo="Cada documento com as frentes, os grupos de atividade e os documentos que ele referencia. As mesmas ligações vão nas notas .md do acervo da obra (abrem no graphify ou no Obsidian).">
-      {q.data ? <GrafoDocumentos g={q.data} onAbrir={onAbrir} /> : <Carregando />}
-    </Painel>
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-2">
+        <Chip ativo={vista === 'ativos'} onClick={() => setVista('ativos')}>Projetos por ativo</Chip>
+        <Chip ativo={vista === 'mapa'} onClick={() => setVista('mapa')}>Mapa das ligações</Chip>
+      </div>
+      {vista === 'ativos' ? <ProjetosPorAtivo onAbrir={onAbrir} /> : (
+        <Painel titulo="Como os documentos se ligam?" subtitulo="Cada documento com as frentes, os grupos de atividade e os documentos que ele referencia. As mesmas ligações vão nas notas .md do acervo da obra (abrem no graphify ou no Obsidian).">
+          {q.data ? <GrafoDocumentos g={q.data} onAbrir={onAbrir} /> : <Carregando />}
+        </Painel>
+      )}
+    </div>
   );
 }
 

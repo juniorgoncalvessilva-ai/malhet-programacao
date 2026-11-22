@@ -7,7 +7,9 @@ import { toast } from 'sonner';
 import { Abas } from '@/components/Obra/Abas';
 import { Calculado } from '@/components/Obra/Calculado';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { PilulaProjetos } from '@/components/Documentos/PilulaProjetos';
 import { Botao, Cabecalho, Campo, Indicador, Painel, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
+import { useSituacaoProjetos } from '@/lib/documentos/ativos';
 import { useFrentes2, useProgramacoes, useWbs } from '@/hooks/programacao/planejamento';
 import { useEquipes } from '@/hooks/programacao/queries';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -91,6 +93,7 @@ export default function PlanoPage() {
 function Grade({ dados, seis, sel, onSel, detalhe }: { dados: PlanoResposta; seis: boolean; sel: number | null; onSel: (id: number) => void; detalhe?: React.ReactNode }) {
   const { semanas } = dados;
   const h = hoje();
+  const projetosDa = useSituacaoProjetos();
   // spec 085: recolher pela estrutura (Local → Área → CWP), como na WBS
   const [fechados, setFechados] = useState<Set<string>>(new Set());
   const alternar = (k: string) => setFechados((f) => { const n = new Set(f); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -181,7 +184,7 @@ function Grade({ dados, seis, sel, onSel, detalhe }: { dados: PlanoResposta; sei
               {!fechados.has(`L:${l}`) && areas.map(({ a, cwps }) => (
                 <Fragment key={a}>
                   <tr onClick={() => alternar(`A:${l}|${a}`)} className="cursor-pointer"><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-[#173761] px-3 py-1.5 text-xs font-semibold text-white">
-                    <span aria-hidden="true" className="mr-1.5 inline-block w-3">{seta(`A:${l}|${a}`)}</span>{a}<span className="ml-2 font-normal opacity-80">{total([{ cwps }])}</span></td></tr>
+                    <span aria-hidden="true" className="mr-1.5 inline-block w-3">{seta(`A:${l}|${a}`)}</span>{a}<span className="ml-2 font-normal opacity-80">{total([{ cwps }])}</span><PilulaProjetos s={projetosDa(cwps[0]?.itens[0]?.area_id)} /></td></tr>
                   {!fechados.has(`A:${l}|${a}`) && cwps.map(({ c, itens }) => (
                     <Fragment key={c || '—'}>
                       {c && <tr onClick={() => alternar(`C:${l}|${a}|${c}`)} className="cursor-pointer"><td colSpan={colunas} className="border-b border-m-stroke-subtle bg-m-surface-active px-3 py-1 text-[11.5px] font-semibold text-m-text-primary">
@@ -242,6 +245,7 @@ function Detalhe({ item, marcos, onFechar }: { item: ItemPlano; marcos: ItemPlan
   const { pode } = useObra();
   const [editar, setEditar] = useState(false);
   const [r, setR] = useState({ acao: '', responsavel: '', prazo_termino: '', seis_m: '', impeditivo: true });
+  const projeto = useSituacaoProjetos()(item.area_id);
   const pedir = (p: Promise<unknown>, ok: string) => p.then(() => { toast.success(ok); atualizar(); }).catch((e) => toast.error(e.message));
   if (editar) return <FormItem item={item} marcos={marcos} onFechar={() => setEditar(false)} />;
   return (
@@ -255,6 +259,14 @@ function Detalhe({ item, marcos, onFechar }: { item: ItemPlano; marcos: ItemPlan
       </div>}>
       {item.programacoes.length > 0 && <p className="text-[13px] text-m-text-secondary">Na programação: {item.programacoes.map((p, k) => <Fragment key={p.id}>{k ? ', ' : ''}<Link href={`/app/programacoes/${p.id}`} className="font-semibold text-m-accent underline">{p.titulo}</Link></Fragment>)}</p>}
       {item.recursos.length > 0 && <Recursos recursos={item.recursos} />}
+      {!item.marco && projeto && !projeto.libera && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-m-md border border-m-warning bg-m-warning-subtle px-3 py-2 text-[13px]">
+          <span className="text-m-text-primary">Projeto da frente: <b>{projeto.ativos.map((a) => a.status_texto ?? projeto.rotulo).join(' · ')}</b>
+            <PilulaProjetos s={projeto} /></span>
+          {pode('encarregado') && <button type="button" className="font-semibold text-m-accent" onClick={() => setR({ ...r, seis_m: 'MET', impeditivo: true,
+            acao: `Liberar os projetos da frente ${item.area ?? ''} (${projeto.rotulo.toLowerCase()} no controle por ativo)` })}>Preencher restrição de projeto</button>}
+        </div>
+      )}
       {!item.marco && <>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-[14px] font-semibold text-m-text-primary">Restrições (alimentam o <Link href="/app/restricoes" className="text-m-accent underline">Restrições 6WLA</Link>)</h3>

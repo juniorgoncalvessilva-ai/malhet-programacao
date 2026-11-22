@@ -8,6 +8,8 @@ import { BuscaAtividadeCrono } from '@/components/Obra/AssociarAtividade';
 import { toast } from 'sonner';
 import { Calculado, nbr, type MemoriaCalculo } from '@/components/Obra/Calculado';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { PilulaProjetos } from '@/components/Documentos/PilulaProjetos';
+import { useSituacaoProjetos } from '@/lib/documentos/ativos';
 import { Botao, Cabecalho, Campo, Erro, Painel, Pilula, Selecao, fmt } from '@/components/Obra/ui';
 import { useCatalogo, useFrentes2, useProgramacoes, useWbs } from '@/hooks/programacao/planejamento';
 import { useEquipes } from '@/hooks/programacao/queries';
@@ -51,6 +53,7 @@ function memQtd(n: NoWbs): MemoriaCalculo {
 }
 
 export default function WbsPage() {
+  const projetosDa = useSituacaoProjetos();
   const { pode } = useObra();
   const editar = pode('planejador');
   const wbs = useWbs();
@@ -292,6 +295,7 @@ export default function WbsPage() {
           <td className={`${td} min-w-[360px]`}>{n.titulo}{n.detalhe && <span className={`ml-2 text-[11px] font-normal ${n.tipo === 'area' ? 'opacity-80' : 'text-m-text-muted'}`}>{n.detalhe}</span>}
             {n.codigo_p6 && <span className="ml-2 text-[10.5px] font-normal text-m-text-muted" title="Código WBS no Primavera">WBS {n.codigo_p6}</span>}
             {n.origem === 'p6' && <span className="ml-2 rounded-[5px] bg-m-info-subtle px-1.5 py-px text-[10px] font-semibold text-m-info" title="Veio da WBS do cronograma (P6)">P6</span>}
+            {n.tipo === 'area' && <PilulaProjetos s={projetosDa(n.area_id)} />}
             {n.fora_cronograma && <span className="ml-1"><Pilula tom="atencao">fora do cronograma</Pilula></span>}
             {n.id_crono && !associar && <div className="text-[11px] font-normal text-m-text-muted">atividade {n.id_crono}{n.atividade_p6 ? ` · ${n.atividade_p6}` : ''}</div>}
             {associar && (n.tipo === 'iwp' || n.tipo === 'etapa') && <CelulaCronograma n={n} a={assocPorId.get(n.id)} edita={editar}

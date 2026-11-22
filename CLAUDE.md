@@ -174,6 +174,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   pendente na LDO) e `application/envio.py::enviar` (`POST /documentos/enviar`) registra sozinho; o que não casa vai a
   `documento_recebido` (acervo, motivo, sugestões) para associar à LDO, criar o documento ou relacionar a outros
   (`/documentos/recebidos/{rid}/associar|novo`, DELETE descarta). Nunca chuta código fora da LDO (só o do carimbo com revisão).
+  Controle de projetos por ativo (spec 133, `domain/controle_ativo.py`, `application/controle_ativo.py`): planilha STATUS | Ativo |
+  Projeto | Disciplina | OBS (grupos, mesclas, vários CWAs por célula, "Cancelado") → `controle_ativo`(+`_projeto`); TAG/CWA único
+  confirmam a frente e ligam os projetos da LDO (aplica_a), nome só sugere, cancelado não liga, fora da LDO só listado (dica
+  `_parecidos`); `GET /documentos/ativos/situacao` (pior status + vigentes/total com memória) alimenta `PilulaProjetos`
+  (`useSituacaoProjetos`) na WBS e no plano (aviso + restrição de projeto). Conexões: "Projetos por ativo" | "Mapa das ligações".
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
