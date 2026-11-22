@@ -155,6 +155,7 @@ class PastaIn(BaseModel):
     meio: str | None = Field(None, max_length=80)
     local: str | None = Field(None, max_length=120)
     retencao: str | None = Field(None, max_length=160)
+    subpastas: list[str] | None = None
 
 
 @router.get("/pastas")
@@ -166,7 +167,7 @@ def pastas(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 @router.post("/pastas", status_code=201)
 def nova_pasta(d: PastaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes, natureza=d.natureza,
-                      responsavel=d.responsavel, meio=d.meio, local=d.local, retencao=d.retencao)
+                      responsavel=d.responsavel, meio=d.meio, local=d.local, retencao=d.retencao, subpastas=d.subpastas)
 
 
 @router.get("/plano-arquivamento.xlsx")
@@ -184,7 +185,7 @@ def restaurar_pastas(s: Session = Depends(get_session), c: ContextoObra = Depend
 @router.put("/pastas/{pid}")
 def editar_pasta(pid: int, d: PastaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes, pasta_id=pid,
-                      natureza=d.natureza, responsavel=d.responsavel, meio=d.meio, local=d.local, retencao=d.retencao)
+                      natureza=d.natureza, responsavel=d.responsavel, meio=d.meio, local=d.local, retencao=d.retencao, subpastas=d.subpastas)
 
 
 @router.delete("/pastas/{pid}", status_code=204)

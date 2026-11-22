@@ -15,6 +15,8 @@ export interface DocumentoResumo {
   projeto: string | null; origem: string; observacao: string | null; vigente: RevisaoDoc | null; ultima: RevisaoDoc | null;
   revisoes: number; sugestoes: number; ligacoes: number;
   pacote?: string | null; local_texto?: string | null; disciplina_sigla?: string | null;
+  /** Spec 134: frentes confirmadas (aplica_a → área) e a data da última revisão enviada. */
+  frentes?: number[]; atualizado_em?: string | null;
 }
 export interface ResultadoLdo {
   criados: number; atualizados: number; revisoes: number; ligados: number; sugeridos: number; frentes_nao_achadas: string[];
@@ -75,10 +77,14 @@ export interface PastaDoc {
   pacotes: string[]; documentos: number; vigentes: number; ultima: string | null; por_pacote: Record<string, number>;
   natureza: 'documento' | 'registro'; responsavel: string | null; meio: string | null; local: string | null; retencao: string | null;
   por_disciplina: Record<string, number>;
+  /** Spec 134: níveis das subpastas (pacote, frente, disciplina, tipo, ano) e os documentos da pasta. */
+  subpastas: NivelPasta[]; membros: number[];
 }
+export type NivelPasta = 'pacote' | 'frente' | 'disciplina' | 'tipo' | 'ano';
 export interface Pastas {
   pastas: PastaDoc[]; sem_pasta: number; sugestao: { nome: string; tipos: string[]; documentos: number } | null; documentos: number;
   faltam_do_modelo: string[]; armazenamento: { documentos: number; obra: number; limite: number };
+  sem_pasta_ids: number[]; niveis: Record<NivelPasta, string>;
 }
 export interface ItemConsolidado {
   tipo: 'revisao' | 'grd'; id: number; documento_id: number | null; codigo: string; titulo: string; revisao: string | null;

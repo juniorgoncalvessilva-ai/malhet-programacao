@@ -30,6 +30,26 @@ class Regra:
             raise DomainError(f"tipo desconhecido: {', '.join(ruins)}", "tipos")
 
 
+# subpastas (spec 134): a pasta se abre sozinha nos níveis escolhidos — padronização sem mover arquivo
+NIVEIS = {"pacote": "Pacote (aba da LDO)", "frente": "Frente (CWA)", "disciplina": "Disciplina", "tipo": "Tipo de documento",
+          "ano": "Ano da revisão"}
+
+
+def subpastas_padrao(tipos) -> list[str]:
+    """Projetos abrem por pacote → frente (CWA) → disciplina; o resto por pacote → disciplina."""
+    return ["pacote", "frente", "disciplina"] if "DES" in (tipos or ()) else ["pacote", "disciplina"]
+
+
+def validar_subpastas(niveis: list[str] | None) -> list[str]:
+    out = list(dict.fromkeys(n for n in (niveis or []) if n))
+    ruins = [n for n in out if n not in NIVEIS]
+    if ruins:
+        raise DomainError(f"subpasta desconhecida: {', '.join(ruins)} (use {', '.join(NIVEIS)})", "subpastas")
+    if len(out) > 3:
+        raise DomainError("no máximo 3 níveis de subpasta", "subpastas")
+    return out
+
+
 NATUREZAS = {"documento": "Documento", "registro": "Registro"}  # registro = evidência do que foi feito (Plano de Arquivamento 6.1)
 RETENCAO_PADRAO = "Na obra durante a execução; depois no Data-Book, pelo prazo do contrato"
 MEIO_PADRAO = "Digital — acervo da obra no Malhet"

@@ -76,7 +76,10 @@ def _doc_dict(d: DocumentoModel, revs: list[DocumentoRevisaoModel], vinc: list[D
             "observacao": d.observacao, "pacote": d.pacote, "local_texto": d.local_texto, "disciplina_sigla": d.disciplina_sigla,
             "vigente": _rev_dict(vig, revs) if vig else None,
             "ultima": _rev_dict(ultima, revs) if ultima else None, "revisoes": len(revs),
-            "sugestoes": sum(1 for v in (vinc or []) if v.sugerido), "ligacoes": sum(1 for v in (vinc or []) if not v.sugerido)}
+            "sugestoes": sum(1 for v in (vinc or []) if v.sugerido), "ligacoes": sum(1 for v in (vinc or []) if not v.sugerido),
+            # spec 134: subpastas por frente e "recentes" no explorador
+            "frentes": sorted({v.alvo_id for v in (vinc or []) if v.alvo_tipo == "area" and v.relacao == "aplica_a" and not v.sugerido}),
+            "atualizado_em": max((r.enviado_em.isoformat() for r in revs if r.enviado_em), default=None)}
 
 
 def listar(s: Session, obra_id: int, busca: str | None = None, area_id: int | None = None) -> list[dict]:

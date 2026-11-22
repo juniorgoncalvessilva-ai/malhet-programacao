@@ -1,13 +1,14 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, FileSpreadsheet, Plus, Search, Upload } from 'lucide-react';
+import { ArrowLeft, CheckCheck, FileSpreadsheet, Plus, Search, Upload } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
 import { DetalheDocumento } from '@/components/Documentos/DetalheDocumento';
 import { ConsolidadoDocumentos } from '@/components/Documentos/ConsolidadoDocumentos';
 import { EnviarDocumentos } from '@/components/Documentos/EnviarDocumentos';
+import { ExploradorDocumentos } from '@/components/Documentos/ExploradorDocumentos';
 import { GrafoDocumentos } from '@/components/Documentos/GrafoDocumentos';
 import { ProjetosPorAtivo } from '@/components/Documentos/ProjetosPorAtivo';
 import { PastasDocumentos } from '@/components/Documentos/PastasDocumentos';
@@ -38,11 +39,12 @@ function Documentos() {
   const params = useSearchParams();
   const { pode, superadmin } = useObra();
   const planejador = pode('planejador');
-  const [aba, setAba] = useState<Aba>(params.get('doc') ? 'lista' : 'pastas');
+  const [aba, setAba] = useState<Aba>('pastas');
   const [busca, setBusca] = useState('');
   const [tipo, setTipo] = useState('');
   const [pacote, setPacote] = useState('');
   const [aberto, setAberto] = useState<number | null>(Number(params.get('doc')) || null);
+  const [gerenciar, setGerenciar] = useState(false);
   const lista = useQuery({ queryKey: ['documentos', 'lista'], queryFn: () => api.get<DocumentoResumo[]>('/documentos') });
   const opcoes = useQuery({ queryKey: ['documentos', 'opcoes'], queryFn: () => api.get<OpcoesDocumentos>('/documentos/opcoes'), staleTime: Infinity });
   const docs = lista.data ?? [];
@@ -69,7 +71,7 @@ function Documentos() {
         <Indicador rotulo="Ligações a confirmar" valor={sugestoes} tom={sugestoes ? 'atencao' : undefined} detalhe="sugeridas pela TAG do desenho" />
       </div>
       <Abas rotulo="Documentos" ativa={aba} onTrocar={setAba}
-        abas={[{ chave: 'pastas', titulo: 'Pastas' }, { chave: 'enviar', titulo: `Enviar e relacionar${pendentes ? ` (${pendentes})` : ''}`, visivel: planejador }, { chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'consolidado', titulo: 'Consolidado' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões', visivel: superadmin },
+        abas={[{ chave: 'pastas', titulo: 'Explorar pastas' }, { chave: 'enviar', titulo: `Enviar e relacionar${pendentes ? ` (${pendentes})` : ''}`, visivel: planejador }, { chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'consolidado', titulo: 'Consolidado' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões', visivel: superadmin },
           { chave: 'importar', titulo: 'Importar LDO', visivel: planejador }]} />
 
       {aba === 'lista' && (
@@ -101,8 +103,13 @@ function Documentos() {
           </Painel>
         </>
       )}
-      {aba === 'pastas' && <PastasDocumentos opcoes={opcoes.data} docs={docs} onAbrir={setAberto}
-        onAcao={(a) => setAba(a === 'enviar' ? 'enviar' : a === 'ldo' ? 'importar' : 'grds')} />}
+      {aba === 'pastas' && (gerenciar
+        ? <div className="flex flex-col gap-3">
+            <Botao variante="secundario" className="w-fit" onClick={() => setGerenciar(false)}><ArrowLeft size={16} /> Voltar ao explorador</Botao>
+            <PastasDocumentos opcoes={opcoes.data} docs={docs} onAbrir={setAberto} onAcao={(a) => setAba(a === 'enviar' ? 'enviar' : a === 'ldo' ? 'importar' : 'grds')} />
+          </div>
+        : <ExploradorDocumentos docs={docs} opcoes={opcoes.data} onAbrir={setAberto} onGerenciar={() => setGerenciar(true)}
+            onAcao={(a) => setAba(a === 'enviar' ? 'enviar' : a === 'ldo' ? 'importar' : 'grds')} />)}
       {aba === 'enviar' && planejador && <EnviarDocumentos opcoes={opcoes.data} docs={docs} onAbrir={setAberto} />}
       {aba === 'consolidado' && <ConsolidadoDocumentos onAbrir={setAberto} />}
       {aba === 'grds' && <Grds docs={docs} planejador={planejador} />}

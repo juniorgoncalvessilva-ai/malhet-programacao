@@ -185,6 +185,7 @@ class DocumentoPastaModel(Base):
     meio: Mapped[str | None] = mapped_column(String(80))
     local: Mapped[str | None] = mapped_column(String(120))
     retencao: Mapped[str | None] = mapped_column(String(160))
+    subpastas: Mapped[list | None] = mapped_column(JSONB)  # spec 134: níveis (pacote, frente, disciplina, tipo, ano); vazio = padrão
     criado_por: Mapped[str] = mapped_column(String(150))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

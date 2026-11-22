@@ -179,6 +179,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   confirmam a frente e ligam os projetos da LDO (aplica_a), nome só sugere, cancelado não liga, fora da LDO só listado (dica
   `_parecidos`); `GET /documentos/ativos/situacao` (pior status + vigentes/total com memória) alimenta `PilulaProjetos`
   (`useSituacaoProjetos`) na WBS e no plano (aviso + restrição de projeto). Conexões: "Projetos por ativo" | "Mapa das ligações".
+  Explorador GED (spec 134, aba "Explorar pastas", `ExploradorDocumentos`): árvore (Todos · Recentes · pastas · Sem pasta) com
+  subpastas pelos níveis da pasta (`documento_pasta.subpastas`: pacote/frente/disciplina/tipo/ano, `NIVEIS`, padrão projetos =
+  pacote → frente → disciplina), trilha, busca global, lista, "Enviar aqui"/arrastar (spec 132) e prévia da revisão vigente com
+  carimbo, tela cheia, PDF, baixar, ficha e link. `/documentos/pastas` traz `membros`/`sem_pasta_ids`; documento traz `frentes`.
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

@@ -63,6 +63,8 @@ def listar(s: Session, obra_id: int, por: str) -> dict:
     pastas = garantir_modelo(s, obra_id, por)
     docs, revs = _docs_e_revs(s, obra_id)
     conta = {p.id: pd.Contagem() for p in pastas}
+    membros: dict[int, list[int]] = {p.id: [] for p in pastas}
+    sem_ids: list[int] = []
     sem: list[pd.DocInfo] = []
     for d in docs:
         info = _info(d)
@@ -73,6 +75,7 @@ def listar(s: Session, obra_id: int, por: str) -> dict:
         for p in pastas:
             if pd.pertence(info, _regra(p)):
                 achou = True
+                membros[p.id].append(d.id)
                 c = conta[p.id]
                 c.documentos += 1
                 c.vigentes += bool(vig)
@@ -84,6 +87,7 @@ def listar(s: Session, obra_id: int, por: str) -> dict:
                     c.disciplinas[d.disciplina] = c.disciplinas.get(d.disciplina, 0) + 1
         if not achou:
             sem.append(info)
+            sem_ids.append(d.id)
     docs_bytes = s.scalar(select(func.coalesce(func.sum(ArquivoModel.tamanho), 0)).where(
         ArquivoModel.obra_id == obra_id, ArquivoModel.pasta == "05-documentos")) or 0
     obra_bytes = s.scalar(select(func.coalesce(func.sum(ArquivoModel.tamanho), 0)).where(ArquivoModel.obra_id == obra_id)) or 0
@@ -95,7 +99,9 @@ def listar(s: Session, obra_id: int, por: str) -> dict:
                     "meio": p.meio or pd.MEIO_PADRAO, "local": p.local or f"Malhet · {p.codigo} {p.nome}",
                     "retencao": p.retencao or pd.RETENCAO_PADRAO,
                     "documentos": conta[p.id].documentos, "vigentes": conta[p.id].vigentes, "ultima": conta[p.id].ultima,
-                    "por_pacote": conta[p.id].pacotes, "por_disciplina": conta[p.id].disciplinas} for p in pastas],
+                    "por_pacote": conta[p.id].pacotes, "por_disciplina": conta[p.id].disciplinas,
+                    "subpastas": p.subpastas or pd.subpastas_padrao(p.tipos), "membros": membros[p.id]} for p in pastas],
+        "sem_pasta_ids": sem_ids, "niveis": pd.NIVEIS,
         "sem_pasta": len(sem), "sugestao": pd.sugestao_para(sem), "documentos": len(docs),
         "faltam_do_modelo": [m.nome for m in pd.MODELO if m.codigo not in {p.codigo for p in pastas if p.do_modelo} and m.codigo in modelo],
         "armazenamento": {"documentos": int(docs_bytes), "obra": int(obra_bytes),
@@ -123,7 +129,8 @@ def _lista(v: list[str] | None, maiusc: bool = True) -> list[str] | None:
 
 def salvar(s: Session, obra_id: int, por: str, nome: str, descricao: str | None, tipos: list[str] | None,
            disciplinas: list[str] | None, pacotes: list[str] | None, pasta_id: int | None = None, *, natureza: str | None = None,
-           responsavel: str | None = None, meio: str | None = None, local: str | None = None, retencao: str | None = None) -> dict:
+           responsavel: str | None = None, meio: str | None = None, local: str | None = None, retencao: str | None = None,
+           subpastas: list[str] | None = None) -> dict:
     garantir_modelo(s, obra_id, por)
     regra = pd.Regra(tuple(_lista(tipos) or ()), tuple(_lista(disciplinas) or ()), tuple(_lista(pacotes, False) or ()))
     if pasta_id:
@@ -141,6 +148,8 @@ def salvar(s: Session, obra_id: int, por: str, nome: str, descricao: str | None,
     p.meio = (meio or "").strip()[:80] or p.meio or pd.MEIO_PADRAO
     p.local = (local or "").strip()[:120] or p.local or f"Malhet · {p.codigo} {p.nome}"
     p.retencao = (retencao or "").strip()[:160] or p.retencao or pd.RETENCAO_PADRAO
+    if subpastas is not None:
+        p.subpastas = pd.validar_subpastas(subpastas) or None
     s.flush()
     return {"id": p.id, "codigo": p.codigo, "nome": p.nome}
 

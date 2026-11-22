@@ -23,8 +23,8 @@ const quando = (iso: string | null) => {
 };
 const gb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} GB` : `${(b / 1024 ** 2).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`);
 
-type Form = { id?: number; nome: string; descricao: string; tipos: string[]; disciplinas: string; pacotes: string[]; natureza: string; responsavel: string; meio: string; local: string; retencao: string };
-const NOVA = { nome: '', descricao: '', tipos: [] as string[], disciplinas: '', pacotes: [] as string[], natureza: 'documento', responsavel: '', meio: '', local: '', retencao: '' };
+type Form = { id?: number; nome: string; descricao: string; tipos: string[]; disciplinas: string; pacotes: string[]; natureza: string; responsavel: string; meio: string; local: string; retencao: string; subpastas: string[] };
+const NOVA = { nome: '', descricao: '', tipos: [] as string[], disciplinas: '', pacotes: [] as string[], natureza: 'documento', responsavel: '', meio: '', local: '', retencao: '', subpastas: ['pacote', 'disciplina'] };
 
 /**
  * Pastas de documentos (spec 129) — a organização do vídeo Growarq no Malhet: a obra recebe a cópia da pasta-modelo e cada
@@ -51,7 +51,7 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
   const salvar = async () => {
     if (!form) return;
     const corpo = { nome: form.nome, descricao: form.descricao || null, tipos: form.tipos, pacotes: form.pacotes, natureza: form.natureza,
-      responsavel: form.responsavel || null, meio: form.meio || null, local: form.local || null, retencao: form.retencao || null,
+      responsavel: form.responsavel || null, meio: form.meio || null, local: form.local || null, retencao: form.retencao || null, subpastas: form.subpastas,
       disciplinas: form.disciplinas.split(/[,;]/).map((x) => x.trim()).filter(Boolean) };
     try {
       if (form.id) await api.put(`/documentos/pastas/${form.id}`, corpo); else await api.post('/documentos/pastas', corpo);
@@ -102,6 +102,8 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
                 <MultiSelecao rotulo="Tipos" valor={form.tipos} comNa={false} largura="w-[240px]" onChange={(v) => setForm({ ...form, tipos: v })}
                   opcoes={Object.entries(opcoes?.tipos ?? {}).map(([k, v]) => ({ valor: k, rotulo: v }))} />
                 <Campo rotulo="Disciplinas (sigla ou nome, vírgula)" value={form.disciplinas} onChange={(e) => setForm({ ...form, disciplinas: e.target.value })} placeholder="C, Elétrica" className="w-[240px]" />
+                <MultiSelecao rotulo="Subpastas (na ordem)" valor={form.subpastas} comNa={false} largura="w-[260px]" onChange={(v) => setForm({ ...form, subpastas: v })}
+                  opcoes={Object.entries(d.niveis ?? {}).map(([k, v]) => ({ valor: k, rotulo: v }))} />
                 {pacotes.length > 0 && <MultiSelecao rotulo="Pacotes da LDO" valor={form.pacotes} comNa={false} largura="w-[240px]" onChange={(v) => setForm({ ...form, pacotes: v })}
                   opcoes={pacotes.map((p) => ({ valor: p, rotulo: p }))} />}
               </div>
@@ -139,7 +141,7 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
                   <td className={`${td} whitespace-nowrap text-right`} onClick={(e) => e.stopPropagation()}>
                     {planejador && <>
                       <button type="button" aria-label={`Editar ${p.nome}`} className="p-1.5 text-m-text-muted hover:text-m-accent"
-                        onClick={() => setForm({ id: p.id, nome: p.nome, descricao: p.descricao ?? '', tipos: p.tipos, disciplinas: p.disciplinas.join(', '), pacotes: p.pacotes, natureza: p.natureza, responsavel: p.responsavel ?? '', meio: p.meio ?? '', local: p.local ?? '', retencao: p.retencao ?? '' })}><Pencil size={15} /></button>
+                        onClick={() => setForm({ id: p.id, nome: p.nome, descricao: p.descricao ?? '', tipos: p.tipos, disciplinas: p.disciplinas.join(', '), pacotes: p.pacotes, natureza: p.natureza, responsavel: p.responsavel ?? '', meio: p.meio ?? '', local: p.local ?? '', retencao: p.retencao ?? '', subpastas: p.subpastas })}><Pencil size={15} /></button>
                       <button type="button" aria-label={`Excluir ${p.nome}`} className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={() => excluir(p)}><Trash2 size={15} /></button>
                     </>}
                     <ChevronRight size={16} className="ml-1 inline text-m-text-muted" aria-hidden="true" />
@@ -154,7 +156,7 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
                 <td className={td}><Pilula tom="atencao">Sugerida</Pilula></td>
                 <td className={tdNum}>{d.sem_pasta}</td><td className={tdNum}>—</td><td className={td}>—</td>
                 <td className={`${td} text-right`} onClick={(e) => e.stopPropagation()}>
-                  {planejador && d.sugestao && <Botao variante="secundario" className="h-8 px-3" onClick={() => setForm({ ...NOVA, nome: d.sugestao!.nome, tipos: d.sugestao!.tipos })}>Criar pasta</Botao>}
+                  {planejador && d.sugestao && <Botao variante="secundario" className="h-8 px-3" onClick={() => setForm({ ...NOVA, nome: d.sugestao!.nome, tipos: d.sugestao!.tipos, subpastas: d.sugestao!.tipos.includes('DES') ? ['pacote', 'frente', 'disciplina'] : ['pacote', 'disciplina'] })}>Criar pasta</Botao>}
                 </td>
               </tr>
             )}
