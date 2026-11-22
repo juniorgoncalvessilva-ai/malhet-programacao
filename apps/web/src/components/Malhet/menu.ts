@@ -20,7 +20,7 @@ export const MENU: GrupoMenu[] = [
     etapa: 'Projeto e escopo',
     cor: 'var(--m-proc-planejar)',
     itens: [
-      { titulo: 'Documentos (LDO e GRD)', url: '/app/documentos', icone: FolderOpen, palavras: 'projeto desenho dwg ldo grd revisão lista mestra procedimento norma' },
+      { titulo: 'Documentos', url: '/app/documentos', icone: FolderOpen, palavras: 'projeto desenho dwg ldo grd revisão lista mestra procedimento norma' },
       { titulo: 'Take-off do projeto', url: '/app/takeoff', icone: Ruler, palavras: 'takeoff quantidade quantitativo aço ferro resumo levantamento' },
       { titulo: 'WBS de execução', url: '/app/wbs', icone: ListTree, palavras: 'eap cwa cwp iwp awp estrutura' },
       { titulo: 'Critério de avanço', url: '/app/criterios', icone: Percent, palavras: 'medição etapas cms peso' },

@@ -6,7 +6,7 @@ vai ao IWP. Nada é escrito na WBS sem o planejador pedir.
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.arquivos.application import servico as arquivos
@@ -55,13 +55,19 @@ def extrair(s: Session, obra_id: int, rev_id: int, dxf: bytes | None = None) -> 
     """Lê o desenho da revisão e grava as quantidades. Rodar de novo atualiza os números e mantém as decisões."""
     r = _rev(s, obra_id, rev_id)
     d = s.get(DocumentoModel, r.documento_id)
-    if dxf is None:
-        if not r.dxf_arquivo_id:
-            raise DomainError("esta revisão não tem desenho em DXF/DWG para ler as quantidades", "revisao")
-        a = s.get(ArquivoModel, r.dxf_arquivo_id)
-        dxf = arquivos.abrir(s, a)
-    textos, medidas, blocos, insunits = desenho.levantar(dxf)
-    extraidas = to.extrair(textos, medidas, blocos, insunits)
+    fonte = "DWG/DXF"
+    if dxf is None and r.dxf_arquivo_id:
+        dxf = arquivos.abrir(s, s.get(ArquivoModel, r.dxf_arquivo_id))
+    if dxf is not None:
+        textos, medidas, blocos, insunits = desenho.levantar(dxf)
+        extraidas = to.extrair(textos, medidas, blocos, insunits)
+    else:  # spec 131: sem DWG/DXF, o PDF original com camada de texto
+        orig = s.get(ArquivoModel, r.arquivo_id) if r.arquivo_id else None
+        if orig is None or orig.mime != "application/pdf":
+            raise DomainError("esta revisão não tem DWG, DXF ou PDF para ler as quantidades", "revisao")
+        from app.modules.documentos.infra import pdf as pdf_infra
+        fonte = "PDF"
+        extraidas = to.extrair(pdf_infra.textos(arquivos.abrir(s, orig)))
     revs = _revs_do_doc(s, d.id)
     anteriores = [x.id for x in revs if dom.chave_revisao(x.revisao) < dom.chave_revisao(r.revisao)]
     herdar: dict[str, TakeoffProjetoModel] = {}
@@ -90,8 +96,75 @@ def extrair(s: Session, obra_id: int, rev_id: int, dxf: bytes | None = None) -> 
     for chave, x in atuais.items():
         if chave not in vistos:
             s.delete(x)
+    r.takeoff_em, r.takeoff_qtd = datetime.now(timezone.utc), len(extraidas)
+    r.takeoff_obs = (None if extraidas else ("PDF sem camada de texto ou sem quadro de quantidades: envie o DWG/DXF" if fonte == "PDF"
+                     else "o desenho não tem tabela de ferros, resumo, lista de materiais nem anotação com unidade"))
     s.flush()
     return len(extraidas)
+
+
+# ---- os projetos da obra e o levantamento em lote (spec 131) -------------------------------------------------------------
+
+def _revisao_de_trabalho(revs: list[DocumentoRevisaoModel]) -> DocumentoRevisaoModel | None:
+    """A revisão que o take-off usa: a vigente; sem vigente, a mais nova que tem arquivo."""
+    vig = dom.vigente([dom.RevisaoInfo(r.id, r.revisao, r.finalidade) for r in revs])
+    if vig:
+        return next(r for r in revs if r.id == vig)
+    com_arquivo = [r for r in revs if r.arquivo_id]
+    return max(com_arquivo, key=lambda r: dom.chave_revisao(r.revisao)) if com_arquivo else (revs[-1] if revs else None)
+
+
+def _situacao(r: DocumentoRevisaoModel | None, mimes: dict[int, str]) -> str:
+    if r is None or not r.arquivo_id:
+        return "sem_arquivo"
+    legivel = bool(r.dxf_arquivo_id) or mimes.get(r.arquivo_id) == "application/pdf"
+    if not legivel:
+        return "sem_desenho"
+    if r.takeoff_em is None:
+        return "a_ler"
+    return "lido" if (r.takeoff_qtd or 0) > 0 else "sem_quantidade"
+
+
+def projetos(s: Session, obra_id: int) -> dict:
+    """Cada documento com a revisão que vale e a situação do levantamento: lido, a ler, sem quantidade, sem desenho, sem arquivo."""
+    docs = list(s.scalars(select(DocumentoModel).where(DocumentoModel.obra_id == obra_id).order_by(DocumentoModel.codigo)))
+    revs: dict[int, list[DocumentoRevisaoModel]] = {}
+    for r in s.scalars(select(DocumentoRevisaoModel).where(DocumentoRevisaoModel.obra_id == obra_id)):
+        revs.setdefault(r.documento_id, []).append(r)
+    ids = [r.arquivo_id for rs in revs.values() for r in rs if r.arquivo_id]
+    mimes = dict(s.execute(select(ArquivoModel.id, ArquivoModel.mime).where(ArquivoModel.id.in_(ids or [0]))).all())
+    aceitas = dict(s.execute(select(TakeoffProjetoModel.revisao_id, func.count()).where(
+        TakeoffProjetoModel.obra_id == obra_id, TakeoffProjetoModel.situacao == "aceito").group_by(TakeoffProjetoModel.revisao_id)).all())
+    out, conta = [], {"lido": 0, "a_ler": 0, "sem_quantidade": 0, "sem_desenho": 0, "sem_arquivo": 0}
+    for d in docs:
+        r = _revisao_de_trabalho(sorted(revs.get(d.id, []), key=lambda x: dom.chave_revisao(x.revisao)))
+        sit = _situacao(r, mimes)
+        conta[sit] += 1
+        out.append({"documento_id": d.id, "codigo": d.codigo, "titulo": d.titulo, "tipo": d.tipo, "pacote": d.pacote,
+                    "revisao_id": r.id if r else None, "revisao": r.revisao if r else None,
+                    "arquivo": ("DWG/DXF" if r and r.dxf_arquivo_id else ("PDF" if r and mimes.get(r.arquivo_id) == "application/pdf"
+                                else ("outro" if r and r.arquivo_id else None))),
+                    "situacao": sit, "quantidades": (r.takeoff_qtd or 0) if r else 0, "aceitas": aceitas.get(r.id, 0) if r else 0,
+                    "obs": r.takeoff_obs if r else None, "lido_em": r.takeoff_em.isoformat() if r and r.takeoff_em else None})
+    return {"projetos": out, "totais": conta}
+
+
+def levantar(s: Session, obra_id: int, limite: int = 25, refazer: bool = False) -> dict:
+    """Lê as revisões que ainda não foram lidas (ou todas, com `refazer`), em lotes — a tela chama de novo até zerar."""
+    lista = projetos(s, obra_id)["projetos"]
+    alvos = [p for p in lista if p["revisao_id"] and (p["situacao"] == "a_ler" or (refazer and p["situacao"] in ("lido", "sem_quantidade")))]
+    feitos, quantidades, erros = 0, 0, []
+    for p in alvos[:limite]:
+        try:
+            with s.begin_nested():
+                quantidades += extrair(s, obra_id, p["revisao_id"])
+            feitos += 1
+        except Exception as e:  # noqa: BLE001 — um arquivo ruim não para o lote
+            r = s.get(DocumentoRevisaoModel, p["revisao_id"])
+            r.takeoff_em, r.takeoff_qtd, r.takeoff_obs = datetime.now(timezone.utc), 0, f"não foi possível ler: {getattr(e, 'mensagem', type(e).__name__)}"[:200]
+            erros.append(f"{p['codigo']}: {r.takeoff_obs}")
+    s.flush()
+    return {"lidos": feitos, "quantidades": quantidades, "restantes": max(0, len(alvos) - limite), "erros": erros[:20]}
 
 
 def _quantidade_final(x: TakeoffProjetoModel) -> float:

@@ -145,7 +145,9 @@ def montar_quadros(textos: list[Texto]) -> list[Quadro]:
         linhas = linhas[k:]
         cab = linhas[0]
         centros = [t.x for t in cab]
-        ini, fim = min(centros) - 4 * h, max(centros) + 6 * h
+        # margem do quadro: pela letra (DXF) ou pelo espaço médio entre colunas (PDF, onde a escala letra × coluna muda)
+        passo_col = (max(centros) - min(centros)) / max(len(centros) - 1, 1)
+        ini, fim = min(centros) - max(4 * h, 0.6 * passo_col), max(centros) + max(6 * h, 0.8 * passo_col)
         q = Quadro(titulo=limpar(tit.texto), colunas=[limpar(t.texto) for t in cab], linhas=[], y=tit.y, x=tit.x,
                    camada=tit.camada, h=h, lugar=f"quadro \"{limpar(tit.texto)}\" (x {num(tit.x, 0)}, y {num(tit.y, 0)})")
         passo = None

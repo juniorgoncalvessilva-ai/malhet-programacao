@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { ProjetosTakeoff } from '@/components/Documentos/ProjetosTakeoff';
 import { TakeoffProjeto } from '@/components/Documentos/TakeoffProjeto';
 import { Carregando } from '@/components/Obra/Esqueleto';
 import { Cabecalho, Painel } from '@/components/Obra/ui';
@@ -21,6 +22,7 @@ function Takeoff() {
   return (
     <>
       <Cabecalho eyebrow="Projeto e escopo · take-off" titulo="Quanto o projeto pede, e se bate com a planilha" />
+      {!doc && <ProjetosTakeoff />}
       <Painel titulo={doc ? 'O que este desenho pede?' : 'Quanto o projeto pede?'}
         subtitulo="Quantidades lidas dos desenhos (DWG/DXF) que chegam em Documentos. Aceite com o item da PQ e a frente, compare com o take-off da planilha e leve ao IWP.">
         <TakeoffProjeto documentoId={doc} />

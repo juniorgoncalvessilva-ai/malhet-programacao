@@ -235,11 +235,11 @@ def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, 
         s.add(GrdItemModel(grd_id=grd_id, documento_id=d.id, revisao_id=r.id, revisao=rev, finalidade=fin))
     sugeridas = _sugerir_frentes(s, obra_id, d, r.tags or [], por)
     quantidades = 0
-    if dxf:  # take-off pelo projeto (spec 124): falha na leitura não impede guardar a revisão
+    if dxf or ext == "pdf":  # take-off pelo projeto (spec 124; PDF com texto, spec 131): falha na leitura não impede guardar
         from app.modules.documentos.application import takeoff
         try:
             with s.begin_nested():
-                quantidades = takeoff.extrair(s, obra_id, r.id, dxf)
+                quantidades = takeoff.extrair(s, obra_id, r.id, dxf) if dxf else takeoff.extrair(s, obra_id, r.id)
         except Exception as e:  # noqa: BLE001
             avisos.append(f"não foi possível levantar as quantidades do desenho ({type(e).__name__})")
             r.avisos = avisos

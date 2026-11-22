@@ -269,6 +269,18 @@ def takeoff(documento_id: int | None = None, s: Session = Depends(get_session), 
     return to.listar(s, c.obra_id, documento_id)
 
 
+@router.get("/takeoff/projetos")
+def takeoff_projetos(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Os projetos da obra e a situação do levantamento de cada um (lido, a ler, sem quantidade, sem desenho, sem arquivo)."""
+    return to.projetos(s, c.obra_id)
+
+
+@router.post("/takeoff/levantar")
+def takeoff_levantar(refazer: bool = False, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Lê as quantidades de todos os projetos ainda não lidos (em lotes de 25; `restantes` diz quantos faltam)."""
+    return to.levantar(s, c.obra_id, refazer=refazer)
+
+
 @router.get("/takeoff/itens-pq")
 def takeoff_itens(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     from app.modules.referencias.infra.pq_gateway import itens_pq

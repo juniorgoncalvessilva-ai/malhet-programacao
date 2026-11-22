@@ -17,7 +17,6 @@ import { Link, usePathname } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { cn } from '@/lib/utils';
 import { useObra } from '@/lib/obra/ObraProvider';
-import { usePreferencia } from '@/lib/preferencia';
 import { BuscaTelas } from './BuscaTelas';
 import { MENU, menuDoPerfil, type GrupoMenu } from './menu';
 
@@ -116,25 +115,18 @@ function useMenuVisivel(): GrupoMenu[] {
     .filter((g) => g.itens.length);
 }
 
-/** Grupo do menu; o recolhido (Configurar) abre ao clicar, lembra a escolha e fica aberto quando a tela atual é dele. */
-function GrupoLateral({ g, ativoDentro, children }: { g: GrupoMenu; ativoDentro: boolean; children: React.ReactNode }) {
-  const [aberto, setAberto] = usePreferencia(`malhet.menu.${g.etapa}`, false);
-  const titulo = (
-    <>
-      <span className="h-1.5 w-1.5 rounded-[2px]" style={{ background: g.cor }} />
-      {g.etapa}
-    </>
-  );
-  const cls = 'flex items-center gap-2 px-2.5 pb-1.5 text-[11px] font-semibold uppercase leading-4 tracking-[0.48px] text-m-text-muted';
-  if (!g.recolhido) return <div className="flex flex-col gap-0.5"><div className={cls}>{titulo}</div>{children}</div>;
-  const mostrar = aberto || ativoDentro;
+/** Grupo do menu em sanfona (spec 131): só um aberto por vez — o da tela atual —, para o menu caber sem barra de rolagem. */
+function GrupoLateral({ g, aberto, onAlternar, children }: { g: GrupoMenu; aberto: boolean; onAlternar: () => void; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 border-t border-m-stroke-subtle pt-3">
-      <button type="button" aria-expanded={mostrar} onClick={() => setAberto(!mostrar)} className={cn(cls, 'rounded-[8px] text-left hover:text-m-text-secondary')}>
-        {titulo}
-        <ChevronDown size={14} className={cn('ml-auto transition-transform', mostrar ? '' : '-rotate-90')} aria-hidden="true" />
+    <div className={cn('flex flex-col gap-0.5', g.recolhido && 'mt-1 border-t border-m-stroke-subtle pt-3')}>
+      <button type="button" aria-expanded={aberto} onClick={onAlternar}
+        className="flex items-center gap-2 rounded-[8px] px-2.5 py-1 text-left text-[11px] font-semibold uppercase leading-4 tracking-[0.48px] text-m-text-muted hover:bg-m-surface-hover hover:text-m-text-secondary">
+        <span className="h-1.5 w-1.5 rounded-[2px]" style={{ background: g.cor }} />
+        {g.etapa}
+        {!aberto && <span className="ml-auto rounded-full bg-m-surface-base px-1.5 text-[10px] font-medium normal-case tracking-normal">{g.itens.length}</span>}
+        <ChevronDown size={14} className={cn('transition-transform', aberto ? 'ml-auto' : '-rotate-90', !aberto && 'ml-1')} aria-hidden="true" />
       </button>
-      {mostrar && children}
+      {aberto && <div className="flex flex-col gap-0.5 pt-0.5">{children}</div>}
     </div>
   );
 }
@@ -142,13 +134,16 @@ function GrupoLateral({ g, ativoDentro, children }: { g: GrupoMenu; ativoDentro:
 function Lateral({ onNavegar }: { onNavegar?: () => void }) {
   const pathname = usePathname();
   const menu = useMenuVisivel();
+  const atual = menu.find((g) => g.itens.some((i) => itemAtivo(pathname) === i.url))?.etapa ?? null;
+  const [aberto, setAberto] = useState<string | null>(atual ?? menu[0]?.etapa ?? null);
+  useEffect(() => { if (atual) setAberto(atual); }, [atual]);
   return (
-    <div className="flex h-full flex-col gap-[22px] overflow-y-auto overscroll-contain py-5 pl-6 pr-3 [scrollbar-width:thin]">
+    <div className="flex h-full flex-col gap-[18px] overflow-y-auto overscroll-contain py-5 pl-6 pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <MarcaContratada />
       <SeletorObra />
-      <nav className="flex flex-col gap-[22px]" aria-label="Menu do app" data-tour="menu">
+      <nav className="flex flex-col gap-1.5" aria-label="Menu do app" data-tour="menu">
         {menu.map((g) => (
-          <GrupoLateral key={g.etapa} g={g} ativoDentro={g.itens.some((i) => itemAtivo(pathname) === i.url)}>
+          <GrupoLateral key={g.etapa} g={g} aberto={aberto === g.etapa} onAlternar={() => setAberto(aberto === g.etapa ? null : g.etapa)}>
             {g.itens.map((i) => {
               const ativo = itemAtivo(pathname) === i.url;
               const Icone = i.icone;

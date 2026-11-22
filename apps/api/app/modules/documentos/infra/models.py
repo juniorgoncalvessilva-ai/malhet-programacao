@@ -53,6 +53,10 @@ class DocumentoRevisaoModel(Base):
     apresentado: Mapped[bool | None] = mapped_column(Boolean)
     apresentado_para: Mapped[str | None] = mapped_column(String(150))
     ldo: Mapped[str | None] = mapped_column(String(100))
+    # take-off (spec 131): quando o desenho/PDF desta revisão foi lido, quantas quantidades saíram e por que não saiu nada
+    takeoff_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    takeoff_qtd: Mapped[int | None] = mapped_column(Integer)
+    takeoff_obs: Mapped[str | None] = mapped_column(String(200))
     enviado_por: Mapped[str] = mapped_column(String(150))
     enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -20,6 +20,7 @@ dependencies = [
   "pillow>=10.4",
   "python-pptx>=1.0",
   "ezdxf>=1.4",
+  "pdfminer.six>=20250506",
   "matplotlib>=3.9",
 ]
 

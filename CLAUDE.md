@@ -165,6 +165,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   recebida em Excel → revisões registradas + planilha no acervo, `grd.arquivo_id`); `planilhas.grd_xlsx` no layout com legendas e
   assinaturas. Pastas com natureza (documento/registro), responsável, meio, local e retenção → `GET /documentos/plano-arquivamento.xlsx`.
   `VerRevisao carimbo`: vigente "CÓPIA CONTROLADA", superada/cancelada "DOCUMENTO OBSOLETO".
+  Take-off a partir dos projetos (spec 131): `GET /documentos/takeoff/projetos` (situação lido/a_ler/sem_quantidade/sem_desenho/
+  sem_arquivo por documento; `documento_revisao.takeoff_em|takeoff_qtd|takeoff_obs`) e `POST /documentos/takeoff/levantar` (lotes de
+  25, `refazer`); a tela (`ProjetosTakeoff`) lê sozinha o que está a ler. PDF com camada de texto (`infra/pdf.py`, pdfminer.six) usa o
+  mesmo leitor de quadros.
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
@@ -282,7 +286,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Menu pelo ciclo da obra (spec 125): grupos Projeto e escopo · Planejar · Executar · Medir e melhorar · Pessoas e equipes ·
   Segurança (SSMA) · Configurar (recolhido, sempre no fim; `GrupoMenu.recolhido`), no máximo 6 telas por grupo (teste
   `test_modulos_obra.py`); a ordem de `TELAS_WEB` segue os grupos. Busca de telas Ctrl+K (`BuscaTelas`, `buscarTelas`,
-  `ItemMenu.palavras`). Barra lateral rola (`overflow-y-auto`). Módulos contratados por obra (`obras/domain/modulos.py`:
+  `ItemMenu.palavras`). Menu em sanfona (spec 131, `GrupoLateral`): um grupo aberto por vez (o da tela atual), sem barra de rolagem. Módulos contratados por obra (`obras/domain/modulos.py`:
   documentos, plano, auditorias, ssma, presenca, mobilizacao, aderencia; `obra.modulos_desligados`, super admin em Obras e
   usuários, `GET /admin/modulos`): `MinhaObra.telas_desligadas` some do computador e do celular (`podeVer`/`podeVerMobile`) e do
   editor de menus; os dados ficam. Não é trava da API — é contrato.
