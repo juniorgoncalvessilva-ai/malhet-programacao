@@ -7,11 +7,19 @@ export interface RevisaoDoc {
   id: number; revisao: string; finalidade: string; situacao: SituacaoRevisao; data_emissao: string | null; nome_original: string | null;
   formatos: FormatoRevisao[]; tags: string[]; avisos: string[]; carimbo: Record<string, string>; grd_id: number | null;
   enviado_por: string; enviado_em: string | null;
+  /** Da LDO (spec 128): motivo da revisão, quando a LDO foi enviada, se o projeto foi apresentado e a quem, e qual LDO listou. */
+  motivo?: string | null; ldo_enviada_em?: string | null; apresentado?: boolean | null; apresentado_para?: string | null; ldo?: string | null;
 }
 export interface DocumentoResumo {
   id: number; codigo: string; codigo_contratada: string | null; titulo: string; tipo: string; tipo_nome: string; disciplina: string | null;
   projeto: string | null; origem: string; observacao: string | null; vigente: RevisaoDoc | null; ultima: RevisaoDoc | null;
   revisoes: number; sugestoes: number; ligacoes: number;
+  pacote?: string | null; local_texto?: string | null; disciplina_sigla?: string | null;
+}
+export interface ResultadoLdo {
+  criados: number; atualizados: number; revisoes: number; ligados: number; sugeridos: number; frentes_nao_achadas: string[];
+  locais_nao_achados: { local: string; documentos: number }[]; abas: { aba: string; documentos: number }[]; ignoradas: string[];
+  avisos: string[]; ldo: { id: number; codigo: string; revisao: string | null; arquivo_guardado: boolean; historico: number } | null;
 }
 export interface VinculoDoc { id: number; relacao: string; relacao_nome: string; alvo_tipo: 'area' | 'wbs' | 'grupo' | 'documento'; alvo_id: number; alvo: string; sugerido: boolean }
 export interface DocumentoDetalhe extends DocumentoResumo {

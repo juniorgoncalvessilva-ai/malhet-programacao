@@ -8,6 +8,7 @@ import { k, useAcao, useFrentes2 } from '@/hooks/programacao/planejamento';
 import type { Area, Local } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { ImportarPlanilhaCwa } from '@/components/Obra/ImportarPlanilhaCwa';
 
 const MODELO = `CWA\tAtivo\tDESCRICAO CWA\tLocal
 1\t-\tOBRA GERAL\tGeral
@@ -48,6 +49,8 @@ export default function FrentesPage() {
         cor="var(--m-proc-medir)"
         titulo={lista.length ? `${lista.length} locais e ${nAreas} áreas` : 'Nenhuma frente cadastrada'}
       />
+
+      {pode('admin') && <ImportarPlanilhaCwa />}
 
       {pode('admin') && (
         <Painel titulo="Colar a lista de frentes">

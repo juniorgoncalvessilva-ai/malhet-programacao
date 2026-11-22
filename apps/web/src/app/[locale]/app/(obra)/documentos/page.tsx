@@ -12,7 +12,7 @@ import { Carregando } from '@/components/Obra/Esqueleto';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
 import { Botao, CARREGANDO, Cabecalho, Campo, Chip, Indicador, Painel, Pilula, Selecao, Tabela, td } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
-import { type DocumentoResumo, type Grafo, type GrdResumo, type OpcoesDocumentos, SITUACAO } from '@/lib/documentos';
+import { type DocumentoResumo, type Grafo, type GrdResumo, type OpcoesDocumentos, type ResultadoLdo, SITUACAO } from '@/lib/documentos';
 import { useObra } from '@/lib/obra/ObraProvider';
 
 type Aba = 'lista' | 'grds' | 'conexoes' | 'importar';
@@ -37,12 +37,15 @@ function Documentos() {
   const [aba, setAba] = useState<Aba>('lista');
   const [busca, setBusca] = useState('');
   const [tipo, setTipo] = useState('');
+  const [pacote, setPacote] = useState('');
   const [aberto, setAberto] = useState<number | null>(Number(params.get('doc')) || null);
   const lista = useQuery({ queryKey: ['documentos', 'lista'], queryFn: () => api.get<DocumentoResumo[]>('/documentos') });
   const opcoes = useQuery({ queryKey: ['documentos', 'opcoes'], queryFn: () => api.get<OpcoesDocumentos>('/documentos/opcoes'), staleTime: Infinity });
   const docs = lista.data ?? [];
   const termos = busca.trim().toUpperCase();
-  const visiveis = docs.filter((d) => (!tipo || d.tipo === tipo) && (!termos || `${d.codigo} ${d.codigo_contratada ?? ''} ${d.titulo}`.toUpperCase().includes(termos)));
+  const pacotes = [...new Set(docs.map((d) => d.pacote).filter((x): x is string => !!x))];
+  const visiveis = docs.filter((d) => (!tipo || d.tipo === tipo) && (!pacote || d.pacote === pacote)
+    && (!termos || `${d.codigo} ${d.codigo_contratada ?? ''} ${d.titulo} ${d.local_texto ?? ''}`.toUpperCase().includes(termos)));
   const vigentes = docs.filter((d) => d.vigente).length;
   const sugestoes = docs.reduce((s, d) => s + d.sugestoes, 0);
   const atualizar = () => qc.invalidateQueries({ queryKey: ['documentos'] });
@@ -72,12 +75,17 @@ function Documentos() {
                 <input aria-label="Buscar documento" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="código ou título" className="w-[200px] border-0 bg-transparent p-0 text-[13px] outline-none focus:ring-0" /></label>
               <Chip ativo={!tipo} onClick={() => setTipo('')}>Todos</Chip>
               {Object.entries(opcoes.data?.tipos ?? {}).filter(([k]) => docs.some((d) => d.tipo === k)).map(([k, v]) => <Chip key={k} ativo={tipo === k} onClick={() => setTipo(k)}>{v}</Chip>)}
+              {pacotes.length > 1 && (
+                <select aria-label="Pacote" value={pacote} onChange={(e) => setPacote(e.target.value)} className="h-10 rounded-full border border-m-stroke bg-m-surface-field px-3 text-[13px]">
+                  <option value="">Todos os pacotes</option>{pacotes.map((p) => <option key={p}>{p}</option>)}
+                </select>
+              )}
             </div>}>
             <Tabela cabecalho={['Código', 'Título', 'Tipo', 'Vigente no campo', 'Última revisão', 'Ligações']} vazio={lista.isLoading ? CARREGANDO : !visiveis.length && 'Nenhum documento. Envie uma revisão ou importe a LDO.'}>
               {visiveis.map((d) => (
                 <tr key={d.id} className="cursor-pointer hover:bg-m-surface-hover" onClick={() => setAberto(d.id)}>
                   <td className={td}><b className="text-m-text-primary">{d.codigo}</b>{d.codigo_contratada && <div className="text-[11px] text-m-text-muted">{d.codigo_contratada}</div>}</td>
-                  <td className={td}>{d.titulo}</td>
+                  <td className={td}>{d.titulo}{(d.local_texto || d.pacote) && <div className="text-[11px] text-m-text-muted">{[d.local_texto, d.pacote].filter(Boolean).join(' · ')}</div>}</td>
                   <td className={td}>{d.tipo_nome}</td>
                   <td className={td}>{d.vigente ? <Pilula tom="sucesso">Rev. {d.vigente.revisao} · {d.vigente.finalidade}</Pilula> : <Pilula tom="atencao">Sem revisão liberada</Pilula>}</td>
                   <td className={td}>{d.ultima ? <>Rev. {d.ultima.revisao} <Pilula tom={SITUACAO[d.ultima.situacao].tom}>{SITUACAO[d.ultima.situacao].rotulo}</Pilula></> : '—'}</td>
@@ -90,7 +98,7 @@ function Documentos() {
       )}
       {aba === 'grds' && <Grds docs={docs} planejador={planejador} />}
       {aba === 'conexoes' && superadmin && <Conexoes onAbrir={setAberto} />}
-      {aba === 'importar' && planejador && <ImportarLdo onPronto={() => { atualizar(); setAba('lista'); }} />}
+      {aba === 'importar' && planejador && <ImportarLdo onPronto={atualizar} onAbrir={setAberto} />}
       {aberto && <DetalheDocumento id={aberto} opcoes={opcoes.data} documentos={docs} onFechar={() => setAberto(null)} onAbrir={setAberto} />}
     </>
   );
@@ -209,21 +217,45 @@ function Conexoes({ onAbrir }: { onAbrir: (id: number) => void }) {
   );
 }
 
-function ImportarLdo({ onPronto }: { onPronto: () => void }) {
+function ImportarLdo({ onPronto, onAbrir }: { onPronto: () => void; onAbrir: (id: number) => void }) {
   const api = useApi();
-  const [res, setRes] = useState<{ criados: number; atualizados: number; revisoes: number; ligados: number; frentes_nao_achadas: string[] } | null>(null);
+  const [res, setRes] = useState<ResultadoLdo | null>(null);
+  const [enviando, setEnviando] = useState(false);
   return (
-    <Painel titulo="Importar a lista de documentos (LDO)" subtitulo="Planilha .xlsx com CÓDIGO e TÍTULO (obrigatórios) e, se tiver: Nº CONTRATADA, REV., FINALIDADE, TIPO, DISCIPLINA, DATA e FRENTE. Reimportar atualiza sem duplicar; a revisão listada fica esperando o arquivo.">
+    <Painel titulo="Importar a lista de documentos (LDO)" subtitulo="A LDO do contrato em .xlsx, no modelo do cliente: o cabeçalho é achado pelos nomes em cada aba (Número VALE ou Código, Descrição, Revisão, Tipo de Emissão, Observações = CWA/local, Disciplina, Motivo, Enviado em, Apresentado, Para quem). Cada aba é um pacote; a folha de rosto vira a própria LDO com o histórico. Reimportar atualiza sem duplicar.">
       <label className="flex h-11 w-fit cursor-pointer items-center gap-2 rounded-full bg-m-accent-strong px-5 text-[13px] font-semibold text-m-on-accent">
-        <Upload size={16} /> Escolher a planilha da LDO
-        <input type="file" accept=".xlsx" className="sr-only" aria-label="Planilha da LDO" onChange={async (e) => {
+        <Upload size={16} /> {enviando ? 'Lendo a LDO…' : 'Escolher a planilha da LDO'}
+        <input type="file" accept=".xlsx,.xlsm" className="sr-only" aria-label="Planilha da LDO" disabled={enviando} onChange={async (e) => {
           const a = e.target.files?.[0]; e.target.value = '';
           if (!a) return;
           const fd = new FormData(); fd.append('arquivo', a, a.name);
-          try { const r = await api.post<typeof res>('/documentos/ldo', fd); setRes(r); toast.success('LDO importada'); onPronto(); } catch (er) { toast.error((er as Error).message); }
+          setEnviando(true);
+          try { const r = await api.post<ResultadoLdo>('/documentos/ldo', fd); setRes(r); toast.success('LDO importada'); onPronto(); } catch (er) { toast.error((er as Error).message); } finally { setEnviando(false); }
         }} />
       </label>
-      {res && <p className="mt-3 text-[13px] text-m-text-secondary">{res.criados} novos · {res.atualizados} atualizados · {res.revisoes} revisões · {res.ligados} ligados a frentes{res.frentes_nao_achadas.length ? ` · frentes não achadas: ${res.frentes_nao_achadas.join('; ')}` : ''}</p>}
+      {res && (
+        <div className="mt-4 flex flex-col gap-3 text-[13px] text-m-text-secondary">
+          {res.ldo && (
+            <p><b className="text-m-text-primary">{res.ldo.codigo}</b> rev. {res.ldo.revisao} registrada como documento (Lista){res.ldo.historico ? `, com ${res.ldo.historico} revisões do histórico` : ''}{res.ldo.arquivo_guardado ? ' e o arquivo no acervo' : ''}.{' '}
+              <button type="button" className="font-semibold text-m-accent" onClick={() => onAbrir(res.ldo!.id)}>Abrir</button></p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {res.abas.map((x) => <Pilula key={x.aba} tom="neutro" ponto={false}>{x.aba} · {x.documentos}</Pilula>)}
+          </div>
+          <p>{res.criados} novos · {res.atualizados} atualizados · {res.revisoes} revisões novas · {res.ligados} ligados à frente pelo código
+            {res.sugeridos ? <> · <b className="text-m-warning">{res.sugeridos} frentes sugeridas pela observação, a confirmar</b></> : null}</p>
+          {res.locais_nao_achados.length > 0 && (
+            <div>
+              <div className="mb-1 font-semibold text-m-text-primary">Observações (CWA/local) que não casaram com uma frente da contratada</div>
+              <ul className="grid gap-x-6 sm:grid-cols-2">
+                {res.locais_nao_achados.slice(0, 16).map((x) => <li key={x.local}>{x.local} <span className="text-m-text-muted">({x.documentos})</span></li>)}
+              </ul>
+              <p className="mt-1 text-[12px] text-m-text-muted">Pode ser área de outra contratada ou um nome diferente do cadastro de Frentes: ligue no detalhe do documento ou ajuste a frente.</p>
+            </div>
+          )}
+          {res.avisos.length > 0 && <p className="text-[12px] text-m-warning">{res.avisos.slice(0, 5).join(' · ')}</p>}
+        </div>
+      )}
     </Painel>
   );
 }

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -236,6 +236,58 @@ def excluir_local(local_id: int, s: Session = Depends(get_session), c: ContextoO
     s.delete(loc)
 
 
+# ---- planilha de CWAs do empreendimento (spec 128) ----
+def _abas_cwa(conteudo: bytes):
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    from app.modules.frentes.domain import planilha_cwa as pc
+    try:
+        wb = load_workbook(BytesIO(conteudo), read_only=True, data_only=True)
+        abas = [(ws.title, list(ws.iter_rows(values_only=True))) for ws in wb.worksheets]
+    except Exception as e:  # noqa: BLE001
+        raise DomainError("envie a lista de CWAs em Excel (.xlsx)", "arquivo") from e
+    lidas = pc.ler(abas)
+    if not lidas:
+        raise DomainError("não achei uma aba de CWAs: precisa de CWA (ou CONCATENADO), a descrição e o ATIVO ou a EMPRESA", "arquivo")
+    return lidas
+
+
+def _contratada(s: Session, obra_id: int) -> str | None:
+    from app.modules.obras.infra.models import MarcaObraModel
+
+    return s.scalar(select(MarcaObraModel.nome_contratada).where(MarcaObraModel.obra_id == obra_id))
+
+
+@router.post("/planilha/previa")
+def planilha_previa(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    """Abas de CWAs da planilha, empresas de cada uma e a sugestão: a aba da contratada e só as linhas dela."""
+    from app.modules.frentes.domain import planilha_cwa as pc
+
+    lidas = _abas_cwa(arquivo.file.read())
+    aba, empresas = pc.sugerir_aba(lidas, _contratada(s, c.obra_id))
+    return {"abas": [{"nome": a.nome, "areas": len(a.linhas), "empresas": a.empresas, "inativas": a.inativas,
+                      "locais": list(dict.fromkeys(x.local for x in a.linhas))} for a in lidas],
+            "sugerida": aba.nome if aba else None, "empresas": empresas}
+
+
+@router.post("/planilha", response_model=list[LocalOut])
+def planilha_importar(arquivo: UploadFile = File(...), aba: str = Form(...), empresas: str = Form(""),
+                      s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
+    """Importa as áreas da contratada (aba e empresas escolhidas) como Frentes — elas são a WBS de execução."""
+    from app.modules.frentes.domain import planilha_cwa as pc
+
+    lida = next((a for a in _abas_cwa(arquivo.file.read()) if a.nome == aba), None)
+    if lida is None:
+        raise DomainError(f"aba {aba!r} sem CWAs", "aba")
+    escolhidas = [e for e in empresas.split("|") if e] or list(lida.empresas)
+    texto = pc.para_texto(lida, escolhidas)
+    if texto.count("\n") == 0:
+        raise DomainError("nenhuma área das empresas escolhidas", "empresas")
+    return _importar_texto(s, c, texto)
+
+
 @router.post("/importar", response_model=list[LocalOut])
 def importar(d: ImportarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(administrar)):
     """Cola a lista da obra: `CWA | Ativo | DESCRICAO CWA | Local` (ou o antigo `CODIGO | DESCRICAO`).
@@ -243,8 +295,12 @@ def importar(d: ImportarIn, s: Session = Depends(get_session), c: ContextoObra =
     Locais casam pelo código (formato antigo) ou pelo nome; os novos pelo nome ganham código L1, L2…
     Áreas casam pelo CWA + Ativo, depois CWA + TAG, depois CWA + descrição: reimportar atualiza sem duplicar.
     """
-    lidos = interpretar_lista(d.texto)
-    formato_cwa = eh_formato_cwa(d.texto)
+    return _importar_texto(s, c, d.texto)
+
+
+def _importar_texto(s: Session, c: ContextoObra, texto: str) -> list[LocalOut]:
+    lidos = interpretar_lista(texto)
+    formato_cwa = eh_formato_cwa(texto)
     todos_locais = list(s.scalars(select(LocalFrenteModel).where(LocalFrenteModel.obra_id == c.obra_id)))
     por_codigo = {x.codigo: x for x in todos_locais}
     por_nome = {" ".join(x.descricao.split()).lower(): x for x in todos_locais}

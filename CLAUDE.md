@@ -149,6 +149,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `POST /documentos/takeoff/iwp` (`wbs/infra/gateway.py::iwps_do_item|definir_quantidade_iwp`, origem na observação do IWP). Aba
   "Take-off do projeto" — desde a spec 127 tela própria `/app/takeoff` (`?doc=`), fora de Documentos (`TakeoffProjeto`); aba Conexões
   de Documentos só para o super admin.
+  LDO do contrato (spec 128, `documentos/domain/ldo.py`): cabeçalho achado por nome em cada aba (pacote = aba), folha de rosto =
+  a própria LDO (documento LIS com histórico e o .xlsx no acervo), TE em letra (`TIPO_EMISSAO`, E/G liberam), duas "Disciplina"
+  (sigla/nome), Observações = CWA/local → `casar_local` (código confirma; TAG/nome da área sugere), revisão com `motivo`,
+  `ldo_enviada_em`, `apresentado`, `apresentado_para`, `ldo`. Frentes pela planilha de CWAs (`frentes/domain/planilha_cwa.py`,
+  `POST /frentes/planilha/previa` e `/frentes/planilha`): a aba da contratada filtrada pela coluna Empresa é a WBS de execução.
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

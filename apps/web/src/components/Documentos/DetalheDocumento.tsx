@@ -60,6 +60,7 @@ export function DetalheDocumento({ id, opcoes, documentos, onFechar, onAbrir }: 
                 <h2 className="text-[20px] font-semibold leading-7">{d.codigo}</h2>
                 <p className="text-[14px] text-m-text-secondary">{d.titulo}</p>
                 {d.codigo_contratada && <p className="text-[12px] text-m-text-muted">Contratada: {d.codigo_contratada}{d.projeto ? ` · ${d.projeto}` : ''}</p>}
+                {(d.pacote || d.local_texto) && <p className="text-[12px] text-m-text-muted">{[d.pacote && `Pacote ${d.pacote}`, d.local_texto && `Local na LDO: ${d.local_texto}`].filter(Boolean).join(' · ')}</p>}
               </div>
               {planejador && <Botao variante="secundario" onClick={() => setEditar(!editar)}><Pencil size={15} /> Editar</Botao>}
               <button type="button" aria-label="Fechar" onClick={onFechar} className="grid h-10 w-10 place-items-center rounded-full hover:bg-m-surface-hover"><X size={20} /></button>
@@ -88,7 +89,10 @@ export function DetalheDocumento({ id, opcoes, documentos, onFechar, onAbrir }: 
                   {d.historico.map((r) => (
                     <tr key={r.id} className="border-t border-m-row align-top">
                       <td className="py-2 font-semibold">{r.revisao}</td>
-                      <td className="py-2">{r.finalidade}{r.avisos.length > 0 && <div className="text-[11px] text-m-warning">{r.avisos.join(' · ')}</div>}{r.tags.length > 0 && <div className="text-[11px] text-m-text-muted">TAGs: {r.tags.join(', ')}</div>}</td>
+                      <td className="py-2">{r.finalidade}
+                        {r.motivo && <div className="text-[11px] text-m-text-secondary">Motivo: {r.motivo}</div>}
+                        {(r.ldo || r.apresentado != null) && <div className="text-[11px] text-m-text-muted">{[r.ldo && `na ${r.ldo}${r.ldo_enviada_em ? ` (enviada ${dataBR(r.ldo_enviada_em)})` : ''}`, r.apresentado != null && (r.apresentado ? `apresentado${r.apresentado_para ? ` a ${r.apresentado_para}` : ''}` : 'não apresentado')].filter(Boolean).join(' · ')}</div>}
+                        {r.avisos.length > 0 && <div className="text-[11px] text-m-warning">{r.avisos.join(' · ')}</div>}{r.tags.length > 0 && <div className="text-[11px] text-m-text-muted">TAGs: {r.tags.join(', ')}</div>}</td>
                       <td className="py-2">{dataBR(r.data_emissao)}</td>
                       <td className="py-2"><Pilula tom={SITUACAO[r.situacao].tom}>{SITUACAO[r.situacao].rotulo}</Pilula></td>
                       <td className="py-2 text-[12px] text-m-text-muted">{r.enviado_por}<div>{quando(r.enviado_em)}</div></td>

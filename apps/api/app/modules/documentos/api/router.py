@@ -45,7 +45,7 @@ def nova_revisao(arquivo: UploadFile = File(...), codigo: str | None = Form(None
 
 @router.post("/ldo")
 def importar_ldo(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    return sv.importar_ldo(s, c.obra_id, arquivo.file.read(), _quem(c))
+    return sv.importar_ldo(s, c.obra_id, arquivo.file.read(sv.LIMITE + 1), _quem(c), arquivo.filename)
 
 
 @router.get("/ldo.xlsx")

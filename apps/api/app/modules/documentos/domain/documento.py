@@ -34,12 +34,18 @@ FINALIDADES = {
     "LIBERADO": True,
     "LIBERADO PARA EXECUÇÃO": True,
     "COMO CONSTRUÍDO": True,
+    "CONFORME CONSTRUÍDO": True,
     "PARA APROVAÇÃO": False,
+    "PARA COTAÇÃO": False,
+    "CONFORME COMPRADO": False,
     "PARA COMENTÁRIOS": False,
     "PARA CONHECIMENTO": False,
     "PRELIMINAR": False,
     "CANCELADO": False,
 }
+# "TE — tipo de emissão" das LDOs e carimbos de contrato (letra → finalidade); E e G liberam o uso no campo (spec 128)
+TIPO_EMISSAO = {"A": "PRELIMINAR", "B": "PARA APROVAÇÃO", "C": "PARA CONHECIMENTO", "D": "PARA COTAÇÃO",
+                "E": "PARA CONSTRUÇÃO", "F": "CONFORME COMPRADO", "G": "CONFORME CONSTRUÍDO", "H": "CANCELADO"}
 RELACOES = {"aplica_a": "aplica-se a", "referencia": "referencia", "baseado_em": "baseado em", "substitui": "substitui"}
 ALVOS = ("area", "wbs", "grupo", "documento")
 SITUACOES = ("vigente", "em_analise", "superada", "cancelada")
@@ -78,11 +84,17 @@ def normalizar_finalidade(txt: str | None) -> str:
     t = " ".join((txt or "").split()).upper()
     if not t:
         return "PARA CONHECIMENTO"
+    if t in TIPO_EMISSAO:  # letra do TE (A–H)
+        return TIPO_EMISSAO[t]
+    m = re.match(r"^([A-H])\s*[-–—]\s*\S", t)  # "E - PARA CONSTRUÇÃO"
+    if m:
+        return TIPO_EMISSAO[m.group(1)]
     base = _sem_acento(t)
     for f in FINALIDADES:
         if _sem_acento(f) == base:
             return f
-    for chave, f in (("CONSTRU", "PARA CONSTRUÇÃO"), ("AS BUILT", "COMO CONSTRUÍDO"), ("COMO CONSTRUIDO", "COMO CONSTRUÍDO"),
+    for chave, f in (("CONFORME CONSTRU", "CONFORME CONSTRUÍDO"), ("CONFORME COMPRA", "CONFORME COMPRADO"), ("COTACAO", "PARA COTAÇÃO"),
+                     ("CONSTRU", "PARA CONSTRUÇÃO"), ("AS BUILT", "COMO CONSTRUÍDO"), ("COMO CONSTRUIDO", "COMO CONSTRUÍDO"),
                      ("APROVACAO", "PARA APROVAÇÃO"), ("COMENTARIO", "PARA COMENTÁRIOS"), ("CANCEL", "CANCELADO"),
                      ("LIBERAD", "LIBERADO"), ("APROVAD", "APROVADO"), ("CONHECIMENTO", "PARA CONHECIMENTO"),
                      ("INFORMA", "PARA CONHECIMENTO"), ("PRELIMINAR", "PRELIMINAR")):

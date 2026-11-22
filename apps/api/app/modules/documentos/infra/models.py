@@ -21,6 +21,9 @@ class DocumentoModel(Base):
     disciplina: Mapped[str | None] = mapped_column(String(40))
     projeto: Mapped[str | None] = mapped_column(String(150))
     origem: Mapped[str] = mapped_column(String(10), default="manual")  # ldo | carimbo | manual
+    pacote: Mapped[str | None] = mapped_column(String(80))  # aba da LDO (spec 128): "1870CC - CMD"
+    local_texto: Mapped[str | None] = mapped_column(String(200))  # "Observações" da LDO: CWA/local como o cliente escreveu
+    disciplina_sigla: Mapped[str | None] = mapped_column(String(6))
     observacao: Mapped[str | None] = mapped_column(String(500))
     criado_por: Mapped[str] = mapped_column(String(150))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -44,6 +47,12 @@ class DocumentoRevisaoModel(Base):
     tags: Mapped[list | None] = mapped_column(JSONB)  # TAGs citadas no desenho
     avisos: Mapped[list | None] = mapped_column(JSONB)
     grd_id: Mapped[int | None] = mapped_column(ForeignKey("grd.id", ondelete="SET NULL"))  # GRD em que chegou
+    # da LDO (spec 128): por que revisou, quando a LDO foi enviada, se o projeto foi apresentado e a quem, e qual LDO listou
+    motivo: Mapped[str | None] = mapped_column(String(300))
+    ldo_enviada_em: Mapped[date | None] = mapped_column(Date)
+    apresentado: Mapped[bool | None] = mapped_column(Boolean)
+    apresentado_para: Mapped[str | None] = mapped_column(String(150))
+    ldo: Mapped[str | None] = mapped_column(String(100))
     enviado_por: Mapped[str] = mapped_column(String(150))
     enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

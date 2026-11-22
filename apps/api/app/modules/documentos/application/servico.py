@@ -15,6 +15,7 @@ from app.modules.arquivos.application import servico as arquivos
 from app.modules.arquivos.application.registro import Usuario, registrar
 from app.modules.arquivos.infra.models import ArquivoModel
 from app.modules.documentos.domain import documento as dom
+from app.modules.documentos.domain import ldo as ldo_dom
 from app.modules.documentos.infra import desenho, dwg
 from app.modules.documentos.infra.models import (
     DocumentoLeituraModel,
@@ -24,7 +25,7 @@ from app.modules.documentos.infra.models import (
     GrdItemModel,
     GrdModel,
 )
-from app.modules.frentes.infra.models import AreaFrenteModel
+from app.modules.frentes.infra.models import AreaFrenteModel, LocalFrenteModel
 from app.shared.errors import DomainError, NotFoundError
 
 LIMITE = 60 * 1024 * 1024
@@ -59,7 +60,9 @@ def _rev_dict(r: DocumentoRevisaoModel, revs: list[DocumentoRevisaoModel]) -> di
             "data_emissao": r.data_emissao.isoformat() if r.data_emissao else None, "nome_original": r.nome_original,
             "formatos": [f for f, a in (("png", r.png_arquivo_id), ("pdf", r.pdf_arquivo_id), ("original", r.arquivo_id), ("dxf", r.dxf_arquivo_id)) if a],
             "tags": r.tags or [], "avisos": r.avisos or [], "carimbo": r.carimbo or {}, "grd_id": r.grd_id,
-            "enviado_por": r.enviado_por, "enviado_em": r.enviado_em.isoformat() if r.enviado_em else None}
+            "enviado_por": r.enviado_por, "enviado_em": r.enviado_em.isoformat() if r.enviado_em else None,
+            "motivo": r.motivo, "ldo_enviada_em": r.ldo_enviada_em.isoformat() if r.ldo_enviada_em else None,
+            "apresentado": r.apresentado, "apresentado_para": r.apresentado_para, "ldo": r.ldo}
 
 
 def _doc_dict(d: DocumentoModel, revs: list[DocumentoRevisaoModel], vinc: list[DocumentoVinculoModel] | None = None) -> dict:
@@ -68,7 +71,8 @@ def _doc_dict(d: DocumentoModel, revs: list[DocumentoRevisaoModel], vinc: list[D
     ultima = revs[-1] if revs else None
     return {"id": d.id, "codigo": d.codigo, "codigo_contratada": d.codigo_contratada, "titulo": d.titulo, "tipo": d.tipo,
             "tipo_nome": dom.TIPOS.get(d.tipo, d.tipo), "disciplina": d.disciplina, "projeto": d.projeto, "origem": d.origem,
-            "observacao": d.observacao, "vigente": _rev_dict(vig, revs) if vig else None,
+            "observacao": d.observacao, "pacote": d.pacote, "local_texto": d.local_texto, "disciplina_sigla": d.disciplina_sigla,
+            "vigente": _rev_dict(vig, revs) if vig else None,
             "ultima": _rev_dict(ultima, revs) if ultima else None, "revisoes": len(revs),
             "sugestoes": sum(1 for v in (vinc or []) if v.sugerido), "ligacoes": sum(1 for v in (vinc or []) if not v.sugerido)}
 
@@ -283,105 +287,128 @@ def _avisar_vigente(s: Session, obra_id: int, d: DocumentoModel, r: DocumentoRev
 
 # ---- lista de documentos (LDO) por planilha -------------------------------------------------------------------------
 
-_COLUNAS = {
-    "codigo": ("CODIGO CLIENTE", "NUMERO CLIENTE", "NUMERO VALE", "CODIGO", "NUMERO", "DOCUMENTO", "N DOCUMENTO"),
-    "codigo_contratada": ("CODIGO CONTRATADA", "NUMERO CONTRATADA", "N CONTRATADA", "CODIGO INTERNO"),
-    "titulo": ("TITULO", "DESCRICAO", "NOME"),
-    "revisao": ("REVISAO", "REV"),
-    "finalidade": ("FINALIDADE", "EMISSAO", "SITUACAO", "STATUS"),
-    "tipo": ("TIPO",),
-    "disciplina": ("DISCIPLINA",),
-    "data": ("DATA EMISSAO", "DATA"),
-    "frente": ("FRENTE", "AREA", "CWA"),
-}
-
-
 def _norm(t) -> str:
-    import re
-
-    return " ".join(re.sub(r"[^A-Z0-9]+", " ", dom._sem_acento(str(t or "").replace("º", "").replace("°", "")).upper()).split())
+    return ldo_dom.norm(t)
 
 
-def importar_ldo(s: Session, obra_id: int, xlsx: bytes, por: str) -> dict:
-    """Planilha da LDO (lista de documentos): cria ou atualiza cada documento pelo código; com revisão, registra a revisão
-    (sem arquivo até o arquivo chegar); com frente, liga o documento a ela. Reimportar não duplica."""
+def importar_ldo(s: Session, obra_id: int, xlsx: bytes, por: str, nome: str | None = None) -> dict:
+    """LDO do contrato (spec 128): todas as abas de pacote, cada uma com o cabeçalho achado pelos nomes. Cria ou atualiza
+    cada documento pelo número; a revisão listada fica esperando o arquivo (com finalidade do TE, motivo, data de envio e a
+    quem foi apresentado). "Observações" (CWA/local) liga à frente: código exato confirma, nome/TAG só sugere. A folha de
+    rosto vira o próprio documento da LDO, com o histórico, e o arquivo vai para o acervo. Reimportar não duplica."""
     try:
         wb = load_workbook(BytesIO(xlsx), read_only=True, data_only=True)
+        abas = [(ws.title, list(ws.iter_rows(values_only=True))) for ws in wb.worksheets]
     except Exception as e:  # noqa: BLE001
         raise DomainError("envie a LDO em Excel (.xlsx)", "arquivo") from e
-    ws = wb.worksheets[0]
-    linhas = list(ws.iter_rows(values_only=True))
-    cab, idx = None, {}
-    for n, lin in enumerate(linhas[:30]):
-        nomes = [_norm(c) for c in lin]
-        achado = {}
-        for campo, opcoes in _COLUNAS.items():
-            for o in opcoes:
-                j = next((k for k, c in enumerate(nomes) if c == o or c.startswith(o + " ")), None)
-                if j is not None and j not in achado.values():
-                    achado[campo] = j
-                    break
-        if "codigo" in achado and "titulo" in achado:
-            cab, idx = n, achado
-            break
-    if cab is None:
-        raise DomainError("não achei o cabeçalho da LDO: precisa de CÓDIGO e TÍTULO", "arquivo")
-    areas = {(_norm(a.codigo)): a for a in s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == obra_id))}
-    for a in list(areas.values()):
-        if a.cwa:
-            areas.setdefault(_norm(a.cwa), a)
-    criados = atualizados = revisoes = ligados = 0
+    leitura = ldo_dom.ler(abas)
+    if not leitura.linhas:
+        raise DomainError("não achei a lista de documentos: precisa de uma aba com o número do documento e a descrição "
+                          "(ex.: Número VALE | Descrição ou Código | Título)", "arquivo")
+    locais = {lf.id: lf.descricao for lf in s.scalars(select(LocalFrenteModel).where(LocalFrenteModel.obra_id == obra_id))}
+    refs = [ldo_dom.AreaRef(a.id, a.codigo, a.cwa or a.codigo, a.descricao, a.ativo_codigo, locais.get(a.local_id, ""))
+            for a in s.scalars(select(AreaFrenteModel).where(AreaFrenteModel.obra_id == obra_id, AreaFrenteModel.ativo.is_(True)))]
+    rotulo_ldo = f"{leitura.codigo} rev. {leitura.revisao}" if leitura.codigo and leitura.revisao else leitura.codigo
+    existentes = {d.codigo: d for d in s.scalars(select(DocumentoModel).where(DocumentoModel.obra_id == obra_id,
+                                                                              DocumentoModel.codigo.in_([x.codigo for x in leitura.linhas])))}
+    revs_de: dict[int, dict[str, DocumentoRevisaoModel]] = {}
+    for r in s.scalars(select(DocumentoRevisaoModel).where(DocumentoRevisaoModel.documento_id.in_([d.id for d in existentes.values()] or [0]))):
+        revs_de.setdefault(r.documento_id, {})[r.revisao] = r
+    vinc = {(v.documento_id, v.alvo_id) for v in s.scalars(select(DocumentoVinculoModel).where(
+        DocumentoVinculoModel.obra_id == obra_id, DocumentoVinculoModel.alvo_tipo == "area"))}
+    criados = atualizados = revisoes = ligados = sugeridos = 0
     sem_frente: list[str] = []
-    vistos: set[str] = set()
-    for lin in linhas[cab + 1:]:
-        val = lambda c: lin[idx[c]] if c in idx and idx[c] < len(lin) else None  # noqa: E731
-        if not val("codigo") or not str(val("codigo")).strip():
-            continue
-        cod = dom.normalizar_codigo(str(val("codigo")))
-        if cod in vistos:
-            continue
-        vistos.add(cod)
-        titulo = " ".join(str(val("titulo") or cod).split())[:300]
-        d = s.scalar(select(DocumentoModel).where(DocumentoModel.obra_id == obra_id, DocumentoModel.codigo == cod))
+    locais_sem: dict[str, int] = {}
+    for x in leitura.linhas:
+        d = existentes.get(x.codigo)
         if d is None:
-            d = DocumentoModel(obra_id=obra_id, codigo=cod, titulo=titulo, tipo="DES", origem="ldo", criado_por=por)
+            d = DocumentoModel(obra_id=obra_id, codigo=x.codigo, titulo=x.titulo, tipo="DES", origem="ldo", criado_por=por)
             s.add(d)
+            existentes[x.codigo] = d
             criados += 1
         else:
-            d.titulo = titulo
+            d.titulo = x.titulo
             atualizados += 1
-        if val("codigo_contratada"):
-            d.codigo_contratada = str(val("codigo_contratada")).strip()[:80]
-        if val("tipo"):
-            t = _norm(val("tipo"))
-            d.tipo = t if t in dom.TIPOS else next((k for k, v in dom.TIPOS.items() if _norm(v).startswith(t[:5])), d.tipo)
-        if val("disciplina"):
-            d.disciplina = str(val("disciplina")).strip().upper()[:40]
+        d.pacote = x.aba[:80] if len(leitura.abas) > 1 or d.pacote else d.pacote
+        if x.local:
+            d.local_texto = x.local[:200]
+        if x.codigo_contratada:
+            d.codigo_contratada = x.codigo_contratada[:80]
+        if x.tipo:
+            tp = _norm(x.tipo)
+            d.tipo = tp if tp in dom.TIPOS else next((k for k, v in dom.TIPOS.items() if _norm(v).startswith(tp[:5])), d.tipo)
+        if x.disciplina:
+            d.disciplina = x.disciplina.upper()[:40]
+        if x.disciplina_sigla:
+            d.disciplina_sigla = x.disciplina_sigla.upper()[:6]
         s.flush()
-        if val("revisao") not in (None, ""):
-            rev = dom.normalizar_revisao(val("revisao"))
-            if not s.scalar(select(DocumentoRevisaoModel.id).where(DocumentoRevisaoModel.documento_id == d.id, DocumentoRevisaoModel.revisao == rev)):
-                dt = val("data")
-                s.add(DocumentoRevisaoModel(obra_id=obra_id, documento_id=d.id, revisao=rev,
-                                            finalidade=dom.normalizar_finalidade(str(val("finalidade") or "")),
-                                            data_emissao=dt.date() if isinstance(dt, datetime) else (dt if isinstance(dt, date) else None),
-                                            enviado_por=por))
+        if x.revisao:
+            r = revs_de.get(d.id, {}).get(x.revisao)
+            if r is None:
+                r = DocumentoRevisaoModel(obra_id=obra_id, documento_id=d.id, revisao=x.revisao,
+                                          finalidade=x.finalidade or dom.normalizar_finalidade(None), enviado_por=por)
+                s.add(r)
+                revs_de.setdefault(d.id, {})[x.revisao] = r
                 revisoes += 1
-        if val("frente"):
-            a = areas.get(_norm(val("frente")))
-            if a is None:
-                sem_frente.append(f"{cod}: {val('frente')}")
-            elif not s.scalar(select(DocumentoVinculoModel.id).where(DocumentoVinculoModel.documento_id == d.id,
-                                                                    DocumentoVinculoModel.alvo_tipo == "area", DocumentoVinculoModel.alvo_id == a.id)):
-                s.add(DocumentoVinculoModel(obra_id=obra_id, documento_id=d.id, relacao="aplica_a", alvo_tipo="area",
-                                            alvo_id=a.id, sugerido=False, criado_por=por))
-                ligados += 1
+            elif x.finalidade and not r.arquivo_id:
+                r.finalidade = x.finalidade  # sem arquivo, a LDO manda; com arquivo, o carimbo já disse
+            r.motivo = x.motivo[:300] if x.motivo else r.motivo
+            r.ldo_enviada_em = x.enviado_em or r.ldo_enviada_em
+            r.apresentado = x.apresentado if x.apresentado is not None else r.apresentado
+            r.apresentado_para = x.para_quem[:150] if x.para_quem else r.apresentado_para
+            r.ldo = rotulo_ldo[:100] if rotulo_ldo else r.ldo
+            if r.data_emissao is None and x.enviado_em:
+                r.data_emissao = x.enviado_em
+        area_id, confirmada, _como = ldo_dom.casar_local(x.local, x.codigo, refs)
+        if area_id is None:
+            if x.local:
+                sem_frente.append(f"{x.codigo}: {x.local}")
+                locais_sem[x.local] = locais_sem.get(x.local, 0) + 1
+        elif (d.id, area_id) not in vinc:
+            s.add(DocumentoVinculoModel(obra_id=obra_id, documento_id=d.id, relacao="aplica_a", alvo_tipo="area", alvo_id=area_id,
+                                        sugerido=not confirmada, criado_por=por))
+            vinc.add((d.id, area_id))
+            ligados += confirmada
+            sugeridos += not confirmada
+    ldo_info = _registrar_a_propria_ldo(s, obra_id, leitura, xlsx, nome, por) if leitura.codigo else None
     s.flush()
-    return {"criados": criados, "atualizados": atualizados, "revisoes": revisoes, "ligados": ligados,
-            "frentes_nao_achadas": sem_frente[:30]}
+    return {"criados": criados, "atualizados": atualizados, "revisoes": revisoes, "ligados": ligados, "sugeridos": sugeridos,
+            "frentes_nao_achadas": sem_frente[:200],
+            "locais_nao_achados": [{"local": k, "documentos": v} for k, v in sorted(locais_sem.items(), key=lambda kv: -kv[1])],
+            "abas": [{"aba": a, "documentos": n} for a, n in leitura.abas], "ignoradas": leitura.ignoradas,
+            "avisos": leitura.avisos[:50], "ldo": ldo_info}
 
 
-# ---- ligações (Zettelkasten) -----------------------------------------------------------------------------------------
+def _registrar_a_propria_ldo(s: Session, obra_id: int, leitura, xlsx: bytes, nome: str | None, por: str) -> dict:
+    """A LDO também é documento controlado: tipo Lista, com o histórico da folha de rosto e o arquivo na revisão atual."""
+    d = s.scalar(select(DocumentoModel).where(DocumentoModel.obra_id == obra_id, DocumentoModel.codigo == leitura.codigo))
+    if d is None:
+        d = DocumentoModel(obra_id=obra_id, codigo=leitura.codigo, titulo="Lista de documentos (LDO)", tipo="LIS", origem="ldo",
+                           criado_por=por)
+        s.add(d)
+        s.flush()
+    revs = {r.revisao: r for r in s.scalars(select(DocumentoRevisaoModel).where(DocumentoRevisaoModel.documento_id == d.id))}
+    for h in leitura.historico:
+        if h.revisao not in revs:
+            revs[h.revisao] = DocumentoRevisaoModel(obra_id=obra_id, documento_id=d.id, revisao=h.revisao, finalidade=h.finalidade,
+                                                    data_emissao=h.data, motivo=(h.descricao or "")[:300] or None, enviado_por=por)
+            s.add(revs[h.revisao])
+    atual = leitura.revisao or (leitura.historico[-1].revisao if leitura.historico else None)
+    guardado = False
+    if atual:
+        r = revs.get(atual)
+        if r is None:
+            r = revs[atual] = DocumentoRevisaoModel(obra_id=obra_id, documento_id=d.id, revisao=atual,
+                                                    finalidade="PARA CONHECIMENTO", enviado_por=por)
+            s.add(r)
+        if not r.arquivo_id:
+            a = arquivos.guardar(s, obra_id, xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "documento",
+                                 titulo=f"{leitura.codigo} rev {atual}", ligacoes={"documento": leitura.codigo, "revisao": atual},
+                                 origem="documento", nome_original=nome)
+            r.arquivo_id, r.nome_original, guardado = a.id, (nome or "")[:200] or None, True
+    s.flush()
+    return {"id": d.id, "codigo": d.codigo, "revisao": atual, "arquivo_guardado": guardado, "historico": len(leitura.historico)}
+
 
 def _alvo_existe(s: Session, obra_id: int, tipo: str, alvo_id: int) -> None:
     if tipo == "area":
