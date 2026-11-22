@@ -8,6 +8,8 @@ export interface RevisaoDoc {
   formatos: FormatoRevisao[]; tags: string[]; avisos: string[]; carimbo: Record<string, string>; grd_id: number | null;
   enviado_por: string; enviado_em: string | null;
   /** Da LDO (spec 128): motivo da revisão, quando a LDO foi enviada, se o projeto foi apresentado e a quem, e qual LDO listou. */
+  /** Spec 135: arquivos trocados nesta mesma revisão (o anterior fica guardado, com quem trocou e por quê). */
+  anteriores?: { id: number; nome_original: string | null; enviado_por: string | null; enviado_em: string | null; motivo: string; substituido_por: string; substituido_em: string | null }[];
   motivo?: string | null; ldo_enviada_em?: string | null; apresentado?: boolean | null; apresentado_para?: string | null; ldo?: string | null;
 }
 export interface DocumentoResumo {

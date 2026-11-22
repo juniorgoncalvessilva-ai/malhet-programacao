@@ -221,6 +221,15 @@ def nova_revisao(arquivo: UploadFile = File(...), codigo: str | None = Form(None
                                 data_emissao=data_emissao, grd_id=grd_id)
 
 
+@router.post("/{doc_id}/arquivo")
+def atualizar_arquivo(doc_id: int, arquivo: UploadFile = File(...), modo: str = Form("mesma"), revisao: str | None = Form(None),
+                      finalidade: str | None = Form(None), motivo: str | None = Form(None),
+                      s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Spec 135: enviar o arquivo da revisão da LDO, corrigir o da mesma revisão (com motivo) ou subir a revisão."""
+    return sv.atualizar_arquivo(s, c.obra_id, doc_id, arquivo.file.read(sv.LIMITE + 1), arquivo.filename, _quem(c), modo=modo,
+                                revisao=revisao or None, finalidade=finalidade or None, motivo=motivo)
+
+
 @router.post("/ldo")
 def importar_ldo(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     return sv.importar_ldo(s, c.obra_id, arquivo.file.read(sv.LIMITE + 1), _quem(c), arquivo.filename)

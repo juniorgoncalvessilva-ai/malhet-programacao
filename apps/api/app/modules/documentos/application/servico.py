@@ -20,6 +20,7 @@ from app.modules.documentos.domain import grd as grd_dom
 from app.modules.documentos.domain import ldo as ldo_dom
 from app.modules.documentos.infra import desenho, dwg
 from app.modules.documentos.infra.models import (
+    DocumentoArquivoAnteriorModel,
     DocumentoLeituraModel,
     DocumentoModel,
     DocumentoRevisaoModel,
@@ -134,7 +135,13 @@ def detalhe(s: Session, obra_id: int, doc_id: int) -> dict:
     leituras = list(s.scalars(select(DocumentoLeituraModel).where(DocumentoLeituraModel.revisao_id.in_([r.id for r in revs] or [0]))
                               .order_by(DocumentoLeituraModel.id.desc()).limit(40)))
     rev_de = {r.id: r.revisao for r in revs}
-    return {**_doc_dict(d, revs, vinc), "historico": [_rev_dict(r, revs) for r in reversed(revs)],
+    anteriores: dict[int, list[dict]] = {}
+    for a in s.scalars(select(DocumentoArquivoAnteriorModel).where(DocumentoArquivoAnteriorModel.revisao_id.in_([r.id for r in revs] or [0]))
+                       .order_by(DocumentoArquivoAnteriorModel.id.desc())):
+        anteriores.setdefault(a.revisao_id, []).append({
+            "id": a.id, "nome_original": a.nome_original, "enviado_por": a.enviado_por, "enviado_em": a.enviado_em.isoformat() if a.enviado_em else None,
+            "motivo": a.motivo, "substituido_por": a.substituido_por, "substituido_em": a.substituido_em.isoformat() if a.substituido_em else None})
+    return {**_doc_dict(d, revs, vinc), "historico": [{**_rev_dict(r, revs), "anteriores": anteriores.get(r.id, [])} for r in reversed(revs)],
             "vinculos": [{"id": v.id, "relacao": v.relacao, "relacao_nome": dom.RELACOES.get(v.relacao, v.relacao),
                           "alvo_tipo": v.alvo_tipo, "alvo_id": v.alvo_id, "alvo": rot.get((v.alvo_tipo, v.alvo_id), "(removido)"),
                           "sugerido": v.sugerido} for v in vinc],
@@ -186,7 +193,8 @@ def ler_arquivo(nome: str | None, dados: bytes) -> tuple[bytes | None, "desenho.
 def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, por: str, *, codigo: str | None = None,
                       revisao: str | None = None, finalidade: str | None = None, titulo: str | None = None,
                       tipo: str | None = None, disciplina: str | None = None, data_emissao: date | None = None,
-                      grd_id: int | None = None, leitura: tuple | None = None) -> dict:
+                      grd_id: int | None = None, leitura: tuple | None = None, substituir: bool = False,
+                      motivo_substituicao: str | None = None) -> dict:
     """Uma revisão nova de um documento. O que não vier no formulário sai do carimbo do desenho; o código, se não houver
     nem no carimbo, vem do nome do arquivo. Revisão que já existe não é sobrescrita (ISO 7.5.3: controle de versão)."""
     if not dados:
@@ -222,7 +230,18 @@ def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, 
             d.disciplina = disciplina
     existente = s.scalar(select(DocumentoRevisaoModel).where(DocumentoRevisaoModel.documento_id == d.id, DocumentoRevisaoModel.revisao == rev))
     if existente is not None and existente.arquivo_id:
-        raise DomainError(f"{cod} revisão {rev} já está guardada: uma correção é uma revisão nova", "revisao")
+        if not substituir:
+            raise DomainError(f"{cod} revisão {rev} já está guardada: uma correção é uma revisão nova", "revisao")
+        motivo = " ".join((motivo_substituicao or "").split())
+        if len(motivo) < 5:
+            raise DomainError("diga por que o arquivo da mesma revisão está sendo trocado", "motivo")
+        # spec 135: corrigir o arquivo sem subir a revisão — o anterior fica guardado com quem trocou e por quê
+        s.add(DocumentoArquivoAnteriorModel(
+            obra_id=obra_id, revisao_id=existente.id, arquivo_id=existente.arquivo_id, pdf_arquivo_id=existente.pdf_arquivo_id,
+            png_arquivo_id=existente.png_arquivo_id, dxf_arquivo_id=existente.dxf_arquivo_id, nome_original=existente.nome_original,
+            enviado_por=existente.enviado_por, enviado_em=existente.enviado_em, motivo=motivo[:300], substituido_por=por))
+        existente.enviado_por, existente.enviado_em = por, datetime.now(timezone.utc)
+        existente.takeoff_em = existente.takeoff_qtd = existente.takeoff_obs = None
     ligacoes = {"documento": cod, "revisao": rev, "finalidade": fin, "codigo_contratada": d.codigo_contratada}
     rotulo = f"{cod} rev {rev}"
     orig = arquivos.guardar(s, obra_id, dados, MIME_ORIGINAL[ext], "documento", titulo=rotulo, ligacoes=ligacoes,
@@ -261,6 +280,46 @@ def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, 
     s.flush()
     return {"documento": _doc_dict(d, revs), "revisao": _rev_dict(r, revs), "sugeridas": sugeridas, "avisos": avisos,
             "nova_vigente": vigente_agora, "quantidades": quantidades}
+
+
+def atualizar_arquivo(s: Session, obra_id: int, doc_id: int, dados: bytes, nome: str | None, por: str, *, modo: str,
+                      revisao: str | None = None, finalidade: str | None = None, motivo: str | None = None) -> dict:
+    """Enviar ou atualizar o arquivo de um documento da lista (spec 135), a partir da prévia do explorador.
+    - modo "mesma": o arquivo vai para a revisão informada (a da LDO esperando arquivo; se ela já tem arquivo, é correção e
+      pede o motivo — o anterior fica guardado);
+    - modo "nova": sobe a revisão (a informada ou a seguinte à mais nova: 0 → 1, A → B)."""
+    if modo not in ("mesma", "nova"):
+        raise DomainError("modo: mesma ou nova", "modo")
+    d = obter(s, obra_id, doc_id)
+    revs = _revisoes(s, [d.id]).get(d.id, [])
+    if modo == "nova":
+        mais_nova = max((r.revisao for r in revs), key=dom.chave_revisao, default=None)
+        rev = dom.normalizar_revisao(revisao) if revisao else dom.proxima_revisao(mais_nova)
+        if mais_nova and dom.chave_revisao(rev) <= dom.chave_revisao(mais_nova):
+            raise DomainError(f"a revisão nova precisa vir depois da {mais_nova} (ex.: {dom.proxima_revisao(mais_nova)})", "revisao")
+    else:
+        if not revisao:
+            raise DomainError("informe a revisão que recebe o arquivo", "revisao")
+        rev = dom.normalizar_revisao(revisao)
+        if not any(r.revisao == rev for r in revs):
+            raise DomainError(f"{d.codigo} não tem a revisão {rev}: para criar, use revisão nova", "revisao")
+    ext = _extensao(nome, dados)
+    leitura = ler_arquivo(nome, dados) if ext in ("dwg", "dxf") else None
+    avisos_carimbo: list[str] = []
+    car = dom.ler_carimbo(leitura[1].carimbo) if leitura and leitura[1].carimbo else dom.Carimbo()
+    if car.codigo and _norm(car.codigo) not in (_norm(d.codigo), _norm(d.codigo_contratada or "")):
+        avisos_carimbo.append(f"o carimbo do desenho diz {car.codigo}, não {d.codigo}: confira se é o arquivo certo")
+    if car.revisao and dom.normalizar_revisao(car.revisao) != rev:
+        avisos_carimbo.append(f"o carimbo diz revisão {car.revisao}; o arquivo foi guardado como revisão {rev}")
+    existente = next((r for r in revs if r.revisao == rev), None)
+    if finalidade is None and existente is not None and modo == "mesma":
+        finalidade = existente.finalidade  # a finalidade da LDO continua valendo
+    substituir = bool(existente and existente.arquivo_id)
+    r = registrar_revisao(s, obra_id, dados, nome, por, codigo=d.codigo, revisao=rev, finalidade=finalidade, leitura=leitura,
+                          substituir=substituir, motivo_substituicao=motivo)
+    r["avisos"] = avisos_carimbo + (r.get("avisos") or [])
+    r["substituido"] = substituir
+    return r
 
 
 def _tipo(tipo: str | None, ext: str) -> str:
@@ -696,8 +755,10 @@ def _em_uso():
     from app.modules.documentos.infra.models import DocumentoRecebidoModel
 
     R = DocumentoRevisaoModel
+    A = DocumentoArquivoAnteriorModel  # trocado na mesma revisão (spec 135)
     colunas = (R.arquivo_id, R.pdf_arquivo_id, R.png_arquivo_id, R.dxf_arquivo_id, GrdModel.arquivo_id,  # GRD como chegou (spec 130)
-               DocumentoRecebidoModel.arquivo_id)  # esperando relacionar (spec 132)
+               DocumentoRecebidoModel.arquivo_id,  # esperando relacionar (spec 132)
+               A.arquivo_id, A.pdf_arquivo_id, A.png_arquivo_id, A.dxf_arquivo_id)
     return union_all(*(select(c).where(c.is_not(None)) for c in colunas))
 
 

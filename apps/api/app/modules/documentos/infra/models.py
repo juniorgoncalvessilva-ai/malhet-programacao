@@ -61,6 +61,26 @@ class DocumentoRevisaoModel(Base):
     enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class DocumentoArquivoAnteriorModel(Base):
+    """Arquivo que uma revisão tinha antes de ser corrigido sem subir a revisão (spec 135): fica guardado com quem trocou, quando
+    e por quê — a revisão muda de arquivo, mas o histórico não se perde (ISO 9001 7.5.3)."""
+
+    __tablename__ = "documento_arquivo_anterior"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    revisao_id: Mapped[int] = mapped_column(ForeignKey("documento_revisao.id", ondelete="CASCADE"), index=True)
+    arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    pdf_arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    png_arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    dxf_arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    nome_original: Mapped[str | None] = mapped_column(String(200))
+    enviado_por: Mapped[str | None] = mapped_column(String(150))
+    enviado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    motivo: Mapped[str] = mapped_column(String(300))
+    substituido_por: Mapped[str] = mapped_column(String(150))
+    substituido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class DocumentoVinculoModel(Base):
     """Ligação Zettelkasten: o documento aplica-se a uma frente/IWP/grupo, ou referencia/baseia-se em outro documento."""
 

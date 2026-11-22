@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownAZ, BookOpen, ChevronDown, ChevronRight, ClipboardList, Clock, Download, ExternalLink, FileSpreadsheet, FileText, Folder,
-  FolderCog, FolderOpen, Home, Inbox, Link2, type LucideIcon, Maximize2, Paperclip, Ruler, ScrollText, Search, ShieldCheck, Upload, X } from 'lucide-react';
+  Copy, FileX2, FolderCog, FolderOpen, RefreshCw, Home, Inbox, Link2, type LucideIcon, Maximize2, Paperclip, Ruler, ScrollText, Search, ShieldCheck, Upload, X } from 'lucide-react';
 import { type DragEvent, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { VerRevisao } from '@/components/Documentos/VerRevisao';
@@ -21,10 +21,12 @@ const quando = (iso?: string | null) => {
   const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   return dias <= 0 ? 'hoje' : dias === 1 ? 'ontem' : dias < 30 ? `há ${dias} dias` : new Date(iso).toLocaleDateString('pt-BR');
 };
+/** O documento tem arquivo guardado (na vigente ou na última revisão)? Sem arquivo = só listado na LDO, esperando chegar. */
+export const temArquivo = (d: DocumentoResumo) => !!(d.vigente?.formatos.includes('original') || d.ultima?.formatos.includes('original'));
 const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 
 /** Onde o explorador está: uma raiz (todos, recentes, sem pasta ou uma pasta) e os valores escolhidos em cada nível de subpasta. */
-type Raiz = 'todos' | 'recentes' | 'sem' | number;
+type Raiz = 'todos' | 'recentes' | 'sem' | 'sem_arquivo' | number;
 interface Caminho { raiz: Raiz; partes: string[] }
 
 /**
@@ -71,6 +73,7 @@ export function ExploradorDocumentos({ docs, opcoes, onAbrir, onAcao, onGerencia
   };
   const daRaiz = (r: Raiz): DocumentoResumo[] => {
     if (r === 'todos') return docs;
+    if (r === 'sem_arquivo') return docs.filter((d) => !temArquivo(d));
     if (r === 'recentes') return docs.filter((d) => d.atualizado_em && Date.now() - new Date(d.atualizado_em).getTime() < DIAS_RECENTES * 86_400_000);
     const ids = r === 'sem' ? q.data?.sem_pasta_ids ?? [] : pastaDe(r)?.membros ?? [];
     return ids.map((i) => porId.get(i)).filter((x): x is DocumentoResumo => !!x);
@@ -102,7 +105,7 @@ export function ExploradorDocumentos({ docs, opcoes, onAbrir, onAcao, onGerencia
   const chave = (c: Caminho) => `${c.raiz}|${c.partes.join('|')}`;
   const alternar = (k: string) => setAbertos((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
-  const nomeRaiz = (r: Raiz) => (r === 'todos' ? 'Todos os documentos' : r === 'recentes' ? `Recentes (${DIAS_RECENTES} dias)` : r === 'sem' ? 'Sem pasta' : (() => { const p = pastaDe(r); return p ? `${p.codigo} · ${p.nome}` : 'Pasta'; })());
+  const nomeRaiz = (r: Raiz) => (r === 'todos' ? 'Todos os documentos' : r === 'sem_arquivo' ? 'Sem arquivo (a receber)' : r === 'recentes' ? `Recentes (${DIAS_RECENTES} dias)` : r === 'sem' ? 'Sem pasta' : (() => { const p = pastaDe(r); return p ? `${p.codigo} · ${p.nome}` : 'Pasta'; })());
   const pastaAtual = pastaDe(cam.raiz);
 
   const enviar = async (arquivos: File[]) => {
@@ -158,6 +161,7 @@ export function ExploradorDocumentos({ docs, opcoes, onAbrir, onAcao, onGerencia
       <ul className="flex flex-col">
         <No c={{ raiz: 'todos', partes: [] }} rotulo="Todos os documentos" icone={Home} total={docs.length} nivel={0} />
         <No c={{ raiz: 'recentes', partes: [] }} rotulo={`Recentes (${DIAS_RECENTES} dias)`} icone={Clock} total={recentes} nivel={0} />
+        <No c={{ raiz: 'sem_arquivo', partes: [] }} rotulo="Sem arquivo (a receber)" icone={FileX2} total={docs.filter((d) => !temArquivo(d)).length} nivel={0} />
       </ul>
       <div className="mt-2 px-2 text-[11px] font-semibold uppercase tracking-[0.48px] text-m-text-muted">Pastas da obra</div>
       <ul className="flex flex-col">
@@ -252,7 +256,8 @@ export function ExploradorDocumentos({ docs, opcoes, onAbrir, onAcao, onGerencia
                       className={`cursor-pointer border-b border-m-row outline-none focus-visible:bg-m-surface-hover ${sel === d.id ? 'bg-m-accent-subtle' : 'hover:bg-m-surface-hover'}`}>
                       <td className="px-4 py-2"><span className="flex items-start gap-2.5"><I size={17} strokeWidth={1.75} className="mt-0.5 shrink-0 text-m-accent" />
                         <span className="min-w-0"><span className="font-semibold text-m-text-primary">{d.codigo}</span>
-                          <span className="block max-w-[520px] truncate text-[12px] text-m-text-tertiary" title={d.titulo}>{d.titulo}</span></span></span></td>
+                          <span className="block max-w-[520px] truncate text-[12px] text-m-text-tertiary" title={d.titulo}>{d.titulo}</span>
+                          {!temArquivo(d) && <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-m-warning"><FileX2 size={12} /> sem arquivo</span>}</span></span></td>
                       <td className="whitespace-nowrap px-2 py-2">{d.vigente ? <Pilula tom="sucesso">Rev. {d.vigente.revisao}</Pilula> : <Pilula tom="atencao">Sem liberada</Pilula>}</td>
                       <td className="hidden whitespace-nowrap px-2 py-2 md:table-cell">{d.ultima ? <>Rev. {d.ultima.revisao} <Pilula tom={SITUACAO[d.ultima.situacao].tom}>{SITUACAO[d.ultima.situacao].rotulo}</Pilula></> : '—'}</td>
                       <td className="hidden whitespace-nowrap px-2 py-2 text-[12px] text-m-text-muted xl:table-cell">{quando(d.atualizado_em)}</td>
@@ -276,7 +281,7 @@ export function ExploradorDocumentos({ docs, opcoes, onAbrir, onAcao, onGerencia
 
         {/* prévia */}
         {selecionado
-          ? <Previa d={selecionado} rotFrente={rotFrente} onFechar={() => setSel(null)} onAbrir={onAbrir} />
+          ? <Previa d={selecionado} rotFrente={rotFrente} finalidades={opcoes?.finalidades ?? []} onFechar={() => setSel(null)} onAbrir={onAbrir} />
           : <aside className="hidden h-[calc(100vh-300px)] min-h-[520px] flex-col items-center justify-center gap-2 rounded-m-lg border border-dashed border-m-stroke p-6 text-center text-[13px] text-m-text-muted 2xl:flex">
               <FileText size={28} strokeWidth={1.5} />Clique num documento para ver a folha e os dados aqui.<span className="text-[12px]">Duplo clique abre a ficha com o histórico.</span>
             </aside>}
@@ -286,8 +291,8 @@ export function ExploradorDocumentos({ docs, opcoes, onAbrir, onAcao, onGerencia
 }
 
 /** Prévia ao lado da lista: a folha da revisão que vale (cada abertura fica registrada como leitura), carimbo e os dados. */
-function Previa({ d, rotFrente, onFechar, onAbrir }: {
-  d: DocumentoResumo; rotFrente: Map<number, string>; onFechar: () => void; onAbrir: (id: number) => void;
+function Previa({ d, rotFrente, finalidades, onFechar, onAbrir }: {
+  d: DocumentoResumo; rotFrente: Map<number, string>; finalidades: string[]; onFechar: () => void; onAbrir: (id: number) => void;
 }) {
   const api = useApi();
   const { obra } = useObra();
@@ -308,7 +313,7 @@ function Previa({ d, rotFrente, onFechar, onAbrir }: {
         .catch(() => undefined).finally(() => vivo && setCarregando(false));
     }
     return () => { vivo = false; if (u) URL.revokeObjectURL(u); };
-  }, [r?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [r?.id, r?.formatos.join(','), r?.enviado_em]); // eslint-disable-line react-hooks/exhaustive-deps
   const arquivo = (formato: string) => () => api.blob(`/documentos/revisoes/${r!.id}/arquivo?formato=${formato}`);
   const baixar = () => r && api.download(`/documentos/revisoes/${r.id}/arquivo?formato=original&baixar=true`,
     nomeArquivo(obra?.codigo, d.codigo, r.revisao, r.finalidade, (r.nome_original ?? '').split('.').pop() || 'pdf'));
@@ -317,7 +322,8 @@ function Previa({ d, rotFrente, onFechar, onAbrir }: {
     try { await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?doc=${d.id}`); toast.success('Link do documento copiado'); }
     catch { toast.error('Não deu para copiar'); }
   };
-  const controlada = r && d.vigente && r.id === d.vigente.id;
+  const comArquivo = !!r?.formatos.includes('original');
+  const controlada = comArquivo && r && d.vigente && r.id === d.vigente.id;
   const dados: [string, React.ReactNode][] = [
     ['Tipo', d.tipo_nome], ['Disciplina', d.disciplina ?? d.disciplina_sigla ?? '—'], ['Pacote', d.pacote ?? '—'],
     ['Frentes', d.frentes?.length ? d.frentes.map((id) => rotFrente.get(id) ?? id).join(' · ') : <span className="text-m-text-muted">nenhuma confirmada</span>],
@@ -340,13 +346,15 @@ function Previa({ d, rotFrente, onFechar, onAbrir }: {
             <img src={url} alt={`Folha ${d.codigo}`} className="max-h-[360px] w-full cursor-zoom-in object-contain" onClick={() => setCheia(true)} />
           )}
           {url && tipoUrl === 'pdf' && <iframe src={url} title={`PDF ${d.codigo}`} className="h-[360px] w-full" />}
-          {!url && <span className="p-6 text-center text-[12.5px] text-m-text-muted">{carregando ? 'Abrindo a folha…' : r ? 'Sem visualização desta revisão: baixe o original.' : 'Ainda sem arquivo (só na LDO).'}</span>}
-          {r && (url || !carregando) && (
+          {!url && <span className="p-6 text-center text-[12.5px] text-m-text-muted">{carregando ? 'Abrindo a folha…' : comArquivo ? 'Sem visualização desta revisão: baixe o original.'
+            : r ? `Ainda sem arquivo: a revisão ${r.revisao} está na LDO esperando o arquivo.` : 'Ainda sem arquivo (só na LDO).'}</span>}
+          {r && comArquivo && (url || !carregando) && (
             <span className={`pointer-events-none absolute left-2 top-2 rotate-[-3deg] rounded-[4px] border-2 px-2 py-0.5 font-mono text-[10.5px] font-extrabold uppercase tracking-[0.14em] ${controlada ? 'border-m-danger/80 bg-white/85 text-m-danger' : 'border-m-warning bg-white/85 text-m-warning'}`}>
               {controlada ? 'Cópia controlada' : r.situacao === 'superada' || r.situacao === 'cancelada' ? 'Documento obsoleto' : 'Não liberada'}
             </span>
           )}
         </div>
+        <ArquivoDoDocumento d={d} r={r} comArquivo={comArquivo} finalidades={finalidades} />
         <div className="flex flex-wrap gap-2 px-3">
           {r?.formatos.includes('png') && <Botao variante="secundario" className="h-8 px-3" onClick={() => setCheia(true)}><Maximize2 size={14} /> Tela cheia</Botao>}
           {r?.formatos.includes('pdf') && <Botao variante="secundario" className="h-8 px-3" onClick={abrirPdf}><ExternalLink size={14} /> PDF</Botao>}
@@ -367,5 +375,115 @@ function Previa({ d, rotFrente, onFechar, onAbrir }: {
         png={r.formatos.includes('png') ? arquivo('png') : undefined} pdf={r.formatos.includes('pdf') ? arquivo('pdf') : undefined}
         original={r.formatos.includes('original') ? () => baixar()!.then(() => undefined) : undefined} />}
     </aside>
+  );
+}
+
+
+/** A revisão que vem depois: 0 → 1, A → B, Z → AA (igual a `domain/documento.py::proxima_revisao`). */
+export function proximaRevisao(rev?: string | null): string {
+  if (!rev) return '0';
+  const r = rev.trim().toUpperCase().replace(/^(REV\.?|R)\s*/, '');
+  if (/^\d+$/.test(r)) return String(Number(r) + 1);
+  if (/^[A-Z]+$/.test(r)) {
+    const l = r.split('');
+    let i = l.length - 1;
+    while (i >= 0 && l[i] === 'Z') { l[i] = 'A'; i -= 1; }
+    if (i < 0) return 'A'.repeat(r.length + 1);
+    l[i] = String.fromCharCode(l[i].charCodeAt(0) + 1);
+    return l.join('');
+  }
+  return `${r}1`;
+}
+
+/**
+ * Enviar ou atualizar o arquivo do documento (spec 135). Sem arquivo: "Enviar arquivo" põe o arquivo na revisão que a LDO
+ * listou. Com arquivo: "Atualizar arquivo" sobe a revisão (a seguinte já vem sugerida) ou corrige o arquivo da mesma revisão —
+ * com motivo, e o anterior fica guardado no histórico. "Copiar código" ajuda a procurar o arquivo na rede.
+ */
+function ArquivoDoDocumento({ d, r, comArquivo, finalidades }: { d: DocumentoResumo; r: RevisaoDoc | null; comArquivo: boolean; finalidades: string[] }) {
+  const api = useApi();
+  const qc = useQueryClient();
+  const { pode } = useObra();
+  const [aberto, setAberto] = useState(false);
+  const [modo, setModo] = useState<'nova' | 'mesma'>('nova');
+  const mais = d.ultima?.revisao ?? r?.revisao ?? null;
+  const [rev, setRev] = useState(proximaRevisao(mais));
+  const [finalidade, setFinalidade] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  // outro documento, ou depois de enviar: volta ao começo com a revisão seguinte já sugerida
+  useEffect(() => { setAberto(false); setModo('nova'); setRev(proximaRevisao(d.ultima?.revisao ?? r?.revisao)); setMotivo(''); setFinalidade(''); },
+    [d.id, d.ultima?.revisao, d.ultima?.enviado_em]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!pode('planejador')) return null;
+  const copiarCodigo = async () => {
+    try { await navigator.clipboard.writeText(d.codigo); toast.success(`${d.codigo} copiado: cole na busca da pasta da rede`); } catch { toast.error('Não deu para copiar'); }
+  };
+  const enviar = async (f: File | undefined, m: 'nova' | 'mesma') => {
+    if (!f) return;
+    const fd = new FormData();
+    fd.append('arquivo', f, f.name); fd.append('modo', m);
+    if (m === 'mesma' && r) fd.append('revisao', r.revisao);
+    if (m === 'nova') { fd.append('revisao', rev); if (finalidade) fd.append('finalidade', finalidade); }
+    if (motivo.trim()) fd.append('motivo', motivo.trim());
+    setEnviando(true);
+    try {
+      const x = await api.post<{ revisao: RevisaoDoc; avisos: string[]; substituido: boolean }>(`/documentos/${d.id}/arquivo`, fd);
+      toast.success(x.substituido ? `Arquivo da rev. ${x.revisao.revisao} corrigido (o anterior ficou no histórico)` : `Rev. ${x.revisao.revisao} guardada com o arquivo`);
+      x.avisos.forEach((a) => toast.warning(a));
+      setAberto(false); setMotivo(''); setModo('nova');
+      qc.invalidateQueries({ queryKey: ['documentos'] });
+    } catch (e) { toast.error((e as Error).message); } finally { setEnviando(false); }
+  };
+  const botaoArquivo = (rotulo: string, m: 'nova' | 'mesma', desabilitado = false) => (
+    <label className={`flex h-9 w-fit items-center gap-1.5 rounded-full bg-m-accent-strong px-4 text-[13px] font-semibold text-m-on-accent ${desabilitado || enviando ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}>
+      <Upload size={15} /> {enviando ? 'Enviando…' : rotulo}
+      <input type="file" className="sr-only" aria-label={rotulo} disabled={desabilitado || enviando}
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void enviar(f, m); }} />
+    </label>
+  );
+
+  if (!comArquivo) {
+    return (
+      <div className="mx-3 mb-3 flex flex-col gap-2 rounded-m-md border border-dashed border-m-warning bg-m-warning-subtle p-3">
+        <div className="text-[12.5px] text-m-text-primary">Ainda não tem arquivo. Procure na rede por <b className="font-mono">{d.codigo}</b>{d.codigo_contratada ? <> ou <b className="font-mono">{d.codigo_contratada}</b></> : null} e envie aqui.</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {botaoArquivo(r ? `Enviar arquivo da rev. ${r.revisao}` : 'Enviar arquivo', r ? 'mesma' : 'nova')}
+          <Botao variante="fantasma" className="h-9 px-3" onClick={copiarCodigo}><Copy size={14} /> Copiar código</Botao>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mx-3 mb-3 flex flex-col gap-2">
+      {!aberto
+        ? <div className="flex flex-wrap items-center gap-2">
+            <Botao className="h-9 px-4" onClick={() => setAberto(true)}><RefreshCw size={14} /> Atualizar arquivo</Botao>
+            <Botao variante="fantasma" className="h-9 px-3" onClick={copiarCodigo}><Copy size={14} /> Copiar código</Botao>
+          </div>
+        : <div className="flex flex-col gap-2.5 rounded-m-md border border-m-stroke-subtle bg-m-surface-base p-3 text-[12.5px]">
+            <div className="flex items-center justify-between"><b className="text-m-text-primary">Atualizar o arquivo de {d.codigo}</b>
+              <button type="button" aria-label="Fechar atualizar" onClick={() => setAberto(false)} className="text-m-text-muted"><X size={15} /></button></div>
+            <label className="flex items-start gap-2"><input type="radio" name={`modo-${d.id}`} checked={modo === 'nova'} onChange={() => setModo('nova')} className="mt-0.5" />
+              <span><b>Nova revisão</b> — o projeto mudou; a anterior vira superada quando esta liberar o uso.</span></label>
+            {modo === 'nova' && (
+              <div className="ml-6 flex flex-wrap gap-2">
+                <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.48px] text-m-text-muted">Revisão
+                  <input value={rev} onChange={(e) => setRev(e.target.value.toUpperCase())} aria-label="Revisão nova" className="h-8 w-20 rounded-[8px] border border-m-stroke bg-m-surface-field px-2 text-[13px] font-normal normal-case text-m-text-primary" /></label>
+                <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.48px] text-m-text-muted">Finalidade
+                  <select value={finalidade} onChange={(e) => setFinalidade(e.target.value)} aria-label="Finalidade da revisão nova" className="h-8 rounded-[8px] border border-m-stroke bg-m-surface-field px-2 text-[13px] font-normal normal-case text-m-text-primary">
+                    <option value="">a do carimbo</option>{finalidades.map((f) => <option key={f}>{f}</option>)}
+                  </select></label>
+              </div>
+            )}
+            {r && <label className="flex items-start gap-2"><input type="radio" name={`modo-${d.id}`} checked={modo === 'mesma'} onChange={() => setModo('mesma')} className="mt-0.5" />
+              <span><b>Corrigir o arquivo da rev. {r.revisao}</b> — mesma revisão (arquivo errado ou incompleto); o anterior fica guardado no histórico.</span></label>}
+            {modo === 'mesma' && (
+              <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Por que está trocando? (ex.: folha errada)" aria-label="Motivo da correção"
+                className="ml-6 h-8 rounded-[8px] border border-m-stroke bg-m-surface-field px-2 text-[13px]" />
+            )}
+            <div className="ml-6">{botaoArquivo(modo === 'nova' ? `Escolher arquivo da rev. ${rev || '?'}` : `Escolher arquivo corrigido`, modo,
+              modo === 'nova' ? !rev.trim() : motivo.trim().length < 5)}</div>
+          </div>}
+    </div>
   );
 }

@@ -80,6 +80,26 @@ def chave_revisao(rev: str) -> tuple:
     return (0, 0, r)
 
 
+def proxima_revisao(rev: str | None) -> str:
+    """A revisão que vem depois (spec 135): 0 → 1, 9 → 10, A → B, Z → AA; sem revisão = 0."""
+    if not rev:
+        return "0"
+    r = normalizar_revisao(rev)
+    if r.isdigit():
+        return str(int(r) + 1)
+    if r.isalpha():
+        letras = list(r)
+        i = len(letras) - 1
+        while i >= 0 and letras[i] == "Z":
+            letras[i] = "A"
+            i -= 1
+        if i < 0:
+            return "A" * (len(r) + 1)
+        letras[i] = chr(ord(letras[i]) + 1)
+        return "".join(letras)
+    return r + "1"
+
+
 def normalizar_finalidade(txt: str | None) -> str:
     t = " ".join((txt or "").split()).upper()
     if not t:

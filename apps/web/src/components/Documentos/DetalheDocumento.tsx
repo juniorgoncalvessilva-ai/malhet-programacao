@@ -91,6 +91,7 @@ export function DetalheDocumento({ id, opcoes, documentos, onFechar, onAbrir }: 
                       <td className="py-2 font-semibold">{r.revisao}</td>
                       <td className="py-2">{r.finalidade}
                         {r.motivo && <div className="text-[11px] text-m-text-secondary">Motivo: {r.motivo}</div>}
+                        {r.anteriores?.map((a) => <div key={a.id} className="text-[11px] text-m-warning">Arquivo corrigido {a.substituido_em ? new Date(a.substituido_em).toLocaleDateString('pt-BR') : ''} por {a.substituido_por}: {a.motivo} (antes: {a.nome_original ?? 'arquivo'})</div>)}
                         {(r.ldo || r.apresentado != null) && <div className="text-[11px] text-m-text-muted">{[r.ldo && `na ${r.ldo}${r.ldo_enviada_em ? ` (enviada ${dataBR(r.ldo_enviada_em)})` : ''}`, r.apresentado != null && (r.apresentado ? `apresentado${r.apresentado_para ? ` a ${r.apresentado_para}` : ''}` : 'não apresentado')].filter(Boolean).join(' · ')}</div>}
                         {r.avisos.length > 0 && <div className="text-[11px] text-m-warning">{r.avisos.join(' · ')}</div>}{r.tags.length > 0 && <div className="text-[11px] text-m-text-muted">TAGs: {r.tags.join(', ')}</div>}</td>
                       <td className="py-2">{dataBR(r.data_emissao)}</td>

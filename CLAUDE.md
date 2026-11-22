@@ -183,6 +183,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   subpastas pelos níveis da pasta (`documento_pasta.subpastas`: pacote/frente/disciplina/tipo/ano, `NIVEIS`, padrão projetos =
   pacote → frente → disciplina), trilha, busca global, lista, "Enviar aqui"/arrastar (spec 132) e prévia da revisão vigente com
   carimbo, tela cheia, PDF, baixar, ficha e link. `/documentos/pastas` traz `membros`/`sem_pasta_ids`; documento traz `frentes`.
+  Enviar/atualizar arquivo (spec 135, `ArquivoDoDocumento` na prévia, `POST /documentos/{id}/arquivo` → `atualizar_arquivo`): sem
+  arquivo = "Enviar arquivo da rev. X" (a da LDO) + "Copiar código"; com arquivo = nova revisão (`proxima_revisao`) ou corrigir a
+  mesma com motivo (anterior em `documento_arquivo_anterior`, no histórico e em `_em_uso`); nó "Sem arquivo (a receber)" (`temArquivo`).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
