@@ -31,6 +31,7 @@ def test_telas_dos_modulos_existem():
     for m in mods.MODULOS.values():
         assert set(m.web) <= set(TELAS_WEB), m.chave
         assert set(m.celular) <= mobile, m.chave
+    assert "/app/takeoff" in mods.MODULOS["documentos"].web  # spec 127: take-off tem tela própria, no mesmo módulo
     nucleo = {"/app/vigente", "/app/programacoes", "/app/cronograma", "/app/wbs", "/app/acessos", "/app/menu-celular"}
     assert not nucleo & set(mods.telas_desligadas(list(mods.MODULOS)))  # o núcleo não desliga
 

@@ -147,7 +147,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   chave estável (Δ da revisão anterior, decisões herdadas, aceitar de novo), item da PQ sugerido (nunca vincula sozinho; unidade
   igual ou kg↔t, `fator_de_conversao`) e frente pela ligação do documento. Comparação projeto × planilha (TAG) × IWP e
   `POST /documentos/takeoff/iwp` (`wbs/infra/gateway.py::iwps_do_item|definir_quantidade_iwp`, origem na observação do IWP). Aba
-  "Take-off do projeto" e seção no `DetalheDocumento` (`TakeoffProjeto`).
+  "Take-off do projeto" — desde a spec 127 tela própria `/app/takeoff` (`?doc=`), fora de Documentos (`TakeoffProjeto`); aba Conexões
+  de Documentos só para o super admin.
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
@@ -280,7 +281,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   variável `CONTATO_PRIVACIDADE` do repositório) — ao coletar dado novo, atualize a política e a Data safety.
 - Dados da empresa não saem (spec 126): ato 6 "A guarda" na home (`Guarda`, `#guarda`, "O que é da obra fica com a obra"),
   só com o que o sistema já faz; política de privacidade diz que nada vai a IA de terceiros. **IA no Malhet só local** (servidor do
-  Malhet ou da empresa) — nunca API externa (Claude, OpenAI…). Frase nova na home precisa de lastro no sistema.
+  Malhet ou da empresa) — nunca API externa (Claude, OpenAI…). Frase nova na home precisa de lastro no sistema. A home segue o
+  Planejamento 360 (curso do autor, spec 127): "O ciclo inteiro, numa memória só" — Contrato · Escopo · Prazo · Campo · Medição ·
+  Governança; nada de "apps" (VisualPlan, PlanningControl, ADC Digital) nem promessa sem lastro ("custo baixo").
 - Página principal pública `/` (spec 092, `components/Marca/Landing.tsx`): a história da marca em sete atos — o 6º é "A guarda", spec 126 — (fonte: doc
   "Malhet — a história da marca"; voz direta, sem número não confirmado, IA nunca como manchete). Pedra bruta → pedra
   cúbica em canvas 3D que gira e segue o mouse (`components/Marca/PedraCubica.tsx`); leitura guiada pela rolagem (frases

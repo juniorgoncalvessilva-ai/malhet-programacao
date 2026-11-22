@@ -13,7 +13,7 @@ PLANEJADOR, ADMIN, SSMA = "planejador", "admin", "ssma"
 # url → exigência do papel (None = qualquer papel; "ssma" = segurança, planejador e admin)
 TELAS_WEB: dict[str, str | None] = {
     # Projeto e escopo (spec 125: grupos pelo ciclo da obra; a ordem daqui é a do padrão do admin e do planejador)
-    "/app/documentos": None, "/app/wbs": None, "/app/criterios": None,
+    "/app/documentos": None, "/app/takeoff": None, "/app/wbs": None, "/app/criterios": None,
     # Planejar
     "/app/cronograma": None, "/app/plano": None, "/app/restricoes": None, "/app/lookahead": None, "/app/programacoes": None,
     "/app/pto": PLANEJADOR,

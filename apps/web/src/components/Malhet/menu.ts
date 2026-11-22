@@ -1,4 +1,4 @@
-import { AlertTriangle, FolderOpen, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Ruler, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2 } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu {
@@ -20,7 +20,8 @@ export const MENU: GrupoMenu[] = [
     etapa: 'Projeto e escopo',
     cor: 'var(--m-proc-planejar)',
     itens: [
-      { titulo: 'Documentos e take-off', url: '/app/documentos', icone: FolderOpen, palavras: 'projeto desenho dwg ldo grd revisão quantidade takeoff lista mestra' },
+      { titulo: 'Documentos (LDO e GRD)', url: '/app/documentos', icone: FolderOpen, palavras: 'projeto desenho dwg ldo grd revisão lista mestra procedimento norma' },
+      { titulo: 'Take-off do projeto', url: '/app/takeoff', icone: Ruler, palavras: 'takeoff quantidade quantitativo aço ferro resumo levantamento' },
       { titulo: 'WBS de execução', url: '/app/wbs', icone: ListTree, palavras: 'eap cwa cwp iwp awp estrutura' },
       { titulo: 'Critério de avanço', url: '/app/criterios', icone: Percent, palavras: 'medição etapas cms peso' },
     ],

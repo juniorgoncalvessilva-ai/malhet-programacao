@@ -20,7 +20,7 @@ class Modulo:
 
 MODULOS: dict[str, Modulo] = {m.chave: m for m in (
     Modulo("documentos", "Documentos e take-off do projeto", "LDO, revisões, GRD, projetos no campo e quantidades do desenho",
-           ("/app/documentos",), ("/m/documentos",)),
+           ("/app/documentos", "/app/takeoff"), ("/m/documentos",)),
     Modulo("plano", "Plano de 90 dias e restrições (6WLA)", "Plano de médio prazo, pull planning e restrições",
            ("/app/plano", "/app/restricoes"), ("/m/restricoes",)),
     Modulo("auditorias", "Auditorias e plano de ação 5W2H", "Auditorias por modelo, ver e agir e ações com evidência",

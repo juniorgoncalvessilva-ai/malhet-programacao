@@ -345,9 +345,9 @@ function Espaco() {
         <div className="mt-20">
           {[
             ['Registro', 'O guindaste atrasou às 7h. Às 7h05, já estava registrado.', 'O ocorrido é registrado em campo, no momento em que acontece.'],
-            ['Responsabilidade', 'Validado é com nome, data e hora.', 'Toda atividade tem dono; cada etapa validada tem responsável, setor e hora.'],
+            ['Responsabilidade', 'Validado é com nome, data e hora.', 'Toda atividade tem encarregado e responsável; cada lançamento e cada revisão guardam quem fez e quando.'],
             ['Conexão', 'O campo resolve. O planejamento fica sabendo. O cliente vê.', 'A atividade chega ao setor certo, com prazo e o porquê.'],
-            ['Resultado', 'Pare de descobrir o prejuízo na medição.', 'Perdas e ganhos contabilizados por ocorrência validada.'],
+            ['Resultado', 'Pare de descobrir o prejuízo na medição.', 'O que não foi feito aparece na semana, com a causa e em reais — não no fim do mês.'],
           ].map(([pilar, frase, prova], i) => (
             <EmFoco key={pilar}>
               {(f) => (
@@ -365,20 +365,28 @@ function Espaco() {
 
         <Revela className="mt-20 grid gap-10 border-t border-black/10 pt-10 lg:grid-cols-2">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-black/45" style={{ fontFamily: MONO }}>Um cérebro, vários apps</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-black/45" style={{ fontFamily: MONO }}>O ciclo inteiro, numa memória só</p>
             <p className="mt-3 max-w-[520px] text-[17px] leading-7 text-black/70">
-              Uma memória única da obra que os apps de cada área compartilham. A empresa assina os que precisa, e todos conversam entre si.
+              A primeira pergunta de todo contrato é: onde está o dinheiro? O Malhet acompanha o caminho inteiro, do contrato à
+              governança, sem trocar de sistema — e cada número mostra a conta e de onde veio.
             </p>
-            <ul className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border border-black/10 bg-black/10 text-[15px]">
-              {[['VisualPlan', 'cronograma e governança'], ['PlanningControl', 'execução e avanço'], ['ADC Digital', 'administração contratual'], ['Painel de Indicadores', 'PPC, restrições, desvios']].map(([a, d]) => (
-                <li key={a} className="bg-[#F6F8F8] p-4 transition-colors hover:bg-white"><b className="font-semibold">{a}</b><span className="block text-[13px] text-black/50">{d}</span></li>
+            <ol className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border border-black/10 bg-black/10 text-[15px]">
+              {[['Contrato', 'PQ, composições e critério de medição'], ['Escopo', 'WBS de execução e take-off do projeto'],
+                ['Prazo', 'Cronograma do P6, plano de 90 dias e restrições'], ['Campo', 'Programação, lançamento do dia, presença e fotos'],
+                ['Medição', 'Avanço por critério e aderência em reais'], ['Governança', 'PPC, desvios com causa e plano de ação']].map(([a, d], i) => (
+                <li key={a} className="bg-[#F6F8F8] p-4 transition-colors hover:bg-white">
+                  <span className="text-[11px] text-black/35" style={{ fontFamily: MONO }}>0{i + 1}</span>
+                  <b className="block font-semibold">{a}</b><span className="block text-[13px] text-black/50">{d}</span>
+                </li>
               ))}
-            </ul>
+            </ol>
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-black/45" style={{ fontFamily: MONO }}>Quatro compromissos</p>
             <ol className="mt-4 text-[17px]">
-              {['Várias empresas na mesma conta.', 'Custo baixo.', 'Conformidade com a LGPD.', 'Um modo que funciona sem inteligência artificial, para quem não aceita IA no processo.'].map((c, i) => (
+              {['Várias obras e empresas, cada uma com a sua marca.', 'A empresa contrata só os módulos que usa, obra a obra.',
+                'LGPD no processo: aceite por finalidade, colhido no campo.',
+                'Funciona inteiro sem inteligência artificial — e nada da obra vai para IA de terceiros.'].map((c, i) => (
                 <li key={c} className="flex gap-4 border-b border-black/10 py-3"><span className="text-black/35" style={{ fontFamily: MONO }}>0{i + 1}</span>{c}</li>
               ))}
             </ol>
@@ -483,12 +491,12 @@ function ParaQuem() {
           texto="A mesma história, por *portas *diferentes." />
         <div className="mt-16">
           {[
-            ['Diretor de obras', 'Descobre o prejuízo tarde demais, na medição.', 'Você vê perdas e ganhos de cada obra enquanto ainda dá para agir.'],
+            ['Diretor de obras', 'Descobre o prejuízo tarde demais, na medição.', 'Você vê a aderência de cada obra, em reais, toda semana — enquanto ainda dá para agir.'],
             ['Gerente de contrato', 'Perde pleitos por falta de registro e de prova.', 'Cada ocorrido tem data, responsável e impacto. A prova já está pronta.'],
             ['Planejamento e controle', 'Cronograma bonito que não conversa com o campo.', 'O que aconteceu na obra alimenta o planejamento, sem retrabalho.'],
             ['Engenheiro e encarregado', 'Mais um sistema para preencher.', 'Registre em segundos. Quem resolve fica com o crédito.'],
             ['Suprimentos, qualidade e SMS', 'Recebem a demanda tarde e sem contexto.', 'A atividade chega com dono, prazo e o porquê.'],
-            ['Cliente da obra', 'Não confia no que a contratada reporta.', 'Cada etapa validada mostra quem assinou e quando.'],
+            ['Cliente da obra', 'Não confia no que a contratada reporta.', 'Cada registro mostra quem fez, quando e a foto carimbada do que foi feito.'],
           ].map(([q, dor, frase]) => (
             <EmFoco key={q}>
               {(f) => (
