@@ -1,12 +1,13 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCheck, FileSpreadsheet, FileUp, Plus, Search, Upload } from 'lucide-react';
+import { CheckCheck, FileSpreadsheet, Plus, Search, Upload } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
 import { DetalheDocumento } from '@/components/Documentos/DetalheDocumento';
 import { ConsolidadoDocumentos } from '@/components/Documentos/ConsolidadoDocumentos';
+import { EnviarDocumentos } from '@/components/Documentos/EnviarDocumentos';
 import { GrafoDocumentos } from '@/components/Documentos/GrafoDocumentos';
 import { PastasDocumentos } from '@/components/Documentos/PastasDocumentos';
 import { Abas } from '@/components/Obra/Abas';
@@ -17,7 +18,7 @@ import { useApi } from '@/hooks/programacao/useApi';
 import { type DocumentoResumo, type Grafo, type GrdResumo, type OpcoesDocumentos, type ResultadoLdo, SITUACAO } from '@/lib/documentos';
 import { useObra } from '@/lib/obra/ObraProvider';
 
-type Aba = 'pastas' | 'lista' | 'consolidado' | 'grds' | 'conexoes' | 'importar';
+type Aba = 'pastas' | 'enviar' | 'lista' | 'consolidado' | 'grds' | 'conexoes' | 'importar';
 const dataBR = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—');
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -44,6 +45,8 @@ function Documentos() {
   const lista = useQuery({ queryKey: ['documentos', 'lista'], queryFn: () => api.get<DocumentoResumo[]>('/documentos') });
   const opcoes = useQuery({ queryKey: ['documentos', 'opcoes'], queryFn: () => api.get<OpcoesDocumentos>('/documentos/opcoes'), staleTime: Infinity });
   const docs = lista.data ?? [];
+  const recebidos = useQuery({ queryKey: ['documentos', 'recebidos'], queryFn: () => api.get<unknown[]>('/documentos/recebidos'), enabled: planejador });
+  const pendentes = recebidos.data?.length ?? 0;
   const termos = busca.trim().toUpperCase();
   const pacotes = [...new Set(docs.map((d) => d.pacote).filter((x): x is string => !!x))];
   const visiveis = docs.filter((d) => (!tipo || d.tipo === tipo) && (!pacote || d.pacote === pacote)
@@ -65,12 +68,11 @@ function Documentos() {
         <Indicador rotulo="Ligações a confirmar" valor={sugestoes} tom={sugestoes ? 'atencao' : undefined} detalhe="sugeridas pela TAG do desenho" />
       </div>
       <Abas rotulo="Documentos" ativa={aba} onTrocar={setAba}
-        abas={[{ chave: 'pastas', titulo: 'Pastas' }, { chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'consolidado', titulo: 'Consolidado' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões', visivel: superadmin },
+        abas={[{ chave: 'pastas', titulo: 'Pastas' }, { chave: 'enviar', titulo: `Enviar e relacionar${pendentes ? ` (${pendentes})` : ''}`, visivel: planejador }, { chave: 'lista', titulo: 'Lista de documentos (LDO)' }, { chave: 'consolidado', titulo: 'Consolidado' }, { chave: 'grds', titulo: 'GRDs' }, { chave: 'conexoes', titulo: 'Conexões', visivel: superadmin },
           { chave: 'importar', titulo: 'Importar LDO', visivel: planejador }]} />
 
       {aba === 'lista' && (
         <>
-          {planejador && <EnviarRevisao opcoes={opcoes.data} onEnviado={(id) => { atualizar(); setAberto(id); }} />}
           <Painel titulo="Qual revisão vale em cada documento?" acoes={
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex h-10 items-center gap-2 rounded-full border border-m-stroke bg-m-surface-field px-3"><Search size={15} className="text-m-text-muted" />
@@ -99,64 +101,14 @@ function Documentos() {
         </>
       )}
       {aba === 'pastas' && <PastasDocumentos opcoes={opcoes.data} docs={docs} onAbrir={setAberto}
-        onAcao={(a) => setAba(a === 'enviar' ? 'lista' : a === 'ldo' ? 'importar' : 'grds')} />}
+        onAcao={(a) => setAba(a === 'enviar' ? 'enviar' : a === 'ldo' ? 'importar' : 'grds')} />}
+      {aba === 'enviar' && planejador && <EnviarDocumentos opcoes={opcoes.data} docs={docs} onAbrir={setAberto} />}
       {aba === 'consolidado' && <ConsolidadoDocumentos onAbrir={setAberto} />}
       {aba === 'grds' && <Grds docs={docs} planejador={planejador} />}
       {aba === 'conexoes' && superadmin && <Conexoes onAbrir={setAberto} />}
       {aba === 'importar' && planejador && <ImportarLdo onPronto={atualizar} onAbrir={setAberto} />}
       {aberto && <DetalheDocumento id={aberto} opcoes={opcoes.data} documentos={docs} onFechar={() => setAberto(null)} onAbrir={setAberto} />}
     </>
-  );
-}
-
-function EnviarRevisao({ opcoes, onEnviado }: { opcoes?: OpcoesDocumentos; onEnviado: (docId: number) => void }) {
-  const api = useApi();
-  const grds = useQuery({ queryKey: ['documentos', 'grds'], queryFn: () => api.get<GrdResumo[]>('/documentos/grds') });
-  const [arquivos, setArquivos] = useState<File[]>([]);
-  const [f, setF] = useState({ codigo: '', revisao: '', finalidade: '', tipo: '', grd_id: '' });
-  const [enviando, setEnviando] = useState(false);
-  const [resultado, setResultado] = useState<string[]>([]);
-  const enviar = async () => {
-    setEnviando(true); setResultado([]);
-    const saida: string[] = [];
-    let ultimo = 0;
-    for (const a of arquivos) {
-      const fd = new FormData();
-      fd.append('arquivo', a, a.name);
-      if (arquivos.length === 1 && f.codigo) fd.append('codigo', f.codigo);
-      if (arquivos.length === 1 && f.revisao) fd.append('revisao', f.revisao);
-      for (const k of ['finalidade', 'tipo', 'grd_id'] as const) if (f[k]) fd.append(k, f[k]);
-      try {
-        const r = await api.post<{ documento: { id: number; codigo: string }; revisao: { revisao: string; situacao: string; finalidade: string }; sugeridas: string[]; avisos: string[] }>('/documentos/revisoes', fd);
-        ultimo = r.documento.id;
-        saida.push(`✓ ${r.documento.codigo} rev. ${r.revisao.revisao} · ${r.revisao.finalidade} · ${SITUACAO[r.revisao.situacao as keyof typeof SITUACAO]?.rotulo ?? r.revisao.situacao}`
-          + (r.sugeridas.length ? ` · frente sugerida: ${r.sugeridas.join(', ')}` : '') + (r.avisos.length ? ` · ${r.avisos.join(' · ')}` : ''));
-      } catch (e) { saida.push(`✗ ${a.name}: ${(e as Error).message}`); }
-    }
-    setResultado(saida); setEnviando(false); setArquivos([]);
-    if (ultimo && arquivos.length === 1) onEnviado(ultimo); else onEnviado(0);
-  };
-  return (
-    <Painel titulo="Chegou revisão nova?" subtitulo="Envie o DWG, DXF ou PDF. Do DWG sai a folha para o campo, e o carimbo preenche código, revisão e finalidade; o que você digitar aqui tem prioridade.">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex h-11 cursor-pointer items-center gap-2 rounded-full border border-dashed border-m-stroke-strong px-4 text-[13px] font-semibold text-m-accent">
-          <Upload size={16} /> {arquivos.length ? `${arquivos.length} arquivo(s)` : 'Escolher arquivos'}
-          <input type="file" multiple accept=".dwg,.dxf,.pdf,.png,.jpg,.jpeg" className="sr-only" aria-label="Arquivos da revisão" onChange={(e) => setArquivos(Array.from(e.target.files ?? []))} />
-        </label>
-        {arquivos.length === 1 && <>
-          <Campo rotulo="Código (se não tiver carimbo)" value={f.codigo} onChange={(e) => setF({ ...f, codigo: e.target.value })} className="w-[200px]" />
-          <Campo rotulo="Revisão" value={f.revisao} onChange={(e) => setF({ ...f, revisao: e.target.value })} className="w-[90px]" />
-        </>}
-        <Selecao rotulo="Finalidade" value={f.finalidade} onChange={(e) => setF({ ...f, finalidade: e.target.value })}>
-          <option value="">a do carimbo</option>{(opcoes?.finalidades ?? []).map((x) => <option key={x}>{x}</option>)}
-        </Selecao>
-        <Selecao rotulo="Tipo" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })}><option value="">pelo arquivo</option>{Object.entries(opcoes?.tipos ?? {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Selecao>
-        <Selecao rotulo="Chegou na GRD" value={f.grd_id} onChange={(e) => setF({ ...f, grd_id: e.target.value })}><option value="">—</option>{(grds.data ?? []).filter((g) => g.sentido === 'recebida').map((g) => <option key={g.id} value={g.id}>{g.numero}{g.numero_externo ? ` (${g.numero_externo})` : ''}</option>)}</Selecao>
-        <Botao disabled={!arquivos.length || enviando} onClick={enviar}><FileUp size={16} /> {enviando ? 'Convertendo…' : 'Enviar revisão'}</Botao>
-      </div>
-      {opcoes && !opcoes.conversor_dwg && <p className="mt-2 text-[12px] text-m-warning">O conversor de DWG não está ativo neste servidor: o DWG fica guardado, sem a folha para o campo.</p>}
-      {resultado.length > 0 && <ul className="mt-3 flex flex-col gap-1 text-[13px]">{resultado.map((r, i) => <li key={i} className={r.startsWith('✗') ? 'text-m-danger' : 'text-m-text-secondary'}>{r}</li>)}</ul>}
-    </Painel>
   );
 }
 

@@ -169,6 +169,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   sem_arquivo por documento; `documento_revisao.takeoff_em|takeoff_qtd|takeoff_obs`) e `POST /documentos/takeoff/levantar` (lotes de
   25, `refazer`); a tela (`ProjetosTakeoff`) lê sozinha o que está a ler. PDF com camada de texto (`infra/pdf.py`, pdfminer.six) usa o
   mesmo leitor de quadros.
+  Enviar e relacionar (spec 132, aba "Enviar e relacionar", `EnviarDocumentos`): arrastar vários arquivos por tipo (+ GRD);
+  `domain/casamento.py::casar` acha o código da LDO no carimbo → nome → texto do PDF e a revisão (carimbo, `_R4`/`rev B`, única
+  pendente na LDO) e `application/envio.py::enviar` (`POST /documentos/enviar`) registra sozinho; o que não casa vai a
+  `documento_recebido` (acervo, motivo, sugestões) para associar à LDO, criar o documento ou relacionar a outros
+  (`/documentos/recebidos/{rid}/associar|novo`, DELETE descarta). Nunca chuta código fora da LDO (só o do carimbo com revisão).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

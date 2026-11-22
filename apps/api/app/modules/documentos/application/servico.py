@@ -160,16 +160,9 @@ def _extensao(nome: str | None, dados: bytes) -> str:
     raise DomainError("envie DWG, DXF, PDF ou imagem (PNG/JPG)", "arquivo")
 
 
-def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, por: str, *, codigo: str | None = None,
-                      revisao: str | None = None, finalidade: str | None = None, titulo: str | None = None,
-                      tipo: str | None = None, disciplina: str | None = None, data_emissao: date | None = None,
-                      grd_id: int | None = None) -> dict:
-    """Uma revisão nova de um documento. O que não vier no formulário sai do carimbo do desenho; o código, se não houver
-    nem no carimbo, vem do nome do arquivo. Revisão que já existe não é sobrescrita (ISO 7.5.3: controle de versão)."""
-    if not dados:
-        raise DomainError("arquivo vazio", "arquivo")
-    if len(dados) > LIMITE:
-        raise DomainError("arquivo maior que 60 MB", "arquivo")
+def ler_arquivo(nome: str | None, dados: bytes) -> tuple[bytes | None, "desenho.Desenho", list[str]]:
+    """DWG → DXF (conversor separado) e DXF → carimbo, textos e folha; o resto passa direto. Usado no envio (spec 132) para
+    casar com a LDO antes de registrar, sem converter duas vezes."""
     ext = _extensao(nome, dados)
     avisos: list[str] = []
     dxf: bytes | None = None
@@ -184,6 +177,21 @@ def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, 
     if dxf:
         vis = desenho.ler(dxf)
         avisos += vis.avisos
+    return dxf, vis, avisos
+
+
+def registrar_revisao(s: Session, obra_id: int, dados: bytes, nome: str | None, por: str, *, codigo: str | None = None,
+                      revisao: str | None = None, finalidade: str | None = None, titulo: str | None = None,
+                      tipo: str | None = None, disciplina: str | None = None, data_emissao: date | None = None,
+                      grd_id: int | None = None, leitura: tuple | None = None) -> dict:
+    """Uma revisão nova de um documento. O que não vier no formulário sai do carimbo do desenho; o código, se não houver
+    nem no carimbo, vem do nome do arquivo. Revisão que já existe não é sobrescrita (ISO 7.5.3: controle de versão)."""
+    if not dados:
+        raise DomainError("arquivo vazio", "arquivo")
+    if len(dados) > LIMITE:
+        raise DomainError("arquivo maior que 60 MB", "arquivo")
+    ext = _extensao(nome, dados)
+    dxf, vis, avisos = leitura if leitura is not None else ler_arquivo(nome, dados)
     car = dom.ler_carimbo(vis.carimbo) if vis.carimbo else dom.Carimbo()
     base = (nome or "").rsplit("/", 1)[-1].rsplit(".", 1)[0]
     cod = dom.normalizar_codigo(codigo or car.codigo or base)
@@ -682,8 +690,12 @@ def grafo(s: Session, obra_id: int) -> dict:
 def _em_uso():
     from sqlalchemy import union_all
 
+    from app.modules.documentos.infra.models import DocumentoRecebidoModel
+
     R = DocumentoRevisaoModel
-    return union_all(*(select(c).where(c.is_not(None)) for c in (R.arquivo_id, R.pdf_arquivo_id, R.png_arquivo_id, R.dxf_arquivo_id)))
+    colunas = (R.arquivo_id, R.pdf_arquivo_id, R.png_arquivo_id, R.dxf_arquivo_id, GrdModel.arquivo_id,  # GRD como chegou (spec 130)
+               DocumentoRecebidoModel.arquivo_id)  # esperando relacionar (spec 132)
+    return union_all(*(select(c).where(c.is_not(None)) for c in colunas))
 
 
 registrar(Usuario("documentos controlados", ("documento", "documento-visual"), lambda s, limite: 0, _em_uso))

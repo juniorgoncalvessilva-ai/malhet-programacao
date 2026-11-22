@@ -187,3 +187,28 @@ class DocumentoPastaModel(Base):
     retencao: Mapped[str | None] = mapped_column(String(160))
     criado_por: Mapped[str] = mapped_column(String(150))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentoRecebidoModel(Base):
+    """Arquivo enviado que não casou sozinho com a LDO (spec 132): fica em "A relacionar", guardado no acervo, com o que foi lido
+    e as sugestões, até o Planejamento associar à LDO, criar o documento, relacionar a outros ou descartar."""
+
+    __tablename__ = "documento_recebido"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
+    nome_original: Mapped[str | None] = mapped_column(String(200))
+    tipo: Mapped[str | None] = mapped_column(String(4))  # tipo escolhido no envio (DES, PRO…) ou vazio = pelo arquivo
+    codigo_lido: Mapped[str | None] = mapped_column(String(80))
+    revisao_lida: Mapped[str | None] = mapped_column(String(6))
+    titulo_lido: Mapped[str | None] = mapped_column(String(300))
+    motivo: Mapped[str | None] = mapped_column(String(300))
+    sugestoes: Mapped[list | None] = mapped_column(JSONB)
+    grd_id: Mapped[int | None] = mapped_column(ForeignKey("grd.id", ondelete="SET NULL"))
+    situacao: Mapped[str] = mapped_column(String(12), default="pendente", server_default="pendente")  # pendente | associado | descartado
+    documento_id: Mapped[int | None] = mapped_column(ForeignKey("documento.id", ondelete="SET NULL"))
+    revisao_id: Mapped[int | None] = mapped_column(ForeignKey("documento_revisao.id", ondelete="SET NULL"))
+    enviado_por: Mapped[str] = mapped_column(String(150))
+    enviado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolvido_por: Mapped[str | None] = mapped_column(String(150))
+    resolvido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

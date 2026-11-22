@@ -33,6 +33,74 @@ def listar(busca: str | None = None, area_id: int | None = None, pasta_id: int |
     return docs
 
 
+# ---- enviar e relacionar (spec 132) ----
+class AssociarIn(BaseModel):
+    documento_id: int
+    revisao: str = Field(min_length=1, max_length=6)
+    finalidade: str | None = None
+    relacionar_a: list[int] = []
+    relacao: str = "referencia"
+
+
+class CriarDocIn(BaseModel):
+    codigo: str = Field(min_length=3, max_length=80)
+    titulo: str = Field(min_length=3, max_length=300)
+    revisao: str = Field(min_length=1, max_length=6)
+    tipo: str | None = None
+    finalidade: str | None = None
+    relacionar_a: list[int] = []
+    relacao: str = "referencia"
+
+
+@router.post("/enviar", status_code=201)
+def enviar(arquivo: UploadFile = File(...), tipo: str | None = Form(None), grd_id: int | None = Form(None),
+           s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Envia um arquivo: casa sozinho com a LDO (carimbo, nome, texto do PDF) ou vai para "A relacionar"."""
+    from app.modules.documentos.application import envio
+
+    return envio.enviar(s, c.obra_id, arquivo.file.read(sv.LIMITE + 1), arquivo.filename, _quem(c), tipo=tipo or None, grd_id=grd_id)
+
+
+@router.get("/recebidos")
+def recebidos(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    from app.modules.documentos.application import envio
+
+    return envio.listar(s, c.obra_id)
+
+
+@router.get("/recebidos/{rid}/arquivo")
+def recebido_arquivo(rid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    from urllib.parse import quote
+
+    from app.modules.documentos.application import envio
+
+    dados, mime, nome = envio.arquivo(s, c.obra_id, rid)
+    return Response(dados, media_type=mime, headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(nome)}"})
+
+
+@router.post("/recebidos/{rid}/associar")
+def recebido_associar(rid: int, d: AssociarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    from app.modules.documentos.application import envio
+
+    return envio.associar(s, c.obra_id, rid, _quem(c), documento_id=d.documento_id, revisao=d.revisao, finalidade=d.finalidade,
+                          relacionar_a=d.relacionar_a, relacao=d.relacao)
+
+
+@router.post("/recebidos/{rid}/novo")
+def recebido_novo(rid: int, d: CriarDocIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    from app.modules.documentos.application import envio
+
+    return envio.criar(s, c.obra_id, rid, _quem(c), codigo=d.codigo, titulo=d.titulo, revisao=d.revisao, tipo=d.tipo,
+                       finalidade=d.finalidade, relacionar_a=d.relacionar_a, relacao=d.relacao)
+
+
+@router.delete("/recebidos/{rid}", status_code=204)
+def recebido_descartar(rid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    from app.modules.documentos.application import envio
+
+    envio.descartar(s, c.obra_id, rid, _quem(c))
+
+
 # ---- pastas e consolidado (spec 129) ----
 class PastaIn(BaseModel):
     nome: str = Field(min_length=3, max_length=80)
