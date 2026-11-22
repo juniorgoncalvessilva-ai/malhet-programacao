@@ -167,7 +167,8 @@ export function DetalheDocumento({ id, opcoes, documentos, onFechar, onAbrir }: 
           </div>
         )}
       </aside>
-      {ver && d && <VerRevisao titulo={`${d.codigo} · rev. ${ver.revisao}`} sub={`${d.titulo} · ${SITUACAO[ver.situacao].rotulo}`} onFechar={() => setVer(null)}
+      {ver && d && <VerRevisao carimbo={ver.situacao === 'vigente' ? 'controlada' : ver.situacao === 'superada' || ver.situacao === 'cancelada' ? 'obsoleto' : undefined}
+        titulo={`${d.codigo} · rev. ${ver.revisao}`} sub={`${d.titulo} · ${SITUACAO[ver.situacao].rotulo}`} onFechar={() => setVer(null)}
         png={ver.formatos.includes('png') ? arquivo(ver, 'png') : undefined} pdf={ver.formatos.includes('pdf') ? arquivo(ver, 'pdf') : undefined}
         original={ver.formatos.includes('original') ? () => api.download(`/documentos/revisoes/${ver.id}/arquivo?formato=original&baixar=true`,
           nomeArquivo(obra?.codigo, d.codigo, ver.revisao, ver.finalidade, (ver.nome_original ?? '').split('.').pop() || 'dwg')).then(() => undefined) : undefined} />}

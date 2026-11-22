@@ -31,7 +31,7 @@ export function ListaCampo({ docs, abrir, vazio }: { docs: DocumentoResumo[]; ab
           </li>
         ))}
       </ul>
-      {ver?.vigente && <VerRevisao titulo={`${ver.codigo} · rev. ${ver.vigente.revisao}`} sub={ver.titulo} onFechar={() => setVer(null)}
+      {ver?.vigente && <VerRevisao carimbo="controlada" titulo={`${ver.codigo} · rev. ${ver.vigente.revisao}`} sub={ver.titulo} onFechar={() => setVer(null)}
         png={ver.vigente.formatos.includes('png') ? () => abrir(ver.vigente!.id, 'png') : undefined}
         pdf={ver.vigente.formatos.includes('pdf') ? () => abrir(ver.vigente!.id, 'pdf') : undefined} />}
     </>

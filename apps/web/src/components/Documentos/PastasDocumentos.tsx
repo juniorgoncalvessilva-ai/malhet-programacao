@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { Carregando } from '@/components/Obra/Esqueleto';
 import { MultiSelecao } from '@/components/Obra/MultiSelecao';
-import { Botao, CARREGANDO, Campo, Chip, Painel, Pilula, Tabela, td, tdNum } from '@/components/Obra/ui';
+import { Botao, CARREGANDO, Campo, Chip, Painel, Pilula, Selecao, Tabela, td, tdNum } from '@/components/Obra/ui';
 import { Link } from '@/i18n/navigation';
 import { useApi } from '@/hooks/programacao/useApi';
 import { type DocumentoResumo, nomeArquivo, type OpcoesDocumentos, type PastaDoc, type Pastas, SITUACAO } from '@/lib/documentos';
@@ -23,7 +23,8 @@ const quando = (iso: string | null) => {
 };
 const gb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} GB` : `${(b / 1024 ** 2).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`);
 
-type Form = { id?: number; nome: string; descricao: string; tipos: string[]; disciplinas: string; pacotes: string[] };
+type Form = { id?: number; nome: string; descricao: string; tipos: string[]; disciplinas: string; pacotes: string[]; natureza: string; responsavel: string; meio: string; local: string; retencao: string };
+const NOVA = { nome: '', descricao: '', tipos: [] as string[], disciplinas: '', pacotes: [] as string[], natureza: 'documento', responsavel: '', meio: '', local: '', retencao: '' };
 
 /**
  * Pastas de documentos (spec 129) — a organização do vídeo Growarq no Malhet: a obra recebe a cópia da pasta-modelo e cada
@@ -49,7 +50,8 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
   const pacotes = [...new Set(docs.map((x) => x.pacote).filter((x): x is string => !!x))];
   const salvar = async () => {
     if (!form) return;
-    const corpo = { nome: form.nome, descricao: form.descricao || null, tipos: form.tipos, pacotes: form.pacotes,
+    const corpo = { nome: form.nome, descricao: form.descricao || null, tipos: form.tipos, pacotes: form.pacotes, natureza: form.natureza,
+      responsavel: form.responsavel || null, meio: form.meio || null, local: form.local || null, retencao: form.retencao || null,
       disciplinas: form.disciplinas.split(/[,;]/).map((x) => x.trim()).filter(Boolean) };
     try {
       if (form.id) await api.put(`/documentos/pastas/${form.id}`, corpo); else await api.post('/documentos/pastas', corpo);
@@ -86,7 +88,10 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
 
       <div className="grid gap-5 2xl:grid-cols-[1fr_360px]">
         <Painel titulo="Onde está cada documento?" subtitulo="Cada pasta é uma regra (tipo, disciplina, pacote): o documento aparece em toda pasta que cumpre, sem mover arquivo. A obra começa com a cópia da pasta-modelo do Malhet."
-          acoes={planejador && <Botao variante="secundario" onClick={() => setForm({ nome: '', descricao: '', tipos: [], disciplinas: '', pacotes: [] })}><FolderPlus size={16} /> Nova pasta</Botao>}>
+          acoes={<div className="flex flex-wrap gap-2">
+            <Botao variante="secundario" onClick={() => api.download('/documentos/plano-arquivamento.xlsx', `${obra?.codigo ?? 'obra'}_Plano-de-arquivamento.xlsx`)}><FileSpreadsheet size={16} /> Plano de arquivamento</Botao>
+            {planejador && <Botao variante="secundario" onClick={() => setForm({ ...NOVA })}><FolderPlus size={16} /> Nova pasta</Botao>}
+          </div>}>
           {form && (
             <div className="mb-4 flex flex-col gap-3 rounded-[16px] border border-m-stroke-subtle bg-m-surface-base p-4">
               <div className="grid gap-3 md:grid-cols-2">
@@ -99,6 +104,15 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
                 <Campo rotulo="Disciplinas (sigla ou nome, vírgula)" value={form.disciplinas} onChange={(e) => setForm({ ...form, disciplinas: e.target.value })} placeholder="C, Elétrica" className="w-[240px]" />
                 {pacotes.length > 0 && <MultiSelecao rotulo="Pacotes da LDO" valor={form.pacotes} comNa={false} largura="w-[240px]" onChange={(v) => setForm({ ...form, pacotes: v })}
                   opcoes={pacotes.map((p) => ({ valor: p, rotulo: p }))} />}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Selecao rotulo="Natureza" value={form.natureza} onChange={(e) => setForm({ ...form, natureza: e.target.value })}>
+                  <option value="documento">Documento</option><option value="registro">Registro (evidência do que foi feito)</option>
+                </Selecao>
+                <Campo rotulo="Responsável pela guarda" value={form.responsavel} onChange={(e) => setForm({ ...form, responsavel: e.target.value })} placeholder="Qualidade (CQ da obra)" />
+                <Campo rotulo="Meio" value={form.meio} onChange={(e) => setForm({ ...form, meio: e.target.value })} placeholder="Digital — acervo da obra no Malhet" />
+                <Campo rotulo="Local" value={form.local} onChange={(e) => setForm({ ...form, local: e.target.value })} placeholder="Malhet · 70 Registros de solda" />
+                <Campo rotulo="Retenção" value={form.retencao} onChange={(e) => setForm({ ...form, retencao: e.target.value })} placeholder="Na obra; depois no Data-Book pelo prazo do contrato" className="md:col-span-2" />
               </div>
               <div className="flex gap-2"><Botao onClick={salvar} disabled={form.nome.trim().length < 3}>Salvar pasta</Botao><Botao variante="fantasma" onClick={() => setForm(null)}>Cancelar</Botao></div>
             </div>
@@ -116,14 +130,16 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
                         <span className="mt-1 flex flex-wrap gap-1">{[...p.tipos.map((t) => opcoes?.tipos[t] ?? t), ...p.disciplinas, ...p.pacotes].map((x) => <Pilula key={x} ponto={false}>{x}</Pilula>)}</span></span>
                     </span>
                   </td>
-                  <td className={td}>{p.do_modelo ? <Pilula tom="info">Pasta-modelo</Pilula> : <Pilula tom="acento">Criada na obra</Pilula>}</td>
+                  <td className={td}>{p.do_modelo ? <Pilula tom="info">Pasta-modelo</Pilula> : <Pilula tom="acento">Criada na obra</Pilula>}
+                    <div className="mt-1 text-[11px] text-m-text-muted">{p.natureza === 'registro' ? 'Registro' : 'Documento'} · {p.responsavel}</div>
+                    <div className="text-[11px] text-m-text-muted" title={p.retencao ?? ''}>{p.retencao}</div></td>
                   <td className={tdNum}>{p.documentos}</td>
                   <td className={tdNum}>{p.vigentes}</td>
                   <td className={td}>{quando(p.ultima)}</td>
                   <td className={`${td} whitespace-nowrap text-right`} onClick={(e) => e.stopPropagation()}>
                     {planejador && <>
                       <button type="button" aria-label={`Editar ${p.nome}`} className="p-1.5 text-m-text-muted hover:text-m-accent"
-                        onClick={() => setForm({ id: p.id, nome: p.nome, descricao: p.descricao ?? '', tipos: p.tipos, disciplinas: p.disciplinas.join(', '), pacotes: p.pacotes })}><Pencil size={15} /></button>
+                        onClick={() => setForm({ id: p.id, nome: p.nome, descricao: p.descricao ?? '', tipos: p.tipos, disciplinas: p.disciplinas.join(', '), pacotes: p.pacotes, natureza: p.natureza, responsavel: p.responsavel ?? '', meio: p.meio ?? '', local: p.local ?? '', retencao: p.retencao ?? '' })}><Pencil size={15} /></button>
                       <button type="button" aria-label={`Excluir ${p.nome}`} className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={() => excluir(p)}><Trash2 size={15} /></button>
                     </>}
                     <ChevronRight size={16} className="ml-1 inline text-m-text-muted" aria-hidden="true" />
@@ -138,7 +154,7 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
                 <td className={td}><Pilula tom="atencao">Sugerida</Pilula></td>
                 <td className={tdNum}>{d.sem_pasta}</td><td className={tdNum}>—</td><td className={td}>—</td>
                 <td className={`${td} text-right`} onClick={(e) => e.stopPropagation()}>
-                  {planejador && d.sugestao && <Botao variante="secundario" className="h-8 px-3" onClick={() => setForm({ nome: d.sugestao!.nome, descricao: '', tipos: d.sugestao!.tipos, disciplinas: '', pacotes: [] })}>Criar pasta</Botao>}
+                  {planejador && d.sugestao && <Botao variante="secundario" className="h-8 px-3" onClick={() => setForm({ ...NOVA, nome: d.sugestao!.nome, tipos: d.sugestao!.tipos })}>Criar pasta</Botao>}
                 </td>
               </tr>
             )}
@@ -173,7 +189,7 @@ export function PastasDocumentos({ opcoes, docs, onAbrir, onAcao }: {
               <div className="grid grid-cols-2 gap-2">
                 {([['enviar', Upload, 'Enviar revisão', 'DWG, DXF, PDF'], ['ldo', FilePlus2, 'Importar LDO', 'planilha do contrato'],
                   ['grd', Send, 'Nova GRD', 'recebida ou emitida'], ['pasta', FolderPlus, 'Nova pasta', 'por tipo ou pacote']] as const).map(([k, I, t, sub]) => (
-                  <button key={k} type="button" onClick={() => (k === 'pasta' ? setForm({ nome: '', descricao: '', tipos: [], disciplinas: '', pacotes: [] }) : onAcao(k))}
+                  <button key={k} type="button" onClick={() => (k === 'pasta' ? setForm({ ...NOVA }) : onAcao(k))}
                     className="flex flex-col items-start gap-1 rounded-[14px] border border-m-stroke-subtle p-3 text-left hover:border-m-accent hover:bg-m-surface-hover">
                     <I size={18} strokeWidth={1.75} className="text-m-accent" aria-hidden="true" />
                     <span className="text-[13px] font-semibold text-m-text-primary">{t}</span>

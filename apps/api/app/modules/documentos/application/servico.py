@@ -4,6 +4,7 @@ Revisão entra pelo arquivo (DWG, DXF, PDF, imagem): o DWG vira DXF no conversor
 (TAGs) e a folha em PDF/PNG; tudo vai para o acervo Zettelkasten da obra (`arquivos.guardar`, pasta 05-documentos) com as
 ligações no `.md`. A vigente é calculada pelas regras do domínio — nunca gravada à mão — e a anterior vira superada.
 """
+import re
 from datetime import date, datetime, timezone
 from io import BytesIO
 
@@ -15,6 +16,7 @@ from app.modules.arquivos.application import servico as arquivos
 from app.modules.arquivos.application.registro import Usuario, registrar
 from app.modules.arquivos.infra.models import ArquivoModel
 from app.modules.documentos.domain import documento as dom
+from app.modules.documentos.domain import grd as grd_dom
 from app.modules.documentos.domain import ldo as ldo_dom
 from app.modules.documentos.infra import desenho, dwg
 from app.modules.documentos.infra.models import (
@@ -517,16 +519,21 @@ def arquivo_da_revisao(s: Session, obra_id: int, rev_id: int, formato: str, quem
 # ---- GRD -------------------------------------------------------------------------------------------------------------
 
 def criar_grd(s: Session, obra_id: int, sentido: str, data: date, remetente: str, destinatario: str, por: str, *,
-              numero_externo: str | None = None, observacao: str | None = None, itens: list[dict] | None = None) -> dict:
+              numero_externo: str | None = None, observacao: str | None = None, itens: list[dict] | None = None,
+              atencao: str | None = None, atencao_cargo: str | None = None, emitente: str | None = None,
+              emitente_cargo: str | None = None, referencia: str | None = None) -> dict:
     """GRD recebida (os arquivos das revisões chegam depois, apontando para ela) ou emitida (lista as revisões vigentes
-    que estão saindo). O número é sequencial por sentido e ano."""
+    que estão saindo). O número é sequencial por sentido e ano. Cada item leva as colunas da GRD do contrato (spec 130):
+    folhas, status (letra do TE), finalidade da remessa (1–7), tipo de via, formato e nº de vias."""
     if len((remetente or "").strip()) < 2 or len((destinatario or "").strip()) < 2:
         raise DomainError("informe remetente e destinatário", "remetente")
     seq = len(list(s.scalars(select(GrdModel.id).where(GrdModel.obra_id == obra_id, GrdModel.sentido == sentido)))) + 1
+    limpo = lambda x, n: (x or "").strip()[:n] or None  # noqa: E731
     g = GrdModel(obra_id=obra_id, numero=dom.numero_grd(sentido, seq, data.year), sentido=sentido, data=data,
                  remetente=remetente.strip()[:150], destinatario=destinatario.strip()[:150],
-                 numero_externo=(numero_externo or "").strip()[:80] or None, observacao=(observacao or "").strip() or None,
-                 criado_por=por)
+                 numero_externo=limpo(numero_externo, 80), observacao=(observacao or "").strip() or None,
+                 atencao=limpo(atencao, 150), atencao_cargo=limpo(atencao_cargo, 120), emitente=limpo(emitente, 150),
+                 emitente_cargo=limpo(emitente_cargo, 120), referencia=limpo(referencia, 150), criado_por=por)
     s.add(g)
     s.flush()
     for n, it in enumerate(itens or []):
@@ -536,9 +543,76 @@ def criar_grd(s: Session, obra_id: int, sentido: str, data: date, remetente: str
         r = next((x for x in revs if x.id == rid), None)
         if r is None:
             raise DomainError(f"{d.codigo} não tem revisão para a GRD", "itens")
-        s.add(GrdItemModel(grd_id=g.id, documento_id=d.id, revisao_id=r.id, revisao=r.revisao, finalidade=r.finalidade, ordem=n))
+        s.add(_item_grd(g, d, r, n, it, padrao_via="CC" if sentido == "emitida" else None))
     s.flush()
     return grd_detalhe(s, obra_id, g.id)
+
+
+def _item_grd(g: GrdModel, d: DocumentoModel, r: DocumentoRevisaoModel, ordem: int, it: dict, padrao_via: str | None) -> GrdItemModel:
+    via, formato = grd_dom.validar_item(it.get("via") or padrao_via, it.get("formato"), it.get("finalidade_remessa"), it.get("vias"), it.get("folhas"))
+    return GrdItemModel(grd_id=g.id, documento_id=d.id, revisao_id=r.id, revisao=r.revisao, finalidade=r.finalidade, ordem=ordem,
+                        folhas=it.get("folhas"), status=(it.get("status") or grd_dom.status_da_finalidade(r.finalidade)),
+                        finalidade_remessa=it.get("finalidade_remessa") or grd_dom.finalidade_da_remessa(r.finalidade),
+                        via=via, formato=formato, vias=it.get("vias") if it.get("vias") is not None else 1)
+
+
+def _tipo_pelo_codigo(codigo: str) -> str:
+    """Tipo do documento pelo código, quando a GRD não diz: …IT-001 → IT, …PO-01/PR- → PRO, NR/NBR → NOR, MD/MC → MEM."""
+    c = codigo.upper()
+    for padrao, tipo in ((r"(^|[.\-_])IT[-_.]?\d", "IT"), (r"(^|[.\-_])(PO|PR|PG|PE)[-_.]?\d", "PRO"), (r"(^|[.\-_])(NR|NBR|NORMA)", "NOR"),
+                         (r"(^|[.\-_])(ET|ES|ESP)[-_.]?\d", "ESP"), (r"(^|[.\-_])(MD|MC|MEM)[-_.]?\d", "MEM"), (r"(^|[.\-_])(LD|LM|LS|LISTA)", "LIS")):
+        if re.search(padrao, c):
+            return tipo
+    return "DES"
+
+
+def importar_grd(s: Session, obra_id: int, xlsx: bytes, por: str, nome: str | None = None) -> dict:
+    """GRD recebida no modelo do contrato (spec 130): cria a GRD (o número de quem mandou fica como origem), registra cada
+    documento e a revisão listada apontando para ela (o arquivo chega depois e completa a mesma revisão) e guarda a planilha
+    da GRD no acervo. A mesma GRD de origem não entra duas vezes."""
+    try:
+        wb = load_workbook(BytesIO(xlsx), read_only=True, data_only=True)
+        linhas = list(wb.worksheets[0].iter_rows(values_only=True))
+    except Exception as e:  # noqa: BLE001
+        raise DomainError("envie a GRD em Excel (.xlsx)", "arquivo") from e
+    lida = grd_dom.ler(linhas)
+    if not lida.itens:
+        raise DomainError("; ".join(lida.avisos) or "a GRD não tem documentos", "arquivo")
+    if lida.numero and s.scalar(select(GrdModel.id).where(GrdModel.obra_id == obra_id, GrdModel.numero_externo == lida.numero)):
+        raise DomainError(f"a GRD {lida.numero} já foi importada", "arquivo")
+    g = criar_grd(s, obra_id, "recebida", lida.data or date.today(), lida.de or "remetente não informado", lida.para or "contratada", por,
+                  numero_externo=lida.numero, observacao=lida.observacao, atencao=lida.atencao, atencao_cargo=lida.atencao_cargo,
+                  emitente=lida.emitente, emitente_cargo=lida.emitente_cargo, referencia=lida.referencia)
+    gm = s.get(GrdModel, g["id"])
+    criados = revisoes = 0
+    for n, it in enumerate(lida.itens):
+        d = s.scalar(select(DocumentoModel).where(DocumentoModel.obra_id == obra_id, DocumentoModel.codigo == it.codigo))
+        if d is None:
+            d = DocumentoModel(obra_id=obra_id, codigo=it.codigo, titulo=it.titulo, tipo=_tipo_pelo_codigo(it.codigo), origem="grd",
+                               criado_por=por)
+            s.add(d)
+            s.flush()
+            criados += 1
+        rev = it.revisao or "0"
+        r = s.scalar(select(DocumentoRevisaoModel).where(DocumentoRevisaoModel.documento_id == d.id, DocumentoRevisaoModel.revisao == rev))
+        if r is None:
+            fin = grd_dom.STATUS.get(it.status or "", None)
+            r = DocumentoRevisaoModel(obra_id=obra_id, documento_id=d.id, revisao=rev, grd_id=gm.id, enviado_por=por,
+                                      finalidade=dom.normalizar_finalidade(fin if fin and fin != "OBSOLETO" else None),
+                                      data_emissao=lida.data)
+            s.add(r)
+            s.flush()
+            revisoes += 1
+        elif r.grd_id is None:
+            r.grd_id = gm.id
+        s.add(_item_grd(gm, d, r, n, {"folhas": it.folhas, "status": it.status, "finalidade_remessa": it.finalidade, "via": it.via,
+                                      "formato": it.formato, "vias": it.vias}, padrao_via=None))
+    a = arquivos.guardar(s, obra_id, xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "documento",
+                         titulo=f"GRD {lida.numero or gm.numero}", ligacoes={"grd": gm.numero, "origem": lida.numero},
+                         origem="documento", nome_original=nome)
+    gm.arquivo_id = a.id
+    s.flush()
+    return {**grd_detalhe(s, obra_id, gm.id), "documentos_novos": criados, "revisoes_novas": revisoes, "avisos": lida.avisos}
 
 
 def _grd(s: Session, obra_id: int, gid: int) -> GrdModel:
@@ -554,9 +628,13 @@ def grd_detalhe(s: Session, obra_id: int, gid: int) -> dict:
     docs = {d.id: d for d in s.scalars(select(DocumentoModel).where(DocumentoModel.id.in_({i.documento_id for i in itens} or {0})))}
     return {"id": g.id, "numero": g.numero, "numero_externo": g.numero_externo, "sentido": g.sentido, "data": g.data.isoformat(),
             "remetente": g.remetente, "destinatario": g.destinatario, "observacao": g.observacao,
+            "atencao": g.atencao, "atencao_cargo": g.atencao_cargo, "emitente": g.emitente, "emitente_cargo": g.emitente_cargo,
+            "referencia": g.referencia, "tem_arquivo": bool(g.arquivo_id),
             "ciente_por": g.ciente_por, "ciente_em": g.ciente_em.isoformat() if g.ciente_em else None,
             "itens": [{"documento_id": i.documento_id, "codigo": docs[i.documento_id].codigo, "titulo": docs[i.documento_id].titulo,
-                       "revisao": i.revisao, "finalidade": i.finalidade, "revisao_id": i.revisao_id} for i in itens if i.documento_id in docs]}
+                       "revisao": i.revisao, "finalidade": i.finalidade, "revisao_id": i.revisao_id, "folhas": i.folhas,
+                       "status": i.status, "finalidade_remessa": i.finalidade_remessa, "via": i.via, "formato": i.formato,
+                       "vias": i.vias} for i in itens if i.documento_id in docs]}
 
 
 def listar_grds(s: Session, obra_id: int) -> list[dict]:
@@ -566,7 +644,8 @@ def listar_grds(s: Session, obra_id: int) -> list[dict]:
         qtd[gid] = qtd.get(gid, 0) + 1
     return [{"id": g.id, "numero": g.numero, "numero_externo": g.numero_externo, "sentido": g.sentido, "data": g.data.isoformat(),
              "remetente": g.remetente, "destinatario": g.destinatario, "itens": qtd.get(g.id, 0),
-             "ciente_por": g.ciente_por, "ciente_em": g.ciente_em.isoformat() if g.ciente_em else None} for g in gs]
+             "ciente_por": g.ciente_por, "ciente_em": g.ciente_em.isoformat() if g.ciente_em else None,
+             "atencao": g.atencao, "emitente": g.emitente, "referencia": g.referencia, "tem_arquivo": bool(g.arquivo_id)} for g in gs]
 
 
 def ciencia_grd(s: Session, obra_id: int, gid: int, por: str) -> None:

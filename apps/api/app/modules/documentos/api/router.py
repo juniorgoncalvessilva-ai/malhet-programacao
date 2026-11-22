@@ -40,6 +40,11 @@ class PastaIn(BaseModel):
     tipos: list[str] = []
     disciplinas: list[str] = []
     pacotes: list[str] = []
+    natureza: str | None = None
+    responsavel: str | None = Field(None, max_length=80)
+    meio: str | None = Field(None, max_length=80)
+    local: str | None = Field(None, max_length=120)
+    retencao: str | None = Field(None, max_length=160)
 
 
 @router.get("/pastas")
@@ -50,7 +55,15 @@ def pastas(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 
 @router.post("/pastas", status_code=201)
 def nova_pasta(d: PastaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes)
+    return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes, natureza=d.natureza,
+                      responsavel=d.responsavel, meio=d.meio, local=d.local, retencao=d.retencao)
+
+
+@router.get("/plano-arquivamento.xlsx")
+def plano_arquivamento(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Plano de arquivamento da obra a partir das pastas: o que é documento e o que é registro, quem guarda, onde e por quanto tempo."""
+    dados = planilhas.plano_arquivamento_xlsx(s, c.obra_id, _quem(c))
+    return Response(dados, media_type=XLSX, headers={"Content-Disposition": 'attachment; filename="Plano de arquivamento.xlsx"'})
 
 
 @router.post("/pastas/restaurar")
@@ -60,7 +73,8 @@ def restaurar_pastas(s: Session = Depends(get_session), c: ContextoObra = Depend
 
 @router.put("/pastas/{pid}")
 def editar_pasta(pid: int, d: PastaIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes, pasta_id=pid)
+    return pst.salvar(s, c.obra_id, _quem(c), d.nome, d.descricao, d.tipos, d.disciplinas, d.pacotes, pasta_id=pid,
+                      natureza=d.natureza, responsavel=d.responsavel, meio=d.meio, local=d.local, retencao=d.retencao)
 
 
 @router.delete("/pastas/{pid}", status_code=204)
@@ -140,6 +154,11 @@ def grafo(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 class ItemGrdIn(BaseModel):
     documento_id: int
     revisao_id: int | None = None
+    folhas: int | None = None
+    finalidade_remessa: int | None = None
+    via: str | None = None
+    formato: str | None = None
+    vias: int | None = None
 
 
 class GrdIn(BaseModel):
@@ -149,6 +168,11 @@ class GrdIn(BaseModel):
     destinatario: str = Field(max_length=150)
     numero_externo: str | None = Field(None, max_length=80)
     observacao: str | None = Field(None, max_length=2000)
+    atencao: str | None = Field(None, max_length=150)
+    atencao_cargo: str | None = Field(None, max_length=120)
+    emitente: str | None = Field(None, max_length=150)
+    emitente_cargo: str | None = Field(None, max_length=120)
+    referencia: str | None = Field(None, max_length=150)
     itens: list[ItemGrdIn] = []
 
 
@@ -160,7 +184,36 @@ def grds(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
 @router.post("/grds", status_code=201)
 def nova_grd(d: GrdIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     return sv.criar_grd(s, c.obra_id, d.sentido, d.data, d.remetente, d.destinatario, _quem(c), numero_externo=d.numero_externo,
-                        observacao=d.observacao, itens=[i.model_dump() for i in d.itens])
+                        observacao=d.observacao, itens=[i.model_dump() for i in d.itens], atencao=d.atencao,
+                        atencao_cargo=d.atencao_cargo, emitente=d.emitente, emitente_cargo=d.emitente_cargo, referencia=d.referencia)
+
+
+@router.get("/grds/opcoes")
+def grd_opcoes(_c: ContextoObra = Depends(ler)):
+    from app.modules.documentos.domain import grd as g
+
+    return {"status": g.STATUS, "finalidades": g.FINALIDADES, "vias": g.VIAS, "formatos": list(g.FORMATOS)}
+
+
+@router.post("/grds/importar", status_code=201)
+def importar_grd(arquivo: UploadFile = File(...), s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """GRD recebida no modelo do contrato (.xlsx): cria a GRD, registra as revisões listadas e guarda a planilha."""
+    return sv.importar_grd(s, c.obra_id, arquivo.file.read(sv.LIMITE + 1), _quem(c), arquivo.filename)
+
+
+@router.get("/grds/{gid}/arquivo")
+def grd_arquivo(gid: int, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """A planilha da GRD como chegou (importada)."""
+    from app.modules.arquivos.application import servico as arq
+    from app.modules.arquivos.infra.models import ArquivoModel
+
+    g = sv._grd(s, c.obra_id, gid)
+    a = s.get(ArquivoModel, g.arquivo_id) if g.arquivo_id else None
+    if a is None:
+        from app.shared.errors import NotFoundError
+        raise NotFoundError("arquivo da GRD", gid)
+    return Response(arq.abrir(s, a), media_type=a.mime,
+                    headers={"Content-Disposition": f'attachment; filename="{(g.numero_externo or g.numero)}.xlsx"'})
 
 
 @router.get("/grds/{gid}")

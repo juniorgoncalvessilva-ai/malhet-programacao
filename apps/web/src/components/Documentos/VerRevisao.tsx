@@ -10,8 +10,10 @@ import { toast } from 'sonner';
  * vetorial abre no leitor do aparelho (zoom sem perder nitidez) e o original (DWG) baixa. Funciona no computador, no app de
  * campo e no endereço do encarregado — quem chama diz de onde vem cada arquivo.
  */
-export function VerRevisao({ titulo, sub, png, pdf, original, onFechar }: {
+export function VerRevisao({ titulo, sub, png, pdf, original, onFechar, carimbo }: {
   titulo: string; sub?: string; png?: () => Promise<Blob>; pdf?: () => Promise<Blob>; original?: () => Promise<void>; onFechar: () => void;
+  /** Spec 130 (Plano de Arquivamento 8.14/8.17): vigente = CÓPIA CONTROLADA; superada/cancelada = DOCUMENTO OBSOLETO. */
+  carimbo?: 'controlada' | 'obsoleto';
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -41,6 +43,11 @@ export function VerRevisao({ titulo, sub, png, pdf, original, onFechar }: {
         {original && <button type="button" onClick={() => void original()} className="flex h-10 items-center gap-1.5 rounded-full bg-white/15 px-3 text-[13px] font-semibold"><Download size={15} /> Original</button>}
         <button type="button" aria-label="Fechar" onClick={onFechar} className="grid h-10 w-10 place-items-center rounded-full bg-white/15"><X size={20} /></button>
       </div>
+      {carimbo && (
+        <div role="status" className={`pointer-events-none absolute left-1/2 top-[72px] z-10 -translate-x-1/2 rotate-[-4deg] rounded-[6px] border-[3px] px-4 py-1.5 font-mono text-[15px] font-extrabold uppercase tracking-[0.18em] shadow-sm ${carimbo === 'obsoleto' ? 'border-m-danger bg-white/90 text-m-danger' : 'border-m-danger/80 bg-white/80 text-m-danger'}`}>
+          {carimbo === 'obsoleto' ? 'Documento obsoleto' : 'Cópia controlada'}
+        </div>
+      )}
       <div ref={caixa} className="relative flex-1 overflow-auto bg-white"
         onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); mudar(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); } }}
         onDoubleClick={() => mudar(zoom >= 4 ? 1 : zoom * 2)}

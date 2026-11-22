@@ -33,9 +33,14 @@ def garantir_modelo(s: Session, obra_id: int, por: str) -> list[DocumentoPastaMo
     for m in pd.MODELO:
         s.add(DocumentoPastaModel(obra_id=obra_id, codigo=m.codigo, nome=m.nome, descricao=m.descricao, tipos=list(m.regra.tipos),
                                   disciplinas=list(m.regra.disciplinas) or None, pacotes=list(m.regra.pacotes) or None,
-                                  do_modelo=True, criado_por=por))
+                                  do_modelo=True, criado_por=por, **_arquivamento(m)))
     s.flush()
     return list(s.scalars(select(DocumentoPastaModel).where(DocumentoPastaModel.obra_id == obra_id).order_by(DocumentoPastaModel.codigo)))
+
+
+def _arquivamento(m: pd.PastaModelo) -> dict:
+    return {"natureza": m.natureza, "responsavel": m.responsavel, "meio": m.meio, "local": f"Malhet · {m.codigo} {m.nome}",
+            "retencao": m.retencao}
 
 
 def _regra(p: DocumentoPastaModel) -> pd.Regra:
@@ -86,6 +91,9 @@ def listar(s: Session, obra_id: int, por: str) -> dict:
     return {
         "pastas": [{"id": p.id, "codigo": p.codigo, "nome": p.nome, "descricao": p.descricao, "do_modelo": p.do_modelo,
                     "tipos": p.tipos or [], "disciplinas": p.disciplinas or [], "pacotes": p.pacotes or [],
+                    "natureza": p.natureza or "documento", "responsavel": p.responsavel or "Qualidade (CQ da obra)",
+                    "meio": p.meio or pd.MEIO_PADRAO, "local": p.local or f"Malhet · {p.codigo} {p.nome}",
+                    "retencao": p.retencao or pd.RETENCAO_PADRAO,
                     "documentos": conta[p.id].documentos, "vigentes": conta[p.id].vigentes, "ultima": conta[p.id].ultima,
                     "por_pacote": conta[p.id].pacotes, "por_disciplina": conta[p.id].disciplinas} for p in pastas],
         "sem_pasta": len(sem), "sugestao": pd.sugestao_para(sem), "documentos": len(docs),
@@ -114,7 +122,8 @@ def _lista(v: list[str] | None, maiusc: bool = True) -> list[str] | None:
 
 
 def salvar(s: Session, obra_id: int, por: str, nome: str, descricao: str | None, tipos: list[str] | None,
-           disciplinas: list[str] | None, pacotes: list[str] | None, pasta_id: int | None = None) -> dict:
+           disciplinas: list[str] | None, pacotes: list[str] | None, pasta_id: int | None = None, *, natureza: str | None = None,
+           responsavel: str | None = None, meio: str | None = None, local: str | None = None, retencao: str | None = None) -> dict:
     garantir_modelo(s, obra_id, por)
     regra = pd.Regra(tuple(_lista(tipos) or ()), tuple(_lista(disciplinas) or ()), tuple(_lista(pacotes, False) or ()))
     if pasta_id:
@@ -127,6 +136,11 @@ def salvar(s: Session, obra_id: int, por: str, nome: str, descricao: str | None,
         s.add(p)
     p.nome, p.descricao = pd.validar_nome(nome), (descricao or "").strip()[:200] or None
     p.tipos, p.disciplinas, p.pacotes = list(regra.tipos) or None, list(regra.disciplinas) or None, list(regra.pacotes) or None
+    p.natureza = pd.validar_natureza(natureza or p.natureza)
+    p.responsavel = (responsavel or "").strip()[:80] or p.responsavel or "Qualidade (CQ da obra)"
+    p.meio = (meio or "").strip()[:80] or p.meio or pd.MEIO_PADRAO
+    p.local = (local or "").strip()[:120] or p.local or f"Malhet · {p.codigo} {p.nome}"
+    p.retencao = (retencao or "").strip()[:160] or p.retencao or pd.RETENCAO_PADRAO
     s.flush()
     return {"id": p.id, "codigo": p.codigo, "nome": p.nome}
 
@@ -145,7 +159,7 @@ def restaurar_modelo(s: Session, obra_id: int, por: str) -> int:
     for m in pd.MODELO:
         if m.codigo not in tem:
             s.add(DocumentoPastaModel(obra_id=obra_id, codigo=m.codigo, nome=m.nome, descricao=m.descricao, tipos=list(m.regra.tipos),
-                                      do_modelo=True, criado_por=por))
+                                      do_modelo=True, criado_por=por, **_arquivamento(m)))
             novas += 1
     s.flush()
     return novas

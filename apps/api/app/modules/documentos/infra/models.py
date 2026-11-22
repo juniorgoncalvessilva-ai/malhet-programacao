@@ -87,6 +87,13 @@ class GrdModel(Base):
     remetente: Mapped[str] = mapped_column(String(150))
     destinatario: Mapped[str] = mapped_column(String(150))
     observacao: Mapped[str | None] = mapped_column(Text)
+    # modelo do contrato (spec 130): ATENÇÃO / EMITENTE com área-cargo, REFERÊNCIA e o arquivo da GRD como chegou
+    atencao: Mapped[str | None] = mapped_column(String(150))
+    atencao_cargo: Mapped[str | None] = mapped_column(String(120))
+    emitente: Mapped[str | None] = mapped_column(String(150))
+    emitente_cargo: Mapped[str | None] = mapped_column(String(120))
+    referencia: Mapped[str | None] = mapped_column(String(150))
+    arquivo_id: Mapped[int | None] = mapped_column(ForeignKey("arquivo.id", ondelete="SET NULL"))
     ciente_por: Mapped[str | None] = mapped_column(String(150))  # quem deu ciência do recebimento
     ciente_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     criado_por: Mapped[str] = mapped_column(String(150))
@@ -102,6 +109,13 @@ class GrdItemModel(Base):
     revisao: Mapped[str] = mapped_column(String(6))
     finalidade: Mapped[str] = mapped_column(String(40))
     ordem: Mapped[int] = mapped_column(Integer, default=0)
+    # colunas da GRD do contrato (spec 130): Nº folha · Status (letra do TE) · Finalidade da remessa (1–7) · Tipo de via · Formato · Nº vias
+    folhas: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str | None] = mapped_column(String(3))
+    finalidade_remessa: Mapped[int | None] = mapped_column(Integer)
+    via: Mapped[str | None] = mapped_column(String(3))
+    formato: Mapped[str | None] = mapped_column(String(8))
+    vias: Mapped[int | None] = mapped_column(Integer)
 
 
 class DocumentoLeituraModel(Base):
@@ -161,5 +175,11 @@ class DocumentoPastaModel(Base):
     disciplinas: Mapped[list | None] = mapped_column(JSONB)
     pacotes: Mapped[list | None] = mapped_column(JSONB)
     do_modelo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # plano de arquivamento (spec 130): documento × registro, quem guarda, como/onde e por quanto tempo
+    natureza: Mapped[str] = mapped_column(String(10), default="documento", server_default="documento")
+    responsavel: Mapped[str | None] = mapped_column(String(80))
+    meio: Mapped[str | None] = mapped_column(String(80))
+    local: Mapped[str | None] = mapped_column(String(120))
+    retencao: Mapped[str | None] = mapped_column(String(160))
     criado_por: Mapped[str] = mapped_column(String(150))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

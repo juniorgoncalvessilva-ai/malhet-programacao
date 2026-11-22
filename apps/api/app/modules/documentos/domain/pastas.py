@@ -30,22 +30,32 @@ class Regra:
             raise DomainError(f"tipo desconhecido: {', '.join(ruins)}", "tipos")
 
 
+NATUREZAS = {"documento": "Documento", "registro": "Registro"}  # registro = evidência do que foi feito (Plano de Arquivamento 6.1)
+RETENCAO_PADRAO = "Na obra durante a execução; depois no Data-Book, pelo prazo do contrato"
+MEIO_PADRAO = "Digital — acervo da obra no Malhet"
+
+
 @dataclass(frozen=True)
 class PastaModelo:
     codigo: str
     nome: str
     descricao: str
     regra: Regra
+    natureza: str = "documento"
+    responsavel: str = "Qualidade (CQ da obra)"
+    meio: str = MEIO_PADRAO
+    retencao: str = RETENCAO_PADRAO
 
 
 # a pasta-modelo do Malhet (ordem = código): o processo do contrato, da LDO ao que é complementar
 MODELO: tuple[PastaModelo, ...] = (
     PastaModelo("10", "Contrato e listas (LDO)", "Listas de documentos, contrato, aditivos e listas de materiais", Regra(tipos=("LIS",))),
-    PastaModelo("20", "Projetos", "Desenhos e projetos de todas as disciplinas, por pacote e revisão", Regra(tipos=("DES",))),
+    PastaModelo("20", "Projetos", "Desenhos e projetos de todas as disciplinas, por pacote e revisão", Regra(tipos=("DES",)),
+                responsavel="Engenharia / Planejamento"),
     PastaModelo("30", "Especificações e memoriais", "Especificações técnicas, memoriais descritivos e de cálculo", Regra(tipos=("ESP", "MEM"))),
     PastaModelo("40", "Procedimentos e instruções", "Procedimentos executivos e instruções de trabalho", Regra(tipos=("PRO", "IT"))),
     PastaModelo("50", "Normas", "Normas técnicas e de segurança de referência", Regra(tipos=("NOR",))),
-    PastaModelo("60", "Documentos complementares", "ARTs, laudos, relatórios e outros", Regra(tipos=("OUT",))),
+    PastaModelo("60", "Documentos complementares", "ARTs, laudos, relatórios e outros", Regra(tipos=("OUT",)), natureza="registro"),
 )
 
 
@@ -74,6 +84,13 @@ def pertence(doc: DocInfo, regra: Regra) -> bool:
         if not p or not any(_n(x) in p for x in regra.pacotes):
             return False
     return True
+
+
+def validar_natureza(n: str | None) -> str:
+    n = (n or "documento").strip().lower()
+    if n not in NATUREZAS:
+        raise DomainError("natureza: documento ou registro", "natureza")
+    return n
 
 
 def validar_nome(nome: str) -> str:

@@ -160,6 +160,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   "Sem pasta" com sugestão, restaurar o modelo; `GET /documentos?pasta_id=` (0 = sem pasta). Arquivo baixado = `OBRA_CÓDIGO_Rrev_TE`
   (`nome_padrao`/`nomeArquivo`). Consolidado `GET /documentos/consolidado` (semana/mês; assinado = arquivo/ciência, pendente).
   Abas Pastas (padrão) · Lista · Consolidado · GRDs · Conexões · Importar (`PastasDocumentos`, `ConsolidadoDocumentos`).
+  GRD no modelo do contrato (spec 130, `documentos/domain/grd.py`): atenção/emitente com área-cargo, referência, itens com folhas,
+  status (letra do TE), finalidade da remessa 1–7, via (OR/CC/CO/CH/AD/OT), formato e vias; `POST /documentos/grds/importar` (GRD
+  recebida em Excel → revisões registradas + planilha no acervo, `grd.arquivo_id`); `planilhas.grd_xlsx` no layout com legendas e
+  assinaturas. Pastas com natureza (documento/registro), responsável, meio, local e retenção → `GET /documentos/plano-arquivamento.xlsx`.
+  `VerRevisao carimbo`: vigente "CÓPIA CONTROLADA", superada/cancelada "DOCUMENTO OBSOLETO".
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

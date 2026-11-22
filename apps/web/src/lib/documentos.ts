@@ -31,6 +31,7 @@ export interface DocumentoDetalhe extends DocumentoResumo {
 export interface GrdResumo {
   id: number; numero: string; numero_externo: string | null; sentido: 'recebida' | 'emitida'; data: string; remetente: string;
   destinatario: string; itens: number; ciente_por: string | null; ciente_em: string | null;
+  atencao?: string | null; emitente?: string | null; referencia?: string | null; tem_arquivo?: boolean;
 }
 export interface GrdDetalhe extends Omit<GrdResumo, 'itens'> {
   observacao: string | null; itens: { documento_id: number; codigo: string; titulo: string; revisao: string; finalidade: string; revisao_id: number | null }[];
@@ -72,6 +73,7 @@ export const ORIGEM_TAKEOFF: Record<LinhaTakeoff['origem'], string> = { quadro: 
 export interface PastaDoc {
   id: number; codigo: string; nome: string; descricao: string | null; do_modelo: boolean; tipos: string[]; disciplinas: string[];
   pacotes: string[]; documentos: number; vigentes: number; ultima: string | null; por_pacote: Record<string, number>;
+  natureza: 'documento' | 'registro'; responsavel: string | null; meio: string | null; local: string | null; retencao: string | null;
   por_disciplina: Record<string, number>;
 }
 export interface Pastas {

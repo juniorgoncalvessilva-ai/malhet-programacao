@@ -164,47 +164,95 @@ function Grds({ docs, planejador }: { docs: DocumentoResumo[]; planejador: boole
   const api = useApi();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['documentos', 'grds'], queryFn: () => api.get<GrdResumo[]>('/documentos/grds') });
+  const op = useQuery({ queryKey: ['documentos', 'grds', 'opcoes'], staleTime: Infinity,
+    queryFn: () => api.get<{ vias: Record<string, string>; formatos: string[]; finalidades: Record<string, string> }>('/documentos/grds/opcoes') });
   const [nova, setNova] = useState(false);
-  const [f, setF] = useState({ sentido: 'recebida', data: hoje(), remetente: '', destinatario: '', numero_externo: '', observacao: '' });
+  const vazio = { sentido: 'emitida', data: hoje(), remetente: '', destinatario: '', numero_externo: '', observacao: '', atencao: '', atencao_cargo: '',
+    emitente: '', emitente_cargo: '', referencia: '', via: 'CC', formato: '', vias: '1' };
+  const [f, setF] = useState(vazio);
   const [itens, setItens] = useState<string[]>([]);
+  const [importando, setImportando] = useState(false);
+  const atualizar = () => qc.invalidateQueries({ queryKey: ['documentos'] });
   const criar = async () => {
     try {
-      const g = await api.post<{ numero: string }>('/documentos/grds', { ...f, numero_externo: f.numero_externo || null, observacao: f.observacao || null,
-        itens: itens.map((x) => ({ documento_id: Number(x) })) });
-      toast.success(`${g.numero} registrada`); setNova(false); setItens([]); qc.invalidateQueries({ queryKey: ['documentos'] });
+      const { via, formato, vias, ...cab } = f;
+      const g = await api.post<{ numero: string }>('/documentos/grds', { ...Object.fromEntries(Object.entries(cab).map(([k, v]) => [k, v || null])),
+        sentido: f.sentido, data: f.data, remetente: f.remetente, destinatario: f.destinatario,
+        itens: itens.map((x) => ({ documento_id: Number(x), via: via || null, formato: formato || null, vias: Number(vias) || 1 })) });
+      toast.success(`${g.numero} registrada`); setNova(false); setItens([]); setF(vazio); atualizar();
     } catch (e) { toast.error((e as Error).message); }
   };
+  const importar = async (a: File) => {
+    const fd = new FormData(); fd.append('arquivo', a, a.name);
+    setImportando(true);
+    try {
+      const g = await api.post<{ numero: string; numero_externo: string | null; itens: unknown[]; documentos_novos: number; revisoes_novas: number }>('/documentos/grds/importar', fd);
+      toast.success(`${g.numero_externo ?? g.numero}: ${g.itens.length} documentos (${g.documentos_novos} novos, ${g.revisoes_novas} revisões registradas)`);
+      atualizar();
+    } catch (e) { toast.error((e as Error).message); } finally { setImportando(false); }
+  };
+  const c = (k: keyof typeof f, rotulo: string, extra: { placeholder?: string; className?: string; type?: string } = {}) => (
+    <Campo rotulo={rotulo} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} {...extra} />
+  );
   return (
-    <Painel titulo="O que chegou e o que saiu?" subtitulo="GRD recebida: depois envie as revisões escolhendo a GRD. GRD emitida: as revisões vigentes que estão saindo, com a ciência de quem recebeu."
-      acoes={planejador && <Botao onClick={() => setNova(!nova)}><Plus size={16} /> Nova GRD</Botao>}>
+    <Painel titulo="O que chegou e o que saiu?" subtitulo="Guia de Remessa no modelo do contrato: toda distribuição externa sai com GRD (Plano de Arquivamento). Importe a GRD recebida em Excel — as revisões listadas ficam registradas e o arquivo chega depois — ou emita a GRD com as revisões vigentes."
+      acoes={planejador && <div className="flex flex-wrap gap-2">
+        <label className="flex h-10 cursor-pointer items-center gap-2 rounded-full border border-m-stroke px-4 text-[13px] font-semibold text-m-accent">
+          <Upload size={15} /> {importando ? 'Lendo a GRD…' : 'Importar GRD (Excel)'}
+          <input type="file" accept=".xlsx,.xlsm" className="sr-only" aria-label="Planilha da GRD" disabled={importando} onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) importar(a); }} />
+        </label>
+        <Botao onClick={() => setNova(!nova)}><Plus size={16} /> Nova GRD</Botao>
+      </div>}>
       {nova && (
-        <div className="mb-4 flex flex-col gap-2 rounded-[16px] border border-m-stroke-subtle p-4">
+        <div className="mb-4 flex flex-col gap-3 rounded-[16px] border border-m-stroke-subtle p-4">
           <div className="flex flex-wrap gap-2">
-            <Chip ativo={f.sentido === 'recebida'} onClick={() => setF({ ...f, sentido: 'recebida' })}>Recebida</Chip>
             <Chip ativo={f.sentido === 'emitida'} onClick={() => setF({ ...f, sentido: 'emitida' })}>Emitida</Chip>
+            <Chip ativo={f.sentido === 'recebida'} onClick={() => setF({ ...f, sentido: 'recebida' })}>Recebida</Chip>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Campo rotulo="Data" type="date" value={f.data} onChange={(e) => setF({ ...f, data: e.target.value })} />
-            <Campo rotulo="De" value={f.remetente} onChange={(e) => setF({ ...f, remetente: e.target.value })} placeholder="Projetista, cliente…" />
-            <Campo rotulo="Para" value={f.destinatario} onChange={(e) => setF({ ...f, destinatario: e.target.value })} placeholder="Contratada, campo, fornecedor…" />
-            <Campo rotulo="Nº da GRD de origem" value={f.numero_externo} onChange={(e) => setF({ ...f, numero_externo: e.target.value })} />
+          <div className="grid gap-2 md:grid-cols-4">
+            {c('data', 'Data', { type: 'date' })}
+            {c('destinatario', 'Para', { placeholder: 'Cliente, campo, fornecedor…' })}
+            {c('remetente', 'De', { placeholder: 'Contratada, projetista…' })}
+            {c('numero_externo', 'Nº da GRD de origem')}
+            {c('atencao', 'Atenção')}
+            {c('atencao_cargo', 'Área/cargo')}
+            {c('emitente', 'Emitente')}
+            {c('emitente_cargo', 'Área/cargo')}
+            {c('referencia', 'Referência', { placeholder: 'Book Qualidade, pacote…' })}
           </div>
-          {f.sentido === 'emitida' && <MultiSelecao rotulo="Documentos (vai a revisão vigente)" largura="w-full" comNa={false} valor={itens}
-            opcoes={docs.filter((d) => d.vigente).map((d) => ({ valor: String(d.id), rotulo: `${d.codigo} · rev ${d.vigente!.revisao} · ${d.titulo}` }))} onChange={setItens} />}
-          <Campo rotulo="Observação" value={f.observacao} onChange={(e) => setF({ ...f, observacao: e.target.value })} />
+          {f.sentido === 'emitida' && <>
+            <MultiSelecao rotulo="Documentos (vai a revisão vigente)" largura="w-full" comNa={false} valor={itens}
+              opcoes={docs.filter((d) => d.vigente).map((d) => ({ valor: String(d.id), rotulo: `${d.codigo} · rev ${d.vigente!.revisao} · ${d.titulo}` }))} onChange={setItens} />
+            <div className="flex flex-wrap gap-2">
+              <Selecao rotulo="Tipo de via" value={f.via} onChange={(e) => setF({ ...f, via: e.target.value })}>
+                {Object.entries(op.data?.vias ?? { CC: 'Cópia controlada' }).map(([k, v]) => <option key={k} value={k}>{k} - {v}</option>)}
+              </Selecao>
+              <Selecao rotulo="Formato" value={f.formato} onChange={(e) => setF({ ...f, formato: e.target.value })}>
+                <option value="">—</option>{(op.data?.formatos ?? []).map((x) => <option key={x}>{x}</option>)}
+              </Selecao>
+              {c('vias', 'Nº de vias', { type: 'number', className: 'w-[110px]' })}
+            </div>
+            <p className="text-[12px] text-m-text-muted">Status (letra do TE) e finalidade da remessa saem da revisão: para construção → E e 3 - Para aplicação/construção.</p>
+          </>}
+          {c('observacao', 'Observações')}
           <div><Botao onClick={criar}>Registrar GRD</Botao></div>
         </div>
       )}
       <Tabela cabecalho={['GRD', 'Data', 'De → Para', 'Itens', 'Ciência', '']} vazio={q.isLoading ? CARREGANDO : !q.data?.length && 'Nenhuma GRD ainda.'}>
         {(q.data ?? []).map((g) => (
           <tr key={g.id}>
-            <td className={td}><b className="text-m-text-primary">{g.numero}</b> <Pilula tom={g.sentido === 'recebida' ? 'info' : 'acento'}>{g.sentido}</Pilula>{g.numero_externo && <div className="text-[11px] text-m-text-muted">origem {g.numero_externo}</div>}</td>
+            <td className={td}><b className="text-m-text-primary">{g.numero}</b> <Pilula tom={g.sentido === 'recebida' ? 'info' : 'acento'}>{g.sentido}</Pilula>
+              {g.numero_externo && <div className="text-[11px] text-m-text-muted">origem {g.numero_externo}</div>}
+              {(g.atencao || g.referencia) && <div className="text-[11px] text-m-text-muted">{[g.atencao && `at. ${g.atencao}`, g.referencia].filter(Boolean).join(' · ')}</div>}</td>
             <td className={td}>{dataBR(g.data)}</td>
             <td className={td}>{g.remetente} → {g.destinatario}</td>
             <td className={td}>{g.itens}</td>
             <td className={td}>{g.ciente_por ? <span className="text-m-success">{g.ciente_por} · {dataBR(g.ciente_em)}</span>
               : <button type="button" className="flex items-center gap-1 font-semibold text-m-accent" onClick={async () => { await api.post(`/documentos/grds/${g.id}/ciencia`); qc.invalidateQueries({ queryKey: ['documentos', 'grds'] }); }}><CheckCheck size={15} /> dar ciência</button>}</td>
-            <td className={`${td} text-right`}><button type="button" className="font-semibold text-m-accent" onClick={() => api.download(`/documentos/grds/${g.id}/xlsx`, `${g.numero}.xlsx`)}>Excel</button></td>
+            <td className={`${td} whitespace-nowrap text-right`}>
+              {g.tem_arquivo && <button type="button" className="mr-3 font-semibold text-m-accent" onClick={() => api.download(`/documentos/grds/${g.id}/arquivo`, `${g.numero_externo ?? g.numero}.xlsx`)}>Original</button>}
+              <button type="button" className="font-semibold text-m-accent" onClick={() => api.download(`/documentos/grds/${g.id}/xlsx`, `${g.numero}.xlsx`)}>Excel no modelo</button>
+            </td>
           </tr>
         ))}
       </Tabela>
