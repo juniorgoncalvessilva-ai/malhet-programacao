@@ -104,10 +104,11 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
     editaSsma: !!obra && ['seguranca', 'planejador', 'admin'].includes(obra.papel),
     menuWeb,
     // perfil (spec 090) e, por cima, a lista da pessoa (spec 033); a vigente fica sempre e o admin nunca perde Acessos/Menus
-    podeVer: (url) => sa || url === '/app/vigente' || (obra?.papel === 'admin' && (url === '/app/acessos' || url === '/app/menu-celular'))
-      || ((!menuWeb || menuWeb.includes(url)) && (!obra?.paginas?.length || obra.paginas.includes(url))),
+    podeVer: (url) => !obra?.telas_desligadas?.includes(url) && (sa || url === '/app/vigente' || (obra?.papel === 'admin' && (url === '/app/acessos' || url === '/app/menu-celular'))
+      || ((!menuWeb || menuWeb.includes(url)) && (!obra?.paginas?.length || obra.paginas.includes(url)))),
     podeVerMobile: (url) => {
       const item = MENU_MOBILE.find((i) => i.url === url);
+      if (obra?.telas_desligadas?.includes(url)) return false; // módulo não contratado pela obra (spec 125)
       if (!obra || !item) return !!item || sa;
       if (item.fixo || sa) return true;
       const peloPapel = !item.minimo || NIVEL[obra.papel] >= NIVEL[item.minimo] || (!!item.seguranca && obra.papel === 'seguranca');

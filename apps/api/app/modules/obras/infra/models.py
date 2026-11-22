@@ -15,6 +15,7 @@ class ObraModel(Base):
     contrato: Mapped[str | None] = mapped_column(String(200))
     cliente: Mapped[str | None] = mapped_column(String(200))
     ativa: Mapped[bool] = mapped_column(Boolean, default=True)
+    modulos_desligados: Mapped[list | None] = mapped_column(JSONB)  # spec 125: chaves de obras/domain/modulos.py
     criado_por: Mapped[str] = mapped_column(String(80))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

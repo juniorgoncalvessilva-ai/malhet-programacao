@@ -34,7 +34,7 @@ export function MenuComputador() {
   const perfil = q.data?.perfis[papel];
   useEffect(() => {
     if (!perfil) return;
-    setGrupos(menuDoPerfil(MENU, perfil.paginas).map((g) => ({ ...g, itens: g.itens.filter((i) => perfil.permitidas.includes(i.url)) })).filter((g) => g.itens.length));
+    setGrupos(menuDoPerfil(MENU, perfil.paginas).map((g) => ({ ...g, itens: g.itens.filter((i) => perfil.permitidas.includes(i.url) && !obra?.telas_desligadas?.includes(i.url)) })).filter((g) => g.itens.length));
     setMarcadas(new Set(perfil.paginas));
   }, [papel, q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!q.data || !perfil) return <Carregando />;

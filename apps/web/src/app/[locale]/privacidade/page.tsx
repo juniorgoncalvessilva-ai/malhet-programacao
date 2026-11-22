@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: 'Como o Malhet e o app Malhet Campo tratam dados pessoais (LGPD).',
 };
 
-const ATUALIZADA = '19/11/2026';
+const ATUALIZADA = '22/11/2026';
 const CONTATO = process.env.NEXT_PUBLIC_CONTATO_PRIVACIDADE;
 
 function Secao({ id, titulo, children }: { id?: string; titulo: string; children: ReactNode }) {
@@ -106,6 +106,10 @@ export default function PrivacidadePage() {
               <b> não vão para a nuvem de terceiros</b>.</li>
             <li>Com autoridades, quando exigido por lei.</li>
           </ul>
+          <p><b>Não enviamos</b> projetos, contratos, documentos, fotos nem dados de pessoas a serviços externos de inteligência
+            artificial — nem para gerar respostas, nem para treinar modelos. Desenhos (DWG/DXF) são convertidos e lidos no próprio
+            servidor do Malhet, sem serviços de terceiros. Se um assistente for oferecido, ele rodará em servidor do Malhet ou da
+            empresa contratante, e esta política será atualizada antes.</p>
         </Secao>
 
         <Secao titulo="6. Segurança e guarda">

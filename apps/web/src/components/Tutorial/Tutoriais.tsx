@@ -69,8 +69,10 @@ export function TutorialComputador() {
       { alvo: 'obra', titulo: 'Sua obra',
         texto: <>Tudo o que aparece é da obra <B>{obra?.nome}</B>: programação, equipes, fotos e indicadores. Se você trabalha em mais de uma, troque aqui.</> },
       largo
-        ? { alvo: 'menu', titulo: 'Seu menu', texto: <>Mostra só as telas do seu perfil{papel && !superadmin ? <> (<B>{PAPEL[papel]}</B>)</> : ''}, em grupos — Planejamento, Campo e qualidade, Segurança, Efetivo. O que não faz parte do seu trabalho não aparece.</> }
+        ? { alvo: 'menu', titulo: 'Seu menu', texto: <>Mostra só as telas do seu perfil{papel && !superadmin ? <> (<B>{PAPEL[papel]}</B>)</> : ''}, em grupos pelo ciclo da obra — Projeto, Planejar, Executar, Medir, Pessoas, Segurança. O que não faz parte do seu trabalho não aparece.</> }
         : { alvo: 'abrir-menu', titulo: 'Seu menu', texto: <>Toque aqui para abrir o menu. Ele mostra só as telas do seu perfil{papel && !superadmin ? <> (<B>{PAPEL[papel]}</B>)</> : ''}.</> },
+      { alvo: 'busca', titulo: 'Achar qualquer tela',
+        texto: <>Clique em <B>Buscar</B> ou aperte <B>Ctrl K</B> e digite o que procura — “take-off”, “PPC”, “presença”, “ASO”.</> },
       { alvo: largo ? 'menu:/app/vigente' : undefined, titulo: 'Programação vigente',
         texto: <>O que a obra vai executar agora, já emitido e valendo. Fica aberta para todos: é o ponto de partida do dia.</> },
     ];

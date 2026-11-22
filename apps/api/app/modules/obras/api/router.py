@@ -1,13 +1,14 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.auth import UsuarioAtual, resolver_contexto, superadmin, usuario_atual
 from app.core.db import get_session
 from app.modules.obras.application.acessos import ConcederIn, conceder_acesso, criar_obra
+from app.modules.obras.domain import modulos as mods
 from app.modules.obras.domain.obra import DadosObra, PapelObra
 from app.modules.obras.infra.contas_authkit import ContasAuthKit
 from app.modules.obras.infra.models import AcessoObraModel, ObraModel
@@ -22,6 +23,7 @@ class ObraIn(BaseModel):
     contrato: str | None = None
     cliente: str | None = None
     ativa: bool = True
+    modulos_desligados: list[str] | None = None  # None = não muda
 
 
 class ObraOut(BaseModel):
@@ -33,6 +35,12 @@ class ObraOut(BaseModel):
     cliente: str | None
     ativa: bool
     criado_em: datetime
+    modulos_desligados: list[str] = []
+
+    @field_validator("modulos_desligados", mode="before")
+    @classmethod
+    def _lista(cls, v):
+        return v or []
 
 
 class MinhaObraOut(ObraOut):
@@ -40,6 +48,7 @@ class MinhaObraOut(ObraOut):
     paginas_mobile: list[str] | None = None  # telas do celular liberadas (vazio = todas as do papel) — spec 066
     cor: str | None = None  # cor do cliente (marca da obra) no lugar do verde Malhet
     papel: PapelObra
+    telas_desligadas: list[str] = []  # spec 125: telas dos módulos que a obra não contratou (computador e celular)
 
 
 class ObraAdminOut(ObraOut):
@@ -86,12 +95,13 @@ def minhas(s: Session = Depends(get_session), u: UsuarioAtual = Depends(usuario_
     cores = dict(s.execute(select(MarcaObraModel.obra_id, MarcaObraModel.cor)).all())
     if u.superadmin:
         obras = s.scalars(select(ObraModel).where(ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
-        return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra.ADMIN, cor=cores.get(o.id)) for o in obras]
+        return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra.ADMIN, cor=cores.get(o.id),
+                             telas_desligadas=mods.telas_desligadas(o.modulos_desligados)) for o in obras]
     q = (select(ObraModel, AcessoObraModel.papel, AcessoObraModel.paginas, AcessoObraModel.paginas_mobile)
          .join(AcessoObraModel, AcessoObraModel.obra_id == ObraModel.id)
          .where(AcessoObraModel.usuario_id == u.id, ObraModel.ativa.is_(True)).order_by(ObraModel.codigo))
     return [MinhaObraOut(**ObraOut.model_validate(o).model_dump(), papel=PapelObra(p), paginas=pg or None, paginas_mobile=pm or None,
-                         cor=cores.get(o.id))
+                         cor=cores.get(o.id), telas_desligadas=mods.telas_desligadas(o.modulos_desligados))
             for o, p, pg, pm in s.execute(q)]
 
 
@@ -123,8 +133,16 @@ def editar(obra_id: int, d: ObraIn, s: Session = Depends(get_session), _: Usuari
     if outra:
         raise DomainError(f"já existe obra com o código {d.codigo}", "codigo")
     o.codigo, o.nome, o.contrato, o.cliente, o.ativa = d.codigo.strip().upper(), d.nome.strip(), d.contrato, d.cliente, d.ativa
+    if d.modulos_desligados is not None:
+        o.modulos_desligados = mods.validar(d.modulos_desligados) or None
     s.flush()
     return o
+
+
+@router.get("/admin/modulos")
+def modulos(_: UsuarioAtual = Depends(superadmin)):
+    """Módulos que se ligam e desligam por obra (spec 125)."""
+    return [{"chave": m.chave, "nome": m.nome, "descricao": m.descricao, "telas": [*m.web, *m.celular]} for m in mods.MODULOS.values()]
 
 
 @router.get("/admin/usuarios")

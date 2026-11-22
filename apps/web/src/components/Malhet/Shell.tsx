@@ -4,7 +4,7 @@ import { TituloAba, useLogo, useMarcaObra } from '@/components/Obra/LogosObra';
 import { SincronizarDados } from '@/lib/tempo-real';
 import { SincronizarFila } from '@/lib/offline/SincronizarFila';
 
-import { Bug, Check, ChevronsUpDown, FlaskConical, GraduationCap, LayoutGrid, LifeBuoy, LogOut, Menu as MenuIcon, Moon, Sun, UserRound, X } from 'lucide-react';
+import { Bug, Check, ChevronDown, ChevronsUpDown, FlaskConical, GraduationCap, LayoutGrid, LifeBuoy, LogOut, Menu as MenuIcon, Moon, Sun, UserRound, X } from 'lucide-react';
 import { RelatarProblema } from '@/components/Erros/Relatos';
 import { TutorialComputador, abrirTutorial } from '@/components/Tutorial/Tutoriais';
 import { useErrosAbertos } from '@/lib/erros/consultas';
@@ -17,6 +17,8 @@ import { Link, usePathname } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import { cn } from '@/lib/utils';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { usePreferencia } from '@/lib/preferencia';
+import { BuscaTelas } from './BuscaTelas';
 import { MENU, menuDoPerfil, type GrupoMenu } from './menu';
 
 function Logo({ altura = 22 }: { altura?: number }) {
@@ -114,20 +116,39 @@ function useMenuVisivel(): GrupoMenu[] {
     .filter((g) => g.itens.length);
 }
 
+/** Grupo do menu; o recolhido (Configurar) abre ao clicar, lembra a escolha e fica aberto quando a tela atual é dele. */
+function GrupoLateral({ g, ativoDentro, children }: { g: GrupoMenu; ativoDentro: boolean; children: React.ReactNode }) {
+  const [aberto, setAberto] = usePreferencia(`malhet.menu.${g.etapa}`, false);
+  const titulo = (
+    <>
+      <span className="h-1.5 w-1.5 rounded-[2px]" style={{ background: g.cor }} />
+      {g.etapa}
+    </>
+  );
+  const cls = 'flex items-center gap-2 px-2.5 pb-1.5 text-[11px] font-semibold uppercase leading-4 tracking-[0.48px] text-m-text-muted';
+  if (!g.recolhido) return <div className="flex flex-col gap-0.5"><div className={cls}>{titulo}</div>{children}</div>;
+  const mostrar = aberto || ativoDentro;
+  return (
+    <div className="flex flex-col gap-0.5 border-t border-m-stroke-subtle pt-3">
+      <button type="button" aria-expanded={mostrar} onClick={() => setAberto(!mostrar)} className={cn(cls, 'rounded-[8px] text-left hover:text-m-text-secondary')}>
+        {titulo}
+        <ChevronDown size={14} className={cn('ml-auto transition-transform', mostrar ? '' : '-rotate-90')} aria-hidden="true" />
+      </button>
+      {mostrar && children}
+    </div>
+  );
+}
+
 function Lateral({ onNavegar }: { onNavegar?: () => void }) {
   const pathname = usePathname();
   const menu = useMenuVisivel();
   return (
-    <div className="flex h-full flex-col gap-[22px] py-5 pl-6 pr-3">
+    <div className="flex h-full flex-col gap-[22px] overflow-y-auto overscroll-contain py-5 pl-6 pr-3 [scrollbar-width:thin]">
       <MarcaContratada />
       <SeletorObra />
       <nav className="flex flex-col gap-[22px]" aria-label="Menu do app" data-tour="menu">
         {menu.map((g) => (
-          <div key={g.etapa} className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2 px-2.5 pb-1.5 text-[11px] font-semibold uppercase leading-4 tracking-[0.48px] text-m-text-muted">
-              <span className="h-1.5 w-1.5 rounded-[2px]" style={{ background: g.cor }} />
-              {g.etapa}
-            </div>
+          <GrupoLateral key={g.etapa} g={g} ativoDentro={g.itens.some((i) => itemAtivo(pathname) === i.url)}>
             {g.itens.map((i) => {
               const ativo = itemAtivo(pathname) === i.url;
               const Icone = i.icone;
@@ -149,7 +170,7 @@ function Lateral({ onNavegar }: { onNavegar?: () => void }) {
                 </Link>
               );
             })}
-          </div>
+          </GrupoLateral>
         ))}
       </nav>
       <span className="mt-auto flex items-center gap-2 px-2.5 pt-2 text-[11px] text-m-text-muted">
@@ -253,6 +274,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [gaveta, setGaveta] = useState(false);
   const atual = MENU.flatMap((g) => g.itens).find((i) => i.url === itemAtivo(pathname));
+  const menuBusca = useMenuVisivel();
   const { obra, carregando, superadmin } = useObra();
   const marca = useMarcaObra();
   const nomeEmpresa = obra ? marca.data?.nome_contratada?.trim() : null;
@@ -285,6 +307,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
           <div className="flex items-center gap-3">
+            {obra && <BuscaTelas grupos={menuBusca} />}
             <Tema />
             {obra && <span data-tour="sino" className="inline-flex"><Sino /></span>}
             <Usuario />

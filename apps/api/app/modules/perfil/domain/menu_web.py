@@ -12,21 +12,24 @@ PLANEJADOR, ADMIN, SSMA = "planejador", "admin", "ssma"
 
 # url → exigência do papel (None = qualquer papel; "ssma" = segurança, planejador e admin)
 TELAS_WEB: dict[str, str | None] = {
-    # Planejamento
-    "/app/vigente": None, "/app/cronograma": None, "/app/wbs": None, "/app/criterios": None, "/app/plano": None,
-    "/app/programacoes": None, "/app/lookahead": None, "/app/restricoes": None, "/app/pto": PLANEJADOR,
-    "/app/desvios": None, "/app/indicadores": None, "/app/aderencia": None,
-    # Campo e qualidade
-    "/app/resumo-dia": None, "/app/fotos": None, "/app/documentos": None, "/app/auditorias": None, "/app/acoes": None,
+    # Projeto e escopo (spec 125: grupos pelo ciclo da obra; a ordem daqui é a do padrão do admin e do planejador)
+    "/app/documentos": None, "/app/wbs": None, "/app/criterios": None,
+    # Planejar
+    "/app/cronograma": None, "/app/plano": None, "/app/restricoes": None, "/app/lookahead": None, "/app/programacoes": None,
+    "/app/pto": PLANEJADOR,
+    # Executar
+    "/app/vigente": None, "/app/presenca": None, "/app/resumo-dia": None, "/app/fotos": None, "/app/auditorias": None,
+    # Medir e melhorar
+    "/app/indicadores": None, "/app/desvios": None, "/app/aderencia": None, "/app/acoes": None,
+    # Pessoas e equipes
+    "/app/efetivo": None, "/app/efetivo/mobilizacao": None, "/app/equipes": None, "/app/efetivo/organograma": None,
+    "/app/lideres": PLANEJADOR,
     # Segurança (SSMA)
-    "/app/ssma": SSMA, "/app/ssma/cadastros": SSMA, "/app/preventivos": None, "/app/lgpd": SSMA,
-    # Efetivo e mobilização
-    "/app/efetivo": None, "/app/efetivo/mobilizacao": None, "/app/presenca": None, "/app/efetivo/identificacao": PLANEJADOR,
-    "/app/equipes": None, "/app/lideres": PLANEJADOR, "/app/efetivo/setores": None, "/app/efetivo/organograma": None, "/app/efetivo/funcoes": None,
-    # Cadastros
-    "/app/frentes": None, "/app/catalogo": None, "/app/importacoes": None,
-    # Administrar
-    "/app/acessos": ADMIN, "/app/marca": ADMIN, "/app/menu-celular": ADMIN, "/app/armazenamento": ADMIN, "/app/exclusoes": ADMIN,
+    "/app/ssma/cadastros": SSMA, "/app/ssma": SSMA, "/app/preventivos": None, "/app/lgpd": SSMA,
+    # Configurar
+    "/app/importacoes": None, "/app/frentes": None, "/app/catalogo": None, "/app/efetivo/setores": None,
+    "/app/efetivo/funcoes": None, "/app/efetivo/identificacao": PLANEJADOR,
+    "/app/acessos": ADMIN, "/app/menu-celular": ADMIN, "/app/marca": ADMIN, "/app/armazenamento": ADMIN, "/app/exclusoes": ADMIN,
 }
 SEMPRE = ("/app/vigente",)
 SEMPRE_ADMIN = ("/app/acessos", "/app/menu-celular")

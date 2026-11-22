@@ -75,8 +75,14 @@ export interface CriarItemOut { item: ItemProgramacao; hh_disponivel_dia: number
 export type PapelObra = 'admin' | 'planejador' | 'encarregado' | 'leitor' | 'seguranca';
 export interface Obra {
   id: number; codigo: string; nome: string; contrato: string | null; cliente: string | null; ativa: boolean; criado_em: string;
+  modulos_desligados?: string[];
 }
-export interface MinhaObra extends Obra { papel: PapelObra; paginas?: string[] | null; paginas_mobile?: string[] | null; cor?: string | null }
+export interface MinhaObra extends Obra {
+  papel: PapelObra; paginas?: string[] | null; paginas_mobile?: string[] | null; cor?: string | null;
+  /** Telas dos módulos que a obra não contratou (spec 125): somem do menu do computador e do celular. */
+  telas_desligadas?: string[];
+}
+export interface ModuloObra { chave: string; nome: string; descricao: string; telas: string[] }
 export interface MarcaObra { cor: string | null; nome_contratada: string | null; nome_contratante: string | null; contratada: boolean; contratante: boolean; versao: number }
 export interface ObraAdmin extends Obra { usuarios: number }
 export interface Acesso {

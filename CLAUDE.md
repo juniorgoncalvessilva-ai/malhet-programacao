@@ -262,17 +262,26 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Planejamento, avisam a gestão e alimentam o processo (`vaga_id`; a Solicitação conta desde a abertura). Configurações:
   treinamento previsto em contrato por função (`mobilizacao_treinamento_previsto`, dias vira a meta de Treinamentos;
   horas × carga horária registrada, `cargas_registradas`). Abas Vagas | Processos | Métricas | Configurações.
+- Menu pelo ciclo da obra (spec 125): grupos Projeto e escopo · Planejar · Executar · Medir e melhorar · Pessoas e equipes ·
+  Segurança (SSMA) · Configurar (recolhido, sempre no fim; `GrupoMenu.recolhido`), no máximo 6 telas por grupo (teste
+  `test_modulos_obra.py`); a ordem de `TELAS_WEB` segue os grupos. Busca de telas Ctrl+K (`BuscaTelas`, `buscarTelas`,
+  `ItemMenu.palavras`). Barra lateral rola (`overflow-y-auto`). Módulos contratados por obra (`obras/domain/modulos.py`:
+  documentos, plano, auditorias, ssma, presenca, mobilizacao, aderencia; `obra.modulos_desligados`, super admin em Obras e
+  usuários, `GET /admin/modulos`): `MinhaObra.telas_desligadas` some do computador e do celular (`podeVer`/`podeVerMobile`) e do
+  editor de menus; os dados ficam. Não é trava da API — é contrato.
 - Menu do computador por perfil (spec 090): `menu_web_perfil` (admin da obra) → `PADRAO_WEB` (`perfil/domain/menu_web.py`,
   `TELAS_WEB` = url → exigência do papel); fora do menu do perfil a tela não aparece e o endereço volta à vigente
-  (`useObra().menuWeb` em `podeVer`). Barra lateral em grupos Planejamento · Campo e qualidade · Segurança (SSMA) · Efetivo
-  e mobilização · Cadastros · Administrar, ordenada pelo perfil (`menuDoPerfil`). Tela nova no menu = url em `menu.ts` **e**
-  em `TELAS_WEB` (teste confere). Editor: Administrar › Menus por perfil (aba Computador, `MenuComputador.tsx`).
+  (`useObra().menuWeb` em `podeVer`). Barra lateral nos grupos da spec 125, ordenada pelo perfil (`menuDoPerfil`). Tela nova no menu = url em `menu.ts` **e**
+  em `TELAS_WEB` (teste confere). Editor: Configurar › Menus por perfil (aba Computador, `MenuComputador.tsx`).
 - Publicação nas lojas (spec 091): `docs/play-store.md`. Workflow *App nativo* gera o .aab (assinado com os secrets
   `ANDROID_KEYSTORE_*`, versão = execução do workflow) e envia à Play no disparo manual (`PLAY_SERVICE_ACCOUNT_JSON`).
   Ícones/splash em `apps/mobile/assets` e `apps/mobile/loja`; `allowBackup=false`; app nativo sem cadastro aberto
   (`emAppNativo` esconde "Criar conta"). Política pública `/[locale]/privacidade` (contato = `NEXT_PUBLIC_CONTATO_PRIVACIDADE`,
   variável `CONTATO_PRIVACIDADE` do repositório) — ao coletar dado novo, atualize a política e a Data safety.
-- Página principal pública `/` (spec 092, `components/Marca/Landing.tsx`): a história da marca em seis atos (fonte: doc
+- Dados da empresa não saem (spec 126): ato 6 "A guarda" na home (`Guarda`, `#guarda`, "O que é da obra fica com a obra"),
+  só com o que o sistema já faz; política de privacidade diz que nada vai a IA de terceiros. **IA no Malhet só local** (servidor do
+  Malhet ou da empresa) — nunca API externa (Claude, OpenAI…). Frase nova na home precisa de lastro no sistema.
+- Página principal pública `/` (spec 092, `components/Marca/Landing.tsx`): a história da marca em sete atos — o 6º é "A guarda", spec 126 — (fonte: doc
   "Malhet — a história da marca"; voz direta, sem número não confirmado, IA nunca como manchete). Pedra bruta → pedra
   cúbica em canvas 3D que gira e segue o mouse (`components/Marca/PedraCubica.tsx`); leitura guiada pela rolagem (frases
   que acendem, linha em foco, cena presa — spec 094). Tela em pé ou < 900 px (`empilhado()`) = cubo centralizado acima do texto e cena

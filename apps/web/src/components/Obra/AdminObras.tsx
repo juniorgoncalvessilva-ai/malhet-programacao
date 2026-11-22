@@ -7,10 +7,10 @@ import { toast } from 'sonner';
 import { AcessosDaObra, rotuloPapel } from '@/components/Obra/Acessos';
 import { Botao, Campo, Erro, Indicador, Painel, Pilula, Tabela, dataBR, td, tdNum } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
-import type { ContaAdmin, ObraAdmin } from '@/lib/api/types';
+import type { ContaAdmin, ModuloObra, ObraAdmin } from '@/lib/api/types';
 import { useObra } from '@/lib/obra/ObraProvider';
 
-const vazio = { codigo: '', nome: '', contrato: '', cliente: '', ativa: true };
+const vazio = { codigo: '', nome: '', contrato: '', cliente: '', ativa: true, modulos_desligados: [] as string[] };
 
 /** Super Admin: obras (criar, editar, ativar), acessos de qualquer obra e contas. */
 export function AdminObras() {
@@ -19,13 +19,14 @@ export function AdminObras() {
   const { superadmin, carregando } = useObra();
   const obras = useQuery({ queryKey: ['admin-obras'], queryFn: () => api.get<ObraAdmin[]>('/admin/obras'), enabled: superadmin });
   const contas = useQuery({ queryKey: ['admin-usuarios'], queryFn: () => api.get<ContaAdmin[]>('/admin/usuarios'), enabled: superadmin });
+  const modulos = useQuery({ queryKey: ['admin-modulos'], queryFn: () => api.get<ModuloObra[]>('/admin/modulos'), enabled: superadmin, staleTime: Infinity });
   const [form, setForm] = useState(vazio);
   const [editando, setEditando] = useState<number | null>(null);
   const [selecionada, setSelecionada] = useState<ObraAdmin | null>(null);
 
   const salvar = useMutation({
     mutationFn: () => {
-      const d = { ...form, contrato: form.contrato || null, cliente: form.cliente || null };
+      const d = { ...form, contrato: form.contrato || null, cliente: form.cliente || null, modulos_desligados: editando ? form.modulos_desligados : undefined };
       return editando ? api.put<ObraAdmin>(`/admin/obras/${editando}`, d) : api.post<ObraAdmin>('/admin/obras', d);
     },
     onSuccess: (o) => {
@@ -60,13 +61,14 @@ export function AdminObras() {
             {lista.map((o) => (
               <tr key={o.id} className={selecionada?.id === o.id ? 'bg-m-accent-subtle/60' : ''}>
                 <td className={td}><span className="inline-grid h-7 min-w-7 place-items-center rounded-m-sm bg-m-accent-strong px-1.5 text-[10px] font-bold text-m-on-accent">{o.codigo}</span></td>
-                <td className={td}><b className="font-semibold text-m-text-primary">{o.nome}</b><div className="text-xs text-m-text-muted">desde {dataBR(o.criado_em)}</div></td>
+                <td className={td}><b className="font-semibold text-m-text-primary">{o.nome}</b><div className="text-xs text-m-text-muted">desde {dataBR(o.criado_em)}</div>
+                  {!!o.modulos_desligados?.length && <div className="text-xs text-m-warning">{o.modulos_desligados.length} módulo(s) desligado(s)</div>}</td>
                 <td className={td}>{[o.contrato, o.cliente].filter(Boolean).join(' · ') || '—'}</td>
                 <td className={tdNum}>{o.usuarios}</td>
                 <td className={td}><Pilula tom={o.ativa ? 'sucesso' : 'neutro'}>{o.ativa ? 'Ativa' : 'Inativa'}</Pilula></td>
                 <td className={`${td} whitespace-nowrap text-right`}>
                   <Botao variante="fantasma" className="h-8 px-3" onClick={() => setSelecionada(o)}>Acessos</Botao>
-                  <Botao variante="fantasma" className="h-8 px-3" onClick={() => { setEditando(o.id); setForm({ codigo: o.codigo, nome: o.nome, contrato: o.contrato ?? '', cliente: o.cliente ?? '', ativa: o.ativa }); }}>Editar</Botao>
+                  <Botao variante="fantasma" className="h-8 px-3" onClick={() => { setEditando(o.id); setForm({ codigo: o.codigo, nome: o.nome, contrato: o.contrato ?? '', cliente: o.cliente ?? '', ativa: o.ativa, modulos_desligados: o.modulos_desligados ?? [] }); }}>Editar</Botao>
                   <Botao variante="fantasma" className="h-8 px-3" onClick={() => alternar.mutate(o)}>{o.ativa ? 'Desativar' : 'Reativar'}</Botao>
                 </td>
               </tr>
@@ -82,6 +84,22 @@ export function AdminObras() {
             </div>
             <Campo rotulo="Contrato" value={form.contrato} onChange={(e) => setForm({ ...form, contrato: e.target.value })} />
             <Campo rotulo="Cliente" value={form.cliente} onChange={(e) => setForm({ ...form, cliente: e.target.value })} />
+            {editando && (
+              <fieldset className="flex flex-col gap-2 rounded-[14px] border border-m-stroke-subtle p-3">
+                <legend className="px-1 text-[12px] font-semibold text-m-text-secondary">Módulos contratados</legend>
+                <p className="text-[12px] text-m-text-muted">Desligado some do menu do computador e do celular desta obra. Os dados ficam guardados; religar devolve tudo.</p>
+                {(modulos.data ?? []).map((m) => {
+                  const ligado = !form.modulos_desligados.includes(m.chave);
+                  return (
+                    <label key={m.chave} className="flex items-start gap-2 text-[13px]">
+                      <input type="checkbox" className="mt-0.5" checked={ligado} aria-label={m.nome}
+                        onChange={() => setForm({ ...form, modulos_desligados: ligado ? [...form.modulos_desligados, m.chave] : form.modulos_desligados.filter((x) => x !== m.chave) })} />
+                      <span><b className="font-semibold text-m-text-primary">{m.nome}</b><span className="block text-[12px] text-m-text-muted">{m.descricao}</span></span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            )}
             <div className="flex gap-2">
               <Botao type="submit" disabled={salvar.isPending}><Plus size={16} /> {editando ? 'Salvar' : 'Criar obra'}</Botao>
               {editando && <Botao type="button" variante="secundario" onClick={() => { setEditando(null); setForm(vazio); }}>Cancelar</Botao>}

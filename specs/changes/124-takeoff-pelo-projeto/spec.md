@@ -49,11 +49,14 @@ Licenças conferidas nos repositórios em 21/11/2026:
 | RAGFlow | Apache-2.0 | melhor leitura de documentos com citação da fonte; pesado (Elasticsearch/Infinity, ~16 GB RAM) — não cabe na KVM1 |
 | Dify | Apache-2.0 **modificada** | proíbe operar multi-inquilino sem licença comercial e tirar a logo do console — o Malhet é por obra/empresa, então não usar como base |
 
-Caminho recomendado: uma porta "Assistente" na API (provedor configurável: Claude pela API ou modelo local via Jan/Ollama), com as
+**Decisão do usuário (22/11/2026): nenhuma IA externa — nem Claude, nem outra API de terceiros.** Os dados e arquivos da empresa
+não saem; o assistente roda só em servidor do Malhet ou da empresa (spec 126).
+
+Caminho recomendado: uma porta "Assistente" na API com modelo **local** (Ollama/llama.cpp; Jan só no computador), com as
 ferramentas sendo as **funções do próprio Malhet** (ler WBS, programação, documentos, take-off, CPU) e a busca nos documentos em
 pgvector no Postgres que já temos. O take-off desta spec é a base determinística que a IA depois explica e completa (quadros fora do
-padrão, notas de projeto), sempre como sugestão com a fonte. Dado de contrato/projeto que vai para modelo externo precisa de aviso
-na política de privacidade e opção local.
+padrão, notas de projeto), sempre como sugestão com a fonte. Modelo local pede servidor com GPU ou bastante memória (a KVM1 não
+roda): isso é decisão de infraestrutura antes da spec do assistente.
 
 ## Verificação
 - `tests/test_takeoff_projeto.py`: recorte real da TABELA DE FERROS/RESUMO AÇO do 51890 (posições do arquivo), quadro que não bate,

@@ -1,13 +1,13 @@
 'use client';
 
-import { ArrowDown, ArrowUpRight, Gavel } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Eye, FileLock2, Gavel, HardDrive, Fingerprint, Layers, ShieldOff, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { PedraCubica } from '@/components/Marca/PedraCubica';
 import { Link } from '@/i18n/navigation';
 import { useSessao } from '@/lib/auth/AuthProvider';
 
 /**
- * Página principal do Malhet (specs 092 e 094): a história da marca em seis atos, conduzida pela rolagem — frases que
+ * Página principal do Malhet (specs 092, 094 e 126): a história da marca em sete atos, conduzida pela rolagem — frases que
  * acendem palavra por palavra, a cena que avança linha a linha, a linha em foco no centro da tela, o nome que desliza e o
  * golpe que sela "O que foi decidido, fica." Fio visual: a pedra bruta (pontos soltos) que vira pedra cúbica.
  * Voz da marca: direta, do canteiro, sem número não confirmado e sem a IA como manchete.
@@ -123,12 +123,12 @@ function Marcador({ n, titulo, claro = false }: { n: string; titulo: string; cla
     <div className={`flex items-center justify-between border-t pt-4 text-[11px] uppercase tracking-[0.18em] ${claro ? 'border-white/15 text-white/55' : 'border-black/10 text-black/45'}`}
       style={{ fontFamily: MONO }}>
       <span>( {n} )&nbsp;&nbsp;{titulo}</span>
-      <span>[ 00{n} / 006 ]</span>
+      <span>[ 00{n} / 007 ]</span>
     </div>
   );
 }
 
-const ATOS = [['topo', 'A obra'], ['historia', 'A cena'], ['metodo', 'O espaço'], ['nome', 'O nome'], ['para-quem', 'Para quem'], ['manifesto', 'Manifesto']] as const;
+const ATOS = [['topo', 'A obra'], ['historia', 'A cena'], ['metodo', 'O espaço'], ['nome', 'O nome'], ['para-quem', 'Para quem'], ['guarda', 'A guarda'], ['manifesto', 'Manifesto']] as const;
 
 /** Barra fina de leitura: em que ato da história a pessoa está. */
 function Leitura() {
@@ -148,7 +148,7 @@ function Leitura() {
   );
 }
 
-const NAV = [['#historia', 'A história'], ['#metodo', 'O método'], ['#nome', 'O nome'], ['#para-quem', 'Para quem']] as const;
+const NAV = [['#historia', 'A história'], ['#metodo', 'O método'], ['#nome', 'O nome'], ['#para-quem', 'Para quem'], ['#guarda', 'Seus dados']] as const;
 
 export function Landing() {
   const { usuario, carregado } = useSessao();
@@ -225,6 +225,7 @@ export function Landing() {
       <Espaco />
       <Nome />
       <ParaQuem />
+      <Guarda />
       <Manifesto entrar={entrar} />
 
       <footer className="flex flex-wrap items-center justify-between gap-4 px-5 py-8 text-[12px] text-white/45 sm:px-10" style={{ background: FUNDO_ESCURO, borderTop: '1px solid rgba(255,255,255,.08)' }}>
@@ -506,7 +507,55 @@ function ParaQuem() {
   );
 }
 
-// ---- 06 · manifesto: as frases acendem; o golpe sela a assinatura ---------------------------------------
+// ---- 06 · a guarda: o que é da obra fica com a obra (spec 126) -----------------------------------------
+// Só o que o Malhet já faz hoje — cada frase tem lastro no sistema (acervo por obra, DWG lido no próprio servidor,
+// descritor facial sem foto, sensível fora da nuvem, leituras e exclusões registradas, isolamento por obra).
+const GUARDA: [LucideIcon, string, string][] = [
+  [HardDrive, 'Seus arquivos, no seu lugar.', 'Desenhos, fotos e documentos ficam no acervo da obra — no Malhet ou na nuvem da própria empresa (Google Drive, OneDrive ou Dropbox), organizados por obra.'],
+  [FileLock2, 'O projeto é lido aqui dentro.', 'O DWG vira folha e vira quantidade no próprio servidor do Malhet. Nenhum desenho é mandado para conversor ou serviço de terceiros.'],
+  [ShieldOff, 'Nada vira matéria-prima de ninguém.', 'Projeto, contrato, foto e dado de pessoa não são enviados a serviços externos de inteligência artificial — nem para responder, nem para treinar.'],
+  [Fingerprint, 'Rosto não vira foto guardada.', 'Na presença, fica só o código do rosto, com o aceite do colaborador. O que é sensível — rosto, assinatura, localização — não sai para nuvem nenhuma.'],
+  [Eye, 'Cada acesso deixa rastro.', 'Quem abriu qual revisão do projeto, por onde, e quem excluiu o quê e por quê. A pergunta “quem viu isso?” tem resposta.'],
+  [Layers, 'Cada obra é uma obra.', 'O que é de uma obra não aparece em outra, nem para outra empresa. Cada pessoa vê só o que o papel dela permite.'],
+];
+
+function Guarda() {
+  return (
+    <section id="guarda" className="px-5 py-16 sm:px-10 sm:py-24" style={{ background: '#EDF1F1' }}>
+      <div className="mx-auto max-w-[1680px]">
+        <Marcador n="6" titulo="A guarda" />
+        <Acende className="mt-14 max-w-[1240px] font-light leading-[1.05] tracking-[-0.03em]" style={{ fontSize: 'clamp(32px, 4.8vw, 76px)' }}
+          texto="Projeto, contrato e a foto do canteiro são patrimônio da empresa. *O *que *é *da *obra *fica *com *a *obra." />
+        <Revela className="mt-8 max-w-[760px]">
+          <p className="text-[17px] leading-[1.55] text-black/60 sm:text-[19px]">
+            Registro só tem valor se for seu. Por isso o Malhet guarda a memória da obra sem entregá-la a mais ninguém.
+          </p>
+        </Revela>
+        <div className="mt-16 grid gap-px overflow-hidden rounded-[20px] bg-black/10 sm:grid-cols-2 lg:grid-cols-3">
+          {GUARDA.map(([Icone, titulo, texto], i) => (
+            <Revela key={titulo} atraso={(i % 3) * 120} className="h-full">
+              <div className="flex h-full flex-col gap-4 p-7 sm:p-9" style={{ background: PEDRA }}>
+                <div className="flex items-center justify-between">
+                  <Icone size={26} strokeWidth={1.75} style={{ color: VERDE }} aria-hidden="true" />
+                  <span className="text-[11px] tracking-[0.16em] text-black/35" style={{ fontFamily: MONO }}>0{i + 1}</span>
+                </div>
+                <h3 className="text-[22px] font-semibold leading-[1.2] tracking-[-0.01em]">{titulo}</h3>
+                <p className="text-[15px] leading-[1.55] text-black/60">{texto}</p>
+              </div>
+            </Revela>
+          ))}
+        </div>
+        <Revela className="mt-12">
+          <Link href="/privacidade" className="inline-flex items-center gap-1.5 text-[14px] font-semibold underline underline-offset-4" style={{ color: VERDE }}>
+            Leia a política de privacidade <ArrowUpRight size={14} />
+          </Link>
+        </Revela>
+      </div>
+    </section>
+  );
+}
+
+// ---- 07 · manifesto: as frases acendem; o golpe sela a assinatura ---------------------------------------
 function Manifesto({ entrar }: { entrar: { href: string; texto: string } }) {
   const ref = useRef<HTMLDivElement>(null);
   const p = useProgresso(ref, 'entrada');
@@ -514,7 +563,7 @@ function Manifesto({ entrar }: { entrar: { href: string; texto: string } }) {
   return (
     <section id="manifesto" className="relative overflow-hidden px-5 py-16 text-white sm:px-10 sm:py-24" style={{ background: FUNDO_ESCURO }}>
       <div className="mx-auto max-w-[1680px]">
-        <Marcador n="6" titulo="Manifesto" claro />
+        <Marcador n="7" titulo="Manifesto" claro />
         <div className="relative mt-14 grid gap-10 lg:grid-cols-[1.25fr_1fr]">
           <div className="flex flex-col gap-8">
             {[
