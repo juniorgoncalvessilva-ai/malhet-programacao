@@ -101,7 +101,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `PUT /programacoes/{pid}/sequencia`), aba "Sequência (Gantt)" no modelo do MS Project (predecessoras "3TI+2 dias"), distribuição sugerida nos dias vazios e "Por encarregado"
   (`agruparPorEncarregado`). Spec 054. Cores do modelo S27 (local vermelho FF0000 na linha toda, área azul 173761,
   atividades alternadas C5D9F1, spec 059) no Excel do cliente, na tela e na impressão; Gantt com "Classificar por" e "Agrupar por"
-  (frente/encarregado, linha-resumo). Spec 055. Itens não cumpridos em cards (um por vez, passa ao próximo sem motivo ao registrar,
+  (frente/encarregado, linha-resumo). Spec 055. Excel do cliente com a faixa do CWP antes das atividades dele (`exportar_cliente.py::por_cwp`,
+  "CWP código · texto", DCE6F1), como na tela. Spec 137. Itens não cumpridos em cards (um por vez, passa ao próximo sem motivo ao registrar,
   minimizar/ver todos) e cálculo da CPU por linha recolhível (`usePreferencia`, `lib/preferencia.ts`). Spec 105. Excluir revisão emitida só pelo super admin (`DELETE /programacoes/{pid}/emissoes/{rev}`,
   `excluir_emissao`; a anterior volta a vigente; última de concluída não sai; `RevisoesProgramacao`). Spec 060. Trocar o item da PQ da
   linha também emitida (`PUT …/linhas/{lid}/item-pq`, `item_pq_linha.py`, `TrocarItemPq`; tipo do item novo ou criado no grupo,

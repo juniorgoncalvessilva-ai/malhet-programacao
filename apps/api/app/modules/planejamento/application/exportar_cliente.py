@@ -16,10 +16,12 @@ from app.modules.referencias.domain.cpu_obra import eh_apoio
 from app.modules.ssma.domain.cadastro import texto_da_lista
 
 AZUL, VERMELHO, BRANCO, VERDE_PR = "FF173761", "FFFF0000", "FFFFFFFF", "FF2B665E"
+CWP_FUNDO, CWP_TEXTO = "FFDCE6F1", "FF173761"  # faixa do CWP (spec 137): azul-claro com o texto no azul da área
 ZEBRA = "FFC5D9F1"  # atividades alternadas (azul-claro C5D9F1, pedido da obra; spec 059) — colunas G..AJ
 FINO, MEDIO = Side(style="thin"), Side(style="medium")
 GRADE = Border(left=FINO, right=FINO, top=FINO, bottom=FINO)
 CENTRO = Alignment(horizontal="center", vertical="center", wrap_text=True)
+ESQ = Alignment(horizontal="left", vertical="center", wrap_text=False)
 NUM = "#,##0.00_ ;[Red]\\-#,##0.00\\ "
 
 # colunas fixas (G..AK) — exatamente as do modelo
@@ -80,6 +82,17 @@ def _recursos(composicao: list[tuple[str, str, float]]) -> dict[str, float]:
         if k:
             out[k] = out.get(k, 0) + q
     return out
+
+
+def por_cwp(linhas: list[dict]) -> list[tuple[dict | None, list[dict]]]:
+    """As linhas da área agrupadas pelo CWP, como na tela (`porCwp`): primeiro as sem CWP, depois cada CWP na ordem em que
+    aparece."""
+    grupos: dict[str, tuple[dict | None, list[dict]]] = {}
+    for ln in linhas:
+        c = ln.get("cwp")
+        k = f"{c.get('id') or ''}|{c.get('texto')}" if c else ""
+        grupos.setdefault(k, (c, []))[1].append(ln)
+    return sorted(grupos.values(), key=lambda g: 0 if g[0] is None else 1)
 
 
 def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, float]]], marca=None) -> bytes:
@@ -185,57 +198,67 @@ def gerar(v: dict, obra_nome: str, composicoes: dict[int, list[tuple[str, str, f
             ws[f"J{r}"].font = Font(size=48, bold=True, color=BRANCO)
             ws.row_dimensions[r].height = 55.5
             r += 1
-            for i, ln in enumerate(a["linhas"], start=1):
-                p, rr = r, r + 1
-                ws.row_dimensions[p].height = ws.row_dimensions[rr].height = 80.4
-                rec = _recursos(composicoes.get(ln["equipe_id"], [])) if ln.get("equipe_id") else {}
-                local = tag_desc.split(" – ", 1)[1] if " – " in tag_desc else tag_desc
-                ss = ln.get("ssma") or {}
-                fixos = {
-                    "G": f"{n_area}.{i}", "H": ln.get("id_crono") or "-", "I": ln.get("natureza") or "P",
-                    "J": f"{ln['codigo_simova']} - {ln['descricao']}", "K": ln["grupo"]["descricao"], "L": local,
-                    "M": a.get("cwa") or "-", "N": ss.get("tecnico"), "O": texto_da_lista(ss.get("rac")),
-                    "P": texto_da_lista(ss.get("pts")), "Q": texto_da_lista(ss.get("art")),
-                    "R": texto_da_lista(ss.get("pto")), "S": texto_da_lista(ss.get("ata")), "T": ln.get("responsavel"),
-                    "U": ln.get("encarregado") or ln.get("equipe"), "V": ln.get("unidade"),
-                    "W": ln.get("qtd_projeto"), "X": ln.get("realizado_anterior"), "Y": ln.get("restante"),
-                    "Z": None, "AA": ln.get("status_crono"),
-                    "AB": f"=SUM(AC{p}:AJ{p})" if rec else None,
-                    **{k: (rec.get(k) or None) for k in ("AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ")},
-                }
-                n_ativ += 1
-                zebra = ZEBRA if n_ativ % 2 == 0 else None
-                for letra, val in fixos.items():
-                    for rx in (p, rr):
-                        _cel(ws, f"{letra}{rx}", None, fmt=NUM if letra in "WXY" else None, fill=zebra)
-                    ws[f"{letra}{p}"] = val
-                    _merge(ws, f"{letra}{p}", f"{letra}{rr}")
-                _cel(ws, f"AK{p}", "P", b=True, cor=VERDE_PR)
-                _cel(ws, f"AK{rr}", "R", b=True, cor=VERDE_PR)
-                for di in range(nd):
-                    cl = L(COL_DIA1 + di)
-                    _cel(ws, f"{cl}{p}", ln["previsto"][di], fmt="#,##0.000_ ;[Red]\\-#,##0.000\\ ")
-                    _cel(ws, f"{cl}{rr}", ln["realizado"][di], fmt="#,##0.000_ ;[Red]\\-#,##0.000\\ ")
-                d1, dn = L(COL_DIA1), L(COL_DIA1 + nd - 1)
-                _cel(ws, f"{tt}{p}", f"=SUM({d1}{p}:{dn}{p})", fmt="#,##0.0_ ;[Red]\\-#,##0.0\\ ")
-                _cel(ws, f"{tt}{rr}", f"=SUM({d1}{rr}:{dn}{rr})", fmt="#,##0.0_ ;[Red]\\-#,##0.0\\ ")
-                analise = {
-                    ad: f'=IF({tt}{p}=0,"",{tt}{rr}/{tt}{p})',
-                    L(col["Observações"]): ln.get("observacao"),
-                    L(col["ITEM PQ"]): ln.get("item_pq"),
-                    L(col["PU"]): ln.get("pu"),
-                    L(col["FATURAMENTO PREVISTO"]): f"={L(col['PU'])}{p}*{tt}{p}" if ln.get("pu") else None,
-                    L(col["FATURAMENTO REAL"]): f"={L(col['PU'])}{p}*{tt}{rr}" if ln.get("pu") else None,
-                }
-                for ci in range(c_ader, ult + 1):
-                    letra = L(ci)
-                    for rx in (p, rr):
-                        _cel(ws, f"{letra}{rx}", None, fmt="0%" if letra == ad else (NUM if ci in (
-                            col["PU"], col["FATURAMENTO PREVISTO"], col["FATURAMENTO REAL"]) else None))
-                    ws[f"{letra}{p}"] = analise.get(letra)
-                    _merge(ws, f"{letra}{p}", f"{letra}{rr}")
-                lin_valor.append(p)
-                r += 2
+            i = 0
+            for cwp, linhas_cwp in por_cwp(a["linhas"]):
+                if cwp:  # faixa do CWP antes das atividades dele, como na tela (spec 137)
+                    for ci in range(7, ult + 1):
+                        _cel(ws, f"{L(ci)}{r}", None, sz=36, b=True, fill=CWP_FUNDO, cor=CWP_TEXTO, al=ESQ)
+                    ws[f"J{r}"] = f"CWP {cwp['codigo']} · {cwp['texto']}" if cwp.get("codigo") else f"CWP {cwp['texto']}"
+                    _merge(ws, f"J{r}", f"AJ{r}")
+                    ws.row_dimensions[r].height = 45
+                    r += 1
+                for ln in linhas_cwp:
+                    i += 1
+                    p, rr = r, r + 1
+                    ws.row_dimensions[p].height = ws.row_dimensions[rr].height = 80.4
+                    rec = _recursos(composicoes.get(ln["equipe_id"], [])) if ln.get("equipe_id") else {}
+                    local = tag_desc.split(" – ", 1)[1] if " – " in tag_desc else tag_desc
+                    ss = ln.get("ssma") or {}
+                    fixos = {
+                        "G": f"{n_area}.{i}", "H": ln.get("id_crono") or "-", "I": ln.get("natureza") or "P",
+                        "J": f"{ln['codigo_simova']} - {ln['descricao']}", "K": ln["grupo"]["descricao"], "L": local,
+                        "M": a.get("cwa") or "-", "N": ss.get("tecnico"), "O": texto_da_lista(ss.get("rac")),
+                        "P": texto_da_lista(ss.get("pts")), "Q": texto_da_lista(ss.get("art")),
+                        "R": texto_da_lista(ss.get("pto")), "S": texto_da_lista(ss.get("ata")), "T": ln.get("responsavel"),
+                        "U": ln.get("encarregado") or ln.get("equipe"), "V": ln.get("unidade"),
+                        "W": ln.get("qtd_projeto"), "X": ln.get("realizado_anterior"), "Y": ln.get("restante"),
+                        "Z": None, "AA": ln.get("status_crono"),
+                        "AB": f"=SUM(AC{p}:AJ{p})" if rec else None,
+                        **{k: (rec.get(k) or None) for k in ("AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ")},
+                    }
+                    n_ativ += 1
+                    zebra = ZEBRA if n_ativ % 2 == 0 else None
+                    for letra, val in fixos.items():
+                        for rx in (p, rr):
+                            _cel(ws, f"{letra}{rx}", None, fmt=NUM if letra in "WXY" else None, fill=zebra)
+                        ws[f"{letra}{p}"] = val
+                        _merge(ws, f"{letra}{p}", f"{letra}{rr}")
+                    _cel(ws, f"AK{p}", "P", b=True, cor=VERDE_PR)
+                    _cel(ws, f"AK{rr}", "R", b=True, cor=VERDE_PR)
+                    for di in range(nd):
+                        cl = L(COL_DIA1 + di)
+                        _cel(ws, f"{cl}{p}", ln["previsto"][di], fmt="#,##0.000_ ;[Red]\\-#,##0.000\\ ")
+                        _cel(ws, f"{cl}{rr}", ln["realizado"][di], fmt="#,##0.000_ ;[Red]\\-#,##0.000\\ ")
+                    d1, dn = L(COL_DIA1), L(COL_DIA1 + nd - 1)
+                    _cel(ws, f"{tt}{p}", f"=SUM({d1}{p}:{dn}{p})", fmt="#,##0.0_ ;[Red]\\-#,##0.0\\ ")
+                    _cel(ws, f"{tt}{rr}", f"=SUM({d1}{rr}:{dn}{rr})", fmt="#,##0.0_ ;[Red]\\-#,##0.0\\ ")
+                    analise = {
+                        ad: f'=IF({tt}{p}=0,"",{tt}{rr}/{tt}{p})',
+                        L(col["Observações"]): ln.get("observacao"),
+                        L(col["ITEM PQ"]): ln.get("item_pq"),
+                        L(col["PU"]): ln.get("pu"),
+                        L(col["FATURAMENTO PREVISTO"]): f"={L(col['PU'])}{p}*{tt}{p}" if ln.get("pu") else None,
+                        L(col["FATURAMENTO REAL"]): f"={L(col['PU'])}{p}*{tt}{rr}" if ln.get("pu") else None,
+                    }
+                    for ci in range(c_ader, ult + 1):
+                        letra = L(ci)
+                        for rx in (p, rr):
+                            _cel(ws, f"{letra}{rx}", None, fmt="0%" if letra == ad else (NUM if ci in (
+                                col["PU"], col["FATURAMENTO PREVISTO"], col["FATURAMENTO REAL"]) else None))
+                        ws[f"{letra}{p}"] = analise.get(letra)
+                        _merge(ws, f"{letra}{p}", f"{letra}{rr}")
+                    lin_valor.append(p)
+                    r += 2
     # total do faturamento
     if lin_valor:
         for nome in ("FATURAMENTO PREVISTO", "FATURAMENTO REAL"):

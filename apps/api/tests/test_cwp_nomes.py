@@ -34,3 +34,9 @@ def test_cwp_e_nome_reduzido_na_programacao(client):
         return [c.value for c in ws["J"] if isinstance(c.value, str) and c.value.startswith(ln["codigo_simova"] + " - ")]
     assert coluna_j() == [f"{ln['codigo_simova']} - Concreto fck 30 - (Radier - Eixo A–B)"]
     assert coluna_j(nomes="pq") == [f"{ln['codigo_simova']} - {ln['descricao_completa']}"]
+    # spec 137: a faixa do CWP vem antes das atividades dele, logo abaixo da área, como na tela
+    ws = load_workbook(BytesIO(client.get(f"/api/programacoes/{p['id']}/excel").content)).active
+    j = [(c.row, c.value) for c in ws["J"] if isinstance(c.value, str)]
+    i_cwp = next(i for i, (_, v) in enumerate(j) if v == "CWP 004.05-01 · Radier - Eixo A–B")
+    assert j[i_cwp - 1][1].startswith("CWA 004.05") and j[i_cwp + 1][1].startswith(ln["codigo_simova"] + " - ")
+    assert ws.cell(j[i_cwp][0], 10).fill.fgColor.rgb == "FFDCE6F1"
