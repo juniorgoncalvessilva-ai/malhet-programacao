@@ -1,5 +1,6 @@
 'use client';
 
+import { GerenciaResponsavel } from '@/components/Obra/GerenciaResponsavel';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, Check, Download, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -111,8 +112,7 @@ function Restricoes() {
           <option value="">equipe (opcional)</option>{equipes.data?.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
         </select>
       </td>
-      <td className="min-w-[120px] px-1 py-1.5"><input aria-label="Responsável" className={inp} value={f.responsavel} onChange={(e) => setEd({ ...f, responsavel: e.target.value })} /></td>
-      <td className="min-w-[110px] px-1 py-1.5"><input aria-label="Gerência" list="gerencias" className={inp} value={f.gerencia} onChange={(e) => setEd({ ...f, gerencia: e.target.value })} /></td>
+      <td colSpan={2} className="min-w-[230px] px-1 py-1.5"><GerenciaResponsavel compacto gerencia={f.gerencia} responsavel={f.responsavel} onChange={(v) => setEd({ ...f, ...v })} /></td>
       <td className="min-w-[132px] px-1 py-1.5">
         <input aria-label="Prazo início" type="date" className={inp} value={f.prazo_inicio} onChange={(e) => setEd({ ...f, prazo_inicio: e.target.value })} />
         <input aria-label="Prazo término" type="date" className={`${inp} mt-1`} value={f.prazo_termino} onChange={(e) => setEd({ ...f, prazo_termino: e.target.value })} />

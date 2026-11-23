@@ -1,5 +1,6 @@
 'use client';
 
+import { GerenciaResponsavel } from '@/components/Obra/GerenciaResponsavel';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Layers, List, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -137,8 +138,7 @@ export function DesviosDaProgramacao({ pid, dias, editavel }: { pid: number; dia
                 </Selecao>
                 <Campo rotulo="Desvio (o que aconteceu)" required minLength={3} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} className="md:col-span-3" />
                 <Campo rotulo="Ação" value={form.acao} onChange={(e) => setForm({ ...form, acao: e.target.value })} className="md:col-span-2" />
-                <Campo rotulo="Responsável" value={form.responsavel} onChange={(e) => setForm({ ...form, responsavel: e.target.value })} />
-                <Campo rotulo="Gerência (contratada/cliente)" value={form.gerencia} onChange={(e) => setForm({ ...form, gerencia: e.target.value })} />
+                <GerenciaResponsavel gerencia={form.gerencia} responsavel={form.responsavel} onChange={(v) => setForm({ ...form, ...v })} />
                 <Selecao rotulo="Status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                   {Object.entries(STATUS_DESVIO).map(([n, r]) => <option key={n} value={n}>{n} · {r}</option>)}
                 </Selecao>

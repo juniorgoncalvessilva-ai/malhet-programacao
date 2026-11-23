@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Abas } from '@/components/Obra/Abas';
 import { Calculado } from '@/components/Obra/Calculado';
 import { useConfirmar } from '@/components/Obra/Confirmar';
+import { GerenciaResponsavel } from '@/components/Obra/GerenciaResponsavel';
 import { PilulaProjetos } from '@/components/Documentos/PilulaProjetos';
 import { Botao, Cabecalho, Campo, Indicador, Painel, Pilula, Selecao, dataBR, fmt } from '@/components/Obra/ui';
 import { useSituacaoProjetos } from '@/lib/documentos/ativos';
@@ -244,7 +245,7 @@ function Detalhe({ item, marcos, onFechar }: { item: ItemPlano; marcos: ItemPlan
   const confirmar = useConfirmar();
   const { pode } = useObra();
   const [editar, setEditar] = useState(false);
-  const [r, setR] = useState({ acao: '', responsavel: '', prazo_termino: '', seis_m: '', impeditivo: true });
+  const [r, setR] = useState({ acao: '', responsavel: '', gerencia: '', prazo_termino: '', seis_m: '', impeditivo: true });
   const projeto = useSituacaoProjetos()(item.area_id);
   const pedir = (p: Promise<unknown>, ok: string) => p.then(() => { toast.success(ok); atualizar(); }).catch((e) => toast.error(e.message));
   if (editar) return <FormItem item={item} marcos={marcos} onFechar={() => setEditar(false)} />;
@@ -293,11 +294,11 @@ function Detalhe({ item, marcos, onFechar }: { item: ItemPlano; marcos: ItemPlan
         {pode('encarregado') && (
           <form className="grid gap-2 md:grid-cols-[1fr_180px_150px_120px_auto_auto] md:items-end" onSubmit={(e) => {
             e.preventDefault();
-            pedir(api.post(`/planos/itens/${item.id}/restricoes`, { ...r, prazo_termino: r.prazo_termino || null, seis_m: r.seis_m || null, responsavel: r.responsavel || null })
-              .then(() => setR({ acao: '', responsavel: '', prazo_termino: '', seis_m: '', impeditivo: true })), 'Restrição enviada ao 6WLA');
+            pedir(api.post(`/planos/itens/${item.id}/restricoes`, { ...r, prazo_termino: r.prazo_termino || null, seis_m: r.seis_m || null, responsavel: r.responsavel || null, gerencia: r.gerencia || null })
+              .then(() => setR({ acao: '', responsavel: '', gerencia: '', prazo_termino: '', seis_m: '', impeditivo: true })), 'Restrição enviada ao 6WLA');
           }}>
             <Campo rotulo="Nova restrição (ação para remover)" value={r.acao} onChange={(e) => setR({ ...r, acao: e.target.value })} required minLength={3} />
-            <Campo rotulo="Responsável" value={r.responsavel} onChange={(e) => setR({ ...r, responsavel: e.target.value })} />
+            <GerenciaResponsavel gerencia={r.gerencia} responsavel={r.responsavel} onChange={(v) => setR({ ...r, ...v })} />
             <Campo rotulo="Prazo" type="date" value={r.prazo_termino} onChange={(e) => setR({ ...r, prazo_termino: e.target.value })} />
             <Selecao rotulo="6M" value={r.seis_m} onChange={(e) => setR({ ...r, seis_m: e.target.value })}><option value="">—</option>{Object.entries(SEIS_M).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Selecao>
             <label className="flex items-center gap-1.5 pb-2.5 text-[13px] text-m-text-secondary"><input type="checkbox" checked={r.impeditivo} onChange={(e) => setR({ ...r, impeditivo: e.target.checked })} /> Impeditiva</label>

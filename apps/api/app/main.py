@@ -51,6 +51,7 @@ from app.modules.erros.api.router import router as erros
 from app.modules.aderencia.api.router import router as aderencia
 from app.modules.lideres.api.router import publico as portal_lider, router as lideres
 from app.modules.exclusoes.api.router import router as exclusoes
+from app.modules.partes.api.router import router as partes
 from app.modules.arquivos.application import fila as fila_arquivos
 import app.modules.campo.application.arquivos  # noqa: F401  (registra as fotos na fila de arquivos)
 import app.modules.ssma.application.arquivos  # noqa: F401  (registra os anexos de SSMA)
@@ -164,5 +165,5 @@ def health():
 
 
 app.include_router(auth_router, prefix="/api", tags=["auth (auth-kit)"])
-for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, registros_campo, documentos, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros, aderencia, lideres, portal_lider, exclusoes):
+for r in (obras, frentes, catalogo, planejamento, cadastros, referencias, equipes, programacao, simova, ssma, efetivo, wbs, desvios, indicadores, lookahead, restricoes, campo, registros_campo, documentos, fotos, marca, planos, presenca, acoes, auditorias, preventivos, lgpd, perfil, notificacoes, criterios, armazenamento, treinamentos, mobilizacao, erros, aderencia, lideres, portal_lider, exclusoes, partes):
     app.include_router(r, prefix="/api")

@@ -247,6 +247,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   ícones 1 ✖ 2 ! 3 ✔) e do Plano de Ação (Ações com farol de semáforos + PAINEL AÇÃO) no layout da obra para a
   fiscalização: `indicadores/application/excel_pareto.py`, `restricoes/application/planilha.py`, `app/shared/excel.py`. Spec 031. Tela de Restrições em abas (Ações | Painel | Importar), gráficos do PAINEL AÇÃO
   pela mesma conta do Excel (`restricoes/domain/painel.py`), edição na linha e observação datada (`anotar`). Spec 032.
+- Partes da obra e responsáveis (spec 139, `partes/`): gerência = "CONTRATADA|CONTRATANTE|FISCALIZAÇÃO|PROJETOS - NOME"
+  (`parte_obra`, `domain/partes.py::gerencia`), responsáveis por parte (`responsavel_obra`; contratada pelo efetivo, demais
+  digitados). Tela Configurar › Partes e responsáveis (`/app/partes`) com "padronizar" o que foi escrito à mão (`casar_gerencia`,
+  gateways de restrições e desvios). Formulários usam `GerenciaResponsavel` (desvios, restrições 6WLA, restrições do plano).
 - Marca da obra (`marca_obra`, `app/shared/marca.py`): logos do contratante/contratada (ou Malhet) em todo documento
   (`inserir_logos`, `cor_excel`) e cor do cliente (`/obra/marca`, `MinhaObra.cor` → tokens `--m-accent*`). Documento
   novo usa `marca_da_obra` e `<LogosObra>`; não fixe a cor do Malhet. Spec 039.

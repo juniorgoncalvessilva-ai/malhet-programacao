@@ -126,3 +126,9 @@ def funcao_padronizada(s: Session, obra_id: int, funcao: str | None) -> FuncaoCo
     if f is None:
         raise DomainError(f"a função “{funcao.strip()}” não está cadastrada: crie em De-para de funções", "funcao")
     return f
+
+
+def pessoa(s: Session, obra_id: int, colaborador_id: int) -> PessoaEfetivo | None:
+    """A pessoa do efetivo pelo id (spec 139: responsável da contratada vem do efetivo)."""
+    m = s.get(ColaboradorModel, colaborador_id)
+    return _pessoa(m) if m is not None and m.obra_id == obra_id else None

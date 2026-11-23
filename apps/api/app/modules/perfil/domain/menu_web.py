@@ -29,7 +29,7 @@ TELAS_WEB: dict[str, str | None] = {
     # Configurar
     "/app/importacoes": None, "/app/frentes": None, "/app/catalogo": None, "/app/efetivo/setores": None,
     "/app/efetivo/funcoes": None, "/app/efetivo/identificacao": PLANEJADOR,
-    "/app/acessos": ADMIN, "/app/menu-celular": ADMIN, "/app/marca": ADMIN, "/app/armazenamento": ADMIN, "/app/exclusoes": ADMIN,
+    "/app/acessos": ADMIN, "/app/menu-celular": ADMIN, "/app/marca": ADMIN, "/app/partes": PLANEJADOR, "/app/armazenamento": ADMIN, "/app/exclusoes": ADMIN,
 }
 SEMPRE = ("/app/vigente",)
 SEMPRE_ADMIN = ("/app/acessos", "/app/menu-celular")

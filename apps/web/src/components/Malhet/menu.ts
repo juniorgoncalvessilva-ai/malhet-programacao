@@ -1,4 +1,4 @@
-import { AlertTriangle, FolderOpen, Ruler, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Ruler, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2, Building2 } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu {
@@ -94,6 +94,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Acessos e usuários', url: '/app/acessos', icone: KeyRound, minimo: 'admin', palavras: 'permissão login conta' },
       { titulo: 'Menus por perfil', url: '/app/menu-celular', icone: PanelsTopLeft, minimo: 'admin', palavras: 'celular barra' },
       { titulo: 'Marca da obra', url: '/app/marca', icone: Palette, minimo: 'admin', palavras: 'logo cor contratada' },
+      { titulo: 'Partes e responsáveis', url: '/app/partes', icone: Building2, minimo: 'planejador', palavras: 'gerência contratada contratante fiscalização projetos responsável' },
       { titulo: 'Armazenamento', url: '/app/armazenamento', icone: Cloud, minimo: 'admin', palavras: 'drive onedrive dropbox arquivos' },
       { titulo: 'Exclusões', url: '/app/exclusoes', icone: Trash2, minimo: 'admin', palavras: 'histórico excluir' },
     ],
