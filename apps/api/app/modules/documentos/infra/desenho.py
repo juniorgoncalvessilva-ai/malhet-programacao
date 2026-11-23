@@ -2,6 +2,7 @@
 (vetorial, zoom sem perder) e PNG (leve, abre em qualquer celular e sem internet). Usa a API de objetos do matplotlib
 (sem pyplot), que pode rodar em várias requisições ao mesmo tempo."""
 import io
+import re
 from dataclasses import dataclass, field
 
 import ezdxf
@@ -30,16 +31,25 @@ class Desenho:
 def _abrir(dxf: bytes):
     try:
         doc, auditor = recover.read(io.BytesIO(dxf))
-    except (ezdxf.DXFStructureError, OSError, UnicodeDecodeError) as e:
+    except Exception as e:  # noqa: BLE001 — DXF quebrado (ou que o recover não entende) não vira erro 500
         raise DomainError("DXF ilegível", "arquivo") from e
     return doc
+
+
+_CONTROLE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def limpo(t: str | None) -> str:
+    """Texto do desenho pronto para o banco: o DWG convertido às vezes traz NUL e outros caracteres de controle, que o
+    PostgreSQL recusa (e derrubava o envio com erro 500)."""
+    return _CONTROLE.sub("", t or "")
 
 
 def _texto(e) -> str:
     try:
         if e.dxftype() == "MTEXT":
-            return e.plain_text()
-        return e.dxf.text or ""
+            return limpo(e.plain_text())
+        return limpo(e.dxf.text)
     except Exception:  # noqa: BLE001 — texto estranho não derruba a leitura
         return ""
 
@@ -56,8 +66,9 @@ def ler(dxf: bytes, imagens: bool = True) -> Desenho:
         for ins in lay.query("INSERT"):
             at: dict[str, str] = {}
             for a in ins.attribs:  # campos repetidos (linhas da tabela de revisões) em branco não apagam o preenchido
-                if (a.dxf.text or "").strip() or a.dxf.tag not in at:
-                    at[a.dxf.tag] = a.dxf.text or ""
+                tag, txt = limpo(a.dxf.tag), limpo(a.dxf.text)
+                if txt.strip() or tag not in at:
+                    at[tag] = txt
             if parece_carimbo(at):
                 candidatos.append(at)
     if candidatos:
@@ -68,7 +79,7 @@ def ler(dxf: bytes, imagens: bool = True) -> Desenho:
             if t:
                 d.textos.append(t)
         for ins in lay.query("INSERT"):
-            d.textos += [a.dxf.text for a in ins.attribs if (a.dxf.text or "").strip()]
+            d.textos += [limpo(a.dxf.text) for a in ins.attribs if limpo(a.dxf.text).strip()]
     if imagens:
         d.pdf, d.png = _imagens(doc, alvo, d.avisos)
     return d
@@ -85,9 +96,22 @@ def _imagens(doc, layout, avisos: list[str]) -> tuple[bytes | None, bytes | None
         return None, None
     pdf, png = io.BytesIO(), io.BytesIO()
     FigureCanvasAgg(fig)  # Figure sem pyplot: o savefig usa o canvas ligado à figura
-    fig.savefig(pdf, format="pdf", facecolor="white")
-    fig.savefig(png, format="png", dpi=PNG_DPI, facecolor="white")
-    return pdf.getvalue(), png.getvalue()
+    try:
+        fig.savefig(pdf, format="pdf", facecolor="white")
+    except Exception as e:  # noqa: BLE001
+        avisos.append(f"não foi possível gerar o PDF da folha: {type(e).__name__}")
+        pdf = None
+    for dpi in (PNG_DPI, PNG_DPI // 2):  # desenho muito carregado estoura o Agg ("Exceeded cell block limit"): tenta menor
+        try:
+            png = io.BytesIO()
+            fig.savefig(png, format="png", dpi=dpi, facecolor="white")
+            break
+        except Exception as e:  # noqa: BLE001
+            png = None
+            erro = type(e).__name__
+    if png is None:
+        avisos.append(f"não foi possível gerar a imagem da folha: {erro}")
+    return (pdf.getvalue() if pdf else None), (png.getvalue() if png else None)
 
 
 # ---- take-off pelo projeto (spec 124) -------------------------------------------------------------------------------

@@ -191,6 +191,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Enviar/atualizar arquivo (spec 135, `ArquivoDoDocumento` na prévia, `POST /documentos/{id}/arquivo` → `atualizar_arquivo`): sem
   arquivo = "Enviar arquivo da rev. X" (a da LDO) + "Copiar código"; com arquivo = nova revisão (`proxima_revisao`) ou corrigir a
   mesma com motivo (anterior em `documento_arquivo_anterior`, no histórico e em `_em_uso`); nó "Sem arquivo (a receber)" (`temArquivo`).
+  Leitura do desenho nunca derruba o envio (spec 138): `desenho.limpo` tira NUL/controle dos textos do DWG; erro do leitor ou do
+  Agg vira aviso em `ler_arquivo` e o arquivo é guardado assim mesmo.
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o

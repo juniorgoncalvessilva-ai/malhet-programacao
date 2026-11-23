@@ -55,3 +55,21 @@ def test_enviar_e_atualizar_arquivo(client):
     outra = client.post("/api/admin/obras", json={"codigo": "OUT-ARQ", "nome": "Outra"}).json()["id"]
     assert client.post(f"/api/documentos/{d['id']}/arquivo", data={"modo": "nova"}, files={"arquivo": ("a.pdf", PDF)},
                        headers={"X-Obra-Id": str(outra)}).status_code == 404
+
+
+def test_desenho_que_nao_le_nao_derruba_o_envio(client, monkeypatch):
+    """Spec 138: DWG/DXF que o leitor não entende (ou com NUL/controle nos textos) fica guardado com aviso — antes era 500."""
+    from app.modules.documentos.infra import desenho
+
+    assert desenho.limpo("CÓD\x00IGO\x07 1\n") == "CÓDIGO 1\n"
+    client.post("/api/documentos/ldo", files={"arquivo": ("ldo.xlsx", _ldo())})
+    d = {x["codigo"]: x for x in client.get("/api/documentos").json()}["1800AA-C-52641"]
+    # DXF quebrado
+    r = _envia(client, d["id"], nome="quebrado.dxf", dados=b"0\nSECTION\n2\nENTITIES\n0\nLIXO", modo="mesma", revisao="0")
+    assert r.status_code == 200, r.text  # o recover do ezdxf aguenta muita coisa; o que não aguentar vira aviso
+    # erro inesperado no leitor (ex.: Agg estourando, atributo esquisito)
+    monkeypatch.setattr(desenho, "ler", lambda *a, **k: (_ for _ in ()).throw(OverflowError("Exceeded cell block limit")))
+    r = _envia(client, d["id"], nome="x.dxf", dados=_dxf("1800AA-C-52641", "1", "PARA CONSTRUÇÃO"), modo="nova")
+    assert r.status_code == 200 and any("OverflowError" in a for a in r.json()["avisos"])
+    r = client.post("/api/documentos/revisoes", data={"revisao": "0"}, files={"arquivo": ("1800AA-C-0901.dxf", _dxf("1800AA-C-0901", "0", "PARA CONSTRUÇÃO"))})
+    assert r.status_code == 201, r.text

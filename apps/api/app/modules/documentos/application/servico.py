@@ -185,8 +185,13 @@ def ler_arquivo(nome: str | None, dados: bytes) -> tuple[bytes | None, "desenho.
     elif ext == "dxf":
         dxf = dados
     if dxf:
-        vis = desenho.ler(dxf)
-        avisos += vis.avisos
+        try:
+            vis = desenho.ler(dxf)
+            avisos += vis.avisos
+        except DomainError as e:
+            avisos.append(f"{e.mensagem}: o arquivo ficou guardado, sem carimbo nem folha")
+        except Exception as e:  # noqa: BLE001 — desenho que o leitor não entende não impede guardar o arquivo (era erro 500)
+            avisos.append(f"não consegui ler o desenho ({type(e).__name__}): o arquivo ficou guardado, sem carimbo nem folha")
     return dxf, vis, avisos
 
 
