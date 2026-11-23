@@ -73,6 +73,7 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `theme-color`, abertura com a logo e faixas de cima/baixo na cor (`textoSobre`, tokens no `.portal-lider`). Reivindicar equipe
   (spec 114): função de liderança entra sem equipe (`funcao_de_lider`), pede a equipe (`lider_pedido_equipe`) e o Planejamento
   aprova (cria no padrão de nome, líder = encarregado, pessoas pelo `Alocador`) ou recusa com motivo em Acesso dos líderes.
+  Recusado sai da fila na hora e volta ao líder (spec 140): aviso com o motivo e "nova solicitação" já preenchida com o pedido recusado.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e
@@ -250,7 +251,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
 - Partes da obra e responsáveis (spec 139, `partes/`): gerência = "CONTRATADA|CONTRATANTE|FISCALIZAÇÃO|PROJETOS - NOME"
   (`parte_obra`, `domain/partes.py::gerencia`), responsáveis por parte (`responsavel_obra`; contratada pelo efetivo, demais
   digitados). Tela Configurar › Partes e responsáveis (`/app/partes`) com "padronizar" o que foi escrito à mão (`casar_gerencia`,
-  gateways de restrições e desvios). Formulários usam `GerenciaResponsavel` (desvios, restrições 6WLA, restrições do plano).
+  gateways de restrições e desvios; nome antigo "associar a" um cadastrado — `sugerir_responsavel`, `POST /partes/padronizar/responsavel`
+  troca nome e gerência nos registros). Formulários usam `GerenciaResponsavel` (desvios, restrições 6WLA, restrições do plano).
 - Marca da obra (`marca_obra`, `app/shared/marca.py`): logos do contratante/contratada (ou Malhet) em todo documento
   (`inserir_logos`, `cor_excel`) e cor do cliente (`/obra/marca`, `MinhaObra.cor` → tokens `--m-accent*`). Documento
   novo usa `marca_da_obra` e `<LogosObra>`; não fixe a cor do Malhet. Spec 039.

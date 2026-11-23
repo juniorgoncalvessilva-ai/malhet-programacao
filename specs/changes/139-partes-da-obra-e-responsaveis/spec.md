@@ -29,3 +29,12 @@ de outra parte pelo efetivo = 422; digitado com função; inativar; obra isolada
 ambígua); padronizar (prévia não grava, aplica 3 registros, responsável antigo com a parte sugerida). E2E com os dados reais da
 obra: "Padronizar 605 registro(s)" (CARDAN → CONTRATADA - CARDAN 420, VALE → CONTRATANTE - VALE 185) e os responsáveis já usados;
 na restrição, escolher "Ana Lima · Fiscal de campo" preenche "FISCALIZAÇÃO - TRACTEBEL".
+
+## Adendo — associar o nome antigo a quem responde pela parte (23/11/2026)
+"Cole a opção de associar 'O que já foi registrado à mão?' a 'Quem responde por cada parte?', para que o padrão seja
+atualizado." Em cada nome antigo: **associar a…** (os responsáveis ativos, por parte; o provável vem marcado — `sugerir_responsavel`:
+igual, ou todas as palavras do antigo no começo das do cadastrado, "Willian" → "WILLIAN SOUZA"; dois candidatos = não sugere) ou
+**+ incluir como novo** (escolhe a parte; da contratada pela pessoa do efetivo de mesmo nome) — e os dois atualizam os registros
+antigos: `POST /partes/padronizar/responsavel {de, responsavel_id}` troca, em restrições e desvios (gateways
+`trocar_responsavel`, sem diferença de caixa/espaços nas pontas), o responsável pelo nome cadastrado e a gerência pela da parte
+dele. Teste `test_associar_responsavel_antigo`; E2E com os dados da obra: "116 registro(s): Willian → …" e o nome sai da lista.

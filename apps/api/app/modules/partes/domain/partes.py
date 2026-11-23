@@ -67,3 +67,16 @@ def casar_gerencia(texto: str | None, partes: list[Parte]) -> str | None:
     if not achadas:
         achadas = [p for p in partes if any(f" {x} " in f" {t} " for x in SINONIMOS[p.papel])]
     return achadas[0].gerencia if len(achadas) == 1 else None
+
+
+def sugerir_responsavel(antigo: str, cadastrados: list[tuple[int, str]]) -> int | None:
+    """O cadastrado que o nome antigo provavelmente é: igual, ou todas as palavras do antigo no começo das palavras do
+    cadastrado ("Willian" → "WILLIAN SOUZA", "Vitor R." → "VITOR ROCHA"). Só quando um só casa."""
+    a = _n(antigo).split()
+    if not a:
+        return None
+    iguais = [i for i, n in cadastrados if _n(n) == " ".join(a)]
+    if len(iguais) == 1:
+        return iguais[0]
+    casam = [i for i, n in cadastrados if all(any(p.startswith(w) for p in _n(n).split()) for w in a)]
+    return casam[0] if len(casam) == 1 else None

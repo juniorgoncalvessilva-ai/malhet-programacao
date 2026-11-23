@@ -61,3 +61,14 @@ def padronizar_previa(s: Session = Depends(get_session), c: ContextoObra = Depen
 @router.post("/padronizar")
 def padronizar(s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     return uc.padronizar(s, c.obra_id, aplicar=True)
+
+
+class AssociarIn(BaseModel):
+    de: str = Field(max_length=150)
+    responsavel_id: int
+
+
+@router.post("/padronizar/responsavel")
+def associar(d: AssociarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Associa o nome escrito à mão ao responsável cadastrado: os registros antigos passam ao padrão (nome e gerência)."""
+    return uc.associar(s, c.obra_id, d.de, d.responsavel_id)

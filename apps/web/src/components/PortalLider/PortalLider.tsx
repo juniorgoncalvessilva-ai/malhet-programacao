@@ -273,8 +273,16 @@ function Equipes({ dados, recarregar }: { dados: MinhasEquipes; recarregar: () =
       </>
     );
   }
+  const recusado = dados.pedidos[0]?.situacao === 'recusado' ? dados.pedidos[0] : undefined;
   return (
     <>
+      {recusado && (
+        <div role="alert" className="flex flex-col gap-1.5 rounded-[12px] border border-m-danger bg-m-danger-subtle px-3 py-2.5 text-[13.5px] text-m-danger">
+          <b>Seu pedido de equipe ({recusado.disciplina}) foi recusado</b>
+          <span>Motivo: {recusado.motivo}</span>
+          <button type="button" className="w-fit font-semibold text-m-text-primary underline" onClick={() => setFormando(true)}>Fazer uma nova solicitação</button>
+        </div>
+      )}
       {dados.equipes.length > 1 && (
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Suas equipes">
           {dados.equipes.map((e) => (
@@ -421,9 +429,12 @@ function Trazer({ equipe, onFechar, onFeito }: { equipe: EquipePortal; onFechar:
 function Reivindicar({ dados, onEnviado }: { dados: MinhasEquipes; onEnviado: () => Promise<void> }) {
   const pendente = dados.pedidos.find((p) => p.situacao === 'pendente');
   const ultimo: PedidoEquipe | undefined = dados.pedidos[0];
+  // recusado: a nova solicitação já começa com o pedido anterior, para corrigir e mandar de novo
+  const recusado = !pendente && ultimo?.situacao === 'recusado' ? ultimo : undefined;
+  const base = pendente ?? recusado;
   const [editando, setEditando] = useState(!pendente);
-  const [disciplina, setDisciplina] = useState(pendente?.disciplina ?? '');
-  const [escolhidos, setEscolhidos] = useState<Achado[]>(pendente?.membros.map((m) => ({ ...m })) ?? []);
+  const [disciplina, setDisciplina] = useState(base?.disciplina ?? '');
+  const [escolhidos, setEscolhidos] = useState<Achado[]>(base?.membros.map((m) => ({ ...m })) ?? []);
   const [observacao, setObservacao] = useState(pendente?.observacao ?? '');
   const [q, setQ] = useState('');
   const [achados, setAchados] = useState<Achado[] | null>(null);
@@ -468,8 +479,12 @@ function Reivindicar({ dados, onEnviado }: { dados: MinhasEquipes; onEnviado: ()
     <section className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
       <h2 className="text-[18px] font-semibold">{dados.equipes.length ? 'Formar outra equipe' : 'Você ainda não tem equipe cadastrada'}</h2>
       <p className="text-[14px] text-m-text-tertiary">Aponte quem está trabalhando com você. A equipe passa a valer quando o Planejamento aprovar.</p>
-      {ultimo?.situacao === 'recusado' && !pendente && (
-        <p role="alert" className="rounded-[12px] bg-m-danger-subtle px-3 py-2 text-[13.5px] text-m-danger">Seu último pedido foi recusado: {ultimo.motivo}</p>
+      {recusado && (
+        <div role="alert" className="flex flex-col gap-1 rounded-[12px] border border-m-danger bg-m-danger-subtle px-3 py-2.5 text-[13.5px] text-m-danger">
+          <b className="text-[14.5px]">Seu pedido foi recusado{recusado.decidido_em ? ` em ${new Date(recusado.decidido_em).toLocaleDateString('pt-BR')}` : ''}</b>
+          <span>Motivo: {recusado.motivo}</span>
+          <span className="text-m-text-primary">Faça uma nova solicitação: o pedido anterior já está abaixo — corrija o que foi apontado e envie de novo.</span>
+        </div>
       )}
       <label className="flex flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Disciplina
         <input className={campo} value={disciplina} onChange={(e) => setDisciplina(e.target.value)} placeholder="FORMA, CONCRETO, ARMAÇÃO…" />
@@ -505,7 +520,7 @@ function Reivindicar({ dados, onEnviado }: { dados: MinhasEquipes; onEnviado: ()
       <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={2} maxLength={500} placeholder="Observação para o Planejamento (opcional)"
         className="rounded-[14px] border border-m-stroke bg-m-surface-field p-3 text-[15px] outline-none focus:border-m-accent-strong" />
       <button type="button" className={primario} disabled={enviando || !escolhidos.length || disciplina.trim().length < 2} onClick={enviar}>
-        {enviando ? 'Enviando…' : pendente ? 'Atualizar o pedido' : 'Enviar para aprovação'}</button>
+        {enviando ? 'Enviando…' : pendente ? 'Atualizar o pedido' : recusado ? 'Enviar nova solicitação' : 'Enviar para aprovação'}</button>
       {pendente && <button type="button" className={secundario} onClick={() => setEditando(false)}>Voltar</button>}
     </section>
   );

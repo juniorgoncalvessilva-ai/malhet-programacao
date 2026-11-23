@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -19,7 +19,10 @@ interface Pedido {
  */
 export function PedidosEquipe({ podeDecidir }: { podeDecidir: boolean }) {
   const api = useApi();
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ['lideres-pedidos'], queryFn: () => api.get<Pedido[]>('/lideres/pedidos') });
+  // decidido sai da lista na hora (aprovado vira equipe; recusado volta para o líder, que faz uma nova solicitação)
+  const tirar = (id: number) => qc.setQueryData<Pedido[]>(['lideres-pedidos'], (xs) => (xs ?? []).filter((x) => x.id !== id));
   const [nomes, setNomes] = useState<Record<number, string>>({});
   const [recusando, setRecusando] = useState<number | null>(null);
   const [motivo, setMotivo] = useState('');
@@ -27,11 +30,17 @@ export function PedidosEquipe({ podeDecidir }: { podeDecidir: boolean }) {
   const aprovar = async (p: Pedido) => {
     try {
       const r = await api.post<{ nome: string; membros: number }>(`/lideres/pedidos/${p.id}/aprovar`, { nome: nomes[p.id]?.trim() || null });
+      tirar(p.id);
       toast.success(`${r.nome} criada com ${r.membros} pessoa(s); o líder já vê a equipe no link`);
     } catch (e) { toast.error((e as Error).message); }
   };
   const recusar = async (p: Pedido) => {
-    try { await api.post(`/lideres/pedidos/${p.id}/recusar`, { motivo }); toast.success('Pedido recusado; o líder vê o motivo no link'); setRecusando(null); setMotivo(''); } catch (e) { toast.error((e as Error).message); }
+    try {
+      await api.post(`/lideres/pedidos/${p.id}/recusar`, { motivo });
+      tirar(p.id);
+      toast.success(`Pedido de ${p.lider?.nome ?? 'líder'} recusado: ele vê o motivo no link e faz uma nova solicitação`);
+      setRecusando(null); setMotivo('');
+    } catch (e) { toast.error((e as Error).message); }
   };
   return (
     <Painel titulo={`Quem está pedindo equipe? (${q.data.length})`} subtitulo="Líderes sem equipe apontaram quem está com eles. Ao aprovar, a equipe é criada com o líder como encarregado e as pessoas saem da equipe em que estão hoje.">
@@ -53,8 +62,8 @@ export function PedidosEquipe({ podeDecidir }: { podeDecidir: boolean }) {
             {p.observacao && <p className="text-[13px] italic text-m-text-secondary">“{p.observacao}”</p>}
             {podeDecidir && (recusando === p.id ? (
               <div className="flex flex-wrap items-end gap-2">
-                <Campo rotulo="Motivo da recusa (o líder vê)" value={motivo} onChange={(e) => setMotivo(e.target.value)} className="w-full max-w-[420px]" />
-                <Botao variante="secundario" onClick={() => recusar(p)} disabled={motivo.trim().length < 5}><X size={16} /> Recusar</Botao>
+                <Campo rotulo="Motivo da recusa (o líder vê e faz uma nova solicitação)" value={motivo} onChange={(e) => setMotivo(e.target.value)} className="w-full max-w-[420px]" placeholder="ex.: faltou o armador; refaça com a equipe completa" autoFocus />
+                <Botao variante="perigo" onClick={() => recusar(p)} disabled={motivo.trim().length < 5} title={motivo.trim().length < 5 ? 'Escreva o motivo (mín. 5 letras)' : undefined}><X size={16} /> Recusar e devolver ao líder</Botao>
                 <Botao variante="secundario" onClick={() => setRecusando(null)}>Voltar</Botao>
               </div>
             ) : (

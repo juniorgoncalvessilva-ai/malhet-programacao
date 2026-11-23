@@ -15,7 +15,7 @@ import { type PapelParte, type ResponsavelObra, usePartes } from '@/lib/partes';
 
 interface Previa {
   gerencias: { de: string; para: string; registros: number; onde: string[] }[];
-  responsaveis: { nome: string; registros: number; gerencia: string | null; papel: PapelParte | null }[];
+  responsaveis: { nome: string; registros: number; gerencia: string | null; papel: PapelParte | null; sugestao_id: number | null }[];
 }
 
 const DICA: Record<PapelParte, string> = {
@@ -43,6 +43,7 @@ export default function PartesPage() {
   useEffect(() => { setNomes(Object.fromEntries((q.data?.partes ?? []).map((p) => [p.papel, p.nome ?? '']))); }, [q.data?.partes]);
   const prev = useQuery({ queryKey: ['partes', 'padronizar'], queryFn: () => api.get<Previa>('/partes/padronizar') });
   const [papelDe, setPapelDe] = useState<Record<string, PapelParte>>({});
+  const [alvo, setAlvo] = useState<Record<string, string>>({});
   const atualizar = () => qc.invalidateQueries({ queryKey: ['partes'] });
   const pedir = async (p: Promise<unknown>, ok: string) => { try { await p; toast.success(ok); atualizar(); } catch (e) { toast.error((e as Error).message); } };
   if (!q.data) return <Carregando />;
@@ -79,7 +80,7 @@ export default function PartesPage() {
         </div>
       </Painel>
       {editar && prev.data && (prev.data.gerencias.length > 0 || prev.data.responsaveis.length > 0) && (
-        <Painel titulo="O que já foi registrado à mão?" subtitulo="Desvios e restrições anteriores com a gerência ou o responsável escritos livremente. Padronize as gerências que casam com uma parte e inclua na lista quem já aparece como responsável."
+        <Painel titulo="O que já foi registrado à mão?" subtitulo="Desvios e restrições anteriores com a gerência ou o responsável escritos livremente. Padronize as gerências que casam com uma parte e associe cada nome antigo a quem responde pela parte (ou inclua como novo): os registros antigos passam ao nome e à gerência do padrão."
           acoes={prev.data.gerencias.length > 0 && <Botao onClick={() => pedir(api.post<{ trocados: number }>('/partes/padronizar').then((r) => toast.success(`${r.trocados} registro(s) com a gerência padronizada`)), 'Gerências padronizadas')}>
             <Sparkles size={15} /> Padronizar {prev.data.gerencias.reduce((a, g) => a + g.registros, 0)} registro(s)</Botao>}>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -93,18 +94,38 @@ export default function PartesPage() {
               {!prev.data.gerencias.length && <li className="py-2 text-m-text-muted">Nenhuma gerência para trocar.</li>}
             </ul>
             <ul className="text-[13px]">
-              {prev.data.responsaveis.slice(0, 40).map((x) => {
+              {prev.data.responsaveis.slice(0, 60).map((x) => {
                 const papel = papelDe[x.nome] ?? x.papel ?? 'contratada';
                 const pessoa = papel === 'contratada' ? (efetivo.data ?? []).find((c) => c.nome.toUpperCase() === x.nome.toUpperCase()) : undefined;
+                const escolha = alvo[x.nome] ?? (x.sugestao_id ? String(x.sugestao_id) : '');
+                const ativos = resp.filter((r) => r.ativo);
                 return (
                   <li key={x.nome} className="flex flex-wrap items-center gap-2 border-b border-m-row py-1.5">
-                    <b className="text-m-text-primary">{x.nome}</b><span className="text-[12px] text-m-text-muted">{x.registros} registro(s)</span>
-                    <select aria-label={`Parte de ${x.nome}`} value={papel} onChange={(e) => setPapelDe({ ...papelDe, [x.nome]: e.target.value as PapelParte })}
-                      className="ml-auto h-8 rounded-[8px] border border-m-stroke bg-m-surface-field px-1.5 text-[12px]">
-                      {q.data!.partes.map((p) => <option key={p.papel} value={p.papel}>{p.gerencia}</option>)}
+                    <span className="min-w-[140px] flex-1"><b className="text-m-text-primary">{x.nome}</b> <span className="text-[12px] text-m-text-muted">{x.registros} registro(s)</span>
+                      {x.sugestao_id && !alvo[x.nome] && <span className="ml-1 text-[11px] text-m-success">sugerido</span>}</span>
+                    <select aria-label={`Associar ${x.nome}`} value={escolha} onChange={(e) => setAlvo({ ...alvo, [x.nome]: e.target.value })}
+                      className="h-8 max-w-[260px] rounded-[8px] border border-m-stroke bg-m-surface-field px-1.5 text-[12px]">
+                      <option value="">associar a…</option>
+                      {q.data!.partes.map((p) => {
+                        const rs = ativos.filter((r) => r.papel === p.papel);
+                        return rs.length ? <optgroup key={p.papel} label={p.gerencia}>{rs.map((r) => <option key={r.id} value={r.id}>{r.nome}{r.funcao ? ` · ${r.funcao}` : ''}</option>)}</optgroup> : null;
+                      })}
+                      <option value="novo">+ incluir como novo…</option>
                     </select>
-                    <button type="button" className="text-[12px] font-semibold text-m-accent"
-                      onClick={() => pedir(api.post('/partes/responsaveis', pessoa ? { papel, colaborador_id: pessoa.id } : { papel, nome: x.nome }), `${x.nome} incluído${pessoa ? ' (do efetivo)' : ''}`)}>incluir</button>
+                    {escolha === 'novo' && (
+                      <select aria-label={`Parte de ${x.nome}`} value={papel} onChange={(e) => setPapelDe({ ...papelDe, [x.nome]: e.target.value as PapelParte })}
+                        className="h-8 rounded-[8px] border border-m-stroke bg-m-surface-field px-1.5 text-[12px]">
+                        {q.data!.partes.map((p) => <option key={p.papel} value={p.papel}>{p.gerencia}</option>)}
+                      </select>
+                    )}
+                    <button type="button" disabled={!escolha} className="text-[12px] font-semibold text-m-accent disabled:text-m-text-muted"
+                      onClick={() => escolha === 'novo'
+                        ? pedir(api.post<{ id: number }>('/partes/responsaveis', pessoa ? { papel, colaborador_id: pessoa.id } : { papel, nome: x.nome })
+                            .then((r) => api.post<{ trocados: number }>('/partes/padronizar/responsavel', { de: x.nome, responsavel_id: r.id })),
+                          `${x.nome} incluído${pessoa ? ' (do efetivo)' : ''} e registros antigos padronizados`)
+                        : pedir(api.post<{ trocados: number; responsavel: string }>('/partes/padronizar/responsavel', { de: x.nome, responsavel_id: Number(escolha) })
+                            .then((r) => toast.success(`${r.trocados} registro(s): ${x.nome} → ${r.responsavel}`)), 'Responsável padronizado')}>
+                      {escolha === 'novo' ? 'incluir' : 'associar'}</button>
                   </li>
                 );
               })}

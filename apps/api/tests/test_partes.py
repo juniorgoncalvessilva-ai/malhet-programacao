@@ -69,3 +69,31 @@ def test_padronizar_o_que_ja_existe(client):
     r = client.post("/api/partes/padronizar").json()
     assert r["trocados"] == 3
     assert sorted({a["gerencia"] for a in client.get("/api/restricoes").json()}) == ["CONTRATADA - CARDAN", "CONTRATANTE - VALE", "Outra"]
+
+
+def test_sugerir_responsavel():
+    cad = [(1, "WILLIAN SOUZA"), (2, "VITOR ROCHA"), (3, "VITOR LIMA")]
+    assert dom.sugerir_responsavel("Willian", cad) == 1
+    assert dom.sugerir_responsavel("vitor r.", cad) == 2
+    assert dom.sugerir_responsavel("Vitor", cad) is None  # dois Vitor: não chuta
+    assert dom.sugerir_responsavel("Bruno", cad) is None
+
+
+def test_associar_responsavel_antigo(client):
+    client.put("/api/obra/marca/nomes", json={"nome_contratada": "Cardan", "nome_contratante": "Vale"})
+    for resp, ger in (("Willian", "CARDAN"), ("willian ", "VALE"), ("Bruno", "Outra")):
+        client.post("/api/restricoes", json={"acao": f"ação de {resp}", "responsavel": resp, "gerencia": ger})
+    c = client.post("/api/efetivo/colaboradores", json={"nome": "Willian Souza", "funcao": "Engenheiro"}).json()
+    rid = client.post("/api/partes/responsaveis", json={"papel": "contratada", "colaborador_id": c["id"]}).json()["id"]
+    p = client.get("/api/partes/padronizar").json()
+    w = next(x for x in p["responsaveis"] if x["nome"].upper().strip() == "WILLIAN")
+    assert w["registros"] == 2 and w["sugestao_id"] == rid
+    r = client.post("/api/partes/padronizar/responsavel", json={"de": "Willian", "responsavel_id": rid}).json()
+    assert (r["trocados"], r["responsavel"], r["gerencia"]) == (2, "WILLIAN SOUZA", "CONTRATADA - CARDAN")
+    acoes = {a["acao"]: a for a in client.get("/api/restricoes").json()}
+    assert {(a["responsavel"], a["gerencia"]) for k, a in acoes.items() if "illian" in k} == {("WILLIAN SOUZA", "CONTRATADA - CARDAN")}
+    assert acoes["ação de Bruno"]["responsavel"] == "Bruno"
+    assert not any(x["nome"].upper().strip() == "WILLIAN" for x in client.get("/api/partes/padronizar").json()["responsaveis"])
+    outra = client.post("/api/admin/obras", json={"codigo": "OUT-ASS", "nome": "Outra"}).json()["id"]
+    assert client.post("/api/partes/padronizar/responsavel", json={"de": "Bruno", "responsavel_id": rid},
+                       headers={"X-Obra-Id": str(outra)}).status_code == 404

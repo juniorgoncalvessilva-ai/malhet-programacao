@@ -193,6 +193,9 @@ def test_reivindicar_equipe_com_aprovacao(client):
     p3 = w.post("/api/portal/pedidos", headers=h, json={"disciplina": "concreto", "membros": ["115013"]}).json()
     assert client.post(f"/api/lideres/pedidos/{p3['id']}/recusar", json={"motivo": "Esse pedreiro já está na forma"}).status_code == 200
     assert w.get("/api/portal/equipes", headers=h).json()["pedidos"][0]["motivo"] == "Esse pedreiro já está na forma"
+    # spec 140: recusado sai da fila do Planejamento na hora; o líder vê "recusado" e faz uma nova solicitação
+    assert client.get("/api/lideres/pedidos").json() == []
+    assert w.get("/api/portal/equipes", headers=h).json()["pedidos"][0]["situacao"] == "recusado"
     p4 = w.post("/api/portal/pedidos", headers=h, json={"disciplina": "concreto", "membros": ["115013"]}).json()
     assert w.delete(f"/api/portal/pedidos/{p4['id']}", headers=h).status_code == 204
     assert client.get("/api/lideres/pedidos").json() == []

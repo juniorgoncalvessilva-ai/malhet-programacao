@@ -134,5 +134,19 @@ def padronizar(s: Session, obra_id: int, aplicar: bool) -> dict:
                 trocados += fonte.trocar_gerencia(s, obra_id, t["de"], t["para"])
         s.flush()
     papel_de = {p.gerencia: p.papel for p in partes}
+    cad = [r for r in s.scalars(select(ResponsavelObraModel).where(ResponsavelObraModel.obra_id == obra_id,
+                                                                   ResponsavelObraModel.ativo.is_(True)))]
     return {"gerencias": sorted(trocas.values(), key=lambda t: -t["registros"]), "trocados": trocados,
-            "responsaveis": [{**x, "papel": papel_de.get(x["gerencia"])} for x in sorted(soltos.values(), key=lambda x: -x["registros"])]}
+            "responsaveis": [{**x, "papel": papel_de.get(x["gerencia"]), "sugestao_id": dom.sugerir_responsavel(x["nome"], [(r.id, r.nome) for r in cad])}
+                             for x in sorted(soltos.values(), key=lambda x: -x["registros"])]}
+
+
+def associar(s: Session, obra_id: int, de: str, responsavel_id: int) -> dict:
+    """O nome escrito à mão nos registros antigos passa a ser o responsável cadastrado (nome e gerência do padrão)."""
+    r = _resp(s, obra_id, responsavel_id)
+    if len(" ".join((de or "").split())) < 2:
+        raise DomainError("informe o nome antigo", "de")
+    ger = next(p["gerencia"] for p in listar(s, obra_id)["partes"] if p["papel"] == r.papel)
+    trocados = sum(fonte.trocar_responsavel(s, obra_id, de, r.nome, ger) for _, fonte in _fontes())
+    s.flush()
+    return {"trocados": trocados, "responsavel": r.nome, "gerencia": ger}
