@@ -14,7 +14,7 @@ import { emAppNativo } from '@/lib/presenca/leitores';
 export async function reduzirFoto(arq: File, maior = 1600): Promise<Blob> {
   const url = URL.createObjectURL(arq);
   try {
-    const img = await new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = url; });
+    const img = await new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não consegui abrir a imagem')); i.src = url; });
     const k = Math.min(1, maior / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas');
     c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
@@ -31,7 +31,7 @@ export const momentoDaFoto = new WeakMap<Blob, Date>();
  */
 let logoCarimbo: HTMLImageElement | null = null;
 const CHAVE_LOGO = 'malhet.logo-carimbo.';
-const abrirImagem = (src: string) => new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = src; });
+const abrirImagem = (src: string) => new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não consegui abrir a imagem')); i.src = src; });
 
 /** Logo do carimbo por endereço (o portal do encarregado, sem conta do Malhet, já tem a URL pública da logo). */
 export function definirLogoCarimbo(src: string | null) {
@@ -76,7 +76,7 @@ export const dataHoraBR = (d: Date) => `${d.toLocaleDateString('pt-BR')} ${d.toL
 export async function carimbarFoto(foto: Blob, linhas: string[], quando = momentoDaFoto.get(foto) ?? new Date()): Promise<Blob> {
   const url = URL.createObjectURL(foto);
   try {
-    const img = await new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = url; });
+    const img = await new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não consegui abrir a imagem')); i.src = url; });
     const c = document.createElement('canvas');
     c.width = img.naturalWidth; c.height = img.naturalHeight;
     const ctx = c.getContext('2d')!;

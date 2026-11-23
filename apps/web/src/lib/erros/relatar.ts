@@ -39,6 +39,38 @@ const origem = (): Relato['origem'] => {
   return /\/m(\/|$)/.test(location.pathname) ? 'campo' : 'web';
 };
 
+/**
+ * Spec 141. Sem rede (ou a conexão caiu no meio da resposta — o Safari diz só "network error") não é defeito do Malhet:
+ * a tela mostra "sem conexão" e tenta de novo, sem relato.
+ */
+const REDE = /^(TypeError: )?network error$|Failed to fetch|^Load failed$|NetworkError when attempting|net::ERR_|network connection was lost|Internet connection appears to be offline|ERR_INTERNET_DISCONNECTED/i;
+export const ehErroDeRede = (e: { message?: string } | string | null | undefined) => {
+  const t = typeof e === 'string' ? e : e?.message ?? '';
+  return REDE.test(t.trim()) || (typeof navigator !== 'undefined' && navigator.onLine === false && /fetch|network|load/i.test(t));
+};
+
+/**
+ * Spec 141. Promessa rejeitada com um Event (imagem que não abriu, FileReader, WebSocket) virava "[object Event]" — sem
+ * pista nenhuma. Descreve o evento: tipo, elemento e endereço (sem data:/blob:, que só trazem bytes).
+ */
+export function descreverMotivo(r: unknown): { mensagem: string; pilha?: string } {
+  if (r instanceof Error) return { mensagem: r.message || r.name, pilha: r.stack };
+  if (typeof Event !== 'undefined' && r instanceof Event) {
+    const alvo = r.target as (EventTarget & { tagName?: string; src?: string; currentSrc?: string; url?: string; error?: { message?: string } | null }) | null;
+    const nome = alvo?.tagName ? `<${alvo.tagName.toLowerCase()}>` : alvo?.constructor?.name ?? 'objeto';
+    const end = alvo?.currentSrc || alvo?.src || alvo?.url || '';
+    const onde = end.startsWith('data:') ? ' (imagem em memória)' : end.startsWith('blob:') ? ' (arquivo do aparelho)' : end ? ` ${end.split('?')[0].slice(0, 160)}` : '';
+    const det = alvo?.error?.message ? `: ${alvo.error.message}` : '';
+    return { mensagem: `Evento "${r.type}" em ${nome}${onde}${det}` };
+  }
+  if (r && typeof r === 'object') {
+    const o = r as { message?: unknown; stack?: unknown };
+    if (typeof o.message === 'string') return { mensagem: o.message, pilha: typeof o.stack === 'string' ? o.stack : undefined };
+    try { return { mensagem: JSON.stringify(r).slice(0, 300) }; } catch { /* circular */ }
+  }
+  return { mensagem: String(r ?? '') };
+}
+
 const RUIDO = [/ResizeObserver loop/i, /^Script error\.?$/i, /AbortError|The user aborted|signal is aborted/i, /Non-Error promise rejection captured/i];
 const ehRuido = (mensagem: string, pilha?: string) =>
   RUIDO.some((r) => r.test(mensagem)) || /(chrome|moz|safari)-extension:\/\//.test(pilha ?? '');
@@ -78,6 +110,7 @@ export function relatarErro(e: { tipo: TipoErro; mensagem: string; pilha?: strin
   if (typeof window === 'undefined') return null;
   const mensagem = (e.mensagem || '').slice(0, 500);
   if (e.tipo !== 'manual' && ehRuido(mensagem, e.pilha)) return null;
+  if ((e.tipo === 'js' || e.tipo === 'promessa' || e.tipo === 'tela') && ehErroDeRede(mensagem)) return null; // spec 141: sem rede
   const chave = `${e.tipo}|${mensagem}|${location.pathname}|${e.acao ?? ''}`;
   const agora = Date.now();
   if (e.tipo !== 'manual' && agora - (recentes.get(chave) ?? 0) < 30_000) return null;

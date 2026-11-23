@@ -77,6 +77,10 @@ def codigo_de(id_local: str) -> str:
     return f"E-{limpo[:6].upper()}"
 
 
+# spec 141: mensagens do navegador quando a rede cai (Safari, Chrome, Firefox)
+SEM_REDE = re.compile(r"^(TypeError: )?network error$|Failed to fetch$|^(TypeError: )?Load failed$|NetworkError when attempting|"
+                      r"net::ERR_|network connection was lost|Internet connection appears to be offline", re.I)
+
 @dataclass(frozen=True)
 class Relato:
     id_local: str
@@ -127,6 +131,8 @@ class Relato:
         """Consulta (GET) que deu 502/503: é a janela de deploy (a API reiniciando). Não vira relato (spec 106);
         se a API ficar fora do ar de verdade, o app manda um único "API indisponível", que não começa por GET.
         504 (tempo esgotado com a API no ar) continua sendo relato: é rota lenta, não deploy."""
+        if self.tipo in ("js", "promessa", "tela") and SEM_REDE.search(self.mensagem.strip()):
+            return True  # spec 141: a conexão do aparelho caiu ("network error" do Safari) — não é defeito
         return self.tipo == "api" and self.status in (502, 503) and self.acao.startswith("GET ")
 
     def comentar(self, texto: str) -> "Relato":

@@ -4,7 +4,7 @@ import { AlertTriangle, Check, LifeBuoy, MessageSquareText, X } from 'lucide-rea
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSessao } from '@/lib/auth/AuthProvider';
-import { comentarRelato, configurarRelatos, enviarFila, EVENTO_AVISO, relatarErro, type AvisoErro } from '@/lib/erros/relatar';
+import { comentarRelato, configurarRelatos, descreverMotivo, enviarFila, EVENTO_AVISO, relatarErro, type AvisoErro } from '@/lib/erros/relatar';
 import { abaDeVersaoAntiga, ehVersaoVelha, tratarVersaoVelha } from '@/lib/erros/versaoNova';
 
 /**
@@ -18,18 +18,19 @@ export function CapturaErros() {
   useEffect(() => { configurarRelatos(getToken); }, [getToken]);
   useEffect(() => {
     const erro = (e: ErrorEvent) => {
-      const relatar = () => relatarErro({ tipo: 'js', mensagem: e.message || String(e.error ?? ''), pilha: e.error?.stack });
+      const relatar = () => relatarErro({ tipo: 'js', mensagem: e.message || descreverMotivo(e.error).mensagem, pilha: e.error?.stack });
       if (ehVersaoVelha(e.message) || ehVersaoVelha(e.error)) { void tratarVersaoVelha().then((vai) => { if (!vai) relatar(); }); return; } // deploy novo
       relatar();
     };
     const promessa = (e: PromiseRejectionEvent) => {
-      const r = e.reason as { message?: string; stack?: string; name?: string; status?: number } | undefined;
-      if (r && typeof r.status === 'number') return; // ApiError: a própria chamada já relatou se foi do servidor
-      if (ehVersaoVelha(r ?? String(e.reason ?? ''))) { // deploy novo (specs 109/113)
-        void tratarVersaoVelha().then((vai) => { if (!vai) relatarErro({ tipo: 'promessa', mensagem: r?.message ?? String(e.reason ?? ''), pilha: r?.stack }); });
+      const r = e.reason as { status?: number } | undefined;
+      if (r && typeof r === 'object' && typeof r.status === 'number') return; // ApiError: a própria chamada já relatou se foi do servidor
+      const d = descreverMotivo(e.reason); // spec 141: Event vira descrição, não "[object Event]"
+      if (ehVersaoVelha(d.mensagem)) { // deploy novo (specs 109/113)
+        void tratarVersaoVelha().then((vai) => { if (!vai) relatarErro({ tipo: 'promessa', ...d }); });
         return;
       }
-      relatarErro({ tipo: 'promessa', mensagem: r?.message ?? String(e.reason ?? ''), pilha: r?.stack });
+      relatarErro({ tipo: 'promessa', ...d });
     };
     const mostrar = (e: Event) => setAviso((e as CustomEvent<AvisoErro>).detail);
     const online = () => { void enviarFila(); };

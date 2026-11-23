@@ -351,7 +351,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (grupos, resolver/voltou). Erro novo em tela nova não precisa de nada: já é capturado. 502/503 por até 90 s = deploy: nem relato
   nem aviso (`apiRespondeu`; servidor descarta `Relato.transitorio`); depois, um único "API indisponível". Spec 106. Chunk do build
   antigo ("Loading chunk failed") recarrega a página uma vez em vez de relatar (`lib/erros/versaoNova.ts`). Spec 109. Aba de build
-  antigo recarrega sem relatar (`tratarVersaoVelha`) e toda página confere a versão ao voltar para a aba. Spec 113.
+  antigo recarrega sem relatar (`tratarVersaoVelha`) e toda página confere a versão ao voltar para a aba. Spec 113. Rede que caiu ("network error" do Safari, `ehErroDeRede`) não é relato: `FalhaTela` mostra "Sem conexão" e
+  volta sozinha no `online`; servidor descarta (`SEM_REDE`). Promessa rejeitada com `Event` é descrita (`descreverMotivo`, nunca
+  "[object Event]"); páginas públicas têm `app/[locale]/error.tsx`. Spec 141.
 - Escala na KVM1 (spec 082): rota/dependência que usa a Session é `def`, nunca `async def` (async + Session congela a API
   com o pool cheio; `tests/test_escala.py` varre as rotas). Upload em rota síncrona lê `arquivo.file.read()`. Pool por
   `DB_POOL_*`; gzip na API; tempo real confere a cada 15 s. Leitura cara = `app/shared/cache_leitura.py` (chave com a

@@ -11,8 +11,8 @@ type Inicial = NonNullable<React.ComponentProps<typeof Excalidraw>['initialData'
 // fontes servidas pelo próprio Malhet (scripts/copiar-excalidraw.mjs), guardadas pelo service worker para funcionar offline
 if (typeof window !== 'undefined') (window as unknown as { EXCALIDRAW_ASSET_PATH: string }).EXCALIDRAW_ASSET_PATH = '/excalidraw/';
 
-const lerDataUrl = (b: Blob) => new Promise<string>((ok, falha) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = falha; r.readAsDataURL(b); });
-const abrir = (src: string) => new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = src; });
+const lerDataUrl = (b: Blob) => new Promise<string>((ok, falha) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => falha(r.error ?? new Error('Não consegui ler o arquivo')); r.readAsDataURL(b); });
+const abrir = (src: string) => new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não consegui abrir a imagem')); i.src = src; });
 
 /**
  * Editor da marcação (spec 122): a foto entra travada no fundo do Excalidraw e a pessoa circula, aponta com seta,

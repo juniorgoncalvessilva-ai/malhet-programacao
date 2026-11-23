@@ -158,3 +158,17 @@ def test_janela_de_deploy_nao_vira_relato(client):
     assert r == {"codigos": [codigo_de(x["id_local"]) for x in (fora, salvar, lento)], "recusados": 0}
     assert Relato.de_entrada(**deploy[0]).transitorio is True
     assert Relato.de_entrada(**{**deploy[0], "status": 500}).transitorio is False
+
+
+def test_rede_que_caiu_nao_vira_relato(client):
+    """Spec 141: "network error" (Safari), "Failed to fetch" e afins são a conexão do aparelho caindo — aceita e descarta;
+    o resto continua sendo relato (inclusive o "[object Event]" já descrito pelo app)."""
+    base = {"origem": "campo", "local": "/m"}
+    rede = [{**base, "id_local": _id(), "tipo": t, "mensagem": m} for t, m in
+            (("tela", "network error"), ("tela", "TypeError: Load failed"), ("promessa", "Failed to fetch"),
+             ("js", "NetworkError when attempting to fetch resource."))]
+    evento = {**base, "id_local": _id(), "tipo": "promessa", "mensagem": 'Evento "error" em <img> (imagem em memória)'}
+    manual = {**base, "id_local": _id(), "tipo": "manual", "mensagem": "network error", "comentario": "não abriu"}
+    r = client.post("/api/erros", json={"relatos": [*rede, evento, manual]}).json()
+    assert r == {"codigos": [codigo_de(x["id_local"]) for x in (evento, manual)], "recusados": 0}
+    assert Relato.de_entrada(**{**rede[0], "mensagem": "network error ao salvar o lançamento"}).transitorio is False

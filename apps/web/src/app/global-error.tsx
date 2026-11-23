@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { relatarErro } from '@/lib/erros/relatar';
+import { ehErroDeRede, relatarErro } from '@/lib/erros/relatar';
 import { ehVersaoVelha, tratarVersaoVelha } from '@/lib/erros/versaoNova';
 
 /** Último recurso (spec 098): até o layout raiz quebrou — relata e oferece recarregar, sem depender do resto do app. */
 export default function ErroGeral({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     const relatar = () => relatarErro({ tipo: 'tela', mensagem: error.message || 'O app não abriu', pilha: error.stack });
+    if (ehErroDeRede(error)) return; // spec 141: sem rede não é defeito
     if (ehVersaoVelha(error)) { void tratarVersaoVelha().then((vai) => { if (!vai) relatar(); }); return; } // deploy novo (specs 109/113)
     relatar();
   }, [error]);
