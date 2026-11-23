@@ -7,7 +7,7 @@ import { Abas } from '@/components/Obra/Abas';
 import { ResumoProgramacao } from '@/components/Obra/ResumoProgramacao';
 import { AgruparPor, SequenciaProgramacao } from '@/components/Obra/SequenciaProgramacao';
 import { useQuery } from '@tanstack/react-query';
-import { Calculator, CopyPlus, Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Calculator, Copy, CopyPlus, Download, FileCheck2, FileSpreadsheet, Gauge, Hand, Lock, Pencil, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { Calculado } from '@/components/Obra/Calculado';
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -122,6 +122,12 @@ export default function MontarPage() {
       : a.post<{ aviso: string | null }>(`/programacoes/${id}/linhas`, corpo);
   }, chave);
   const excluir = useAcao((a, lid: number) => a.del(`/programacoes/${id}/linhas/${lid}`), chave);
+  // spec 136: duplicar a linha do IWP (ou o grupo de linhas do CWP) no mesmo CWA — outra equipe na mesma atividade
+  const duplicar = useAcao((a, linhas: number[]) => a.post<{ criadas: number }>(`/programacoes/${id}/linhas/duplicar`, { linhas }), chave);
+  const duplicarLinhas = (linhas: number[], rotulo: string) => duplicar.mutate(linhas, {
+    onSuccess: (r) => toast.success(`${rotulo}: ${r.criadas} linha(s) logo abaixo, no mesmo CWA — escolha a equipe e a quantidade do período`),
+    onError: (e) => toast.error((e as Error).message),
+  });
   const emitir = useAcao((a) => a.post<{ revisao: number }>(`/programacoes/${id}/emitir`), chave);
   const reabrir = useAcao((a) => a.post(`/programacoes/${id}/reabrir`), chave);
   const baseCap = useAcao((a, base: string) => a.put(`/programacoes/${id}/base-capacidade`, { base }), chave);
@@ -475,6 +481,10 @@ export default function MontarPage() {
                         {inicio && cwp && (
                           <tr><td colSpan={v.dias.length + 8} className="border-b border-m-stroke-subtle bg-m-info-subtle px-5 py-1 text-[11.5px] font-semibold text-m-info">
                             CWP {cwp.codigo ? `${cwp.codigo} · ` : ''}{cwp.texto}
+                            {rascunho && pode('encarregado') && <button type="button" className="ml-3 inline-flex items-center gap-1 font-semibold underline" disabled={duplicar.isPending}
+                              title="Duplica todas as linhas deste CWP logo abaixo, no mesmo CWA (ex.: outra equipe)"
+                              onClick={() => duplicarLinhas(porCwp(a.linhas).filter((x) => x.cwp?.codigo === cwp.codigo && x.cwp?.texto === cwp.texto).map((x) => x.ln.id), `CWP ${cwp.texto} duplicado`)}>
+                              <Copy size={12} /> duplicar grupo</button>}
                           </td></tr>
                         )}
                         <tr className="border-b border-m-row align-top" style={zebra(ln.id)}>
@@ -545,6 +555,8 @@ export default function MontarPage() {
                           <td className="whitespace-nowrap px-1 py-1.5">
                             {rascunho && pode('encarregado') && <>
                               <button type="button" aria-label="Editar linha" className="p-1.5 text-m-text-muted hover:text-m-accent" onClick={() => abrirEdicao(ln)}><Pencil size={15} /></button>
+                              <button type="button" aria-label="Duplicar linha" title="Duplicar no mesmo CWA (ex.: outra equipe)" className="p-1.5 text-m-text-muted hover:text-m-accent" disabled={duplicar.isPending}
+                                onClick={() => duplicarLinhas([ln.id], `${ln.codigo_simova} duplicada`)}><Copy size={15} /></button>
                               <button type="button" aria-label="Excluir linha" className="p-1.5 text-m-text-muted hover:text-m-danger" onClick={async () => (await confirmar({ titulo: `Excluir a linha ${ln.codigo_simova} ${ln.descricao}?`, mensagem: 'Os valores previstos e realizados desta linha também saem da programação.' })) && excluir.mutate(ln.id)}><Trash2 size={15} /></button>
                             </>}
                           </td>

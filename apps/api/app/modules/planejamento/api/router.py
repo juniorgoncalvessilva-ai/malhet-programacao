@@ -289,7 +289,7 @@ def linhas_da_wbs(pid: int, d: DaWbsIn, s: Session = Depends(get_session), c: Co
 
     p = sv.obter(s, c.obra_id, pid)
     sv.exigir_rascunho(p)
-    iwps, vazios = iwps_abaixo(s, c.obra_id, d.nos)
+    iwps, vazios, inexistentes = iwps_abaixo(s, c.obra_id, d.nos)
     ja = {ln.wbs_no_id for ln in p.linhas if ln.wbs_no_id}
     criadas, avisos = [], []
     for i in iwps:
@@ -301,7 +301,52 @@ def linhas_da_wbs(pid: int, d: DaWbsIn, s: Session = Depends(get_session), c: Co
         if r.get("aviso"):
             avisos.append(r["aviso"])
     return {"criadas": len(criadas), "ja_estavam": len([i for i in iwps if i in ja]), "nos_sem_iwp": vazios,
-            "avisos": avisos[:20]}
+            "nos_inexistentes": inexistentes, "avisos": avisos[:20]}
+
+
+class DuplicarLinhasIn(BaseModel):
+    linhas: list[int]  # a linha do IWP ou todas as linhas de um grupo/CWP
+    equipe_id: int | None = None  # equipe da cópia (vazio = a mesma)
+    responsavel: str | None = None
+
+
+@router.post("/programacoes/{pid}/linhas/duplicar", status_code=201)
+def duplicar_linhas(pid: int, d: DuplicarLinhasIn, s: Session = Depends(get_session), c: ContextoObra = Depends(programar)):
+    """Duplica linhas na programação (spec 136): o mesmo IWP/grupo no MESMO CWA — por exemplo, outra equipe na mesma
+    atividade. A cópia vem logo abaixo, sem os valores dos dias, sem a quantidade do período (a divisão é de quem programa) e
+    sem predecessoras."""
+    p = sv.obter(s, c.obra_id, pid)
+    sv.exigir_rascunho(p)
+    if d.equipe_id is not None:
+        from app.modules.equipes.infra.models import EquipeModel
+
+        e = s.get(EquipeModel, d.equipe_id)
+        if e is None or e.obra_id != c.obra_id:
+            raise NotFoundError("Equipe", d.equipe_id)
+    por_id = {ln.id: ln for ln in p.linhas}
+    faltam = [i for i in d.linhas if i not in por_id]
+    if faltam or not d.linhas:
+        raise NotFoundError("Linha", faltam[0] if faltam else 0)
+    ordem = sorted(p.linhas, key=lambda x: x.ordem)
+    origem = [ln for ln in ordem if ln.id in set(d.linhas)]
+    ultima = origem[-1].ordem
+    for ln in ordem:  # abre espaço logo abaixo do grupo duplicado
+        if ln.ordem > ultima:
+            ln.ordem += len(origem)
+    novas = []
+    for k, o in enumerate(origem, start=1):
+        n = LinhaProgramacaoModel(
+            area_id=o.area_id, tipo_id=o.tipo_id, item_simova_id=o.item_simova_id, item_pq=o.item_pq, wbs_no_id=o.wbs_no_id,
+            etapa_nome=o.etapa_nome, etapa_percentual=o.etapa_percentual, sem_avanco=o.sem_avanco, id_crono=o.id_crono,
+            plano_item_id=o.plano_item_id, equipe_id=d.equipe_id if d.equipe_id is not None else o.equipe_id,
+            qtd_projeto=o.qtd_projeto, qtd_periodo=None, natureza=o.natureza, modo_previsto=o.modo_previsto,
+            responsavel=(d.responsavel or o.responsavel), observacao=o.observacao,
+            ssma_tecnico=o.ssma_tecnico, ssma_rac=o.ssma_rac, ssma_pts=o.ssma_pts, ssma_art=o.ssma_art, ssma_pto=o.ssma_pto,
+            ssma_ata=o.ssma_ata, ordem=ultima + k)
+        p.linhas.append(n)
+        novas.append(n)
+    s.flush()
+    return {"criadas": len(novas), "ids": [n.id for n in novas]}
 
 
 class AtividadeLinhaIn(BaseModel):

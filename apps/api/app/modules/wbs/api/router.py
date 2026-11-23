@@ -202,6 +202,75 @@ def criar(d: NoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(
     return {"id": n.id, "codigo": codigos(s, c.obra_id)[n.id].codigo}
 
 
+class DuplicarIn(BaseModel):
+    cwp_id: int | None = None  # CWP de destino, no mesmo CWA
+    novo_cwp_elemento: str | None = None  # ou um CWP novo nesse CWA
+    novo_cwp_complemento: str | None = None
+    quantidades: bool = False  # copiar as quantidades digitadas (vazio = take-off da TAG)
+
+
+@router.post("/nos/{nid}/duplicar", status_code=201)
+def duplicar(nid: int, d: DuplicarIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    """Duplica um grupo (com os IWPs e as etapas) ou um IWP para outro CWP do MESMO CWA (spec 136) — existente ou criado
+    aqui. O que o CWP de destino já tem não repete; a atividade do cronograma não vai junto (é outra execução)."""
+    o = _no(s, c, nid)
+    if o.tipo not in ("grupo", "iwp"):
+        raise DomainError("duplique um grupo ou um IWP", "tipo")
+    todos = nos(s, c.obra_id)
+    grupo_o = o if o.tipo == "grupo" else todos[o.pai_id]
+    cwp_o = todos[grupo_o.pai_id]
+    area = todos[cwp_o.pai_id]
+    if d.cwp_id:
+        destino = _no(s, c, d.cwp_id)
+        if destino.tipo != "cwp" or destino.pai_id != area.id:
+            raise DomainError("o destino precisa ser um CWP do mesmo CWA", "cwp_id")
+    elif d.novo_cwp_elemento:
+        el, comp = dom.validar_cwp(d.novo_cwp_elemento, d.novo_cwp_complemento)
+        irmaos = [x for x in todos.values() if x.pai_id == area.id]
+        destino = next((x for x in irmaos if (x.elemento or "").lower() == el.lower() and (x.complemento or "").lower() == (comp or "").lower()), None)
+        if destino is None:
+            destino = WbsNoModel(obra_id=c.obra_id, pai_id=area.id, tipo="cwp", elemento=el, complemento=comp,
+                                 seq=max([x.seq for x in irmaos], default=0) + 1)
+            s.add(destino)
+            s.flush()
+            todos[destino.id] = destino
+    else:
+        raise DomainError("escolha o CWP de destino (no mesmo CWA) ou escreva um novo", "cwp_id")
+    if destino.id == cwp_o.id:
+        raise DomainError("escolha outro CWP: neste já está", "cwp_id")
+    filhos: dict[int, list[WbsNoModel]] = {}
+    for x in todos.values():
+        if x.pai_id:
+            filhos.setdefault(x.pai_id, []).append(x)
+    grupo_d = next((x for x in filhos.get(destino.id, []) if x.tipo == "grupo" and x.grupo_id == grupo_o.grupo_id), None)
+    if grupo_d is None:
+        grupo_d = WbsNoModel(obra_id=c.obra_id, pai_id=destino.id, tipo="grupo", grupo_id=grupo_o.grupo_id, seq=grupo_o.seq)
+        s.add(grupo_d)
+        s.flush()
+    ja = {x.tipo_atividade_id for x in filhos.get(grupo_d.id, []) if x.tipo == "iwp"}
+    seq = max([x.seq for x in filhos.get(grupo_d.id, [])], default=0)
+    origem = [o] if o.tipo == "iwp" else sorted([x for x in filhos.get(grupo_o.id, []) if x.tipo == "iwp" and x.ativo], key=lambda x: x.seq)
+    criados = repetidos = 0
+    for i in origem:
+        if i.tipo_atividade_id in ja:
+            repetidos += 1
+            continue
+        seq += 1
+        novo = WbsNoModel(obra_id=c.obra_id, pai_id=grupo_d.id, tipo="iwp", seq=seq, tipo_atividade_id=i.tipo_atividade_id,
+                          item_pq=i.item_pq, quantidade=i.quantidade if d.quantidades else None)
+        s.add(novo)
+        s.flush()
+        for e in sorted([x for x in filhos.get(i.id, []) if x.tipo == "etapa"], key=lambda x: x.seq):
+            s.add(WbsNoModel(obra_id=c.obra_id, pai_id=novo.id, tipo="etapa", seq=e.seq, elemento=e.elemento, percentual=e.percentual,
+                             sem_avanco=e.sem_avanco, etapa_id=e.etapa_id, quantidade=e.quantidade if d.quantidades else None,
+                             ativo=e.ativo))
+        ja.add(i.tipo_atividade_id)
+        criados += 1
+    s.flush()
+    cods = codigos(s, c.obra_id)
+    return {"cwp_id": destino.id, "cwp": cods[destino.id].caminho, "criados": criados, "ja_estavam": repetidos}
+
+
 @router.put("/nos/{nid}")
 def editar(nid: int, d: NoIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
     """Edita o texto do CWP, a quantidade do IWP, a observação e a situação (área, grupo e item não mudam)."""

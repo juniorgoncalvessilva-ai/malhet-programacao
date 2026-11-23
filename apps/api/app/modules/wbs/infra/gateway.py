@@ -82,9 +82,10 @@ def iwp_para_linha(s: Session, obra_id: int, no_id: int) -> IwpParaLinha:
                         etapa.elemento if etapa else None, etapa.percentual if etapa else None, bool(etapa and etapa.sem_avanco))
 
 
-def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], list[int]]:
+def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], list[int], list[int]]:
     """IWPs ativos dos nós escolhidos (o próprio IWP ou todos abaixo de área/CWP/grupo), na ordem do código.
-    Devolve (iwps, nós escolhidos sem nenhum IWP abaixo)."""
+    Devolve (iwps, nós escolhidos sem nenhum IWP abaixo, nós que não existem mais nesta obra). Um nó que sumiu (a tela
+    estava com a WBS antiga) não derruba o envio dos outros; se nenhum existe, avisa para atualizar."""
     todos = nos(s, obra_id)
     filhos: dict[int, list[WbsNoModel]] = {}
     for n in todos.values():
@@ -92,11 +93,15 @@ def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], li
             filhos.setdefault(n.pai_id, []).append(n)
     cods = codigos(s, obra_id, todos)
     achados: dict[int, None] = {}
-    vazios = []
+    vazios: list[int] = []
+    inexistentes = [i for i in ids if i not in todos]
+    if ids and len(inexistentes) == len(ids):
+        raise DomainError("os itens escolhidos não estão mais na WBS desta obra: a tela estava desatualizada — "
+                          "atualize a página e escolha de novo", "nos")
     for i in ids:
         n = todos.get(i)
         if n is None:
-            raise NotFoundError("Nó da WBS", i)
+            continue
         antes = len(achados)
         pilha = [n]
         while pilha:
@@ -114,7 +119,8 @@ def iwps_abaixo(s: Session, obra_id: int, ids: list[int]) -> tuple[list[int], li
                 pilha.extend(filhos.get(x.id, []))
         if len(achados) == antes:
             vazios.append(i)
-    return sorted(achados, key=lambda k: [int(p) if p.isdigit() else p for p in cods[k].codigo.replace(".", "-").split("-")]), vazios
+    ordem = sorted(achados, key=lambda k: [int(p) if p.isdigit() else p for p in cods[k].codigo.replace(".", "-").split("-")])
+    return ordem, vazios, inexistentes
 
 
 def itens_da_area(s: Session, obra_id: int, area_id: int) -> list[dict]:

@@ -2,7 +2,7 @@
 
 /** Obra corrente: lista as obras do usuário, lembra a escolhida e manda X-Obra-Id em todas as chamadas. */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api/client';
 import { useSessao } from '@/lib/auth/AuthProvider';
 import type { MinhaObra, PapelObra } from '@/lib/api/types';
@@ -75,6 +75,15 @@ export function ObraProvider({ children }: { children: React.ReactNode }) {
     // dados de outra obra não podem ficar no cache
     qc.removeQueries({ predicate: (q) => !['eu', 'obras-minhas', 'admin-obras', 'admin-usuarios'].includes(String(q.queryKey[0])) });
   }, [qc]);
+
+  // a obra trocou por qualquer caminho (escolher, obra salva que saiu da lista…): nada de outra obra fica no cache
+  const obraAnterior = useRef<number | null>(null);
+  useEffect(() => {
+    if (obraAnterior.current !== null && obraId !== null && obraAnterior.current !== obraId) {
+      qc.removeQueries({ predicate: (q) => !['eu', 'obras-minhas', 'admin-obras', 'admin-usuarios'].includes(String(q.queryKey[0])) });
+    }
+    if (obraId !== null) obraAnterior.current = obraId;
+  }, [obraId, qc]);
 
   const obraReal = lista.data?.find((o) => o.id === obraId) ?? null;
   // menu do computador de cada perfil nesta obra (spec 090); guardado no aparelho para a barra não piscar

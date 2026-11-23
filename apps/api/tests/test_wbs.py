@@ -85,3 +85,8 @@ def test_enviar_da_wbs_para_a_programacao(client):
     # reenviar não duplica
     r = client.post(f"/api/programacoes/{p['id']}/linhas/da-wbs", json={"nos": [i2["id"], a["id"]]}).json()
     assert (r["criadas"], r["ja_estavam"]) == (0, 2)
+    # tela com a WBS antiga: nó que não existe mais (ou de outra obra) não derruba o envio dos outros
+    r = client.post(f"/api/programacoes/{p['id']}/linhas/da-wbs", json={"nos": [999999, i1["id"]]})
+    assert r.status_code == 200 and r.json()["nos_inexistentes"] == [999999] and r.json()["ja_estavam"] == 1
+    r = client.post(f"/api/programacoes/{p['id']}/linhas/da-wbs", json={"nos": [999999]})
+    assert r.status_code == 422 and "atualize a página" in r.text

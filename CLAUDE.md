@@ -106,6 +106,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `excluir_emissao`; a anterior volta a vigente; última de concluída não sai; `RevisoesProgramacao`). Spec 060. Trocar o item da PQ da
   linha também emitida (`PUT …/linhas/{lid}/item-pq`, `item_pq_linha.py`, `TrocarItemPq`; tipo do item novo ou criado no grupo,
   IWP da WBS junto; a revisão emitida não muda, sai na próxima). Spec 099.
+  Duplicar no mesmo CWA (spec 136): WBS `POST /wbs/nos/{id}/duplicar` (grupo com IWPs/etapas ou IWP → outro CWP do mesmo CWA,
+  existente ou novo; não repete o que o destino tem) e programação `POST /programacoes/{pid}/linhas/duplicar` ("Duplicar linha" e
+  "duplicar grupo" no cabeçalho do CWP; cópia logo abaixo, sem dias/qtd do período). Envio da WBS pula nó que sumiu
+  (`iwps_abaixo` → `nos_inexistentes`); `useWbs` = `['wbs', obra]` sempre atual e a seleção é podada à árvore.
   Importar itens de outra programação (spec 116, `importar_linhas`, `ImportarProgramacao`): a anterior do mesmo tipo vem sugerida
   (`/importar/origens`, prévia `/importar/{de}`, `POST /importar`; criação com `copiar_de` usa a mesma regra), sem valores do dia,
   quantidade vazia ou o que faltou (`saldo_periodo`), concluída no projeto fica fora e linha repetida não duplica. Realizado confere o

@@ -275,7 +275,7 @@ def da_wbs(d: DaWbsIn, s: Session = Depends(get_session), c: ContextoObra = Depe
     from app.modules.referencias.infra.resolvedor import ResolvedorReferencias
     from app.modules.wbs.infra.gateway import iwps_abaixo
 
-    iwps, vazios = iwps_abaixo(s, c.obra_id, d.nos)
+    iwps, vazios, inexistentes = iwps_abaixo(s, c.obra_id, d.nos)
     ja = set(s.scalars(select(PlanoItemModel.wbs_no_id).where(PlanoItemModel.obra_id == c.obra_id,
                                                               PlanoItemModel.wbs_no_id.in_(iwps or [0]))))
     vig = ResolvedorReferencias(s, c.obra_id).versoes_vigentes().get("CRONOGRAMA")
@@ -300,7 +300,7 @@ def da_wbs(d: DaWbsIn, s: Session = Depends(get_session), c: ContextoObra = Depe
         s.flush()
         criados.append(it.id)
     return {"criados": len(criados), "ja_estavam": len([i for i in iwps if i in ja]), "sem_data": sem_data,
-            "nos_sem_iwp": vazios}
+            "nos_sem_iwp": vazios, "nos_inexistentes": inexistentes}
 
 
 @router.post("/itens/{iid}/restricoes", status_code=201)

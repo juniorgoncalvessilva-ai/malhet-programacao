@@ -35,7 +35,10 @@ export function useFuncoesEfetivo() {
 }
 export function useWbs() {
   const api = useApi();
-  return useQuery({ queryKey: ['wbs'], queryFn: () => api.get<{ arvore: NoWbs[] }>('/wbs') });
+  const obraId = useObraOpcional()?.obra?.id;
+  // a WBS muda por várias telas (Frentes, Catálogo, cronograma): ao abrir, vem sempre a atual — e nunca a de outra obra
+  return useQuery({ queryKey: ['wbs', obraId], enabled: !!obraId, staleTime: 0, refetchOnMount: 'always',
+    queryFn: () => api.get<{ arvore: NoWbs[] }>('/wbs') });
 }
 
 export function useSetores() {

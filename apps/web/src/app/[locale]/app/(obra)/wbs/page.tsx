@@ -1,9 +1,9 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarRange, ChevronDown, ChevronRight, FileUp, Link2, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { CalendarRange, ChevronDown, ChevronRight, Copy, FileUp, Link2, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { BuscaAtividadeCrono } from '@/components/Obra/AssociarAtividade';
 import { toast } from 'sonner';
 import { Calculado, nbr, type MemoriaCalculo } from '@/components/Obra/Calculado';
@@ -90,6 +90,8 @@ export default function WbsPage() {
   const [buscando, setBuscando] = useState<number | null>(null);
   const assoc = useQuery({ queryKey: ['wbs', 'associacao'], enabled: associar, queryFn: () => api.get<RespAssoc>('/wbs/associacao') });
   const assocPorId = useMemo(() => new Map((assoc.data?.nos ?? []).map((x) => [x.id, x])), [assoc.data]);
+  // spec 136: duplicar grupo/IWP para outro CWP do mesmo CWA
+  const [dup, setDup] = useState<{ no: NoWbs; cwp_id: string; elemento: string; complemento: string; qtd: boolean } | null>(null);
   const [plano, setPlano] = useState<{ inicio: string; fim: string; equipe_id: string } | null>(null);
   const porId = useMemo(() => { const m = new Map<number, NoWbs>(); const ir = (n: NoWbs) => { m.set(n.id, n); n.filhos.forEach(ir); }; arvore.forEach(ir); return m; }, [arvore]);
   const iwpsSel = useMemo(() => {
@@ -103,20 +105,36 @@ export default function WbsPage() {
     sel.forEach((id) => { const n = porId.get(id); if (n) ir(n); });
     return [...out.values()].sort((a, b) => a.codigo.localeCompare(b.codigo, 'pt-BR', { numeric: true }));
   }, [sel, porId]);
+  // a seleção só guarda o que está na WBS que a tela mostra (a árvore recarregou: o que sumiu sai da seleção)
+  useEffect(() => { setSel((x) => { const n = new Set([...x].filter((id) => porId.has(id))); return n.size === x.size ? x : n; }); }, [porId]);
   const prog = programacoes.data?.find((p) => String(p.id) === destino);
+  const cwpDe = (n: NoWbs) => { let x: NoWbs | undefined = n; while (x && x.tipo !== 'cwp') x = x.pai_id ? porId.get(x.pai_id) : undefined; return x; };
+  const duplicarNo = async () => {
+    if (!dup) return;
+    try {
+      const r = await api.post<{ cwp: string; criados: number; ja_estavam: number }>(`/wbs/nos/${dup.no.id}/duplicar`, {
+        cwp_id: dup.cwp_id && dup.cwp_id !== 'novo' ? Number(dup.cwp_id) : null,
+        novo_cwp_elemento: dup.cwp_id === 'novo' ? dup.elemento : null, novo_cwp_complemento: dup.cwp_id === 'novo' ? dup.complemento : null,
+        quantidades: dup.qtd,
+      });
+      toast.success(`${r.criados} IWP(s) duplicado(s) em ${r.cwp}${r.ja_estavam ? ` · ${r.ja_estavam} já estavam lá` : ''}`);
+      setDup(null); atualizar();
+    } catch (e) { toast.error((e as Error).message); }
+  };
   const marcar = (id: number) => setSel((x) => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const enviar = async () => {
     if (!envio || !prog) return;
     setEnviando(true);
     try {
       const qtd = Object.fromEntries(Object.entries(envio.qtd).filter(([, v]) => v.trim() !== '').map(([k2, v]) => [k2, Number(v.replace(',', '.'))]));
-      const r = await api.post<{ criadas: number; ja_estavam: number; nos_sem_iwp: number[]; avisos: string[] }>(`/programacoes/${prog.id}/linhas/da-wbs`, {
-        nos: [...sel], equipe_id: envio.equipe_id ? Number(envio.equipe_id) : null, natureza: envio.natureza, qtd_periodo: qtd,
+      const r = await api.post<{ criadas: number; ja_estavam: number; nos_sem_iwp: number[]; nos_inexistentes?: number[]; avisos: string[] }>(`/programacoes/${prog.id}/linhas/da-wbs`, {
+        nos: [...sel].filter((id) => porId.has(id)), equipe_id: envio.equipe_id ? Number(envio.equipe_id) : null, natureza: envio.natureza, qtd_periodo: qtd,
       });
       toast.success(`${r.criadas} linha(s) enviada(s) para ${prog.titulo}${r.ja_estavam ? ` · ${r.ja_estavam} já estavam lá` : ''}`);
       r.avisos.slice(0, 3).forEach((a) => toast.warning(a));
+      if (r.nos_inexistentes?.length) toast.warning(`${r.nos_inexistentes.length} item(ns) escolhido(s) não estavam mais na WBS: a árvore foi atualizada`);
       setEnvio(null); setSel(new Set()); atualizar();
-    } catch (e) { toast.error((e as Error).message); } finally { setEnviando(false); }
+    } catch (e) { toast.error((e as Error).message); atualizar(); } finally { setEnviando(false); }
   };
   const ligar = async (n: { id: number; codigo: string }, id: string | null, quieto = false) => {
     try {
@@ -137,7 +155,7 @@ export default function WbsPage() {
     setEnviando(true);
     try {
       const r = await api.post<{ criados: number; ja_estavam: number; sem_data: number }>('/planos/itens/da-wbs', {
-        nos: [...sel], inicio: plano.inicio || null, fim: plano.fim || null, equipe_id: plano.equipe_id ? Number(plano.equipe_id) : null,
+        nos: [...sel].filter((id) => porId.has(id)), inicio: plano.inicio || null, fim: plano.fim || null, equipe_id: plano.equipe_id ? Number(plano.equipe_id) : null,
       });
       toast.success(`${r.criados} atividade(s) no plano de 90 dias${r.ja_estavam ? ` · ${r.ja_estavam} já estavam` : ''}`);
       if (r.sem_data) toast.warning(`${r.sem_data} sem data: informe início e fim (não estão ligadas a uma atividade do cronograma com datas)`, { duration: 9000 });
@@ -313,6 +331,8 @@ export default function WbsPage() {
               {n.tipo === 'iwp' && <button type="button" title="Cria as etapas do critério de avanço do item da PQ" className="mr-2 text-[12px] font-semibold text-m-accent underline-offset-2 hover:underline" onClick={() => aplicarCriterio(n)}>critério</button>}
               {filho && <button type="button" className="mr-2 text-[12px] font-semibold underline-offset-2 hover:underline" onClick={() => { setErro(null); setForm(vazio(filho, n)); }}><Plus size={12} className="mr-0.5 inline" />{ROTULO[filho]}</button>}
               {<button type="button" aria-label={`Editar ${n.codigo}`} className="p-1 opacity-80 hover:opacity-100" onClick={() => { setErro(null); setForm({ ...vazio(n.tipo), modo: 'editar', no: n, elemento: n.elemento ?? '', complemento: n.complemento ?? '', quantidade: n.quantidade != null ? String(n.quantidade) : '', observacao: n.observacao ?? '', ativo: n.ativo, percentual: n.percentual != null ? String(+(n.percentual * 100).toFixed(4)) : '', sem_avanco: !!n.sem_avanco }); }}><Pencil size={13} /></button>}
+              {(n.tipo === 'grupo' || n.tipo === 'iwp') && <button type="button" aria-label={`Duplicar ${n.codigo}`} title="Duplicar para outro CWP do mesmo CWA" className="p-1 opacity-80 hover:opacity-100"
+                onClick={() => { setDup({ no: n, cwp_id: '', elemento: '', complemento: '', qtd: false }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Copy size={13} /></button>}
               {!n.filhos.length && !n.linhas && <button type="button" aria-label={`Excluir ${n.codigo}`} className="p-1 opacity-80 hover:text-m-danger hover:opacity-100" onClick={() => excluir(n)}><Trash2 size={13} /></button>}
             </>}
           </td>
@@ -369,6 +389,30 @@ export default function WbsPage() {
         </Painel>
       )}
       {form && form.tipo === 'area' && form.modo === 'novo' && <Painel titulo="Nova área na WBS">{formInline(form)}</Painel>}
+      {dup && (() => {
+        const cwp = cwpDe(dup.no);
+        const area = cwp?.pai_id ? porId.get(cwp.pai_id) : undefined;
+        const opcoes = (area?.filhos ?? []).filter((x) => x.tipo === 'cwp' && x.id !== cwp?.id);
+        return (
+          <Painel titulo={`Duplicar ${dup.no.tipo === 'grupo' ? 'o grupo' : 'o IWP'} ${dup.no.codigo} · ${dup.no.titulo}`}
+            subtitulo={`Para outro CWP do mesmo CWA (${area?.codigo ?? ''} · ${area?.titulo ?? ''}). ${dup.no.tipo === 'grupo' ? 'Vão os IWPs e as etapas; ' : 'Vão as etapas; '}o que o CWP de destino já tem não repete. A atividade do cronograma não vai junto.`}>
+            <div className="flex flex-wrap items-end gap-3">
+              <Selecao rotulo="CWP de destino" value={dup.cwp_id} onChange={(e) => setDup({ ...dup, cwp_id: e.target.value })} className="min-w-[320px]">
+                <option value="">Escolha…</option>
+                {opcoes.map((x) => <option key={x.id} value={x.id}>{x.codigo} · {x.titulo}</option>)}
+                <option value="novo">+ CWP novo neste CWA</option>
+              </Selecao>
+              {dup.cwp_id === 'novo' && <>
+                <Campo rotulo="Elemento" value={dup.elemento} onChange={(e) => setDup({ ...dup, elemento: e.target.value })} placeholder="Radier" />
+                <Campo rotulo="Complemento" value={dup.complemento} onChange={(e) => setDup({ ...dup, complemento: e.target.value })} placeholder="Sapata 2B" />
+              </>}
+              <label className="flex h-10 items-center gap-2 text-[13px]"><input type="checkbox" checked={dup.qtd} onChange={(e) => setDup({ ...dup, qtd: e.target.checked })} /> copiar as quantidades digitadas</label>
+              <Botao onClick={duplicarNo} disabled={!dup.cwp_id || (dup.cwp_id === 'novo' && dup.elemento.trim().length < 2)}>Duplicar</Botao>
+              <Botao variante="fantasma" onClick={() => setDup(null)}>Cancelar</Botao>
+            </div>
+          </Painel>
+        );
+      })()}
       {envio && prog && (
         <Painel titulo={`Enviar ${iwpsSel.length} IWP(s) para ${prog.titulo}`}>
           <div className="flex flex-wrap items-end gap-3">
