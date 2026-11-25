@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronLeft } from 'lucide-react';
-import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { Link } from '@/i18n/navigation';
 
 /** Cabeçalho das telas internas do campo: voltar (44 px), título e subtítulo. */
@@ -23,6 +23,11 @@ const campoCls = 'w-full rounded-[14px] border border-m-stroke bg-m-surface-fiel
 
 export function CampoM({ rotulo, ...p }: InputHTMLAttributes<HTMLInputElement> & { rotulo: string }) {
   return <label className="flex flex-col gap-1.5 text-[13px] font-medium text-m-text-secondary">{rotulo}<input {...p} className={`${campoCls} h-12`} /></label>;
+}
+
+/** Lista suspensa no tamanho do campo do celular (48 px). */
+export function SelecaoM({ rotulo, children, ...p }: SelectHTMLAttributes<HTMLSelectElement> & { rotulo: string }) {
+  return <label className="flex flex-col gap-1.5 text-[13px] font-medium text-m-text-secondary">{rotulo}<select {...p} className={`${campoCls} h-12`}>{children}</select></label>;
 }
 
 export function TextoM({ rotulo, ...p }: TextareaHTMLAttributes<HTMLTextAreaElement> & { rotulo: string }) {

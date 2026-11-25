@@ -5,11 +5,12 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { TirarFotos, carimbarFoto, useEnviarFoto } from '@/components/Mobile/Fotos';
 import { SEIS_M } from '@/components/Mobile/restricoes';
-import { CampoM, ChipsM, RodapeM, TextoM, TopoM, botaoPrimarioM, botaoSecundarioM, cartaoM } from '@/components/Mobile/ui';
+import { CampoM, ChipsM, RodapeM, SelecaoM, TextoM, TopoM, botaoPrimarioM, botaoSecundarioM, cartaoM } from '@/components/Mobile/ui';
 import { useFrentes2 } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useRouter } from '@/i18n/navigation';
 import { useObra } from '@/lib/obra/ObraProvider';
+import { usePartes } from '@/lib/partes';
 
 /** Nova restrição pelo celular: a ação, a área, quem resolve, até quando, se trava a atividade, 6M e foto. */
 export default function NovaRestricao() {
@@ -21,7 +22,7 @@ export default function NovaRestricao() {
   const { obra } = useObra();
   const areas = useMemo(() => (frentes.data ?? []).flatMap((l) => l.areas.filter((a) => a.ativo).map((a) => ({ ...a, local: `${l.codigo} · ${l.descricao}` }))), [frentes.data]);
   const [listaAberta, setListaAberta] = useState(false);
-  const [f, setF] = useState({ acao: '', area_id: '', responsavel: '', prazo_termino: '', impeditivo: 'sim' as 'sim' | 'nao', seis_m: null as string | null });
+  const [f, setF] = useState({ acao: '', area_id: '', responsavel: '', gerencia: '', prazo_termino: '', impeditivo: 'sim' as 'sim' | 'nao', seis_m: null as string | null });
   const [busca, setBusca] = useState('');
   const [fotos, setFotos] = useState<Blob[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -32,13 +33,16 @@ export default function NovaRestricao() {
     return termos.every((x) => t.includes(x));
   });
   const area = areas.find((a) => String(a.id) === f.area_id);
+  // spec 144: quem resolve vem de Partes e responsáveis (a gerência vai junto); sem cadastro, continua digitado
+  const partes = usePartes();
+  const resp = (partes.data?.responsaveis ?? []).filter((r) => r.ativo);
 
   const salvar = async () => {
     if (f.acao.trim().length < 3) { toast.error('Descreva a ação'); return; }
     setSalvando(true);
     try {
       const r = await api.post<{ id: number; numero: number }>('/restricoes', {
-        acao: f.acao, area_id: f.area_id ? Number(f.area_id) : null, responsavel: f.responsavel || null,
+        acao: f.acao, area_id: f.area_id ? Number(f.area_id) : null, responsavel: f.responsavel || null, gerencia: f.gerencia || null,
         prazo_termino: f.prazo_termino || null, impeditivo: f.impeditivo === 'sim', seis_m: f.seis_m, status1: 'Pendente', reuniao: '6WLA',
       });
       const frente = area ? `Frente: ${area.codigo} · ${area.descricao}` : '';
@@ -85,7 +89,15 @@ export default function NovaRestricao() {
             )}
           </div>
         )}
-        <CampoM rotulo="Quem resolve" value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value })} />
+        {resp.length ? (
+          <SelecaoM rotulo="Quem resolve" value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value, gerencia: resp.find((r) => r.nome === e.target.value)?.gerencia ?? '' })}>
+            <option value="">Escolha…</option>
+            {(partes.data?.partes ?? []).map((p) => {
+              const rs = resp.filter((r) => r.papel === p.papel);
+              return rs.length ? <optgroup key={p.papel} label={p.gerencia}>{rs.map((r) => <option key={r.id} value={r.nome}>{r.nome}{r.funcao ? ` · ${r.funcao}` : ''}</option>)}</optgroup> : null;
+            })}
+          </SelecaoM>
+        ) : <CampoM rotulo="Quem resolve" value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value })} />}
         <CampoM rotulo="Até quando" type="date" value={f.prazo_termino} onChange={(e) => setF({ ...f, prazo_termino: e.target.value })} />
         <ChipsM rotulo="6M (Ishikawa)" valor={f.seis_m} onChange={(v) => setF({ ...f, seis_m: v })} opcoes={Object.entries(SEIS_M).map(([v, r]) => ({ valor: v, rotulo: r }))} />
       </section>

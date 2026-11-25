@@ -252,7 +252,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`parte_obra`, `domain/partes.py::gerencia`), responsáveis por parte (`responsavel_obra`; contratada pelo efetivo, demais
   digitados). Tela Configurar › Partes e responsáveis (`/app/partes`) com "padronizar" o que foi escrito à mão (`casar_gerencia`,
   gateways de restrições e desvios; nome antigo "associar a" um cadastrado — `sugerir_responsavel`, `POST /partes/padronizar/responsavel`
-  troca nome e gerência nos registros). Formulários usam `GerenciaResponsavel` (desvios, restrições 6WLA, restrições do plano).
+  troca nome e gerência nos registros). Formulários usam `GerenciaResponsavel` (desvios da programação e Ocorrências `/app/desvios`, restrições 6WLA, restrições do
+  plano; spec 144) e o celular `SelecaoM` ("Quem resolve" da nova restrição, com a gerência; sem cadastro, texto).
 - Marca da obra (`marca_obra`, `app/shared/marca.py`): logos do contratante/contratada (ou Malhet) em todo documento
   (`inserir_logos`, `cor_excel`) e cor do cliente (`/obra/marca`, `MinhaObra.cor` → tokens `--m-accent*`). Documento
   novo usa `marca_da_obra` e `<LogosObra>`; não fixe a cor do Malhet. Spec 039.

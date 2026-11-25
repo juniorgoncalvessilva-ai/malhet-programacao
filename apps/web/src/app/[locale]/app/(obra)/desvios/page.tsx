@@ -8,6 +8,7 @@ import { Abas } from '@/components/Obra/Abas';
 import { useConfirmar } from '@/components/Obra/Confirmar';
 import { STATUS_DESVIO, useCausas } from '@/components/Obra/DesviosProgramacao';
 import { Botao, Cabecalho, Campo, Erro, Painel, Pilula, Selecao, Tabela, UploadForm, dataBR, td, tdNum } from '@/components/Obra/ui';
+import { GerenciaResponsavel } from '@/components/Obra/GerenciaResponsavel';
 import { useAcao } from '@/hooks/programacao/planejamento';
 import { useApi } from '@/hooks/programacao/useApi';
 import { Link } from '@/i18n/navigation';
@@ -82,12 +83,11 @@ export default function DesviosPage() {
             <Campo rotulo="Frente de serviço" value={form.frente} onChange={(e) => setForm({ ...form, frente: e.target.value })} className="md:col-span-2" />
             <Campo rotulo="Desvio" required minLength={3} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} className="md:col-span-3" />
             <Campo rotulo="Ação" value={form.acao} onChange={(e) => setForm({ ...form, acao: e.target.value })} className="md:col-span-3" />
-            <Campo rotulo="Responsabilidade" value={form.responsavel} onChange={(e) => setForm({ ...form, responsavel: e.target.value })} />
-            <Campo rotulo="Gerência (contratada/cliente)" value={form.gerencia} onChange={(e) => setForm({ ...form, gerencia: e.target.value })} />
+            <div className="grid gap-3 sm:grid-cols-2 md:col-span-3"><GerenciaResponsavel gerencia={form.gerencia} responsavel={form.responsavel} onChange={(v) => setForm({ ...form, ...v })} /></div>
             <Selecao rotulo="Status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               {Object.entries(STATUS_DESVIO).map(([n, r]) => <option key={n} value={n}>{n} · {r}</option>)}
             </Selecao>
-            <Campo rotulo="Atividade impactada" value={form.atividade_impactada} onChange={(e) => setForm({ ...form, atividade_impactada: e.target.value })} className="md:col-span-3" />
+            <Campo rotulo="Atividade impactada" value={form.atividade_impactada} onChange={(e) => setForm({ ...form, atividade_impactada: e.target.value })} className="md:col-span-3 xl:col-span-2" />
             <div className="flex items-end gap-2 md:col-span-3 xl:col-span-6"><Botao type="submit" disabled={salvar.isPending}>Salvar</Botao><Erro erro={salvar.error} /></div>
           </form>
         </Painel>
