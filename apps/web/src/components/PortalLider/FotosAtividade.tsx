@@ -3,7 +3,7 @@
 import { Camera, Download, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { carimbarFoto, dataHoraBR, momentoDaFoto, reduzirFoto } from '@/components/Mobile/Fotos';
+import { BotaoTextoFoto, carimbarFoto, dataHoraBR, momentoDaFoto, reduzirFoto } from '@/components/Mobile/Fotos';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 import { BotaoMarcar } from '@/components/Mobile/MarcarFoto';
 import { portal, portalArquivo, portalBlob } from '@/lib/portal/api';
@@ -57,6 +57,8 @@ export function FotosAtividade({ obra }: { obra: string | null }) {
   const semWbs = itens !== null && itens.length === 0;
   const peloPq = usarPq || semWbs;
   const oQue = iwp ? `${iwp.codigo} · ${iwp.descricao ?? iwp.item_pq ?? ''}` : pq ? `${pq.item} · ${pq.descricao}` : '';
+  // o texto do carimbo que a pessoa vê e pode editar (spec 145); data e hora não mudam
+  const textoPadrao = [frente ? `Frente: ${frente.codigo} · ${frente.descricao}` : '', oQue, descricao.trim().slice(0, 80), obra ?? ''].filter(Boolean);
   const urls = useMemo(() => fotos.map((f) => URL.createObjectURL(f)), [fotos]);
   useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)), [urls]);
 
@@ -73,7 +75,7 @@ export function FotosAtividade({ obra }: { obra: string | null }) {
       const r = await portal<Registro>('/registros', { method: 'POST', body: { area_id: frente.id, wbs_no_id: iwp?.wbs_no_id ?? null, item_pq: iwp ? null : pq?.item ?? null, descricao } });
       for (const f of fotos) {
         const fd = new FormData();
-        fd.append('arquivo', await carimbarFoto(f, ['ATIVIDADE', `Frente: ${frente.codigo} · ${frente.descricao}`, oQue, descricao.trim().slice(0, 80), obra ?? '']), 'foto.jpg');
+        fd.append('arquivo', await carimbarFoto(f, ['ATIVIDADE', ...textoPadrao]), 'foto.jpg');
         await portal(`/registros/${r.id}/fotos`, { method: 'POST', body: fd });
       }
       toast.success('Atividade registrada com foto');
@@ -161,7 +163,7 @@ export function FotosAtividade({ obra }: { obra: string | null }) {
           </label>
           <label className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-[14px] border border-dashed border-m-stroke-strong px-3.5">
             <Camera size={22} className="text-m-accent" aria-hidden="true" />
-            <span className="flex flex-col"><span className="text-[15px] font-medium">Foto da atividade{fotos.length ? ` · ${fotos.length}` : ''}</span><span className="text-[12px] text-m-text-muted">Com data, hora, frente e a logo · lápis marca na foto</span></span>
+            <span className="flex flex-col"><span className="text-[15px] font-medium">Foto da atividade{fotos.length ? ` · ${fotos.length}` : ''}</span><span className="text-[12px] text-m-text-muted">Com data, hora, frente e a logo · lápis marca, Aa edita o texto</span></span>
             <input type="file" accept="image/*" capture="environment" className="sr-only" aria-label="Tirar foto da atividade" onChange={(e) => { void tirar(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
           {urls.length > 0 && (
@@ -172,6 +174,7 @@ export function FotosAtividade({ obra }: { obra: string | null }) {
                   <img src={u} alt={`Foto ${k + 1}`} className="h-16 w-16 rounded-[10px] object-cover" />
                   <span className="absolute inset-x-0 bottom-0 truncate rounded-b-[10px] bg-black/60 px-1 text-[8px] font-semibold leading-3 text-[#FFD54F]">{dataHoraBR(momentoDaFoto.get(fotos[k]) ?? new Date())}</span>
                   <BotaoMarcar foto={fotos[k]} onMarcada={(b) => setFotos(fotos.map((f, j) => (j === k ? b : f)))} className="absolute -left-2 -top-2" />
+                  <BotaoTextoFoto foto={fotos[k]} base={textoPadrao} onMudou={() => setFotos([...fotos])} className="absolute -bottom-2 -right-2" />
                   <button type="button" aria-label={`Tirar a foto ${k + 1}`} onClick={() => setFotos(fotos.filter((_, j) => j !== k))} className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-m-surface-raised shadow"><X size={14} /></button>
                 </span>
               ))}

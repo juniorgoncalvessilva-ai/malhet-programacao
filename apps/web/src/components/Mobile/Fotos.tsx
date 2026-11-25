@@ -1,8 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Camera, Download, X } from 'lucide-react';
+import { Camera, Download, Lock, Type, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useApi } from '@/hooks/programacao/useApi';
 import { useLogo, useMarcaObra } from '@/components/Obra/LogosObra';
@@ -65,6 +66,27 @@ export function useLogoNoCarimbo() {
   }, [obraId, m.data, logo.data]);
 }
 
+/**
+ * Texto do carimbo editado pela pessoa (spec 145): a data e a hora nunca mudam; as outras linhas sim. `base` = as linhas
+ * que a tela mostrava ao editar — no carimbo, só elas são trocadas; as que a tela acrescenta ao salvar ("Restrição Nº 12",
+ * "OCORRÊNCIA") continuam.
+ */
+export interface TextoFoto { base: string[]; linhas: string[] }
+export const textoDaFoto = new WeakMap<Blob, TextoFoto>();
+const normT = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+export function aplicarTexto(linhas: string[], ed?: TextoFoto): string[] {
+  if (!ed) return linhas;
+  const base = ed.base.map(normT).filter(Boolean);
+  const coberta = (l: string) => { const n = normT(l); return !!n && base.some((b) => n === b || (b.length >= 6 && n.includes(b))); };
+  const out: string[] = [];
+  let pos = -1;
+  for (const l of linhas) {
+    if (coberta(l)) { if (pos < 0) pos = out.length; } else out.push(l);
+  }
+  out.splice(pos < 0 ? out.length : pos, 0, ...ed.linhas.map((x) => x.trim()).filter(Boolean));
+  return out;
+}
+
 /** Fotos que já saíram de carimbarFoto: o envio não carimba de novo. */
 const carimbadas = new WeakSet<Blob>();
 export const dataHoraBR = (d: Date) => `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -74,6 +96,7 @@ export const dataHoraBR = (d: Date) => `${d.toLocaleDateString('pt-BR')} ${d.toL
  * e as linhas seguintes (frente de serviço, obra…). Devolve um JPEG novo; a foto original não é alterada.
  */
 export async function carimbarFoto(foto: Blob, linhas: string[], quando = momentoDaFoto.get(foto) ?? new Date()): Promise<Blob> {
+  linhas = aplicarTexto(linhas, textoDaFoto.get(foto)); // spec 145: o texto que a pessoa editou (data e hora não)
   const url = URL.createObjectURL(foto);
   try {
     const img = await new Promise<HTMLImageElement>((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não consegui abrir a imagem')); i.src = url; });
@@ -195,6 +218,9 @@ export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [urls, setUrls] = useState<string[]>([]);
+  const obraNome = useObraOpcional()?.obra?.nome;
+  // o que a tela mostra no carimbo (a obra entra sempre no envio): é isso que a pessoa pode editar (spec 145)
+  const base = carimbo ? [...carimbo.filter(Boolean), ...(obraNome && !carimbo.includes(obraNome) ? [obraNome] : [])] : [];
   useLogoNoCarimbo(); // toda tela que tira foto já tem a logo pronta para o carimbo
   useEffect(() => { const u = fotos.map((f) => URL.createObjectURL(f)); setUrls(u); return () => u.forEach((x) => URL.revokeObjectURL(x)); }, [fotos]);
   return (
@@ -210,7 +236,7 @@ export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 
           try { const b = await reduzirFoto(arq); momentoDaFoto.set(b, new Date()); onChange([...fotos, b]); } catch { toast.error('Não consegui ler a foto'); }
         }} />
       {carimbo && fotos.length > 0 && (
-        <span className="text-[12px] leading-4 text-m-text-muted">Toque no lápis para marcar na foto. Carimbo: data e hora{carimbo.filter(Boolean).length ? ` · ${carimbo.filter(Boolean).join(' · ')}` : ''}</span>
+        <span className="text-[12px] leading-4 text-m-text-muted">Lápis marca na foto; Aa edita o texto. Carimbo: data e hora{base.length ? ` · ${base.join(' · ')}` : ''}</span>
       )}
       {urls.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -224,11 +250,86 @@ export function TirarFotos({ fotos, onChange, rotulo = 'Foto da frente', dica = 
                 </span>
               )}
               <BotaoMarcar foto={fotos[k]} onMarcada={(b) => onChange(fotos.map((f, j) => (j === k ? b : f)))} className="absolute -left-2 -top-2" />
+              {carimbo && <BotaoTextoFoto foto={fotos[k]} base={base} onMudou={() => onChange([...fotos])} className="absolute -bottom-2 -right-2" />}
               <button type="button" aria-label={`Tirar a foto ${k + 1}`} onClick={() => onChange(fotos.filter((_, j) => j !== k))} className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-m-surface-raised text-m-text-secondary shadow"><X size={14} /></button>
             </span>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * "Aa" numa foto ainda não enviada (spec 145): edita as linhas do carimbo. A data e a hora em que a foto foi tirada
+ * aparecem travadas — não são editáveis.
+ */
+export function BotaoTextoFoto({ foto, base, onMudou, className = '' }: { foto: Blob; base: string[]; onMudou: () => void; className?: string }) {
+  const [aberto, setAberto] = useState(false);
+  const editado = textoDaFoto.has(foto);
+  return (
+    <>
+      <button type="button" aria-label="Editar o texto da foto" title="Editar o texto do carimbo (data e hora não mudam)" onClick={() => setAberto(true)}
+        className={`grid h-7 w-7 place-items-center rounded-full shadow ${editado ? 'bg-[#FFD54F] text-black' : 'bg-m-surface-raised text-m-text-secondary'} ${className}`}>
+        <Type size={13} />
+      </button>
+      {aberto && typeof document !== 'undefined' && createPortal(
+        <EditarTextoFoto foto={foto} base={base} onFechar={() => setAberto(false)} onSalvo={() => { setAberto(false); onMudou(); }} />, document.body)}
+    </>
+  );
+}
+
+const MAX_LINHAS = 6;
+function EditarTextoFoto({ foto, base, onFechar, onSalvo }: { foto: Blob; base: string[]; onFechar: () => void; onSalvo: () => void }) {
+  const atual = textoDaFoto.get(foto);
+  const [linhas, setLinhas] = useState<string[]>(atual?.linhas ?? (base.length ? base : ['']));
+  const quando = momentoDaFoto.get(foto) ?? new Date();
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar(); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onFechar]);
+  const salvar = () => {
+    const ls = linhas.map((x) => x.trim()).filter(Boolean);
+    const igual = ls.length === base.length && ls.every((x, i) => x === base[i]);
+    if (igual) textoDaFoto.delete(foto); else textoDaFoto.set(foto, { base: atual?.base ?? base, linhas: ls });
+    onSalvo();
+  };
+  return (
+    <div className="fixed inset-0 z-[300] flex items-end justify-center p-3 font-[Figtree,system-ui,sans-serif] sm:items-center" role="dialog" aria-modal="true" aria-labelledby="texto-foto-titulo">
+      <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/50" onClick={onFechar} />
+      <div className="relative flex max-h-[90vh] w-full max-w-[440px] flex-col gap-3 overflow-y-auto rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-5 text-m-text-primary">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 id="texto-foto-titulo" className="text-[17px] font-semibold leading-6">Texto da foto</h2>
+            <p className="text-[13px] text-m-text-tertiary">O que sai escrito no rodapé da foto.</p>
+          </div>
+          <button type="button" onClick={onFechar} aria-label="Fechar" className="grid h-9 w-9 place-items-center rounded-full text-m-text-muted hover:bg-m-surface-hover"><X size={18} /></button>
+        </div>
+        <div className="flex items-center gap-2 rounded-[14px] bg-m-surface-active px-3.5 py-3" aria-label="Data e hora da foto (não editável)">
+          <Lock size={15} className="shrink-0 text-m-text-muted" aria-hidden="true" />
+          <span className="flex flex-col">
+            <b className="text-[16px] tabular-nums">{dataHoraBR(quando)}</b>
+            <span className="text-[11.5px] text-m-text-muted">Data e hora em que a foto foi tirada — não dá para mudar</span>
+          </span>
+        </div>
+        {linhas.map((l, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input value={l} maxLength={90} aria-label={`Linha ${i + 1} do texto`} onChange={(e) => setLinhas(linhas.map((x, j) => (j === i ? e.target.value : x)))}
+              className="h-11 min-w-0 flex-1 rounded-[12px] border border-m-stroke bg-m-surface-field px-3 text-[15px] outline-none focus:border-m-accent" />
+            <button type="button" aria-label={`Tirar a linha ${i + 1}`} onClick={() => setLinhas(linhas.filter((_, j) => j !== i))}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-m-text-muted hover:bg-m-surface-hover"><X size={16} /></button>
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          {linhas.length < MAX_LINHAS && <button type="button" onClick={() => setLinhas([...linhas, ''])} className="h-9 rounded-full border border-m-stroke px-3 text-[13px] font-semibold text-m-text-secondary">+ Linha</button>}
+          {textoDaFoto.has(foto) && <button type="button" onClick={() => setLinhas(base)} className="h-9 rounded-full px-3 text-[13px] text-m-text-secondary hover:bg-m-surface-hover">Voltar ao texto padrão</button>}
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onFechar} className="h-11 flex-1 rounded-full border border-m-stroke text-[14px] font-semibold text-m-text-secondary">Cancelar</button>
+          <button type="button" onClick={salvar} className="h-11 flex-1 rounded-full bg-m-accent-strong text-[14px] font-semibold text-m-on-accent">Salvar texto</button>
+        </div>
+      </div>
     </div>
   );
 }

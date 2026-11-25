@@ -2,7 +2,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -93,6 +93,22 @@ def book(de: date | None = None, ate: date | None = None, tipo: str | None = Non
     return montar_book(s, c.obra_id, de, ate, tipo, area_id)
 
 
+@router.get("/book/zip")
+def book_zip(de: date | None = None, ate: date | None = None, tipo: str | None = None, area_id: int | None = None,
+             ids: str | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Todas as fotos do book de uma vez (spec 145), num .zip com pastas Dia/Frente e o índice em Excel: os mesmos filtros
+    do book (dia ou período, frente, tipo) e, opcionalmente, só as fotos escolhidas (`ids=1,2,3`)."""
+    from starlette.background import BackgroundTask
+
+    from app.modules.campo.application.book import montar_zip
+
+    escolhidas = {int(x) for x in (ids or "").split(",") if x.strip().isdigit()} or None
+    caminho, nome = montar_zip(s, c.obra_id, de, ate, tipo, area_id, escolhidas)
+    import os
+
+    return FileResponse(caminho, media_type="application/zip", filename=nome, background=BackgroundTask(os.unlink, caminho))
+
+
 def _foto(s: Session, c: ContextoObra, fid: int) -> FotoCampoModel:
     f = s.get(FotoCampoModel, fid)
     if f is None or f.obra_id != c.obra_id:
@@ -131,21 +147,16 @@ def _area_da_foto(s: Session, f: FotoCampoModel) -> int | None:
 
 def nome_para_baixar(s: Session, f: FotoCampoModel, ext: str) -> str:
     """AAAAMMDD-HHMM-<frente>-<tipo>-<id>.jpg — quem baixa vê quando e onde sem abrir a foto."""
-    import re
-    import unicodedata
     from zoneinfo import ZoneInfo
 
+    from app.modules.campo.domain.foto import nome_arquivo
     from app.modules.frentes.infra.models import AreaFrenteModel
 
     quando = f.enviado_em.astimezone(ZoneInfo("America/Sao_Paulo")) if f.enviado_em else None
     dia = f.data.strftime("%Y%m%d") if f.data else (quando.strftime("%Y%m%d") if quando else "")
-    hora = quando.strftime("%H%M") if quando else ""
     aid = _area_da_foto(s, f)
     a = s.get(AreaFrenteModel, aid) if aid else None
-    partes = [dia + (f"-{hora}" if hora else ""), a.codigo if a else "", _ROTULO.get(f.alvo, f.alvo), str(f.id)]
-    nome = "-".join(x for x in partes if x)
-    nome = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode()
-    return re.sub(r"[^A-Za-z0-9._-]+", "-", nome).strip("-") + f".{ext}"
+    return nome_arquivo(dia, quando.strftime("%H%M") if quando else "", a.codigo if a else "", _ROTULO.get(f.alvo, f.alvo), f.id, ext)
 
 
 @router.get("/{fid}/arquivo")

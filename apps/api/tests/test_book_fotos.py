@@ -71,3 +71,44 @@ def test_book_com_auditorias_e_acoes(client):
     ac = client.get("/api/fotos/book", params={"tipo": "acao"}).json()
     assert len(ac) == 1 and ac[0]["titulo"].startswith("Ação A-1 · evidência") and ac[0]["atividade"] == "Inspeção Nº 1"
     assert {x["tipo"] for x in client.get("/api/fotos/book").json()} == {"auditoria", "acao"}
+
+
+def test_baixar_fotos_do_dia_e_da_frente_em_zip(client):
+    """Spec 145: todas as fotos de uma vez, por dia e por frente — .zip com pastas Dia/Frente, nome que diz dia, frente,
+    tipo e id, e o índice em Excel; os mesmos filtros do book, só as escolhidas com `ids`, por obra."""
+    import zipfile
+
+    from openpyxl import load_workbook
+
+    pid = _programacao(client)
+    client.post(f"/api/programacoes/{pid}/emitir")
+    v = client.get(f"/api/programacoes/{pid}").json()
+    area = v["locais"][0]["areas"][0]
+    ln = area["linhas"][0]
+    f1 = _foto(client, "linha", ln["id"], "2026-11-09")
+    f2 = _foto(client, "linha", ln["id"], "2026-11-09")
+    f3 = _foto(client, "linha", ln["id"], "2026-11-10")
+    r = client.post("/api/restricoes", json={"acao": "Liberar acesso"}).json()  # sem frente
+    f4 = _foto(client, "restricao", r["id"])
+
+    resp = client.get("/api/fotos/book/zip", params={"de": "2026-11-09", "ate": "2026-11-09", "area_id": area["id"]})
+    assert resp.status_code == 200 and resp.headers["content-type"] == "application/zip"
+    assert f'fotos-20261109-{area["codigo"]}' in resp.headers["content-disposition"]
+    z = zipfile.ZipFile(BytesIO(resp.content))
+    fotos = sorted(n for n in z.namelist() if n.endswith(".jpg"))
+    assert len(fotos) == 2 and all(n.startswith(f"2026-11-09/{area['codigo']}") for n in fotos)
+    assert fotos[0].split("/")[-1].startswith("20261109-") and fotos[0].endswith((f"-atividade-{f1}.jpg", f"-atividade-{f2}.jpg"))
+    assert z.read(fotos[0])[:3] == b"\xff\xd8\xff"  # o original, não a miniatura
+    ws = load_workbook(BytesIO(z.read("indice.xlsx"))).active
+    linhas = list(ws.iter_rows(min_row=2, values_only=True))
+    assert len(linhas) == 2 and linhas[0][1] == "2026-11-09" and linhas[0][5] == "atividade" and linhas[0][6].startswith(ln["codigo_simova"])
+
+    tudo = zipfile.ZipFile(BytesIO(client.get("/api/fotos/book/zip").content)).namelist()
+    assert {n.split("/")[0] for n in tudo if n.endswith(".jpg")} >= {"2026-11-09", "2026-11-10"}
+    assert any(n.endswith(f"-restricao-{f4}.jpg") and "/Sem frente/" in n for n in tudo)
+    so = zipfile.ZipFile(BytesIO(client.get("/api/fotos/book/zip", params={"ids": f"{f3},{f4}"}).content)).namelist()
+    assert sorted(n.rsplit("-", 1)[-1] for n in so if n.endswith(".jpg")) == sorted([f"{f3}.jpg", f"{f4}.jpg"])
+
+    assert client.get("/api/fotos/book/zip", params={"de": "2030-01-01"}).status_code == 422
+    outra = client.post("/api/admin/obras", json={"codigo": "OUT-ZIP", "nome": "Outra"}).json()["id"]
+    assert client.get("/api/fotos/book/zip", headers={"X-Obra-Id": str(outra)}).status_code == 422  # nada da outra obra

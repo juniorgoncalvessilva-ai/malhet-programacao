@@ -196,6 +196,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   Agg vira aviso em `ler_arquivo` e o arquivo é guardado assim mesmo.
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
+  Baixar todas em .zip (`GET /fotos/book/zip`, `montar_zip`: pastas Dia/Frente, nome `nome_arquivo`,
+  `indice.xlsx`, filtros ou `ids`) no topo e em cada grupo. Texto da foto editável antes de enviar ("Aa", `BotaoTextoFoto`,
+  `textoDaFoto`/`aplicarTexto`; data e hora travadas; linhas que a tela acrescenta ao salvar continuam). Spec 145.
 - Apropriação de presença (`presenca/`): `identificacao_pessoa` (código, NFC, descritor facial com consentimento — só o
   descritor, nunca a foto) e `presenca_leitura` (`id_local` idempotente); `/presenca/base|leituras|dia|identificacoes`;
   capacidade com os presentes (`capacidade_com_presentes`). Celular `/m/presenca` (botão central), offline em IndexedDB

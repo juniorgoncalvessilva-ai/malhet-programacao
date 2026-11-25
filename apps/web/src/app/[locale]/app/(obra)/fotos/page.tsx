@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Download, Printer, Trash2, X } from 'lucide-react';
+import { Download, FolderDown, Printer, Trash2, X } from 'lucide-react';
 import { baixarFoto } from '@/components/Mobile/Fotos';
 import { toast } from 'sonner';
 import { ExcluirComMotivo } from '@/components/Obra/ExcluirComMotivo';
@@ -127,6 +127,28 @@ export default function BookFotosPage() {
     return [...m.entries()].sort((x, y) => ord(x[0], y[0]))
       .map(([k, sub]) => [k, [...sub.entries()].sort((x, y) => (agrupar === 'data' ? x[0].localeCompare(y[0], 'pt-BR', { numeric: true }) : y[0].localeCompare(x[0])))] as const);
   }, [fotos, agrupar, tipo]);
+  // spec 145: todas as fotos de uma vez (.zip com pastas Dia/Frente e índice em Excel) — da tela inteira ou de um grupo
+  const [baixando, setBaixando] = useState<string | null>(null);
+  const baixarZip = async (chave: string, lista?: FotoBook[]) => {
+    const params = new URLSearchParams({ tipo });
+    const alvo = lista ?? fotos;
+    // pelo filtro (dia e frente) quando ele dá exatamente estas fotos — endereço curto mesmo com centenas de fotos;
+    // senão, a lista das escolhidas
+    const dias = new Set(alvo.map((f) => f.data)), frentesG = new Set(alvo.map((f) => f.area_id));
+    const d0 = dias.size === 1 ? [...dias][0] : de, d1 = dias.size === 1 ? [...dias][0] : ate;
+    const a0 = frentesG.size === 1 && [...frentesG][0] ? String([...frentesG][0]) : area;
+    const peloFiltro = (q.data ?? []).filter((f) => (!d0 || f.data >= d0) && (!d1 || f.data <= d1) && (!a0 || String(f.area_id) === a0));
+    if (peloFiltro.length === alvo.length) { if (d0) params.set('de', d0); if (d1) params.set('ate', d1); if (a0) params.set('area_id', a0); }
+    else params.set('ids', alvo.map((f) => f.id).join(','));
+    setBaixando(chave);
+    try { await api.download(`/fotos/book/zip?${params}`, 'fotos.zip'); } catch (e) { toast.error((e as Error).message); } finally { setBaixando(null); }
+  };
+  const BotaoZip = ({ chave, lista, rotulo }: { chave: string; lista: FotoBook[]; rotulo: string }) => (
+    <button type="button" onClick={() => void baixarZip(chave, lista)} disabled={baixando !== null} aria-label={rotulo} title={rotulo}
+      className="ml-2 inline-flex h-7 items-center gap-1.5 rounded-full border border-m-stroke px-2.5 align-middle text-[12px] font-semibold text-m-text-secondary hover:bg-m-surface-hover disabled:opacity-50 print:hidden">
+      <FolderDown size={14} aria-hidden="true" /> {baixando === chave ? 'Preparando…' : `Baixar ${lista.length}`}
+    </button>
+  );
   const rot = (k: string, nivel: 1 | 2) => ((agrupar === 'data' && nivel === 1) || (agrupar !== 'data' && nivel === 2 && /^\d{4}-\d\d-\d\d$/.test(k)) ? dataBR(k) : k);
   const areas = (frentes.data ?? []).flatMap((l) => l.areas.map((a) => ({ id: a.id, rotulo: `${l.codigo} › ${a.codigo} · ${a.descricao}` })));
   const nomeTipo = { atividade: 'atividades', ocorrencia: 'ocorrências', restricao: 'restrições', auditoria: 'auditorias', acao: 'ações 5W2H (evidências)' }[tipo];
@@ -139,6 +161,9 @@ export default function BookFotosPage() {
             <span className="flex items-center gap-1 rounded-full border border-m-stroke-subtle p-1" role="group" aria-label="Tamanho das miniaturas">
               {(['P', 'M', 'G'] as const).map((k) => <Chip key={k} ativo={tamanho === k} onClick={() => setTamanho(k)}>{{ P: 'Pequena', M: 'Média', G: 'Grande' }[k]}</Chip>)}
             </span>
+            <Botao variante="secundario" onClick={() => void baixarZip('todas')} disabled={!fotos.length || baixando !== null}
+              title="Todas as fotos dos filtros num .zip, em pastas por dia e frente, com o índice em Excel">
+              <FolderDown size={16} /> {baixando === 'todas' ? 'Preparando o .zip…' : `Baixar todas (${fotos.length})`}</Botao>
             <Botao variante="secundario" onClick={() => window.print()} disabled={!fotos.length}><Printer size={16} /> Imprimir book</Botao>
           </div>} />
       </div>
@@ -182,10 +207,11 @@ export default function BookFotosPage() {
       {q.data && !fotos.length && <Painel titulo="Nenhuma foto"><p className="text-[13px] text-m-text-muted">Nenhuma foto de {nomeTipo} no período e filtros escolhidos. As fotos entram pelo app de campo (Lançar, Ocorrências, Restrições, Auditorias e Ações 5W2H).</p></Painel>}
       {grupos.map(([k1, sub]) => (
         <section key={k1} className="flex flex-col gap-3 rounded-m-lg border border-m-stroke-subtle bg-m-surface-raised p-4 print:break-inside-auto print:border-0 print:p-0">
-          <h2 className="text-[16px] font-semibold text-m-text-primary">{rot(k1, 1)} <span className="text-[12.5px] font-normal text-m-text-muted">· {sub.reduce((s, [, l]) => s + l.length, 0)} foto(s)</span></h2>
+          <h2 className="text-[16px] font-semibold text-m-text-primary">{rot(k1, 1)} <span className="text-[12.5px] font-normal text-m-text-muted">· {sub.reduce((s, [, l]) => s + l.length, 0)} foto(s)</span>
+            <BotaoZip chave={k1} lista={sub.flatMap(([, l]) => l)} rotulo={`Baixar as fotos de ${rot(k1, 1)}`} /></h2>
           {sub.map(([k2, lista]) => (
             <div key={k2} className="flex flex-col gap-2">
-              <h3 className="text-[13px] font-semibold text-m-text-secondary">{rot(k2, 2)}</h3>
+              <h3 className="text-[13px] font-semibold text-m-text-secondary">{rot(k2, 2)}<BotaoZip chave={`${k1}|${k2}`} lista={lista} rotulo={`Baixar as fotos de ${rot(k1, 1)} › ${rot(k2, 2)}`} /></h3>
               <div className="grid gap-2 print:grid-cols-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${TAMANHOS[tamanho]}px, 1fr))` }}>
                 {lista.map((f) => <Cartao key={f.id} f={f} onAbrir={() => setAberta(f)} onExcluir={podeExcluir ? () => setExcluir(f) : undefined} />)}
               </div>

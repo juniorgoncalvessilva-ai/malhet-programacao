@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { momentoDaFoto } from '@/components/Mobile/Fotos';
+import { momentoDaFoto, textoDaFoto } from '@/components/Mobile/Fotos';
 
 // o Excalidraw é pesado: só carrega quando a pessoa toca em "Marcar" (e o service worker guarda para usar offline)
 const Editor = dynamic(() => import('./MarcarFotoEditor'), {
@@ -28,6 +28,8 @@ export function BotaoMarcar({ foto, onMarcada, className = '' }: { foto: Blob; o
         <Editor foto={foto} onFechar={() => setAberto(false)} onPronto={(b) => {
           const quando = momentoDaFoto.get(foto);
           if (quando) momentoDaFoto.set(b, quando);
+          const texto = textoDaFoto.get(foto); // spec 145: o texto editado acompanha a foto marcada
+          if (texto) textoDaFoto.set(b, texto);
           setAberto(false);
           onMarcada(b);
         }} />,
