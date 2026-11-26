@@ -15,11 +15,25 @@ export type Resultado =
   | { tipo: 'repetido'; pessoa: PessoaBase; hora: string; outro?: boolean }
   | { tipo: 'desconhecido'; codigo: string; meio: Meio; nfc?: string | null };
 
+/** Como a presença conversa com o servidor: a conta do Malhet (`/m/presenca`) ou a sessão do apontador (spec 150). */
+export interface TransportePresenca {
+  obraId: number;
+  get: <T>(caminho: string) => Promise<T>;
+  post: <T>(caminho: string, corpo: unknown) => Promise<T>;
+}
+
 /** Estado da presença do dia no aparelho: base offline, leituras de hoje, fila e sincronização (spec 063). */
 export function usePresenca() {
   const api = useApi();
   const { obra } = useObra();
-  const obraId = obra?.id ?? 0;
+  const t = useMemo<TransportePresenca>(() => ({ obraId: obra?.id ?? 0, get: api.get, post: api.post as <T>(p: string, b: unknown) => Promise<T> }), [api, obra?.id]);
+  return usePresencaCom(t);
+}
+
+/** O mesmo estado, com o transporte escolhido (a rota do apontador usa o token do portal). */
+export function usePresencaCom(transporte: TransportePresenca) {
+  const api = transporte;
+  const obraId = transporte.obraId;
   const [base, setBase] = useState<BasePresenca | null>(null);
   const [baixando, setBaixando] = useState(false);
   const [erroBase, setErroBase] = useState<string | null>(null);
@@ -28,7 +42,7 @@ export function usePresenca() {
   const [online, setOnline] = useState(true);
   const [remotos, setRemotos] = useState<PresencaRemota[]>([]);
   const data = hojeLocal();
-  const post = api.post as <T>(p: string, b: unknown) => Promise<T>;
+  const post = api.post;
 
   const recarregar = useCallback(async () => {
     if (!obraId) return;

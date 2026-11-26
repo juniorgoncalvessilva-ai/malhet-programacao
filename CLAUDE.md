@@ -84,6 +84,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   `GET|PUT /lideres/apontador/funcoes`, seletor em Acesso dos líderes; o cadastro individual como apontador continua.
   Depois do login, as duas rotas têm o layout do Início do `/m` (spec 149, `PainelPortal`): meta do dia na cor da empresa, números,
   "O que fazer agora", atalhos e barra com o botão central (apontador: Presença; encarregado: Fotos) + "Mais" com Sair.
+  Presença do apontador (spec 150): "Por equipe" (como antes) | "Ler presença" = o painel do `/m/presenca`
+  (`components/Presenca/PainelLeitura.tsx`, crachá/código/rosto/lista, offline) por `usePresencaCom` com o token do portal
+  (`/portal/apontador/presenca/{base,leituras,hoje,vincular,pessoa-simplificada}`, `apontador.contexto_presenca`); só a marcação
+  manual do apontador sai (`manual.desmarcar`).
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e

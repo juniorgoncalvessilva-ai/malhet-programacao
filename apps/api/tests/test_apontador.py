@@ -134,3 +134,53 @@ def test_funcoes_que_entram_como_apontador(client):
     assert entra("115900") == 200
     outra = client.post("/api/admin/obras", json={"codigo": "OUT-APF", "nome": "Outra"}).json()["id"]
     assert client.get("/api/lideres/apontador/funcoes", headers={"X-Obra-Id": str(outra)}).json()["disponiveis"] == []
+
+
+def test_leitura_de_presenca_no_celular_do_apontador(client):
+    """Spec 150: crachá NFC, código/QR, rosto e lista no celular do apontador — os mesmos casos de uso do /m/presenca,
+    com o token dele; marcação à mão sai, leitura de crachá/rosto fica (é prova)."""
+    from datetime import date, datetime, timezone
+
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    client.post("/api/efetivo/colaboradores", json={"nome": "APONTADOR TESTE", "matricula": "115900", "funcao": "APONTADOR",
+                                                    "situacao": "MOBILIZADO"})
+    client.put("/api/efetivo/funcoes", json={"itens": [{"funcao": "PEDREIRO", "recurso": "Pedreiro"}]})
+    cs = {c["nome"]: c for c in client.get("/api/efetivo/colaboradores").json()}
+    w = TestClient(app)
+    h = _entrar(w, "115900")
+    he = _entrar(w, "115011", "lider")
+    assert w.get("/api/portal/apontador/presenca/base", headers=he).status_code == 422  # encarregado não lê pela rota
+    assert w.get("/api/portal/apontador/presenca/base").status_code in (401, 422)
+
+    b = w.get("/api/portal/apontador/presenca/base", headers=h).json()
+    nomes = {p["nome"] for p in b["pessoas"]}
+    assert "SERVENTE TESTE TRES" in nomes and "DEMITIDO TESTE" not in nomes and "termo_lgpd" in b
+
+    serv, enc = cs["SERVENTE TESTE TRES"]["id"], cs["ENCARREGADO TESTE UM"]["id"]
+    hoje, agora = date.today().isoformat(), datetime.now(timezone.utc).isoformat()
+    lt = {"leituras": [{"id_local": "apont-cel-0001", "colaborador_id": serv, "data": hoje, "hora": agora, "meio": "nfc"},
+                       {"id_local": "apont-cel-0002", "colaborador_id": enc, "data": hoje, "hora": agora, "meio": "manual"}]}
+    r = w.post("/api/portal/apontador/presenca/leituras", headers=h, json=lt).json()
+    assert r["aceitas"] == 2 and not r["erros"], r
+    assert w.post("/api/portal/apontador/presenca/leituras", headers=h, json=lt).json()["repetidas"] == 2  # idempotente
+    assert {x["colaborador_id"] for x in w.get(f"/api/portal/apontador/presenca/hoje?data={hoje}", headers=h).json()} == {serv, enc}
+    eq = w.get("/api/portal/apontador/equipes", headers=h).json()
+    assert eq["presentes"] == 2
+
+    # o crachá lido pelo apontador é prova; a lista (manual) dele sai
+    assert "não dá para tirar" in w.post("/api/portal/apontador/presenca", headers=h, json={"colaborador_id": serv, "presente": False}).json()["detail"]
+    assert w.post("/api/portal/apontador/presenca", headers=h, json={"colaborador_id": enc, "presente": False}).json()["presenca"] is None
+
+    # crachá não cadastrado: liga à pessoa do efetivo ou cadastra simplificado, assinado pelo apontador
+    v = w.post("/api/portal/apontador/presenca/vincular", headers=h, json={"colaborador_id": serv, "codigo": "QR-778899"})
+    assert v.status_code == 200 and "QR778899" in "".join(v.json()["codigos"]).replace("-", ""), v.text
+    funcoes = b["funcoes"]
+    assert funcoes, "a base traz as funções do de-para para o cadastro rápido"
+    n = w.post("/api/portal/apontador/presenca/pessoa-simplificada", headers=h,
+               json={"nome": "Fulano Campo Novo", "funcao_chave": funcoes[0]["funcao_chave"], "codigo": "QR-1234"})
+    assert n.status_code == 201 and n.json()["cadastro_pendente"], n.text
+    from app.core.db import SessionLocal
+    from app.modules.efetivo.infra.models import ColaboradorModel
+
+    with SessionLocal() as db:
+        assert db.get(ColaboradorModel, n.json()["id"]).cadastrado_por.startswith("apontador 115900")

@@ -49,7 +49,8 @@ def desmarcar(s: Session, obra_id: int, colaborador_id: int, dia: date) -> None:
     todas = list(s.scalars(select(LeituraPresencaModel).where(LeituraPresencaModel.obra_id == obra_id,
                                                               LeituraPresencaModel.colaborador_id == colaborador_id,
                                                               LeituraPresencaModel.data == dia)))
-    lidas = [x for x in todas if not x.registrado_por.startswith(PREFIXO)]
+    # spec 150: o apontador também lê crachá/rosto no celular dele — só a marcação à mão (meio manual) sai
+    lidas = [x for x in todas if x.meio != "manual" or not x.registrado_por.startswith(PREFIXO)]
     if lidas:
         from zoneinfo import ZoneInfo
 

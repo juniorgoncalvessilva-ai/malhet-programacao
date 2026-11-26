@@ -443,3 +443,38 @@ def ap_apontar_equipamento(eid: int, d: DiaEquipamentoIn, s: Session = Depends(g
 @publico.get("/apontador/producao")
 def ap_producao(s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
     return ap.producao(s, x_portal_token)
+
+
+# ---- leitura de presença no celular do apontador (spec 150): os mesmos casos de uso do /m/presenca ---------------------
+from app.modules.presenca.api import router as pres  # noqa: E402
+
+
+@publico.get("/apontador/presenca/base")
+def ap_presenca_base(s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return pres.base(s, ap.contexto_presenca(s, x_portal_token))
+
+
+@publico.post("/apontador/presenca/leituras")
+def ap_presenca_leituras(d: pres.LeiturasIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = pres.sincronizar(d, s, ap.contexto_presenca(s, x_portal_token))
+    _mudou(x_portal_token)
+    return r
+
+
+@publico.get("/apontador/presenca/hoje")
+def ap_presenca_hoje(data: date | None = None, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return pres.hoje(data, s, ap.contexto_presenca(s, x_portal_token))
+
+
+@publico.post("/apontador/presenca/vincular")
+def ap_presenca_vincular(d: pres.VincularIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = pres.vincular(d, s, ap.contexto_presenca(s, x_portal_token))
+    _mudou(x_portal_token)
+    return r
+
+
+@publico.post("/apontador/presenca/pessoa-simplificada", status_code=201)
+def ap_presenca_pessoa(d: pres.PessoaSimplesIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = pres.pessoa_simplificada(d, s, ap.contexto_presenca(s, x_portal_token))
+    _mudou(x_portal_token)
+    return r

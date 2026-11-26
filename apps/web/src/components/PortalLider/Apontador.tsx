@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { Calculado, type MemoriaCalculo } from '@/components/Obra/Calculado';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 import { Folha } from '@/components/PortalLider/Folha';
+import { PainelLeitura } from '@/components/Presenca/PainelLeitura';
+import { type TransportePresenca, usePresencaCom } from '@/lib/presenca/usePresenca';
 import { FotosAtividade } from '@/components/PortalLider/FotosAtividade';
 import { type Achado, type DadosApontador, type EquipamentoDia, type EquipamentosApontador, type EquipeApontador, type PessoaApontador,
   type Producao, portal } from '@/lib/portal/api';
@@ -64,11 +66,28 @@ export function TelaDoApontador({ tela, obra, estado, criarAoAbrir }: {
   tela: TelaApontador; obra: string | null; estado: ReturnType<typeof useDadosApontador>; criarAoAbrir?: boolean;
 }) {
   const { dia, setDia, dados, setDados, carregar } = estado;
+  const [modo, setModo] = useState<'equipe' | 'ler'>('equipe');
+  const lendo = tela === 'presenca' && modo === 'ler';
+  const hoje = isoLocal(new Date());
+  const trocarModo = (m: 'equipe' | 'ler') => {
+    setModo(m);
+    if (m === 'ler' && dia !== hoje) setDia(hoje); // leitura de crachá/rosto é sempre do dia de hoje
+    if (m === 'equipe') void carregar(); // o que foi lido aparece nas equipes
+  };
   return (
     <>
       <h1 className="text-[22px] font-semibold leading-7">{TITULOS[tela]}</h1>
-      {(tela === 'presenca' || tela === 'equipamentos') && <Dias dia={dia} setDia={setDia} />}
-      {tela === 'presenca' ? (dados ? <Presenca dados={dados} dia={dia} onMudou={setDados} /> : <Esqueleto className="h-60 w-full" />)
+      {tela === 'presenca' && (
+        <div role="tablist" aria-label="Como apontar a presença" className="grid grid-cols-2 gap-1 rounded-full bg-m-surface-active p-1">
+          {([['equipe', 'Por equipe'], ['ler', 'Ler presença']] as const).map(([k, r]) => (
+            <button key={k} type="button" role="tab" aria-selected={modo === k} onClick={() => trocarModo(k)}
+              className={`h-10 rounded-full text-[14px] font-semibold ${modo === k ? 'bg-m-surface text-m-text-primary shadow-sm' : 'text-m-text-secondary'}`}>{r}</button>
+          ))}
+        </div>
+      )}
+      {((tela === 'presenca' && !lendo) || tela === 'equipamentos') && <Dias dia={dia} setDia={setDia} />}
+      {lendo ? (dados ? <LerPresenca obraId={dados.obra_id} /> : <Esqueleto className="h-60 w-full" />)
+        : tela === 'presenca' ? (dados ? <Presenca dados={dados} dia={dia} onMudou={setDados} /> : <Esqueleto className="h-60 w-full" />)
         : tela === 'equipes' ? (dados ? <Equipes dados={dados} recarregar={carregar} criarAoAbrir={criarAoAbrir} /> : <Esqueleto className="h-60 w-full" />)
           : tela === 'equipamentos' ? <Equipamentos dia={dia} />
             : tela === 'fotos' ? <FotosAtividade obra={obra} /> : <ProducaoAba />}
@@ -77,6 +96,22 @@ export function TelaDoApontador({ tela, obra, estado, criarAoAbrir }: {
 }
 
 // ---- presença -----------------------------------------------------------------------------------------------------
+/** Spec 150: troca `/presenca/*` (conta do Malhet) por `/portal/apontador/presenca/*` (token do apontador). */
+const caminhoPortal = (p: string) => p.replace(/^\/presenca\//, '/apontador/presenca/');
+
+/**
+ * Leitura de presença no celular do apontador (spec 150): o mesmo painel do `/m/presenca` — crachá NFC, código/QR, rosto e
+ * lista — com a fila offline do aparelho; as leituras sobem pelo token do apontador e entram nas equipes.
+ */
+function LerPresenca({ obraId }: { obraId: number }) {
+  const transporte = useMemo<TransportePresenca>(() => ({
+    obraId,
+    get: <T,>(p: string) => portal<T>(caminhoPortal(p)),
+    post: <T,>(p: string, corpo: unknown) => portal<T>(caminhoPortal(p), { method: 'POST', body: corpo }),
+  }), [obraId]);
+  return <PainelLeitura pr={usePresencaCom(transporte)} topo={false} />;
+}
+
 function memoriaPresenca(dados: DadosApontador): MemoriaCalculo {
   const todos = [...dados.equipes.flatMap((e) => e.pessoas), ...dados.sem_equipe];
   const presentes = todos.filter((p) => p.presenca).length;
@@ -128,7 +163,7 @@ function Presenca({ dados, dia, onMudou }: { dados: DadosApontador; dia: string;
             )}
             <ul className="flex flex-col border-t border-m-stroke-subtle">
               {lista.map((p) => {
-                const lida = p.presenca && !p.presenca.por.startsWith('apontador');
+                const lida = p.presenca && (p.presenca.meio !== 'manual' || !p.presenca.por.startsWith('apontador'));
                 return (
                   <li key={p.cracha} className="flex items-center gap-3 border-b border-m-stroke-subtle px-4 py-2.5 last:border-b-0">
                     <div className="min-w-0 flex-1">

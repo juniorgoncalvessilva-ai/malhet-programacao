@@ -23,6 +23,18 @@ def _ap(s: Session, token: str | None) -> tuple[int, ColaboradorModel, str]:
     return p.obra_id, c, f"apontador {c.matricula or c.cracha or c.id} · {c.nome}"[:80]
 
 
+def contexto_presenca(s: Session, token: str | None):
+    """Spec 150: a leitura de presença do celular (crachá NFC, código/QR, rosto, lista) roda com o token do apontador.
+    Os casos de uso da presença recebem o mesmo contexto da conta do Malhet, com o apontador como autor (papel de quem
+    lê crachás); a obra sai do token, nunca do aparelho."""
+    from app.core.auth import ContextoObra, UsuarioAtual
+    from app.modules.obras.domain.obra import PapelObra
+
+    obra, c, por = _ap(s, token)
+    return ContextoObra(obra_id=obra, usuario=UsuarioAtual(id=por, email=por), papel=PapelObra.ENCARREGADO,
+                        cracha=c.cracha or c.matricula)
+
+
 def _dia(data: date | None) -> date:
     hoje = hoje_local()
     d = data or hoje
