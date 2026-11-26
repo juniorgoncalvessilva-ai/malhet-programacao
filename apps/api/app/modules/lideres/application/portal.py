@@ -18,6 +18,7 @@ from app.modules.lideres.domain.portal import (
     EquipeDoLider,
     Tentativas,
     equipes_do_lider,
+    funcao_de_apontador,
     funcao_de_lider,
     normalizar_codigo,
     validar_nova_senha,
@@ -125,8 +126,13 @@ def _encarregado_fora_do_efetivo(s: Session, cod: str, obras: set[int] | None, j
     return novos
 
 
+def pode_apontar(c: ColaboradorModel, acesso: LiderAcessoModel | None) -> bool:
+    """Spec 147: apontador = cadastrado como apontador em Acesso dos líderes ou com a função de apontador no efetivo."""
+    return bool(acesso and acesso.perfil == "apontador" and acesso.cadastrado) or funcao_de_apontador(c.funcao)
+
+
 def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int | None = None,
-           obras: list[int] | None = None) -> dict:
+           obras: list[int] | None = None, perfil: str = "lider") -> dict:
     """Endereço dos encarregados (specs 115, 117 e 118): a obra vem da matrícula (ou do endereço). Matrícula em mais de
     uma obra (e a senha confere nas duas) → devolve as obras para ele escolher e entrar de novo com `obra_id`.
     Entra quem aparece em Acesso dos líderes: encarregado/responsável/supervisor de equipe ativa, líder cadastrado,
@@ -148,13 +154,19 @@ def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int |
     lideres, nao_lider, bloqueado = [], [], False
     for c in candidatos:
         acesso = s.scalar(select(LiderAcessoModel).where(LiderAcessoModel.obra_id == c.obra_id, LiderAcessoModel.colaborador_id == c.id))
+        if perfil == "apontador":  # spec 147: a rota do apontador só aceita apontador
+            if pode_apontar(c, acesso):
+                lideres.append((c, acesso))
+            else:
+                nao_lider.append(c)
+            continue
         lidera = equipes_lideradas(s, c.obra_id, c, acesso)
         # spec 114: função de liderança no efetivo também entra (sem equipe ainda, para pedir a dele)
-        if lidera or (acesso and acesso.cadastrado) or funcao_de_lider(c.funcao):
+        if lidera or (acesso and acesso.cadastrado and acesso.perfil != "apontador") or funcao_de_lider(c.funcao):
             lideres.append((c, acesso))
         else:
             nao_lider.append(c)
-    if (senha or "").strip() == SENHA_INICIAL:  # encarregado de equipe que não está no efetivo: entra no 1º acesso
+    if perfil != "apontador" and (senha or "").strip() == SENHA_INICIAL:  # encarregado fora do efetivo: entra no 1º acesso
         lideres += [(c, None) for c in _encarregado_fora_do_efetivo(s, cod, permitidas, {c.obra_id for c in todos})]
     validos = []
     for c, acesso in lideres:
@@ -174,33 +186,45 @@ def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int |
                                                         if ja_criou else "No primeiro acesso a senha é 123456."), "senha")
         TENTATIVAS.errou(chave, agora)
         if nao_lider:
+            if perfil == "apontador":
+                raise DomainError(f"{nao_lider[0].nome}: não está como apontador. O Planejamento inclui em Acesso dos líderes.",
+                                  "matricula")
             raise DomainError(f"{nao_lider[0].nome}: não está como líder de equipe. O Planejamento inclui em Acesso dos líderes.",
                               "matricula")
         if permitidas is not None and any(c.obra_id not in permitidas for c in todos):
             raise DomainError("sua matrícula não é desta obra: entre pelo endereço da sua obra (peça ao Planejamento)", "matricula")
-        raise DomainError(f"matrícula {cod} não encontrada entre os líderes. Confira o número com o Planejamento.", "matricula")
+        quem_e = "os apontadores" if perfil == "apontador" else "os líderes"
+        raise DomainError(f"matrícula {cod} não encontrada entre {quem_e}. Confira o número com o Planejamento.", "matricula")
     TENTATIVAS.acertou(chave)
     if len(validos) > 1:
         return {"escolher": [_nome_obra(s, c.obra_id) for c, _a in validos]}
     c, acesso = validos[0]
     if acesso is None:
-        acesso = LiderAcessoModel(obra_id=c.obra_id, colaborador_id=c.id, ativo=True, cadastrado=False, equipes=[], versao=0)
+        acesso = LiderAcessoModel(obra_id=c.obra_id, colaborador_id=c.id, ativo=True, cadastrado=False, equipes=[], versao=0,
+                                  perfil="apontador" if perfil == "apontador" else "lider")
         s.add(acesso)
     acesso.ultimo_acesso = datetime.now(timezone.utc)
     s.flush()
     trocar = not acesso.senha_hash
     from app.modules.lideres.application.rotas import rota_da_obra
 
-    return {"token": sessao.emitir(acesso.id, c.obra_id, acesso.versao, trocar), "trocar_senha": trocar, "nome": c.nome,
-            "obra_id": c.obra_id, "rota": rota_da_obra(s, c.obra_id)}
+    p = "apontador" if perfil == "apontador" else "lider"
+    return {"token": sessao.emitir(acesso.id, c.obra_id, acesso.versao, trocar, p), "trocar_senha": trocar, "nome": c.nome,
+            "obra_id": c.obra_id, "rota": rota_da_obra(s, c.obra_id), "perfil": p}
 
 
 def obra_do_token(token: str | None) -> int:
     return int(sessao.ler(token)["obra"])
 
 
-def _sessao(s: Session, token: str | None, aceita_trocar: bool = False) -> tuple[_Obra, LiderAcessoModel, ColaboradorModel]:
+def perfil_do_token(token: str | None) -> str:
+    return sessao.ler(token).get("perfil") or "lider"
+
+
+def _sessao(s: Session, token: str | None, aceita_trocar: bool = False, perfil: str | None = None) -> tuple[_Obra, LiderAcessoModel, ColaboradorModel]:
     d = sessao.ler(token)
+    if perfil and (d.get("perfil") or "lider") != perfil:
+        raise DomainError("esta tela é do apontador: entre pelo endereço do apontador", "sessao")
     acesso = s.get(LiderAcessoModel, int(d["sub"]))
     if acesso is None or acesso.obra_id != d.get("obra") or acesso.versao != d.get("v") or not acesso.ativo:
         raise DomainError("sessão encerrada: entre de novo com a matrícula e a senha", "sessao")
@@ -221,7 +245,8 @@ def trocar_senha(s: Session, token: str | None, nova: str, repetida: str) -> dic
     acesso.senha_hash = HASHER.hash(validar_nova_senha(nova, repetida))
     acesso.versao += 1
     s.flush()
-    return {"token": sessao.emitir(acesso.id, p.obra_id, acesso.versao, False), "trocar_senha": False, "nome": c.nome}
+    return {"token": sessao.emitir(acesso.id, p.obra_id, acesso.versao, False, perfil_do_token(token)), "trocar_senha": False,
+            "nome": c.nome}
 
 
 def _membro_out(m, pessoas: dict[str, ColaboradorModel]) -> dict:

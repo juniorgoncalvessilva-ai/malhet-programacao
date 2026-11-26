@@ -32,3 +32,4 @@ from app.modules.aderencia.infra import models as _aderencia  # noqa: F401
 from app.modules.lideres.infra import models as _lideres  # noqa: F401  (spec 111)
 from app.modules.exclusoes.infra import models as _exclusoes  # noqa: F401  (spec 112)
 from app.modules.partes.infra import models as _partes  # noqa: F401  (spec 139)
+from app.modules.equipamentos.infra import models as _equipamentos  # noqa: F401  (spec 147)

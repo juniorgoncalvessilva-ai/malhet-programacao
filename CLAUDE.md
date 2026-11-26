@@ -74,6 +74,12 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (spec 114): função de liderança entra sem equipe (`funcao_de_lider`), pede a equipe (`lider_pedido_equipe`) e o Planejamento
   aprova (cria no padrão de nome, líder = encarregado, pessoas pelo `Alocador`) ou recusa com motivo em Acesso dos líderes.
   Recusado sai da fila na hora e volta ao líder (spec 140): aviso com o motivo e "nova solicitação" já preenchida com o pedido recusado.
+  Rota do apontador (spec 147): `lider_acesso.perfil` (`lider|apontador`; função APONTADOR no efetivo ou cadastrado como apontador),
+  mesmo login/endereço do encarregado em `/apontador/<empresa>/<obra>` (`POST /portal/entrar {perfil}`, token com o perfil,
+  `usarPerfil` guarda a sessão por perfil). `/portal/apontador/*` (`application/apontador.py`): todas as equipes + sem equipe com a
+  presença do dia, criar equipe na hora (`gestao.criar_equipe`), incluir/tirar, presença `manual` (`presenca/application/manual.py`,
+  desmarca só o apontado, 7 dias), equipamentos do dia e produção da vigente (`programacao_vigente`). Celular `Apontador.tsx`;
+  app instalável pela rota (`OfertaInstalar` no login + `/api/manifest?inicio=` com `start_url` = o login da rota).
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e
@@ -194,6 +200,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   mesma com motivo (anterior em `documento_arquivo_anterior`, no histórico e em `_em_uso`); nó "Sem arquivo (a receber)" (`temArquivo`).
   Leitura do desenho nunca derruba o envio (spec 138): `desenho.limpo` tira NUL/controle dos textos do DWG; erro do leitor ou do
   Agg vira aviso em `ler_arquivo` e o arquivo é guardado assim mesmo.
+- Equipamentos (`equipamentos/`, spec 147): `equipamento` (chave TAG→placa→chassi, operador do efetivo, situação mobilizado/
+  desmobilizado/nao_mobilizado), `equipamento_movimento` (histórico) e `equipamento_apontamento` (dia: operando/disposição/parado/
+  manutenção). Planilha da obra com prévia (`domain/equipamento.py::ler`, `casar_operador` liga só operador/motorista único),
+  mobilizar/desmobilizar, `/app/equipamentos` (Pessoas e equipes), "opera TAG" no Efetivo (`/equipamentos/por-operador`).
 - Book de fotos (`/app/fotos`, `GET /fotos/book`, `campo/application/book.py`): atividades/ocorrências/restrições por frente,
   atividade ou data, impressão com logos. Spec 062. Inclui auditorias (antes/depois) e evidências das ações 5W2H (`tipo=auditoria|acao`). Spec 070.
   Baixar todas em .zip (`GET /fotos/book/zip`, `montar_zip`: pastas Dia/Frente, nome `nome_arquivo`,

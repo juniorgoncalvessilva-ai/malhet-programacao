@@ -32,6 +32,8 @@ class LiderAcessoModel(Base):
     cadastrado: Mapped[bool] = mapped_column(Boolean, default=False)  # incluído na tela de líderes
     equipes: Mapped[list] = mapped_column(JSONB, default=list)  # equipes além das que já lidera
     versao: Mapped[int] = mapped_column(Integer, default=0)  # sobe ao trocar/redefinir/bloquear: derruba as sessões
+    # spec 147: "lider" (rota /encarregado) ou "apontador" (rota /apontador: todas as equipes, presença, equipamentos)
+    perfil: Mapped[str] = mapped_column(String(10), default="lider", server_default="lider")
     ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     criado_por: Mapped[str | None] = mapped_column(String(80))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

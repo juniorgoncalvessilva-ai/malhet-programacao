@@ -21,17 +21,19 @@ def listar(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     from app.modules.lideres.application.rotas import rota_da_obra
 
     r = rota_da_obra(s, c.obra_id)
-    return {"endereco": r["endereco"], "endereco_empresa": r["endereco_empresa"], "lideres": gestao.listar(s, c.obra_id)}
+    return {"endereco": r["endereco"], "endereco_empresa": r["endereco_empresa"], "endereco_apontador": r["endereco_apontador"],
+            "endereco_apontador_empresa": r["endereco_apontador_empresa"], "lideres": gestao.listar(s, c.obra_id)}
 
 
 class LiderIn(BaseModel):
     colaborador_id: int
     equipes: list[int] = []
+    perfil: str = Field("lider", max_length=10)  # spec 147: "apontador"
 
 
 @router.post("", status_code=201)
 def cadastrar(d: LiderIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
-    gestao.cadastrar(s, c.obra_id, d.colaborador_id, d.equipes, c.usuario.id)
+    gestao.cadastrar(s, c.obra_id, d.colaborador_id, d.equipes, c.usuario.id, d.perfil)
     return {"ok": True}
 
 
@@ -142,6 +144,7 @@ class EntrarIn(BaseModel):
     senha: str = Field(max_length=60)
     obra_id: int | None = None  # a matrícula está em mais de uma obra: a escolhida (ou a obra do endereço)
     empresa: str | None = Field(None, max_length=60)  # endereço da empresa: só as obras dela (spec 117)
+    perfil: str = Field("lider", max_length=10)  # spec 147: "apontador" pela rota /apontador
 
 
 @publico.post("/entrar")
@@ -151,7 +154,7 @@ def entrar(d: EntrarIn, request: Request, s: Session = Depends(get_session)):
         from app.modules.lideres.application.rotas import obras_da_empresa
 
         obras = obras_da_empresa(s, d.empresa)
-    return pt.entrar(s, d.matricula, d.senha, _ip(request), d.obra_id, obras)
+    return pt.entrar(s, d.matricula, d.senha, _ip(request), d.obra_id, obras, d.perfil)
 
 
 class SenhaIn(BaseModel):
@@ -350,3 +353,78 @@ def documento_arquivo(rid: int, formato: str = "png", s: Session = Depends(get_s
         raise NotFoundError("Revisão vigente", rid)
     dados, mime, nome = dsv.arquivo_da_revisao(s, obra, rid, formato if formato in ("png", "pdf") else "png", por, "portal")
     return Response(dados, media_type=mime, headers={"Content-Disposition": f'inline; filename="{nome}"', "Cache-Control": "private, max-age=3600"})
+
+
+# ---- rota do apontador (spec 147): mesma sessão do portal, perfil "apontador" -----------------------------------------
+from app.modules.lideres.application import apontador as ap  # noqa: E402
+
+
+@publico.get("/apontador/equipes")
+def ap_equipes(data: date | None = None, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return ap.equipes(s, x_portal_token, data)
+
+
+class EquipeNovaIn(BaseModel):
+    disciplina: str = Field(max_length=60)
+    encarregado: str = Field(max_length=30)  # matrícula/crachá
+    membros: list[str] = Field(default_factory=list, max_length=200)
+    nome: str | None = Field(None, max_length=120)
+
+
+@publico.post("/apontador/equipes", status_code=201)
+def ap_criar_equipe(d: EquipeNovaIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.criar_equipe(s, x_portal_token, d.disciplina, d.encarregado, d.membros, d.nome)
+    _mudou(x_portal_token)
+    return r
+
+
+@publico.post("/apontador/incluir")
+def ap_incluir(d: IncluirIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.incluir(s, x_portal_token, d.equipe_id, d.cracha)
+    _mudou(x_portal_token)
+    return r
+
+
+@publico.post("/apontador/tirar")
+def ap_tirar(d: IncluirIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.tirar(s, x_portal_token, d.equipe_id, d.cracha)
+    _mudou(x_portal_token)
+    return r
+
+
+class PresencaIn(BaseModel):
+    data: date | None = None
+    colaborador_id: int
+    presente: bool
+
+
+@publico.post("/apontador/presenca")
+def ap_presenca(d: PresencaIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.presenca(s, x_portal_token, d.data, d.colaborador_id, d.presente)
+    _mudou(x_portal_token)
+    return r
+
+
+@publico.get("/apontador/equipamentos")
+def ap_equipamentos(data: date | None = None, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return ap.equipamentos(s, x_portal_token, data)
+
+
+class DiaEquipamentoIn(BaseModel):
+    data: date | None = None
+    situacao: str = Field(max_length=12)
+    horas: float | None = None
+    equipe_id: int | None = None
+    observacao: str | None = Field(None, max_length=300)
+
+
+@publico.put("/apontador/equipamentos/{eid}")
+def ap_apontar_equipamento(eid: int, d: DiaEquipamentoIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.apontar_equipamento(s, x_portal_token, eid, d.data, d.situacao, d.horas, d.equipe_id, d.observacao)
+    _mudou(x_portal_token)
+    return r
+
+
+@publico.get("/apontador/producao")
+def ap_producao(s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    return ap.producao(s, x_portal_token)

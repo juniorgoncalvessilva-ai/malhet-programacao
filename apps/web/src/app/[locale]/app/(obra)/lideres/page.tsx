@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Copy, KeyRound, Link2, Lock, MessageCircle, Trash2, Unlock, UserPlus } from 'lucide-react';
+import { ClipboardCheck, Copy, KeyRound, Link2, Lock, MessageCircle, Trash2, Unlock, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { BuscaEfetivo } from '@/components/Obra/BuscaEfetivo';
@@ -19,9 +19,9 @@ import type { Colaborador } from '@/lib/api/types';
 interface Lider {
   colaborador_id?: number; nome: string; matricula: string | null; funcao?: string | null; papeis?: string[]; cadastrado?: boolean;
   equipes?: { id: number; nome: string }[]; equipes_extras?: number[]; situacao?: 'nunca_entrou' | 'senha_inicial' | 'ativo' | 'bloqueado';
-  ultimo_acesso?: string | null; fora_do_efetivo?: boolean; equipe?: string;
+  ultimo_acesso?: string | null; fora_do_efetivo?: boolean; equipe?: string; perfil?: 'lider' | 'apontador';
 }
-interface Resposta { endereco: string; endereco_empresa: string; lideres: Lider[] }
+interface Resposta { endereco: string; endereco_empresa: string; endereco_apontador: string; endereco_apontador_empresa: string; lideres: Lider[] }
 
 const SITUACAO = { nunca_entrou: ['Nunca entrou', 'neutro'], senha_inicial: ['Senha inicial (123456)', 'atencao'], ativo: ['Com senha própria', 'sucesso'], bloqueado: ['Bloqueado', 'perigo'] } as const;
 
@@ -40,6 +40,7 @@ export default function LideresPage() {
   const [equipesNovo, setEquipesNovo] = useState<string[]>([]);
   const [editando, setEditando] = useState<number | null>(null);
   const [equipesEdit, setEquipesEdit] = useState<string[]>([]);
+  const [novoAp, setNovoAp] = useState<Colaborador | null>(null);
   const planejador = pode('planejador');
   // spec 117: endereço da obra e da empresa, montados sozinhos pelo nome da contratada e o código da obra
   const origem = `${typeof window !== 'undefined' ? window.location.origin : ''}/pt-BR`;
@@ -47,6 +48,11 @@ export default function LideresPage() {
   const linkEmpresa = `${origem}${q.data?.endereco_empresa ?? '/encarregado'}`;
   const mensagem = `Encarregados e líderes da ${obra?.nome ?? 'obra'}: confiram quem está na sua equipe e avisem quem saiu ou chegou.\n${link}\nEntre com a sua matrícula. Primeiro acesso: senha 123456 (em seguida você cria a sua).`;
   const opcoesEquipes = (equipes.data ?? []).filter((e) => e.ativo).map((e) => ({ valor: String(e.id), rotulo: `${e.nome}${e.encarregado_nome ? ` — Enc. ${e.encarregado_nome}` : ''}` }));
+  // spec 147: o apontador entra pela rota dele, com a mesma regra de endereço
+  const linkAp = `${origem}${q.data?.endereco_apontador ?? '/apontador'}`;
+  const linkApEmpresa = `${origem}${q.data?.endereco_apontador_empresa ?? '/apontador'}`;
+  const mensagemAp = `Apontadores da ${obra?.nome ?? 'obra'}: presença das equipes, equipamentos, fotos e produção pelo celular.\n${linkAp}\nEntre com a sua matrícula. Primeiro acesso: senha 123456 (em seguida você cria a sua). Ao abrir, instale o app na tela de início.`;
+  const apontadores = q.data?.lideres.filter((l) => !l.fora_do_efetivo && l.perfil === 'apontador') ?? [];
   const lideres = q.data?.lideres.filter((l) => !l.fora_do_efetivo) ?? [];
   const fora = q.data?.lideres.filter((l) => l.fora_do_efetivo) ?? [];
   const exec = async (p: Promise<unknown>, ok: string) => { try { await p; toast.success(ok); } catch (e) { toast.error((e as Error).message); } };
@@ -79,6 +85,33 @@ export default function LideresPage() {
         </div>
       </Painel>
 
+      <Painel titulo="Onde o apontador entra?" subtitulo="Endereço do apontador desta obra: a mesma regra do encarregado (matrícula; primeiro acesso com 123456). O apontador cria equipes, aponta a presença de todo o efetivo e o dia dos equipamentos, registra as fotos das atividades e confere a produção. Entram quem tem a função de apontador no efetivo e quem você cadastrar como apontador abaixo. No celular, a tela oferece instalar o app, que abre direto neste login.">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-m-md border border-m-stroke-subtle px-3 py-2.5">
+            <ClipboardCheck size={16} className="text-m-accent" aria-hidden="true" />
+            <code className="min-w-0 flex-1 break-all text-[13px] text-m-text-primary">{linkAp}</code>
+            <Botao variante="secundario" onClick={() => navigator.clipboard.writeText(mensagemAp).then(() => toast.success('Mensagem do apontador copiada'))}><Copy size={16} /> Copiar mensagem</Botao>
+            <a href={`https://wa.me/?text=${encodeURIComponent(mensagemAp)}`} target="_blank" rel="noreferrer"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-m-accent-strong px-4 text-[13px] font-semibold text-m-on-accent"><MessageCircle size={16} /> Enviar no WhatsApp</a>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-m-text-tertiary">
+            <span>Endereço da empresa:</span><code className="break-all text-m-text-secondary">{linkApEmpresa}</code>
+            <span className="ml-auto">{apontadores.length} apontador(es): {apontadores.map((a) => a.nome).join(', ') || '—'}</span>
+          </div>
+          {planejador && (
+            <div className="flex flex-wrap items-end gap-3">
+              <BuscaEfetivo rotulo="Cadastrar apontador (pessoa do efetivo)" className="w-full max-w-[380px]" pessoas={efetivo.data ?? []} onEscolher={(p) => setNovoAp(p)} />
+              <Botao disabled={!novoAp} onClick={async () => {
+                if (!novoAp) return;
+                await exec(api.post('/lideres', { colaborador_id: novoAp.id, perfil: 'apontador' }), `${novoAp.nome} pode entrar no endereço do apontador (senha 123456)`);
+                setNovoAp(null);
+              }}><UserPlus size={16} /> Incluir apontador</Botao>
+              {novoAp && <span className="text-[13px] text-m-text-secondary">Escolhido: <b className="text-m-text-primary">{novoAp.nome}</b>{novoAp.matricula ? ` · ${novoAp.matricula}` : ''}</span>}
+            </div>
+          )}
+        </div>
+      </Painel>
+
       <PedidosEquipe podeDecidir={planejador} />
 
       {planejador && (
@@ -104,7 +137,7 @@ export default function LideresPage() {
             return (
               <tr key={l.colaborador_id}>
                 <td className={td}><b className="text-m-text-primary">{l.nome}</b><span className="block text-xs text-m-text-muted">{[l.matricula, l.funcao].filter(Boolean).join(' · ')}</span></td>
-                <td className={td}>{l.papeis?.join(', ')}</td>
+                <td className={td}>{l.perfil === 'apontador' ? <Pilula tom="info">apontador</Pilula> : null} {l.papeis?.filter((x) => x !== 'apontador').join(', ')}</td>
                 <td className={td}>{editando === l.colaborador_id
                   ? <div className="flex items-center gap-2"><MultiSelecao rotulo="Equipes" largura="w-[280px]" comNa={false} valor={equipesEdit} opcoes={opcoesEquipes} onChange={setEquipesEdit} />
                       <Botao onClick={async () => { await exec(api.put(`/lideres/${l.colaborador_id}`, { equipes: equipesEdit.map(Number) }), 'Equipes do líder salvas'); setEditando(null); }}>Salvar</Botao></div>

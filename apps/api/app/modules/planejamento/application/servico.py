@@ -268,6 +268,19 @@ def _marcar_sequencia(linhas: list[dict]) -> None:
         ln["alertas_sequencia"] = alertas
 
 
+def programacao_vigente(s: Session, obra_id: int, hoje: date) -> ProgramacaoModel | None:
+    """A semanal emitida/concluída que cobre hoje; sem ela, a semanal emitida mais recente; sem semanal, a mensal do mês.
+    (Programação vigente do celular e produção do apontador — spec 147.)"""
+    q = (select(ProgramacaoModel).where(ProgramacaoModel.obra_id == obra_id,
+                                        ProgramacaoModel.status.in_(("emitida", "concluida")))
+         .order_by(ProgramacaoModel.inicio.desc()))
+    progs = list(s.scalars(q))
+    return (next((p for p in progs if p.tipo == "SEMANAL" and p.inicio <= hoje <= p.fim), None)
+            or next((p for p in progs if p.tipo == "SEMANAL" and p.inicio <= hoje), None)
+            or next((p for p in progs if p.tipo == "MENSAL" and p.inicio <= hoje <= p.fim), None)
+            or (progs[0] if progs else None))
+
+
 def visao(s: Session, p: ProgramacaoModel) -> dict:
     """Programação resolvida para tela/impressão: locais → áreas → linhas, com totais."""
     vig = ResolvedorReferencias(s, p.obra_id).versoes_vigentes()

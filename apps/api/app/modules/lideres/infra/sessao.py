@@ -15,9 +15,9 @@ def _chave() -> bytes:
     return hashlib.sha256(b"malhet-portal-lider:" + os.getenv("JWT_SECRET", "dev").encode()).digest()
 
 
-def emitir(acesso_id: int, obra_id: int, versao: int, trocar: bool) -> str:
+def emitir(acesso_id: int, obra_id: int, versao: int, trocar: bool, perfil: str = "lider") -> str:
     agora = int(time.time())
-    return jwt.encode({"sub": str(acesso_id), "obra": obra_id, "v": versao, "trocar": trocar, "iat": agora,
+    return jwt.encode({"sub": str(acesso_id), "obra": obra_id, "v": versao, "trocar": trocar, "perfil": perfil, "iat": agora,
                        "exp": agora + HORAS_SESSAO * 3600}, _chave(), algorithm="HS256")
 
 

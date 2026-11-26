@@ -179,15 +179,7 @@ def importar(pid: int, d: ImportarIn, s: Session = Depends(get_session), c: Cont
 def vigente(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     """Programação vigente (para quem só consulta): a semanal emitida/concluída que cobre hoje; sem ela, a semanal
     emitida mais recente; sem semanal, a mensal. Devolve o id e a última revisão emitida."""
-    hoje = date.today()
-    q = (select(ProgramacaoModel).where(ProgramacaoModel.obra_id == c.obra_id,
-                                        ProgramacaoModel.status.in_(("emitida", "concluida")))
-         .order_by(ProgramacaoModel.inicio.desc()))
-    progs = list(s.scalars(q))
-    escolha = (next((p for p in progs if p.tipo == "SEMANAL" and p.inicio <= hoje <= p.fim), None)
-               or next((p for p in progs if p.tipo == "SEMANAL" and p.inicio <= hoje), None)
-               or next((p for p in progs if p.tipo == "MENSAL" and p.inicio <= hoje <= p.fim), None)
-               or (progs[0] if progs else None))
+    escolha = sv.programacao_vigente(s, c.obra_id, date.today())
     if escolha is None:
         return {"id": None, "revisao": None, "titulo": None}
     rev = s.scalar(select(func.max(EmissaoModel.revisao)).where(EmissaoModel.programacao_id == escolha.id))

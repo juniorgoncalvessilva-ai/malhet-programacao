@@ -2,14 +2,16 @@
 
 import { ArrowRightLeft, Camera, FolderOpen, LogOut, Search, UserPlus, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 import { definirLogoCarimbo } from '@/components/Mobile/Fotos';
 import { FotosAtividade } from '@/components/PortalLider/FotosAtividade';
 import { ProjetosPortal } from '@/components/PortalLider/ProjetosPortal';
+import { Folha } from '@/components/PortalLider/Folha';
 import { API_URL } from '@/lib/api/client';
-import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type RotaPortal, type Sessao, guardarObra, guardarRota, guardarToken, lerObra, lerRota, lerToken, portal } from '@/lib/portal/api';
+import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type PerfilPortal, type RotaPortal, type Sessao, enderecoDoPerfil, guardarObra, guardarRota, guardarToken, lerObra, lerRota, lerToken, portal, raizDoPerfil, usarPerfil } from '@/lib/portal/api';
+import { Apontador } from '@/components/PortalLider/Apontador';
+import { OfertaInstalar } from '@/components/Mobile/OfertaInstalar';
 
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 const campo = 'h-12 w-full rounded-[14px] border border-m-stroke bg-m-surface-field px-3 text-[16px] text-m-text-primary outline-none focus:border-m-accent-strong focus:ring-2 focus:ring-m-accent/30';
@@ -43,7 +45,9 @@ function textoSobre(cor: string) {
  * da empresa (logo, cor nas faixas de cima e de baixo, botões, abertura, aba e barra do navegador). O aparelho lembra a
  * obra para abrir já com a marca na próxima vez.
  */
-export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null; rota?: { empresa: string; obra?: string } }) {
+export function PortalLider({ obraInicial, rota, perfil = 'lider' }: { obraInicial?: number | null; rota?: { empresa: string; obra?: string }; perfil?: PerfilPortal }) {
+  usarPerfil(perfil); // spec 147: encarregado e apontador guardam a sessão e o endereço separados no aparelho
+  const apontador = perfil === 'apontador';
   const [obra, setObra] = useState<number | null>(obraInicial ?? null);
   const [info, setInfo] = useState<InfoPortal | null>(null);
   // spec 117: endereço da empresa/obra — a marca vem antes do login e o login fica restrito a ela
@@ -61,14 +65,17 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
   const usarObra = useCallback((id: number) => { guardarObra(id); setObra(id); }, []);
   const carregar = useCallback(async () => {
     try {
-      const d = await portal<MinhasEquipes>('/equipes');
+      // apontador: a mesma conferência da sessão, pela rota dele (só abre com o perfil de apontador)
+      const d = apontador
+        ? { ...(await portal<MinhasEquipes>('/apontador/equipes')), equipes: [], destinos: [], pedidos: [] } as MinhasEquipes
+        : await portal<MinhasEquipes>('/equipes');
       if (obraDaRota.current && d.obra_id !== obraDaRota.current) { guardarToken(null); setEtapa('entrar'); return; }
       sessaoDe.current = d.obra_id;
       setDados(d); setEtapa('equipe'); usarObra(d.obra_id);
     } catch (e) {
       if ((e as { campo?: string }).campo === 'sessao') { guardarToken(null); setEtapa('entrar'); } else toast.error((e as Error).message);
     }
-  }, [usarObra]);
+  }, [usarObra, apontador]);
 
   useEffect(() => {
     const fim = () => setTimeout(() => setAbrindo(false), 650); // tempo de ver a marca, sem atrasar o uso
@@ -76,7 +83,7 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
       // o endereço diz a empresa (e a obra): veste a marca antes de qualquer coisa
       const caminho = `/rota/${encodeURIComponent(rota.empresa)}${rota.obra ? `/${encodeURIComponent(rota.obra)}` : ''}`;
       portal<RotaResolvida>(caminho).then((r) => {
-        setInfo(r); setMarcaObra(r.marca_obra_id); fixarEndereco(r.rota.endereco);
+        setInfo(r); setMarcaObra(r.marca_obra_id); fixarEndereco(enderecoDoPerfil(r.rota.endereco));
         if (r.obra_id) {
           obraDaRota.current = r.obra_id; setObra(r.obra_id); setEmpresaRota(null);
           if (sessaoDe.current && sessaoDe.current !== r.obra_id) { guardarToken(null); sessaoDe.current = null; setDados(null); setEtapa('entrar'); }
@@ -95,7 +102,7 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
     if (obra == null) return;
     portal<InfoPortal>(`/marca/${obra}`).then((r) => {
       setInfo(r); setMarcaObra(obra);
-      if (r.rota) { guardarRota(r.rota.endereco); fixarEndereco(r.rota.endereco); } // herda o endereço da obra dele
+      if (r.rota) { const e = enderecoDoPerfil(r.rota.endereco); guardarRota(e); fixarEndereco(e); } // herda o endereço da obra dele
     }).catch(() => undefined);
   }, [obra]);
 
@@ -106,7 +113,7 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
   useEffect(() => { definirLogoCarimbo(logo); }, [logo]); // spec 121: a logo da empresa no carimbo das fotos
   // aba e barra do navegador do celular com a marca da empresa
   useEffect(() => {
-    document.title = `${info?.marca.contratada || 'Malhet'} · Minha equipe`;
+    document.title = `${info?.marca.contratada || 'Malhet'} · ${apontador ? 'Apontador' : 'Minha equipe'}`;
     let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
     meta.content = cor;
@@ -118,7 +125,19 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
     const obs = new MutationObserver(trocar); // o Next ainda pode pôr o favicon padrão depois
     obs.observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
     return () => obs.disconnect();
-  }, [info, cor, logo]);
+  }, [info, cor, logo, apontador]);
+  // spec 147: instalar o app do apontador abre direto nesta tela de login da rota (manifesto com o endereço dela)
+  useEffect(() => {
+    if (!apontador) return;
+    const inicio = window.location.pathname;
+    const q = new URLSearchParams({ inicio, nome: info?.marca.contratada || 'Malhet', cor: (info?.marca.cor || PADRAO).replace('#', '') });
+    let link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
+    link.href = `/api/manifest?${q}`;
+    let titulo = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
+    if (!titulo) { titulo = document.createElement('meta'); titulo.name = 'apple-mobile-web-app-title'; document.head.appendChild(titulo); }
+    titulo.content = 'Apontador';
+  }, [apontador, info]);
   const sobre = textoSobre(cor);
   const empresa = info?.marca.contratada || 'Malhet';
   // a cor da empresa vira o acento da tela inteira (botões, foco, seleção), como o app faz dentro da obra
@@ -148,15 +167,17 @@ export function PortalLider({ obraInicial, rota }: { obraInicial?: number | null
       <div className="mx-auto flex w-full max-w-[520px] flex-1 flex-col gap-4 px-4 pb-6 pt-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-[24px] font-semibold leading-8">{dados ? `Olá, ${dados.nome.split(' ')[0]}` : 'Minha equipe'}</h1>
+            <h1 className="text-[24px] font-semibold leading-8">{dados ? `Olá, ${dados.nome.split(' ')[0]}` : apontador ? 'Apontador' : 'Minha equipe'}</h1>
             {dados && <p className="text-[13px] text-m-text-tertiary">{[dados.matricula, dados.funcao].filter(Boolean).join(' · ')}</p>}
           </div>
           {dados && <button type="button" onClick={sair} className="flex h-10 items-center gap-1.5 rounded-full border border-m-stroke px-3 text-[13px] font-semibold text-m-text-secondary"><LogOut size={15} aria-hidden="true" /> Sair</button>}
         </div>
         {naoAchou && <Aviso texto="Endereço não encontrado. Confira o link com o Planejamento ou entre pelo endereço geral." />}
-        {naoAchou && <a href={`/${typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : 'pt-BR'}/encarregado`} className={`${secundario} flex items-center justify-center`}>Ir para o endereço geral</a>}
-        {naoAchou ? null : etapa === 'entrar' ? <Entrar obraFixa={rota?.obra ? obra : null} empresa={empresaRota} onEntrou={(r) => { if (r.obra_id) usarObra(r.obra_id); if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
+        {naoAchou && <a href={`/${typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : 'pt-BR'}${raizDoPerfil(perfil)}`} className={`${secundario} flex items-center justify-center`}>Ir para o endereço geral</a>}
+        {apontador && etapa === 'entrar' && <OfertaInstalar titulo={`Instale o app do apontador${info?.marca.contratada ? ` da ${info.marca.contratada}` : ''}`} icone={logo} />}
+        {naoAchou ? null : etapa === 'entrar' ? <Entrar perfil={perfil} obraFixa={rota?.obra ? obra : null} empresa={empresaRota} onEntrou={(r) => { if (r.obra_id) usarObra(r.obra_id); if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
             : etapa === 'senha' ? <CriarSenha onPronto={() => void carregar()} />
+              : dados && apontador ? <Apontador obra={info?.obra ?? null} />
               : dados ? (
                 <>
                   <div role="tablist" aria-label="O que fazer" className="grid grid-cols-3 gap-1 rounded-full border border-m-stroke bg-m-surface-raised p-1">
@@ -182,7 +203,7 @@ function Aviso({ texto }: { texto: string }) {
   return <p role="alert" className="rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4 text-[15px]">{texto}</p>;
 }
 
-function Entrar({ onEntrou, obraFixa, empresa }: { onEntrou: (r: Sessao) => void; obraFixa?: number | null; empresa?: string | null }) {
+function Entrar({ onEntrou, obraFixa, empresa, perfil }: { onEntrou: (r: Sessao) => void; obraFixa?: number | null; empresa?: string | null; perfil: PerfilPortal }) {
   const [matricula, setMatricula] = useState('');
   const [senha, setSenha] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -191,7 +212,7 @@ function Entrar({ onEntrou, obraFixa, empresa }: { onEntrou: (r: Sessao) => void
   const enviar = async (obraId?: number) => {
     setEnviando(true); setErro('');
     try {
-      const r = await portal<Sessao>('/entrar', { method: 'POST', body: { matricula, senha, obra_id: obraId ?? obraFixa ?? null, empresa: empresa ?? null } });
+      const r = await portal<Sessao>('/entrar', { method: 'POST', body: { matricula, senha, obra_id: obraId ?? obraFixa ?? null, empresa: empresa ?? null, perfil } });
       if (r.escolher) { setObras(r.escolher); return; }
       guardarToken(r.token ?? null);
       onEntrou(r);
@@ -216,7 +237,9 @@ function Entrar({ onEntrou, obraFixa, empresa }: { onEntrou: (r: Sessao) => void
   }
   return (
     <form onSubmit={entrar} className="flex flex-col gap-3 rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised p-4">
-      <p className="text-[15px] text-m-text-secondary">Confira quem está na sua equipe e avise quem saiu ou chegou.</p>
+      <p className="text-[15px] text-m-text-secondary">{perfil === 'apontador'
+        ? 'Aponte a presença das equipes, o dia dos equipamentos, as fotos das atividades e confira a produção.'
+        : 'Confira quem está na sua equipe e avise quem saiu ou chegou.'}</p>
       <label className="flex flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Matrícula
         <input className={campo} inputMode="numeric" name="matricula" autoComplete="off" required value={matricula} onChange={(e) => setMatricula(e.target.value)} placeholder="ex.: 115532" />
       </label>
@@ -312,21 +335,6 @@ function Equipes({ dados, recarregar }: { dados: MinhasEquipes; recarregar: () =
       {saindo && <Transferir equipe={equipe} membro={saindo} destinos={dados.destinos} onFechar={() => setSaindo(null)} onFeito={async () => { setSaindo(null); await recarregar(); }} />}
       {trazendo && <Trazer equipe={equipe} onFechar={() => setTrazendo(false)} onFeito={async () => { await recarregar(); }} />}
     </>
-  );
-}
-
-function Folha({ titulo, onFechar, children }: { titulo: string; onFechar: () => void; children: React.ReactNode }) {
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 font-[Figtree,system-ui,sans-serif]" role="dialog" aria-modal="true" aria-label={titulo}>
-      <div className="flex max-h-[90dvh] w-full max-w-[520px] flex-col gap-3 overflow-y-auto rounded-t-[24px] bg-m-surface-raised p-4 pb-[max(env(safe-area-inset-bottom),16px)] text-m-text-primary">
-        <div className="flex items-start gap-3">
-          <h2 className="flex-1 text-[18px] font-semibold leading-6">{titulo}</h2>
-          <button type="button" onClick={onFechar} aria-label="Fechar" className="grid h-10 w-10 place-items-center rounded-full border border-m-stroke"><X size={18} /></button>
-        </div>
-        {children}
-      </div>
-    </div>,
-    document.body,
   );
 }
 

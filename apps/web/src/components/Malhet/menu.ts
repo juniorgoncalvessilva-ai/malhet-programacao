@@ -1,4 +1,4 @@
-import { AlertTriangle, FolderOpen, Ruler, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2, Building2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Ruler, Images, ShieldAlert, ListChecks, ScanFace, Fingerprint, CalendarClock, Eye, Palette, BarChart3, BookOpen, Columns3, Fish, CalendarRange, ClipboardList, FileUp, GanttChart, GitFork, HardHat, IdCard, KeyRound, ListTree, MapPin, Network, Shuffle, ShieldCheck, Users, type LucideIcon, Wind, Percent, Cloud, Route, FileSignature, PanelsTopLeft, Send, TrendingUp, Trash2, Building2, Truck } from 'lucide-react';
 import type { PapelObra } from '@/lib/api/types';
 
 export interface ItemMenu {
@@ -67,6 +67,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Mobilização e vagas', url: '/app/efetivo/mobilizacao', icone: Route, palavras: 'contratação vaga rh funil' },
       { titulo: 'Equipes', url: '/app/equipes', icone: Users, palavras: 'frente de trabalho encarregado movimentações' },
       { titulo: 'Organograma', url: '/app/efetivo/organograma', icone: GitFork },
+      { titulo: 'Equipamentos', url: '/app/equipamentos', icone: Truck, palavras: 'máquinas veículos operador mobilização desmobilização apontador' },
       { titulo: 'Acesso dos líderes', url: '/app/lideres', icone: KeyRound, minimo: 'planejador', palavras: 'encarregado senha link portal' },
     ],
   },

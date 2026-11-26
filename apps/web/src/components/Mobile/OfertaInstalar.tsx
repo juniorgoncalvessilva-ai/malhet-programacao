@@ -15,7 +15,7 @@ const ios = () => typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(n
 
 /** Oferece instalar o app no celular quando ele ainda não está instalado. Android: botão que abre o "instalar"; iPhone:
  * o caminho no Safari (Compartilhar → Adicionar à Tela de Início). "Agora não" esconde por 7 dias. */
-export function OfertaInstalar() {
+export function OfertaInstalar({ titulo = 'Instale o app Malhet no celular', icone }: { titulo?: string; icone?: string | null } = {}) {
   const [pedido, setPedido] = useState<PedidoInstalar | null>(null);
   const [mostrar, setMostrar] = useState<'android' | 'ios' | null>(null);
 
@@ -39,9 +39,9 @@ export function OfertaInstalar() {
   return (
     <aside aria-label="Instalar o app" className="flex items-start gap-3 rounded-[20px] border border-m-accent-strong/30 bg-m-accent-subtle p-4">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/icone-192.png" alt="" className="h-11 w-11 shrink-0 rounded-[12px]" />
+      <img src={icone || '/brand/icone-192.png'} alt="" className="h-11 w-11 shrink-0 rounded-[12px] bg-white object-contain" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="text-[15px] font-semibold leading-5">Instale o app Malhet no celular</span>
+        <span className="text-[15px] font-semibold leading-5">{titulo}</span>
         {mostrar === 'android' ? (
           <>
             <span className="text-[13px] leading-[18px] text-m-text-secondary">Abre direto na tela de início, em tela cheia, como um aplicativo.</span>

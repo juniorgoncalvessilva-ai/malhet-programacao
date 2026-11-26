@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.equipes.infra.models import EquipeModel
 from app.modules.lideres.application.portal import equipes_lideradas
-from app.modules.lideres.domain.portal import normalizar_codigo
+from app.modules.lideres.domain.portal import funcao_de_apontador, normalizar_codigo
 from app.modules.lideres.infra import sessao
 from app.modules.lideres.infra.models import LiderAcessoModel, LiderPedidoEquipeModel, LiderPortalModel
 from app.shared.errors import DomainError, NotFoundError
@@ -63,7 +63,10 @@ def listar(s: Session, obra_id: int) -> list[dict]:
                 origem.setdefault(pid, set()).add(papel)
     for a in acessos.values():
         if a.cadastrado:
-            origem.setdefault(a.colaborador_id, set()).add("cadastrado")
+            origem.setdefault(a.colaborador_id, set()).add("apontador" if a.perfil == "apontador" else "cadastrado")
+    for p in pessoas:  # spec 147: quem tem a função de apontador entra pela rota do apontador
+        if funcao_de_apontador(p.funcao) and p.situacao not in ("DESMOBILIZADO", "DESISTENCIA"):
+            origem.setdefault(p.id, set()).add("apontador")
     out = []
     for pid, papeis in origem.items():
         p, a = por_id.get(pid), acessos.get(pid)
@@ -72,6 +75,7 @@ def listar(s: Session, obra_id: int) -> list[dict]:
         lidera = equipes_lideradas(s, obra_id, p, a, equipes)
         out.append({"colaborador_id": p.id, "nome": p.nome, "matricula": p.matricula, "funcao": p.funcao,
                     "papeis": sorted(papeis), "cadastrado": bool(a and a.cadastrado),
+                    "perfil": "apontador" if "apontador" in papeis else "lider",
                     "equipes": [{"id": e.id, "nome": e.nome} for e in lidera],
                     "equipes_extras": [int(x) for x in ((a.equipes if a else None) or [])],
                     "situacao": _situacao(a), "ultimo_acesso": a.ultimo_acesso.isoformat() if a and a.ultimo_acesso else None})
@@ -100,13 +104,14 @@ def _validar_equipes(s: Session, obra_id: int, ids: list[int]) -> list[int]:
     return sorted(set(ids))
 
 
-def cadastrar(s: Session, obra_id: int, colaborador_id: int, equipes: list[int], por: str) -> None:
+def cadastrar(s: Session, obra_id: int, colaborador_id: int, equipes: list[int], por: str, perfil: str = "lider") -> None:
     c = s.get(ColaboradorModel, colaborador_id)
     if c is not None and not (c.matricula or c.cracha):
         raise DomainError(f"{c.nome} não tem matrícula/crachá: defina antes, é com ela que ele entra", "colaborador_id")
     a = _acesso(s, obra_id, colaborador_id, criar=True, por=por)
     a.cadastrado, a.ativo = True, True
-    a.equipes = _validar_equipes(s, obra_id, equipes)
+    a.perfil = "apontador" if perfil == "apontador" else "lider"
+    a.equipes = _validar_equipes(s, obra_id, equipes) if a.perfil == "lider" else []
     s.flush()
 
 
@@ -167,40 +172,51 @@ def _pedido(s: Session, obra_id: int, pid: int) -> LiderPedidoEquipeModel:
     return x
 
 
-def aprovar_pedido(s: Session, obra_id: int, pid: int, nome: str | None, por: str, por_email: str | None) -> dict:
-    """Cria a equipe (nome no padrão da obra, o líder como encarregado) e traz as pessoas pelo Alocador: saem da outra
-    equipe e a troca vai para o histórico."""
-    from datetime import datetime, timezone
-
+def criar_equipe(s: Session, obra_id: int, disciplina: str | None, lider: ColaboradorModel, membros: list[tuple[str, str]],
+                 por: str, observacao: str, nome: str | None = None) -> tuple[EquipeModel, int]:
+    """Equipe nova no padrão de nome da obra (spec 107), o líder como encarregado e as pessoas pelo Alocador (saem da outra
+    equipe; a troca vai para o histórico). Usada pela aprovação do pedido (spec 114) e pelo apontador (spec 147)."""
     from app.modules.equipes.application.alocacao import Alocador
     from app.modules.equipes.application.nome import nome_da_nova_equipe
 
-    x = _pedido(s, obra_id, pid)
-    lider = s.get(ColaboradorModel, x.colaborador_id)
-    if lider is None or not (lider.cracha or lider.matricula):
-        raise DomainError("o líder do pedido não está mais no efetivo", "pedido")
-    nome_final = " ".join((nome or "").split())[:120] or nome_da_nova_equipe(s, obra_id, x.disciplina)
+    if not (lider.cracha or lider.matricula):
+        raise DomainError(f"{lider.nome} não tem matrícula/crachá no efetivo", "encarregado")
+    nome_final = " ".join((nome or "").split())[:120] or nome_da_nova_equipe(s, obra_id, disciplina)
     if s.scalar(select(EquipeModel.id).where(EquipeModel.obra_id == obra_id, EquipeModel.nome == nome_final)):
         raise DomainError(f"já existe a equipe {nome_final}", "nome")
     usados = [int(v) for v in s.scalars(select(EquipeModel.codigo_simova).where(EquipeModel.obra_id == obra_id)) if v and str(v).isdigit()]
     cod_lider = lider.cracha or lider.matricula
     nova = EquipeModel(obra_id=obra_id, nome=nome_final, encarregado_cracha=cod_lider, encarregado_nome=lider.nome,
                        jornada_horas=9.0, turno="Diurno", codigo_simova=str(max(usados, default=0) + 1), ativo=True,
-                       observacao=f"Formada pelo pedido do líder (Nº {x.id})")
+                       observacao=observacao[:300])
     s.add(nova)
     s.flush()
-    al = Alocador(s, obra_id, f"aprovado por {por_email or por}"[:80])
+    al = Alocador(s, obra_id, por[:80])
     for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == obra_id, EquipeModel.id != nova.id)):
         for mb in [m for m in e.membros if m.cracha in {lider.cracha, lider.matricula}]:
             e.membros.remove(mb)  # o líder vira o encarregado da equipe nova
             al.registrar(mb.cracha, e, nova)
     entraram = 0
-    for m in x.membros or []:
-        cod = m.get("cracha")
-        if not cod or cod == cod_lider or any(mb.cracha == cod for mb in nova.membros):
+    for cod, nome_m in membros:
+        if not cod or cod in {lider.cracha, lider.matricula} or any(mb.cracha == cod for mb in nova.membros):
             continue
-        al.incluir(nova, cod, m.get("nome") or cod)
+        al.incluir(nova, cod, nome_m or cod)
         entraram += 1
+    s.flush()
+    return nova, entraram
+
+
+def aprovar_pedido(s: Session, obra_id: int, pid: int, nome: str | None, por: str, por_email: str | None) -> dict:
+    """Cria a equipe (nome no padrão da obra, o líder como encarregado) e traz as pessoas pelo Alocador: saem da outra
+    equipe e a troca vai para o histórico."""
+    from datetime import datetime, timezone
+
+    x = _pedido(s, obra_id, pid)
+    lider = s.get(ColaboradorModel, x.colaborador_id)
+    if lider is None or not (lider.cracha or lider.matricula):
+        raise DomainError("o líder do pedido não está mais no efetivo", "pedido")
+    nova, entraram = criar_equipe(s, obra_id, x.disciplina, lider, [(m.get("cracha"), m.get("nome")) for m in x.membros or []],
+                                  f"aprovado por {por_email or por}", f"Formada pelo pedido do líder (Nº {x.id})", nome)
     x.situacao, x.equipe_id = "aprovado", nova.id
     x.decidido_por, x.decidido_em = por_email or por, datetime.now(timezone.utc)
     s.flush()

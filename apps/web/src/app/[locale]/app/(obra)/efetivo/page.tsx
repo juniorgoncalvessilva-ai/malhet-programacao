@@ -35,6 +35,8 @@ export default function EfetivoPage() {
   const resumo = useResumoEfetivo();
   const movimentos = useMovimentosEfetivo();
   const equipes = useEquipes();
+  // spec 147: equipamento que a pessoa opera (cadastro em Equipamentos)
+  const operaQ = useQuery({ queryKey: ['equipamentos', 'por-operador'], queryFn: () => api.get<Record<string, { id: number; nome: string; tag: string | null; situacao: string }[]>>('/equipamentos/por-operador') });
   const [fSit, setFSit] = useState<Set<SituacaoEfetivo>>(new Set(['MOBILIZADO', 'AGUARDANDO_CRACHA', 'EM_PROCESSO', 'PREVISTO', 'AFASTADO']));
   const [empresa, setEmpresa] = useState('');
   const [q, setQ] = useState('');
@@ -263,7 +265,8 @@ export default function EfetivoPage() {
                       : <div><button type="button" className="text-[11px] font-semibold text-m-accent underline" onClick={() => setCrachaEd({ id: c.id, valor: '' })}>definir crachá</button></div>)}
                   </td>
                   <td className="border-b border-m-row px-2 py-1.5"><button type="button" className="text-left font-semibold text-m-text-primary hover:text-m-accent hover:underline" title="Abrir a ficha" onClick={() => setFicha(c.id)}>{c.nome}</button>{!c.no_ultimo_arquivo && <div className="text-[11px] text-m-warning">fora do último arquivo</div>}</td>
-                  <td className="border-b border-m-row px-2 py-1.5">{c.funcao ?? '—'}<div className="text-[11px] text-m-text-muted">{c.funcao_composicao ? `→ ${c.funcao_composicao}` : 'sem de-para'}</div></td>
+                  <td className="border-b border-m-row px-2 py-1.5">{c.funcao ?? '—'}<div className="text-[11px] text-m-text-muted">{c.funcao_composicao ? `→ ${c.funcao_composicao}` : 'sem de-para'}</div>
+                    {operaQ.data?.[String(c.id)]?.length ? <div className="text-[11px] font-semibold text-m-info" title="Operador do equipamento (Equipamentos)">opera {operaQ.data[String(c.id)].map((x) => x.tag ?? x.nome).join(', ')}</div> : null}</td>
                   <td className="border-b border-m-row px-2 py-1.5">{c.empresa}<div className="text-[11px] text-m-text-muted">{[c.dp, c.tipo_mo].filter(Boolean).join(' · ')}</div></td>
                   <td className="whitespace-nowrap border-b border-m-row px-2 py-1.5">
                     <Pilula tom={TOM[c.situacao]}>{c.situacao_rotulo}</Pilula>

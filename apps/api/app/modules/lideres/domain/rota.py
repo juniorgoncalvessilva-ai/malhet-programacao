@@ -23,4 +23,6 @@ def empresa_da_obra(nome_contratada: str | None) -> str:
 def rota(nome_contratada: str | None, codigo_obra: str) -> dict:
     empresa, obra = empresa_da_obra(nome_contratada), slug(codigo_obra)
     return {"empresa": empresa, "obra": obra, "endereco": f"/encarregado/{empresa}/{obra}",
-            "endereco_empresa": f"/encarregado/{empresa}"}
+            "endereco_empresa": f"/encarregado/{empresa}",
+            # spec 147: a mesma regra, para o apontador
+            "endereco_apontador": f"/apontador/{empresa}/{obra}", "endereco_apontador_empresa": f"/apontador/{empresa}"}

@@ -132,3 +132,11 @@ def pessoa(s: Session, obra_id: int, colaborador_id: int) -> PessoaEfetivo | Non
     """A pessoa do efetivo pelo id (spec 139: responsável da contratada vem do efetivo)."""
     m = s.get(ColaboradorModel, colaborador_id)
     return _pessoa(m) if m is not None and m.obra_id == obra_id else None
+
+
+def pessoas_da_obra(s: Session, obra_id: int, so_ativas: bool = True) -> list[PessoaEfetivo]:
+    """Pessoas do efetivo (spec 147: operador de equipamento); `so_ativas` tira desmobilizado e desistência."""
+    q = select(ColaboradorModel).where(ColaboradorModel.obra_id == obra_id)
+    if so_ativas:
+        q = q.where(ColaboradorModel.situacao.not_in(("DESMOBILIZADO", "DESISTENCIA")))
+    return [_pessoa(m) for m in s.scalars(q.order_by(ColaboradorModel.nome))]

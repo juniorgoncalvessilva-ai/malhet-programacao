@@ -17,6 +17,9 @@ HORAS_SESSAO = 12
 
 
 FUNCOES_DE_LIDER = re.compile(r"ENCARREG|L[IÍ]DER|MESTRE|SUPERVISOR|FEITOR", re.IGNORECASE)
+# spec 147: o apontador entra pela rota dele (/apontador/...) — pela função no efetivo ou cadastrado em Acesso dos líderes
+FUNCOES_DE_APONTADOR = re.compile(r"APONTADOR|APROPRIADOR", re.IGNORECASE)
+PERFIS = ("lider", "apontador")
 
 
 def normalizar_codigo(valor: object) -> str:
@@ -30,6 +33,10 @@ def normalizar_codigo(valor: object) -> str:
 def funcao_de_lider(funcao: str | None) -> bool:
     """Quem tem função de liderança no efetivo entra no link mesmo sem equipe — para pedir a dele (spec 114)."""
     return bool(funcao and FUNCOES_DE_LIDER.search(funcao))
+
+
+def funcao_de_apontador(funcao: str | None) -> bool:
+    return bool(funcao and FUNCOES_DE_APONTADOR.search(funcao))
 
 
 def validar_pedido(disciplina: str | None, membros: list[str], maximo: int = 80) -> tuple[str, list[str]]:
