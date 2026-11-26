@@ -1,6 +1,6 @@
 'use client';
 
-import { BarChart3, Camera, Check, ChevronDown, Search, Truck, UserCheck, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { Check, ChevronDown, Search, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Calculado, type MemoriaCalculo } from '@/components/Obra/Calculado';
@@ -17,9 +17,9 @@ const secundario = 'h-11 rounded-full border border-m-stroke px-4 text-[14px] fo
 const cartao = 'flex flex-col rounded-[20px] border border-m-stroke-subtle bg-m-surface-raised';
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const num = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }));
-const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-type Aba = 'presenca' | 'equipes' | 'equipamentos' | 'fotos' | 'producao';
+export type TelaApontador = 'presenca' | 'equipes' | 'equipamentos' | 'fotos' | 'producao';
 
 /** Os últimos 7 dias (o apontador corrige a semana; mais para trás é com o Planejamento). */
 function useDias() {
@@ -41,35 +41,37 @@ function Dias({ dia, setDia }: { dia: string; setDia: (d: string) => void }) {
   );
 }
 
-/**
- * Rota do apontador (spec 147): a obra inteira no celular — presença de todo o efetivo, equipes (cria e remaneja), o dia de
- * cada equipamento, fotos das atividades e a produção da programação vigente.
- */
-export function Apontador({ obra }: { obra: string | null }) {
-  const [aba, setAba] = useState<Aba>('presenca');
+/** Presença e equipes de toda a obra, no dia escolhido (o painel do apontador carrega uma vez e as telas usam). */
+export function useDadosApontador(ativo = true) {
   const [dia, setDia] = useState(() => isoLocal(new Date()));
   const [dados, setDados] = useState<DadosApontador | null>(null);
   const carregar = useCallback(async () => {
+    if (!ativo) return;
     try { setDados(await portal<DadosApontador>(`/apontador/equipes?data=${dia}`)); } catch (e) { toast.error((e as Error).message); }
-  }, [dia]);
+  }, [dia, ativo]);
   useEffect(() => { void carregar(); }, [carregar]);
-  const abas: [Aba, string, typeof Users][] = [['presenca', 'Presença', UserCheck], ['equipes', 'Equipes', Users], ['equipamentos', 'Equip.', Truck],
-    ['fotos', 'Fotos', Camera], ['producao', 'Produção', BarChart3]];
+  return { dia, setDia, dados, setDados, carregar };
+}
+
+const TITULOS: Record<TelaApontador, string> = { presenca: 'Presença', equipes: 'Equipes', equipamentos: 'Equipamentos', fotos: 'Fotos da atividade', producao: 'Produção' };
+
+/**
+ * Rota do apontador (spec 147): a obra inteira no celular — presença de todo o efetivo, equipes (cria e remaneja), o dia de
+ * cada equipamento, fotos das atividades e a produção da programação vigente. Spec 149: uma tela por vez, aberta pela barra
+ * de baixo ou pelo Início (no layout do app de campo).
+ */
+export function TelaDoApontador({ tela, obra, estado, criarAoAbrir }: {
+  tela: TelaApontador; obra: string | null; estado: ReturnType<typeof useDadosApontador>; criarAoAbrir?: boolean;
+}) {
+  const { dia, setDia, dados, setDados, carregar } = estado;
   return (
     <>
-      <div role="tablist" aria-label="O que apontar" className="grid grid-cols-5 gap-1 rounded-[18px] border border-m-stroke bg-m-surface-raised p-1">
-        {abas.map(([k, rotulo, I]) => (
-          <button key={k} type="button" role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
-            className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-[14px] text-[12px] font-semibold ${aba === k ? 'bg-m-accent-strong text-m-on-accent' : 'text-m-text-secondary'}`}>
-            <I size={18} aria-hidden="true" />{rotulo}
-          </button>
-        ))}
-      </div>
-      {(aba === 'presenca' || aba === 'equipamentos') && <Dias dia={dia} setDia={setDia} />}
-      {aba === 'presenca' ? (dados ? <Presenca dados={dados} dia={dia} onMudou={setDados} /> : <Esqueleto className="h-60 w-full" />)
-        : aba === 'equipes' ? (dados ? <Equipes dados={dados} recarregar={carregar} /> : <Esqueleto className="h-60 w-full" />)
-          : aba === 'equipamentos' ? <Equipamentos dia={dia} />
-            : aba === 'fotos' ? <FotosAtividade obra={obra} /> : <ProducaoAba />}
+      <h1 className="text-[22px] font-semibold leading-7">{TITULOS[tela]}</h1>
+      {(tela === 'presenca' || tela === 'equipamentos') && <Dias dia={dia} setDia={setDia} />}
+      {tela === 'presenca' ? (dados ? <Presenca dados={dados} dia={dia} onMudou={setDados} /> : <Esqueleto className="h-60 w-full" />)
+        : tela === 'equipes' ? (dados ? <Equipes dados={dados} recarregar={carregar} criarAoAbrir={criarAoAbrir} /> : <Esqueleto className="h-60 w-full" />)
+          : tela === 'equipamentos' ? <Equipamentos dia={dia} />
+            : tela === 'fotos' ? <FotosAtividade obra={obra} /> : <ProducaoAba />}
     </>
   );
 }
@@ -179,10 +181,10 @@ function useBusca(q: string) {
   return achados;
 }
 
-function Equipes({ dados, recarregar }: { dados: DadosApontador; recarregar: () => Promise<void> }) {
+function Equipes({ dados, recarregar, criarAoAbrir }: { dados: DadosApontador; recarregar: () => Promise<void>; criarAoAbrir?: boolean }) {
   const [aberta, setAberta] = useState<number | null>(null);
   const [trazendo, setTrazendo] = useState<EquipeApontador | null>(null);
-  const [criando, setCriando] = useState(false);
+  const [criando, setCriando] = useState(!!criarAoAbrir);
   const tirar = async (e: EquipeApontador, p: PessoaApontador) => {
     try { await portal('/apontador/tirar', { method: 'POST', body: { equipe_id: e.id, cracha: p.cracha } }); toast.success(`${p.nome.split(' ')[0]} saiu da ${e.nome}`); await recarregar(); }
     catch (er) { toast.error((er as Error).message); }

@@ -1,16 +1,14 @@
 'use client';
 
-import { ArrowRightLeft, Camera, FolderOpen, LogOut, Search, UserPlus, Users, X } from 'lucide-react';
+import { ArrowRightLeft, Search, UserPlus, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Esqueleto } from '@/components/Obra/Esqueleto';
 import { definirLogoCarimbo } from '@/components/Mobile/Fotos';
-import { FotosAtividade } from '@/components/PortalLider/FotosAtividade';
-import { ProjetosPortal } from '@/components/PortalLider/ProjetosPortal';
 import { Folha } from '@/components/PortalLider/Folha';
 import { API_URL } from '@/lib/api/client';
 import { type Achado, type Destino, type EquipePortal, type Membro, type MinhasEquipes, type ObraParaEscolher, type PedidoEquipe, type PerfilPortal, type RotaPortal, type Sessao, enderecoDoPerfil, guardarObra, guardarRota, guardarToken, lerObra, lerRota, lerToken, portal, raizDoPerfil, usarPerfil } from '@/lib/portal/api';
-import { Apontador } from '@/components/PortalLider/Apontador';
+import { PainelPortal } from '@/components/PortalLider/PainelPortal';
 import { OfertaInstalar } from '@/components/Mobile/OfertaInstalar';
 
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
@@ -60,7 +58,6 @@ export function PortalLider({ obraInicial, rota, perfil = 'lider' }: { obraInici
   const [etapa, setEtapa] = useState<'entrar' | 'senha' | 'equipe'>('entrar');
   const [dados, setDados] = useState<MinhasEquipes | null>(null);
   const [abrindo, setAbrindo] = useState(true); // abertura com a logo da empresa
-  const [aba, setAba] = useState<'equipe' | 'fotos' | 'projetos'>('equipe'); // spec 121: fotos da atividade
 
   const usarObra = useCallback((id: number) => { guardarObra(id); setObra(id); }, []);
   const carregar = useCallback(async () => {
@@ -140,6 +137,8 @@ export function PortalLider({ obraInicial, rota, perfil = 'lider' }: { obraInici
   }, [apontador, info]);
   const sobre = textoSobre(cor);
   const empresa = info?.marca.contratada || 'Malhet';
+  // spec 149: depois de entrar, o layout do app de campo (sem as faixas de cima e de baixo; a cor fica no cartão e nos botões)
+  const logado = etapa === 'equipe' && !!dados && !naoAchou;
   // a cor da empresa vira o acento da tela inteira (botões, foco, seleção), como o app faz dentro da obra
   const tokens = `.portal-lider{--m-accent:${cor};--m-accent-strong:${cor};--m-accent-hover:color-mix(in srgb,${cor} 80%,black);--m-accent-subtle:color-mix(in srgb,${cor} 12%,white);--m-on-accent:${sobre}}`;
   const Marca = ({ grande }: { grande?: boolean }) => logo
@@ -158,43 +157,31 @@ export function PortalLider({ obraInicial, rota, perfil = 'lider' }: { obraInici
           </span>
         </div>
       )}
-      <header className="pt-[env(safe-area-inset-top)]" style={{ background: cor, color: sobre }}>
+      {!logado && <header className="pt-[env(safe-area-inset-top)]" style={{ background: cor, color: sobre }}>
         <div className="mx-auto flex w-full max-w-[520px] items-center gap-3 px-4 py-3">
           <span className={`flex min-h-[44px] items-center ${logo ? 'rounded-[10px] bg-white px-2 py-1' : ''}`}><Marca /></span>
           <span className="min-w-0 flex-1 truncate text-right text-[12.5px] font-semibold opacity-90">{info?.obra ?? ''}</span>
         </div>
-      </header>
-      <div className="mx-auto flex w-full max-w-[520px] flex-1 flex-col gap-4 px-4 pb-6 pt-5">
-        <div className="flex items-start justify-between gap-3">
+      </header>}
+      <div className={`mx-auto flex w-full max-w-[520px] flex-1 flex-col gap-4 px-4 ${logado ? 'pt-[max(env(safe-area-inset-top),16px)]' : 'pb-6 pt-5'}`}>
+        {!logado && <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-[24px] font-semibold leading-8">{dados ? `Olá, ${dados.nome.split(' ')[0]}` : apontador ? 'Apontador' : 'Minha equipe'}</h1>
             {dados && <p className="text-[13px] text-m-text-tertiary">{[dados.matricula, dados.funcao].filter(Boolean).join(' · ')}</p>}
           </div>
-          {dados && <button type="button" onClick={sair} className="flex h-10 items-center gap-1.5 rounded-full border border-m-stroke px-3 text-[13px] font-semibold text-m-text-secondary"><LogOut size={15} aria-hidden="true" /> Sair</button>}
-        </div>
+        </div>}
         {naoAchou && <Aviso texto="Endereço não encontrado. Confira o link com o Planejamento ou entre pelo endereço geral." />}
         {naoAchou && <a href={`/${typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : 'pt-BR'}${raizDoPerfil(perfil)}`} className={`${secundario} flex items-center justify-center`}>Ir para o endereço geral</a>}
         {apontador && etapa === 'entrar' && <OfertaInstalar titulo={`Instale o app do apontador${info?.marca.contratada ? ` da ${info.marca.contratada}` : ''}`} icone={logo} />}
         {naoAchou ? null : etapa === 'entrar' ? <Entrar perfil={perfil} obraFixa={rota?.obra ? obra : null} empresa={empresaRota} onEntrou={(r) => { if (r.obra_id) usarObra(r.obra_id); if (r.trocar_senha) setEtapa('senha'); else void carregar(); }} />
             : etapa === 'senha' ? <CriarSenha onPronto={() => void carregar()} />
-              : dados && apontador ? <Apontador obra={info?.obra ?? null} />
-              : dados ? (
-                <>
-                  <div role="tablist" aria-label="O que fazer" className="grid grid-cols-3 gap-1 rounded-full border border-m-stroke bg-m-surface-raised p-1">
-                    {([['equipe', 'Equipe', Users], ['fotos', 'Fotos', Camera], ['projetos', 'Projetos', FolderOpen]] as const).map(([k, rotulo, I]) => (
-                      <button key={k} type="button" role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
-                        className={`flex h-11 items-center justify-center gap-1.5 rounded-full text-[14px] font-semibold ${aba === k ? 'bg-m-accent-strong text-m-on-accent' : 'text-m-text-secondary'}`}>
-                        <I size={16} aria-hidden="true" />{rotulo}
-                      </button>
-                    ))}
-                  </div>
-                  {aba === 'equipe' ? <Equipes dados={dados} recarregar={carregar} /> : aba === 'fotos' ? <FotosAtividade obra={info?.obra ?? null} /> : <ProjetosPortal />}
-                </>
-              ) : <Esqueleto className="h-40 w-full" />}
+              : dados ? <PainelPortal perfil={perfil} dados={dados} obra={info?.obra ?? null} empresa={empresa} logo={logo} onSair={sair}
+                  telaEquipe={<Equipes dados={dados} recarregar={carregar} />} />
+              : <Esqueleto className="h-40 w-full" />}
       </div>
-      <footer className="pb-[max(env(safe-area-inset-bottom),12px)] pt-3 text-center text-[12px]" style={{ background: cor, color: sobre }}>
+      {!logado && <footer className="pb-[max(env(safe-area-inset-bottom),12px)] pt-3 text-center text-[12px]" style={{ background: cor, color: sobre }}>
         <span className="font-semibold">{empresa}</span>{info?.marca.contratante ? ` · ${info.marca.contratante}` : ''} <span className="opacity-75">· com Malhet</span>
-      </footer>
+      </footer>}
     </main>
   );
 }

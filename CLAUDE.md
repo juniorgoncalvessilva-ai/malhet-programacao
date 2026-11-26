@@ -82,6 +82,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   app instalável pela rota (`OfertaInstalar` no login + `/api/manifest?inicio=` com `start_url` = o login da rota).
   Qualquer função pode ser apontador (spec 148): `lider_config.funcoes_apontador` por obra (None = padrão APONTADOR; `chave_funcao`),
   `GET|PUT /lideres/apontador/funcoes`, seletor em Acesso dos líderes; o cadastro individual como apontador continua.
+  Depois do login, as duas rotas têm o layout do Início do `/m` (spec 149, `PainelPortal`): meta do dia na cor da empresa, números,
+  "O que fazer agora", atalhos e barra com o botão central (apontador: Presença; encarregado: Fotos) + "Mais" com Sair.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e
