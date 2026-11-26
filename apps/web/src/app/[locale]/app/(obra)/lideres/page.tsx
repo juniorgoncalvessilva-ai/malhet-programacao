@@ -21,6 +21,7 @@ interface Lider {
   equipes?: { id: number; nome: string }[]; equipes_extras?: number[]; situacao?: 'nunca_entrou' | 'senha_inicial' | 'ativo' | 'bloqueado';
   ultimo_acesso?: string | null; fora_do_efetivo?: boolean; equipe?: string; perfil?: 'lider' | 'apontador';
 }
+interface FuncoesApontador { padrao: boolean; funcoes: string[]; disponiveis: { funcao: string; pessoas: number; apontador: boolean }[] }
 interface Resposta { endereco: string; endereco_empresa: string; endereco_apontador: string; endereco_apontador_empresa: string; lideres: Lider[] }
 
 const SITUACAO = { nunca_entrou: ['Nunca entrou', 'neutro'], senha_inicial: ['Senha inicial (123456)', 'atencao'], ativo: ['Com senha própria', 'sucesso'], bloqueado: ['Bloqueado', 'perigo'] } as const;
@@ -41,6 +42,10 @@ export default function LideresPage() {
   const [editando, setEditando] = useState<number | null>(null);
   const [equipesEdit, setEquipesEdit] = useState<string[]>([]);
   const [novoAp, setNovoAp] = useState<Colaborador | null>(null);
+  // spec 148: as funções do efetivo que entram como apontador (a obra escolhe; sem escolha, APONTADOR)
+  const funcoesAp = useQuery({ queryKey: ['lideres', 'apontador', 'funcoes'], queryFn: () => api.get<FuncoesApontador>('/lideres/apontador/funcoes') });
+  const [funcoesSel, setFuncoesSel] = useState<string[] | null>(null);
+  const selecionadas = funcoesSel ?? funcoesAp.data?.funcoes ?? [];
   const planejador = pode('planejador');
   // spec 117: endereço da obra e da empresa, montados sozinhos pelo nome da contratada e o código da obra
   const origem = `${typeof window !== 'undefined' ? window.location.origin : ''}/pt-BR`;
@@ -55,7 +60,7 @@ export default function LideresPage() {
   const apontadores = q.data?.lideres.filter((l) => !l.fora_do_efetivo && l.perfil === 'apontador') ?? [];
   const lideres = q.data?.lideres.filter((l) => !l.fora_do_efetivo) ?? [];
   const fora = q.data?.lideres.filter((l) => l.fora_do_efetivo) ?? [];
-  const exec = async (p: Promise<unknown>, ok: string) => { try { await p; toast.success(ok); } catch (e) { toast.error((e as Error).message); } };
+  const exec = async (p: Promise<unknown>, ok: string) => { try { await p; toast.success(ok); return true; } catch (e) { toast.error((e as Error).message); return false; } };
 
   return (
     <>
@@ -85,7 +90,7 @@ export default function LideresPage() {
         </div>
       </Painel>
 
-      <Painel titulo="Onde o apontador entra?" subtitulo="Endereço do apontador desta obra: a mesma regra do encarregado (matrícula; primeiro acesso com 123456). O apontador cria equipes, aponta a presença de todo o efetivo e o dia dos equipamentos, registra as fotos das atividades e confere a produção. Entram quem tem a função de apontador no efetivo e quem você cadastrar como apontador abaixo. No celular, a tela oferece instalar o app, que abre direto neste login.">
+      <Painel titulo="Onde o apontador entra?" subtitulo="Endereço do apontador desta obra: a mesma regra do encarregado (matrícula; primeiro acesso com 123456). O apontador cria equipes, aponta a presença de todo o efetivo e o dia dos equipamentos, registra as fotos das atividades e confere a produção. Entram quem tem uma das funções escolhidas abaixo (qualquer função do efetivo; o padrão é APONTADOR) e quem você cadastrar como apontador, qualquer que seja a função. No celular, a tela oferece instalar o app, que abre direto neste login.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2 rounded-m-md border border-m-stroke-subtle px-3 py-2.5">
             <ClipboardCheck size={16} className="text-m-accent" aria-hidden="true" />
@@ -97,6 +102,22 @@ export default function LideresPage() {
           <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-m-text-tertiary">
             <span>Endereço da empresa:</span><code className="break-all text-m-text-secondary">{linkApEmpresa}</code>
             <span className="ml-auto">{apontadores.length} apontador(es): {apontadores.map((a) => a.nome).join(', ') || '—'}</span>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+            <span className="text-[12px] font-semibold uppercase tracking-[0.4px] text-m-text-muted">Funções que entram como apontador</span>
+            <MultiSelecao rotulo="Funções que entram como apontador" largura="w-[360px]" comNa={false} valor={selecionadas}
+              opcoes={[...(funcoesAp.data?.disponiveis ?? []).map((d) => ({ valor: d.funcao, rotulo: `${d.funcao} (${d.pessoas})` })),
+                ...selecionadas.filter((f) => !funcoesAp.data?.disponiveis.some((d) => d.funcao === f)).map((f) => ({ valor: f, rotulo: `${f} (ninguém hoje)` }))]}
+              disabled={!planejador} onChange={setFuncoesSel} />
+            </div>
+            {planejador && <Botao disabled={funcoesSel === null} onClick={async () => {
+              if (await exec(api.put('/lideres/apontador/funcoes', { funcoes: funcoesSel ?? [] }), 'Funções de apontador salvas')) setFuncoesSel(null);
+            }}>Salvar funções</Botao>}
+            {planejador && !funcoesAp.data?.padrao && <button type="button" className="text-[12.5px] font-semibold text-m-accent underline" onClick={async () => {
+              if (await exec(api.put('/lideres/apontador/funcoes', { funcoes: null }), 'Voltou ao padrão (função APONTADOR)')) setFuncoesSel(null);
+            }}>voltar ao padrão</button>}
+            <span className="text-[12.5px] text-m-text-tertiary">{funcoesAp.data?.padrao ? 'Padrão: quem tem a função APONTADOR. Escolha qualquer função do efetivo.' : 'Quem tem uma destas funções entra pela rota do apontador.'}</span>
           </div>
           {planejador && (
             <div className="flex flex-wrap items-end gap-3">

@@ -64,8 +64,11 @@ def listar(s: Session, obra_id: int) -> list[dict]:
     for a in acessos.values():
         if a.cadastrado:
             origem.setdefault(a.colaborador_id, set()).add("apontador" if a.perfil == "apontador" else "cadastrado")
-    for p in pessoas:  # spec 147: quem tem a função de apontador entra pela rota do apontador
-        if funcao_de_apontador(p.funcao) and p.situacao not in ("DESMOBILIZADO", "DESISTENCIA"):
+    from app.modules.lideres.application.portal import funcoes_apontador
+
+    escolhidas = funcoes_apontador(s, obra_id)
+    for p in pessoas:  # spec 147/148: quem tem uma das funções de apontador da obra entra pela rota do apontador
+        if funcao_de_apontador(p.funcao, escolhidas) and p.situacao not in ("DESMOBILIZADO", "DESISTENCIA"):
             origem.setdefault(p.id, set()).add("apontador")
     out = []
     for pid, papeis in origem.items():
@@ -233,3 +236,51 @@ def recusar_pedido(s: Session, obra_id: int, pid: int, motivo: str, por: str, po
     x.situacao, x.motivo = "recusado", m[:500]
     x.decidido_por, x.decidido_em = por_email or por, datetime.now(timezone.utc)
     s.flush()
+
+
+# ---- funções que entram como apontador (spec 148) ------------------------------------------------------------------
+def config_apontador(s: Session, obra_id: int) -> dict:
+    """As funções escolhidas (ou o padrão) e as funções do efetivo ativo da obra, com quantas pessoas cada uma tem."""
+    from collections import Counter
+
+    from app.modules.lideres.application.portal import funcoes_apontador
+    from app.modules.lideres.domain.portal import chave_funcao
+
+    escolhidas = funcoes_apontador(s, obra_id)
+    C = ColaboradorModel
+    cont: Counter = Counter()
+    nomes: dict[str, str] = {}
+    for f in s.scalars(select(C.funcao).where(C.obra_id == obra_id, C.situacao.not_in(("DESMOBILIZADO", "DESISTENCIA")))):
+        k = chave_funcao(f)
+        if k:
+            cont[k] += 1
+            nomes.setdefault(k, " ".join((f or "").split()).upper())
+    marcadas = {chave_funcao(f) for f in escolhidas} if escolhidas is not None else {k for k in cont if funcao_de_apontador(nomes[k])}
+    return {"padrao": escolhidas is None,
+            "funcoes": sorted(nomes[k] for k in marcadas if k in nomes) + sorted(f for f in (escolhidas or []) if chave_funcao(f) not in nomes),
+            "disponiveis": [{"funcao": nomes[k], "pessoas": n, "apontador": k in marcadas} for k, n in sorted(cont.items(), key=lambda x: nomes[x[0]])]}
+
+
+def definir_funcoes_apontador(s: Session, obra_id: int, funcoes: list[str] | None, por: str) -> dict:
+    """Grava as funções que entram como apontador (None volta ao padrão). Quem saiu da lista perde o acesso de apontador
+    na próxima entrada; quem foi cadastrado como apontador continua."""
+    from app.modules.lideres.domain.portal import chave_funcao
+    from app.modules.lideres.infra.models import LiderConfigModel
+
+    lista = None
+    if funcoes is not None:
+        vistos: dict[str, str] = {}
+        for f in funcoes:
+            t = " ".join((f or "").split()).upper()[:120]
+            if chave_funcao(t):
+                vistos.setdefault(chave_funcao(t), t)
+        if len(vistos) > 50:
+            raise DomainError("no máximo 50 funções", "funcoes")
+        lista = sorted(vistos.values())
+    cf = s.get(LiderConfigModel, obra_id)
+    if cf is None:
+        cf = LiderConfigModel(obra_id=obra_id)
+        s.add(cf)
+    cf.funcoes_apontador, cf.atualizado_por = lista, por[:150]
+    s.flush()
+    return config_apontador(s, obra_id)

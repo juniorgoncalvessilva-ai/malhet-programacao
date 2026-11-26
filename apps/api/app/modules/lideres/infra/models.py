@@ -56,3 +56,14 @@ class LiderPedidoEquipeModel(Base):
     decidido_por: Mapped[str | None] = mapped_column(String(320))
     decidido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LiderConfigModel(Base):
+    """Configuração do acesso dos líderes por obra (spec 148): as funções do efetivo que entram como apontador
+    (vazio/None = o padrão, APONTADOR/APROPRIADOR)."""
+
+    __tablename__ = "lider_config"
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
+    funcoes_apontador: Mapped[list | None] = mapped_column(JSONB)
+    atualizado_por: Mapped[str | None] = mapped_column(String(150))
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -126,9 +126,17 @@ def _encarregado_fora_do_efetivo(s: Session, cod: str, obras: set[int] | None, j
     return novos
 
 
-def pode_apontar(c: ColaboradorModel, acesso: LiderAcessoModel | None) -> bool:
-    """Spec 147: apontador = cadastrado como apontador em Acesso dos líderes ou com a função de apontador no efetivo."""
-    return bool(acesso and acesso.perfil == "apontador" and acesso.cadastrado) or funcao_de_apontador(c.funcao)
+def funcoes_apontador(s: Session, obra_id: int) -> list[str] | None:
+    """Spec 148: as funções escolhidas pela obra (None = o padrão APONTADOR/APROPRIADOR)."""
+    from app.modules.lideres.infra.models import LiderConfigModel
+
+    cf = s.get(LiderConfigModel, obra_id)
+    return cf.funcoes_apontador if cf is not None and cf.funcoes_apontador is not None else None
+
+
+def pode_apontar(s: Session, c: ColaboradorModel, acesso: LiderAcessoModel | None) -> bool:
+    """Spec 147/148: apontador = cadastrado como apontador em Acesso dos líderes ou com uma das funções que a obra escolheu."""
+    return bool(acesso and acesso.perfil == "apontador" and acesso.cadastrado) or funcao_de_apontador(c.funcao, funcoes_apontador(s, c.obra_id))
 
 
 def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int | None = None,
@@ -155,7 +163,7 @@ def entrar(s: Session, matricula: str, senha: str, aparelho: str, obra_id: int |
     for c in candidatos:
         acesso = s.scalar(select(LiderAcessoModel).where(LiderAcessoModel.obra_id == c.obra_id, LiderAcessoModel.colaborador_id == c.id))
         if perfil == "apontador":  # spec 147: a rota do apontador só aceita apontador
-            if pode_apontar(c, acesso):
+            if pode_apontar(s, c, acesso):
                 lideres.append((c, acesso))
             else:
                 nao_lider.append(c)

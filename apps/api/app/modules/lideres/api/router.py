@@ -54,6 +54,21 @@ def redefinir(colaborador_id: int, s: Session = Depends(get_session), c: Context
     return {"ok": True, "senha": "123456"}
 
 
+@router.get("/apontador/funcoes")
+def funcoes_apontador(s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Spec 148: as funções do efetivo que entram pela rota do apontador (a obra escolhe; sem escolha, APONTADOR)."""
+    return gestao.config_apontador(s, c.obra_id)
+
+
+class FuncoesApontadorIn(BaseModel):
+    funcoes: list[str] | None = Field(None, max_length=50)  # None = voltar ao padrão
+
+
+@router.put("/apontador/funcoes")
+def definir_funcoes_apontador(d: FuncoesApontadorIn, s: Session = Depends(get_session), c: ContextoObra = Depends(planejar)):
+    return gestao.definir_funcoes_apontador(s, c.obra_id, d.funcoes, c.usuario.email or c.usuario.id)
+
+
 @router.get("/pedidos")
 def pedidos(situacao: str | None = "pendente", s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
     """Pedidos de equipe dos líderes (spec 114): `situacao` vazia = todos."""

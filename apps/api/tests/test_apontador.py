@@ -103,3 +103,34 @@ def test_rota_do_apontador(client):
     hc = _entrar(w, "T77")
     assert w.get("/api/portal/apontador/equipes", headers=hc).status_code == 200
     assert w.post("/api/portal/entrar", json={"matricula": "T77", "senha": "aponta26"}).status_code == 422  # não é líder de equipe
+
+
+def test_funcoes_que_entram_como_apontador(client):
+    """Spec 148: a obra escolhe qualquer função do efetivo para entrar como apontador (sem escolha, APONTADOR); tirar a
+    função da lista tira o acesso; quem foi cadastrado como apontador continua."""
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    client.post("/api/efetivo/colaboradores", json={"nome": "APONTADOR TESTE", "matricula": "115900", "funcao": "APONTADOR", "situacao": "MOBILIZADO"})
+    cf = client.get("/api/lideres/apontador/funcoes").json()
+    assert cf["padrao"] and cf["funcoes"] == ["APONTADOR"]
+    assert {d["funcao"] for d in cf["disponiveis"]} >= {"PEDREIRO", "SERVENTE", "APONTADOR"}
+
+    w = TestClient(app)
+    entra = lambda m: w.post("/api/portal/entrar", json={"matricula": m, "senha": "123456", "perfil": "apontador"}).status_code  # noqa: E731
+    assert (entra("115013"), entra("115900")) == (422, 200)  # pedreiro ainda não; o apontador sim
+
+    # a obra escolhe: pedreiro (escrito de outro jeito) entra; a função APONTADOR saiu da lista
+    cf = client.put("/api/lideres/apontador/funcoes", json={"funcoes": ["Pedreiro ", "pedreiro"]}).json()
+    assert not cf["padrao"] and cf["funcoes"] == ["PEDREIRO"]
+    assert next(d for d in cf["disponiveis"] if d["funcao"] == "PEDREIRO")["apontador"] is True
+    assert (entra("115013"), entra("115900")) == (200, 422)
+    nomes = {x["nome"]: x for x in client.get("/api/lideres").json()["lideres"]}
+    assert nomes["PEDREIRO TESTE DOIS"]["perfil"] == "apontador" and "APONTADOR TESTE" not in nomes
+    # cadastrado como apontador continua, qualquer que seja a função
+    serv = next(c for c in client.get("/api/efetivo/colaboradores").json() if c["nome"] == "SERVENTE TESTE TRES")
+    client.post("/api/lideres", json={"colaborador_id": serv["id"], "perfil": "apontador"})
+    assert entra("115014") == 200
+    # voltar ao padrão e por obra
+    assert client.put("/api/lideres/apontador/funcoes", json={"funcoes": None}).json()["padrao"] is True
+    assert entra("115900") == 200
+    outra = client.post("/api/admin/obras", json={"codigo": "OUT-APF", "nome": "Outra"}).json()["id"]
+    assert client.get("/api/lideres/apontador/funcoes", headers={"X-Obra-Id": str(outra)}).json()["disponiveis"] == []

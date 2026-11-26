@@ -80,6 +80,8 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   presença do dia, criar equipe na hora (`gestao.criar_equipe`), incluir/tirar, presença `manual` (`presenca/application/manual.py`,
   desmarca só o apontado, 7 dias), equipamentos do dia e produção da vigente (`programacao_vigente`). Celular `Apontador.tsx`;
   app instalável pela rota (`OfertaInstalar` no login + `/api/manifest?inicio=` com `start_url` = o login da rota).
+  Qualquer função pode ser apontador (spec 148): `lider_config.funcoes_apontador` por obra (None = padrão APONTADOR; `chave_funcao`),
+  `GET|PUT /lideres/apontador/funcoes`, seletor em Acesso dos líderes; o cadastro individual como apontador continua.
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e

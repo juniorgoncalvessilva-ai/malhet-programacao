@@ -35,8 +35,22 @@ def funcao_de_lider(funcao: str | None) -> bool:
     return bool(funcao and FUNCOES_DE_LIDER.search(funcao))
 
 
-def funcao_de_apontador(funcao: str | None) -> bool:
-    return bool(funcao and FUNCOES_DE_APONTADOR.search(funcao))
+def chave_funcao(funcao: str | None) -> str:
+    """Função como a lista compara: sem acento, maiúsculas, espaços únicos ("Técnico  de planejamento" = "TECNICO DE PLANEJAMENTO")."""
+    import unicodedata
+
+    t = unicodedata.normalize("NFKD", funcao or "").encode("ascii", "ignore").decode().upper()
+    return " ".join(re.sub(r"[^A-Z0-9 ]+", " ", t).split())
+
+
+def funcao_de_apontador(funcao: str | None, funcoes: list[str] | None = None) -> bool:
+    """Spec 148: a obra escolhe quais funções do efetivo entram como apontador (`funcoes`); sem escolha, vale o padrão
+    (APONTADOR/APROPRIADOR). Além delas, qualquer pessoa cadastrada como apontador em Acesso dos líderes."""
+    if not funcao:
+        return False
+    if funcoes is None:
+        return bool(FUNCOES_DE_APONTADOR.search(funcao))
+    return chave_funcao(funcao) in {chave_funcao(f) for f in funcoes}
 
 
 def validar_pedido(disciplina: str | None, membros: list[str], maximo: int = 80) -> tuple[str, list[str]]:
