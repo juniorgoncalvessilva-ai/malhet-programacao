@@ -243,10 +243,36 @@ export default function EquipesPage() {
                   {form.membros.map((m, i) => (
                     <div key={`${m.cracha}-${i}`} className="flex items-center gap-2 rounded-m-md border border-m-stroke-subtle px-2 py-1">
                       <span className="w-[64px] shrink-0 text-xs text-m-text-muted">{semNumero(m.cracha) ? '—' : m.cracha}</span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-m-text-primary" title={[m.nome, m.efetivo?.funcao].filter(Boolean).join(' · ')}>{m.nome}{m.efetivo?.funcao && <span className="block truncate text-[11px] text-m-text-muted">{m.efetivo.funcao}</span>}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-m-text-primary" title={[m.nome, m.efetivo?.funcao].filter(Boolean).join(' · ')}>{m.nome}
+                        {m.efetivo?.funcao ? (
+                          <span className="block truncate text-[11px] text-m-text-muted">{m.efetivo.funcao}
+                            {!m.efetivo.funcao_cpu && !m.funcao && <> · <Link href="/app/efetivo/funcoes" className="font-semibold text-m-warning underline">sem de-para</Link></>}</span>
+                        ) : m.efetivo ? <span className="block truncate text-[11px] text-m-warning">sem função no efetivo</span>
+                          : !semNumero(m.cracha) && <span className="block truncate text-[11px] text-m-warning" title="O número não foi achado no efetivo (nem como matrícula)">fora do efetivo</span>}
+                      </span>
                       <select aria-label={`Função de ${m.nome} na composição`} value={m.funcao ?? ''}
                         title={m.funcao ? 'Função escolhida nesta equipe (no lugar do de-para)' : m.efetivo?.funcao_cpu ? 'Função do de-para' : 'Função do efetivo sem de-para'}
-                        onChange={(e) => { const v = e.target.value || null; const ms = [...form.membros]; ms[i] = { ...m, funcao: v === m.efetivo?.funcao_cpu ? null : v }; setForm({ ...form, membros: ms }); }}
+                        onChange={async (e) => {
+                          const v = e.target.value || null;
+                          const ms = [...form.membros];
+                          const funcaoEfetivo = m.efetivo?.funcao;
+                          // função do efetivo sem de-para: a escolha pode valer para todos com essa função (de-para), não só aqui
+                          if (v && funcaoEfetivo && !m.efetivo?.funcao_cpu && await confirmar({
+                            titulo: `Usar ${v} para todos os ${funcaoEfetivo}?`,
+                            mensagem: <>Grava no de-para de funções: toda pessoa do efetivo com a função <b>{funcaoEfetivo}</b> passa a contar como <b>{v}</b> na composição das equipes. Em &ldquo;Agora não&rdquo;, vale só para {m.nome} nesta equipe.</>,
+                            acao: 'Gravar no de-para', cancelar: 'Agora não', perigo: false,
+                          })) {
+                            try {
+                              await api.put('/efetivo/funcoes', { itens: [{ funcao: funcaoEfetivo, recurso: v }] });
+                              toast.success(`De-para: ${funcaoEfetivo} → ${v}`);
+                              ms.forEach((x, j) => { if (x.efetivo?.funcao === funcaoEfetivo) ms[j] = { ...x, funcao: null, efetivo: { ...x.efetivo!, funcao_cpu: v } }; });
+                              setForm({ ...form, membros: ms });
+                              return;
+                            } catch (err) { toast.error((err as Error).message); }
+                          }
+                          ms[i] = { ...m, funcao: v === m.efetivo?.funcao_cpu ? null : v };
+                          setForm({ ...form, membros: ms });
+                        }}
                         className={`h-8 w-[170px] rounded-[8px] border bg-m-surface-field px-1.5 text-[13px] ${m.funcao ? 'border-m-accent font-semibold text-m-text-primary' : m.efetivo?.funcao_cpu ? 'border-m-stroke text-m-text-primary' : 'border-m-warning text-m-text-muted'}`}>
                         <option value="">{m.efetivo?.funcao_cpu ? `${m.efetivo.funcao_cpu} (de-para)` : m.efetivo?.funcao ? 'sem de-para' : 'escolha a função'}</option>
                         {m.funcao && !mod.some((r) => r.recurso === m.funcao) && <option value={m.funcao}>{m.funcao}</option>}

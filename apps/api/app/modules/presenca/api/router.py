@@ -31,14 +31,22 @@ def _equipe_por_pessoa(s: Session, obra_id: int) -> tuple[dict[str, EquipeModel]
     por: dict[str, EquipeModel] = {}
     for e in equipes:
         for m in e.membros:
-            por.setdefault(m.cracha, e)
-        if e.encarregado_cracha:
-            por.setdefault(e.encarregado_cracha, e)
+            for k in _numeros(m.cracha):
+                por.setdefault(k, e)
+        for k in _numeros(e.encarregado_cracha):
+            por.setdefault(k, e)
     return por, equipes
 
 
+def _numeros(x: str | None) -> list[str]:
+    """O número como está e normalizado ("099800" = "99800" do DP)."""
+    from app.modules.efetivo.infra.gateway import codigo_normal
+
+    return [k for k in dict.fromkeys((x, codigo_normal(x))) if k]
+
+
 def _chaves(c: ColaboradorModel) -> list[str]:
-    return [x for x in (c.cracha, c.matricula) if x]
+    return [k for x in (c.cracha, c.matricula) for k in _numeros(x)]
 
 
 async def campo(c: ContextoObra = Depends(ler)) -> ContextoObra:
@@ -156,10 +164,11 @@ def _setores(s: Session, obra_id: int) -> dict[int, dict]:
 def _composicao(e: EquipeModel, por_chave: dict[str, ColaboradorModel]) -> list[tuple[ColaboradorModel, str]]:
     """Encarregado + membros ativos da equipe (pessoa do efetivo, sem repetir)."""
     lista: list[tuple[ColaboradorModel, str]] = []
-    if e.encarregado_cracha and e.encarregado_cracha in por_chave:
-        lista.append((por_chave[e.encarregado_cracha], "encarregado"))
+    enc = next((por_chave[k] for k in _numeros(e.encarregado_cracha) if k in por_chave), None)
+    if enc is not None:
+        lista.append((enc, "encarregado"))
     for m in e.membros:
-        p = por_chave.get(m.cracha)
+        p = next((por_chave[k] for k in _numeros(m.cracha) if k in por_chave), None)
         if p is not None and p.situacao not in FORA and all(x.id != p.id for x, _ in lista):
             lista.append((p, "membro"))
     return lista

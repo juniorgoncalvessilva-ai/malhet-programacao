@@ -1,4 +1,5 @@
 """Linguagem publicada do efetivo para equipes e programação."""
+import re
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -24,22 +25,75 @@ def depara(s: Session, obra_id: int) -> dict[str, DeParaFuncaoModel]:
     return {d.funcao_chave: d for d in s.scalars(select(DeParaFuncaoModel).where(DeParaFuncaoModel.obra_id == obra_id))}
 
 
+def codigo_normal(valor: object) -> str:
+    """Crachá/matrícula escritos de jeitos diferentes, iguais: "099800" = "99800" (o Excel do DP tira o zero), "115.532",
+    "115532.0" e espaços. Letras ficam (crachá de terceiro "T77")."""
+    t = re.sub(r"\.0+$", "", str(valor or "").strip())
+    t = "".join(ch for ch in t if ch.isalnum()).upper()
+    return (t.lstrip("0") or "0") if t else ""
+
+
+class PorCodigo(dict):
+    """crachá exato → valor; sem o exato, o mesmo número escrito de outro jeito (crachá ou matrícula da pessoa), desde que
+    seja de uma pessoa só. Quem está numa equipe pelo número do Simova acha a função dele no efetivo mesmo sem crachá
+    gravado ou com zero à esquerda."""
+
+    def __init__(self, exatos: dict, por_numero: dict[str, dict[int, object]]):
+        super().__init__(exatos)
+        self._alt = {k: next(iter(v.values())) for k, v in por_numero.items() if len(v) == 1}
+
+    def _outro(self, k):
+        n = codigo_normal(k) if k else ""
+        return self._alt.get(n, _NADA) if n else _NADA
+
+    def __missing__(self, k):
+        v = self._outro(k)
+        if v is _NADA:
+            raise KeyError(k)
+        return v
+
+    def get(self, k, default=None):
+        if dict.__contains__(self, k):
+            return dict.__getitem__(self, k)
+        v = self._outro(k)
+        return default if v is _NADA else v
+
+    def __contains__(self, k) -> bool:
+        return dict.__contains__(self, k) or self._outro(k) is not _NADA
+
+
+_NADA = object()
+
+
+def _por_codigo(pessoas: list[ColaboradorModel], valor) -> PorCodigo:
+    exatos, por_numero = {}, {}
+    for m in pessoas:
+        v = valor(m)
+        if v is None:
+            continue
+        if m.cracha:
+            exatos[m.cracha] = v
+        for numero in {codigo_normal(m.cracha), codigo_normal(m.matricula)} - {""}:
+            por_numero.setdefault(numero, {})[m.id] = v
+    return PorCodigo(exatos, por_numero)
+
+
+def _colaboradores(s: Session, obra_id: int) -> list[ColaboradorModel]:
+    return list(s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == obra_id)))
+
+
 def pessoas_por_cracha(s: Session, obra_id: int) -> dict[str, PessoaEfetivo]:
-    return {m.cracha: _pessoa(m)
-            for m in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == obra_id,
-                                                              ColaboradorModel.cracha.is_not(None)))}
+    return _por_codigo(_colaboradores(s, obra_id), _pessoa)
 
 
 def funcoes_por_cracha(s: Session, obra_id: int) -> dict[str, str]:
     """crachá → função da composição (CPU) pelo de-para da função do efetivo. Ignoradas/sem de-para ficam de fora."""
     dp = depara(s, obra_id)
-    out = {}
-    for m in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == obra_id,
-                                                      ColaboradorModel.cracha.is_not(None))):
+
+    def recurso(m: ColaboradorModel) -> str | None:
         d = dp.get(m.funcao_chave or "")
-        if d is not None and d.recurso and not d.ignorar:
-            out[m.cracha] = d.recurso
-    return out
+        return d.recurso if d is not None and d.recurso and not d.ignorar else None
+    return _por_codigo(_colaboradores(s, obra_id), recurso)
 
 
 def _pessoa(m: ColaboradorModel) -> PessoaEfetivo:
@@ -66,11 +120,18 @@ class LocalizadorEfetivo:
             else:
                 terceiros.setdefault(m.matricula, []).append(m)
         self._terceiro = {k: v[0] for k, v in terceiros.items() if len(v) == 1}
+        normais: dict[str, dict[int, ColaboradorModel]] = {}
+        for m in cs:
+            for numero in {codigo_normal(m.cracha), codigo_normal(m.matricula)} - {""}:
+                normais.setdefault(numero, {})[m.id] = m
+        self._normal = {k: next(iter(v.values())) for k, v in normais.items() if len(v) == 1}
 
     def achar(self, numero: str | None) -> PessoaEfetivo | None:
         if not numero:
             return None
         m = self._por_cracha.get(numero) or self._proprio.get(numero) or self._terceiro.get(numero)
+        if m is None:  # o mesmo número escrito de outro jeito ("099800" = "99800"), se for de uma pessoa só
+            m = self._normal.get(codigo_normal(numero))
         if m is None:
             return None
         if not m.cracha and numero not in self._por_cracha:

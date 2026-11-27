@@ -10,6 +10,8 @@ export interface PedidoConfirmacao {
   mensagem?: ReactNode;
   /** Texto do botão de ação. Padrão: "Excluir" (perigo) ou "Confirmar". */
   acao?: string;
+  /** Texto do botão de voltar. Padrão: "Cancelar". */
+  cancelar?: string;
   /** Ação destrutiva (excluir, remover, desvincular): botão vermelho. Padrão: true. */
   perigo?: boolean;
   /** Se informado, roda ao confirmar; o diálogo mostra "aguarde" e só fecha quando terminar. */
@@ -57,7 +59,7 @@ export function ConfirmarProvider({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <Botao autoFocus variante="secundario" disabled={rodando} onClick={() => fechar(false)}>Cancelar</Botao>
+              <Botao autoFocus variante="secundario" disabled={rodando} onClick={() => fechar(false)}>{pedido.cancelar ?? 'Cancelar'}</Botao>
               <Botao disabled={rodando} onClick={ok} variante={perigo ? 'excluir' : 'primario'}>
                 {rodando ? 'Aguarde…' : pedido.acao ?? (perigo ? 'Excluir' : 'Confirmar')}
               </Botao>

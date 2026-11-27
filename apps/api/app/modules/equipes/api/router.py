@@ -101,7 +101,8 @@ class EquipeOut(EquipeIn):
 def _pessoa_io(p: PessoaEfetivo | None, funcao_de: dict[str, str]) -> PessoaEfetivoIO | None:
     if p is None:
         return None
-    return PessoaEfetivoIO(matricula=p.matricula, nome=p.nome, funcao=p.funcao, funcao_cpu=funcao_de.get(p.cracha or ""),
+    return PessoaEfetivoIO(matricula=p.matricula, nome=p.nome, funcao=p.funcao,
+                           funcao_cpu=funcao_de.get(p.cracha or "") or funcao_de.get(p.matricula or ""),
                            situacao=p.situacao, empresa=p.empresa, no_ultimo_arquivo=p.no_ultimo_arquivo)
 
 

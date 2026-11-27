@@ -20,7 +20,7 @@ from app.modules.efetivo.domain.organograma import (
     validar_cor,
     validar_cores,
 )
-from app.modules.efetivo.infra.gateway import depara
+from app.modules.efetivo.infra.gateway import codigo_normal, depara
 from app.modules.efetivo.infra.models import (
     ColaboradorModel,
     DeParaFuncaoModel,
@@ -69,14 +69,23 @@ def _rotulo(sit: str) -> str:
 def _vinculos(s: Session, obra_id: int) -> tuple[dict[str, EquipeModel], dict[str, EquipeModel]]:
     """crachá → equipe em que está (membro) e crachá → equipe que encarrega."""
     equipes = {e.id: e for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == obra_id))}
-    membro = {m.cracha: equipes[m.equipe_id] for e in equipes.values() for m in e.membros}
-    enc = {e.encarregado_cracha: e for e in equipes.values() if e.encarregado_cracha}
+    # pelo número normalizado: "099800" na equipe é a matrícula "99800" do DP
+    membro = {codigo_normal(m.cracha): equipes[m.equipe_id] for e in equipes.values() for m in e.membros if codigo_normal(m.cracha)}
+    enc = {codigo_normal(e.encarregado_cracha): e for e in equipes.values() if codigo_normal(e.encarregado_cracha)}
     return membro, enc
 
 
+def _da_pessoa(m: ColaboradorModel, mapa: dict):
+    for numero in (m.cracha, m.matricula):
+        k = codigo_normal(numero)
+        if k and k in mapa:
+            return mapa[k]
+    return None
+
+
 def _out(m: ColaboradorModel, membro: dict, enc: dict, dp: dict) -> ColaboradorOut:
-    eq = membro.get(m.cracha) if m.cracha else None
-    e_enc = enc.get(m.cracha) if m.cracha else None
+    eq = _da_pessoa(m, membro)
+    e_enc = _da_pessoa(m, enc)
     d = dp.get(m.funcao_chave or "")
     return ColaboradorOut(
         id=m.id, chave=m.chave, empresa=m.empresa, matricula=m.matricula, cracha=m.cracha, nome=m.nome, funcao=m.funcao,

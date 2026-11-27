@@ -56,6 +56,9 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   estar em várias), tudo por `equipes/application/alocacao.py::Alocador` com movimento `EQUIPE` (`de_equipe_id`/`para_equipe_id`);
   aba Movimentações (`GET /equipes/movimentacoes`). Nome padrão `equipe_config` (`EQUIPE.{n}_{disciplina}`, número automático,
   `disciplina_padrao`, aba Configuração). Spec 107.
+  Número da pessoa normalizado (spec 151): `efetivo/infra/gateway.py::codigo_normal` + `PorCodigo` — `pessoas_por_cracha`/
+  `funcoes_por_cracha` acham pelo crachá exato e, sem ele, pelo crachá ou matrícula normalizados ("099800" = "99800"), se de uma
+  pessoa só; `LocalizadorEfetivo`, lista do efetivo e presença também. Tela da equipe mostra "sem de-para" (link) e oferece gravar no de-para.
   Acesso dos líderes (`lideres/`, spec 111; endereço fixo spec 115): `/encarregado` sem conta do Malhet — matrícula + senha
   (inicial 123456, cria a dele no primeiro acesso ali mesmo; Argon2, JWT próprio com `obra` e `versao`, `Tentativas`); a obra sai
   da matrícula (`POST /portal/entrar`; em várias obras devolve `escolher`), vê as equipes que lidera, "Não está comigo" (vai para
