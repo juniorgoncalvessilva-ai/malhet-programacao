@@ -45,3 +45,37 @@ class LeituraPresencaModel(Base):
     # spec 069: dois celulares leram a mesma pessoa no dia → vale a leitura mais cedo; as outras ficam como duplicadas
     valida: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     recebido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FaltaModel(Base):
+    """Falta apontada no dia (spec 152): quem não veio e por quê. Uma por pessoa e dia; presença lida no crachá/rosto apaga."""
+
+    __tablename__ = "presenca_falta"
+    __table_args__ = (UniqueConstraint("obra_id", "colaborador_id", "data", name="uq_presenca_falta"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    colaborador_id: Mapped[int] = mapped_column(ForeignKey("colaborador.id", ondelete="CASCADE"), index=True)
+    data: Mapped[date] = mapped_column(Date, index=True)
+    motivo: Mapped[str] = mapped_column(String(20))
+    observacao: Mapped[str | None] = mapped_column(String(300))
+    equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
+    por: Mapped[str] = mapped_column(String(80))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EmprestimoModel(Base):
+    """Empréstimo do dia (spec 152): a pessoa continua na equipe dela, mas trabalhou hoje em outra — com a justificativa."""
+
+    __tablename__ = "presenca_emprestimo"
+    __table_args__ = (UniqueConstraint("obra_id", "colaborador_id", "data", name="uq_presenca_emprestimo"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    colaborador_id: Mapped[int] = mapped_column(ForeignKey("colaborador.id", ondelete="CASCADE"), index=True)
+    data: Mapped[date] = mapped_column(Date, index=True)
+    de_equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
+    para_equipe_id: Mapped[int | None] = mapped_column(ForeignKey("equipe.id", ondelete="SET NULL"))
+    de_equipe_nome: Mapped[str | None] = mapped_column(String(120))  # o nome no dia (a equipe pode mudar de nome depois)
+    para_equipe_nome: Mapped[str] = mapped_column(String(120))
+    justificativa: Mapped[str] = mapped_column(String(300))
+    por: Mapped[str] = mapped_column(String(80))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

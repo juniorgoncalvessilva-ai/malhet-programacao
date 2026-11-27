@@ -73,9 +73,15 @@ export interface Sessao { token?: string; trocar_senha?: boolean; nome?: string;
 
 // ---- apontador (spec 147) ----------------------------------------------------------------------------------------
 export interface PresencaDia { hora: string; meio: string; por: string }
-export interface PessoaApontador { cracha: string; nome: string; matricula: string | null; funcao: string | null; colaborador_id: number | null; papel: string | null; presenca: PresencaDia | null }
-export interface EquipeApontador { id: number; nome: string; encarregado: string | null; pessoas: PessoaApontador[]; presentes: number; total: number }
-export interface DadosApontador { data: string; nome: string; matricula: string | null; funcao: string | null; obra_id: number; equipes: EquipeApontador[]; sem_equipe: PessoaApontador[]; presentes: number }
+export interface FaltaDia { motivo: string; rotulo: string; justificada: boolean; observacao: string | null; por: string }
+export interface EmprestimoDia { de_equipe_id: number | null; de_equipe: string | null; para_equipe_id: number; para_equipe: string; justificativa: string; por: string }
+export interface PessoaApontador { cracha: string; nome: string; matricula: string | null; funcao: string | null; colaborador_id: number | null; papel: string | null;
+  presenca: PresencaDia | null; equipe_id?: number | null; falta?: FaltaDia | null; emprestimo?: EmprestimoDia | null }
+export interface EquipeApontador { id: number; nome: string; encarregado: string | null; pessoas: PessoaApontador[]; presentes: number; total: number;
+  recebidos?: PessoaApontador[]; faltas?: number; cedidos?: number }
+export interface MotivoFalta { motivo: string; rotulo: string; justificada: boolean }
+export interface DadosApontador { data: string; nome: string; matricula: string | null; funcao: string | null; obra_id: number; equipes: EquipeApontador[];
+  sem_equipe: PessoaApontador[]; presentes: number; faltas?: number; emprestimos?: number; motivos_falta?: MotivoFalta[] }
 export interface MemoriaPortal { chave: string; titulo: string; valor: string; formula: string; passos: { descricao: string; conta: string; resultado: string; destaque: boolean }[]; fontes: { dado: string; valor: string; origem: string; local: string | null }[]; notas: string[] }
 export interface EquipamentoDia {
   id: number; nome: string; tipo: string | null; placa: string | null; tag: string | null; operador: { id: number; nome: string; matricula: string | null } | null;

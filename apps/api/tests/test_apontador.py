@@ -184,3 +184,71 @@ def test_leitura_de_presenca_no_celular_do_apontador(client):
 
     with SessionLocal() as db:
         assert db.get(ColaboradorModel, n.json()["id"]).cadastrado_por.startswith("apontador 115900")
+
+
+def test_falta_e_emprestimo_entre_equipes(client):
+    """Spec 152: falta com motivo (lida no crachá não é falta; presente tira a falta; fechar a equipe), empréstimo com
+    justificativa (a pessoa fica na equipe dela e conta na que recebeu) e os números no computador."""
+    from datetime import datetime, timezone
+
+    from app.shared.tempo import hoje_local
+
+    client.post("/api/efetivo/importar", files={"arquivo": ("EFETIVO.xlsx", efetivo(1))})
+    client.post("/api/efetivo/colaboradores", json={"nome": "APONTADOR TESTE", "matricula": "115900", "funcao": "APONTADOR",
+                                                    "situacao": "MOBILIZADO"})
+    cs = {c["nome"]: c for c in client.get("/api/efetivo/colaboradores").json()}
+    enc, ped = cs["ENCARREGADO TESTE UM"]["id"], cs["PEDREIRO TESTE DOIS"]["id"]
+    client.post("/api/efetivo/equipes", json={"nome": "EQUIPE.1_FORMA", "encarregado_id": enc, "colaboradores": [ped]})
+    w = TestClient(app)
+    h = _entrar(w, "115900")
+    eq2 = w.post("/api/portal/apontador/equipes", headers=h, json={"disciplina": "concreto", "encarregado": "115014"}).json()
+    hoje = hoje_local().isoformat()
+
+    def dados():
+        r = w.get("/api/portal/apontador/equipes", headers=h).json()
+        return r, {e["nome"]: e for e in r["equipes"]}
+
+    # falta com motivo; "outro" pede a descrição
+    r = w.post("/api/portal/apontador/falta", headers=h, json={"colaborador_id": ped, "motivo": "atestado"}).json()
+    assert r["falta"]["rotulo"] == "Atestado médico" and r["falta"]["justificada"]
+    assert w.post("/api/portal/apontador/falta", headers=h, json={"colaborador_id": ped, "motivo": "outro"}).status_code == 422
+    todos, eqs = dados()
+    um = eqs["EQUIPE.1_FORMA"]
+    assert um["faltas"] == 1 and todos["faltas"] == 1 and len(todos["motivos_falta"]) == 7
+    assert next(p for p in um["pessoas"] if p["colaborador_id"] == ped)["falta"]["motivo"] == "atestado"
+    # apontou presente: a falta sai
+    w.post("/api/portal/apontador/presenca", headers=h, json={"colaborador_id": ped, "presente": True})
+    assert dados()[1]["EQUIPE.1_FORMA"]["faltas"] == 0
+    # presença lida no crachá é prova: não vira falta
+    client.post("/api/presenca/leituras", json={"leituras": [{"id_local": "cel1-falta-0001", "colaborador_id": enc, "data": hoje,
+                                                             "hora": datetime.now(timezone.utc).isoformat(), "meio": "nfc"}]})
+    assert "não é falta" in w.post("/api/portal/apontador/falta", headers=h, json={"colaborador_id": enc, "motivo": "nao_compareceu"}).json()["detail"]
+    # fechar a equipe: só quem não veio leva a falta
+    w.post("/api/portal/apontador/presenca", headers=h, json={"colaborador_id": ped, "presente": False})
+    assert w.post("/api/portal/apontador/faltas/restantes", headers=h,
+                  json={"equipe_id": um["id"], "motivo": "nao_compareceu"}).json() == {"faltas": 1}
+
+    # empréstimo: o pedreiro trabalha hoje na equipe nova, com justificativa; continua na EQUIPE.1
+    assert w.post("/api/portal/apontador/emprestimo", headers=h, json={"colaborador_id": ped, "para_equipe_id": um["id"],
+                                                                       "justificativa": "ajuda na concretagem"}).status_code == 422
+    assert w.post("/api/portal/apontador/emprestimo", headers=h, json={"colaborador_id": ped, "para_equipe_id": eq2["equipe_id"],
+                                                                       "justificativa": "ok"}).status_code == 422
+    r = w.post("/api/portal/apontador/emprestimo", headers=h, json={"colaborador_id": ped, "para_equipe_id": eq2["equipe_id"],
+                                                                    "justificativa": "Ajuda na concretagem da laje"})
+    assert r.status_code == 200 and r.json()["emprestimo"]["de_equipe"] == "EQUIPE.1_FORMA", r.text
+    todos, eqs = dados()
+    nova = next(e for e in eqs.values() if e["id"] == eq2["equipe_id"])
+    assert [p["nome"] for p in nova["recebidos"]] == ["PEDREIRO TESTE DOIS"] and nova["recebidos"][0]["presenca"]
+    p1 = next(p for p in eqs["EQUIPE.1_FORMA"]["pessoas"] if p["colaborador_id"] == ped)
+    assert p1["emprestimo"]["para_equipe_id"] == eq2["equipe_id"] and p1["falta"] is None and eqs["EQUIPE.1_FORMA"]["cedidos"] == 1
+    assert todos["emprestimos"] == 1
+
+    # no computador: os números da semana
+    ap = client.get(f"/api/presenca/apontamentos?de={hoje}&ate={hoje}").json()
+    assert ap["faltas"]["valor"] == "0" and ap["emprestimos"]["valor"] == "1"
+    assert ap["recebidos"][0]["qtd"] == 1 and ap["lista_emprestimos"][0]["justificativa"] == "Ajuda na concretagem da laje"
+
+    # devolver desfaz o empréstimo
+    w.post("/api/portal/apontador/emprestimo/devolver", headers=h, json={"colaborador_id": ped})
+    _todos, eqs = dados()
+    assert next(e for e in eqs.values() if e["id"] == eq2["equipe_id"])["recebidos"] == []

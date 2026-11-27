@@ -220,7 +220,8 @@ function InicioApontador({ estado, ir }: { estado: ReturnType<typeof useDadosApo
   useEffect(() => { portal<EquipamentosApontador>('/apontador/equipamentos').then(setEq).catch(() => undefined); }, []);
   const pessoas = dados ? [...dados.equipes.flatMap((e) => e.pessoas), ...dados.sem_equipe] : [];
   const presentes = pessoas.filter((p) => p.presenca).length;
-  const semMarcar = pessoas.length - presentes;
+  const faltas = pessoas.filter((p) => p.falta).length;
+  const semMarcar = pessoas.filter((p) => !p.presenca && !p.falta).length; // spec 152: quem tem falta já está apontado
   const apontados = eq ? eq.itens.filter((i) => i.dia).length : null;
   const faltamEq = eq ? eq.itens.length - (apontados ?? 0) : null;
   const memoria = (): MemoriaCalculo => ({
@@ -232,15 +233,17 @@ function InicioApontador({ estado, ir }: { estado: ReturnType<typeof useDadosApo
     <>
       <Meta rotulo="Presença de hoje" numero={dados ? presentes : null} texto={`de ${pessoas.length} pessoa${pessoas.length === 1 ? '' : 's'}`} memoria={memoria}
         progresso={pessoas.length ? presentes / pessoas.length : 0} carregando={!dados}
-        rodape={dados ? `${dados.equipes.length} equipe(s) ativa(s) · ${semMarcar} sem presença` : undefined} />
+        rodape={dados ? `${dados.equipes.length} equipe(s) ativa(s) · ${faltas} falta(s) · ${semMarcar} sem apontar` : undefined} />
       <div className="grid grid-cols-2 gap-2.5">
         <Numero rotulo="Equipamentos apontados" valor={eq ? `${apontados}/${eq.itens.length}` : '—'} aviso={!!faltamEq} onClick={() => ir('equipamentos')} />
         <Numero rotulo="Equipes ativas" valor={dados ? dados.equipes.length : '—'} onClick={() => ir('equipes')} />
+        <Numero rotulo="Faltas hoje" valor={dados ? faltas : '—'} onClick={() => ir('presenca')} />
+        <Numero rotulo="Empréstimos hoje" valor={dados ? (dados.emprestimos ?? 0) : '—'} onClick={() => ir('presenca')} />
       </div>
       <h2 className="mt-0.5 text-[13px] font-semibold leading-[18px] text-m-text-secondary">O que fazer agora</h2>
       <div className="flex flex-col gap-2">
         <Fazer icone={ClipboardCheck} titulo={semMarcar ? 'Apontar a presença' : 'Presença apontada'} destaque={semMarcar > 0} tom="sucesso"
-          texto={dados ? `${semMarcar} de ${pessoas.length} pessoa(s) sem presença hoje` : 'Carregando…'} onClick={() => ir('presenca')} />
+          texto={dados ? `${semMarcar} de ${pessoas.length} pessoa(s) sem presença nem falta hoje` : 'Carregando…'} onClick={() => ir('presenca')} />
         <Fazer icone={Truck} titulo={!eq || eq.itens.length === 0 ? 'Equipamentos' : faltamEq ? 'Apontar os equipamentos' : 'Equipamentos apontados'}
           tom={faltamEq ? 'atencao' : eq?.itens.length ? 'sucesso' : 'neutro'}
           texto={!eq ? 'Carregando…' : eq.itens.length ? `${faltamEq} de ${eq.itens.length} sem o dia apontado` : 'Nenhum equipamento mobilizado na obra'} onClick={() => ir('equipamentos')} />

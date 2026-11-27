@@ -420,6 +420,61 @@ def ap_presenca(d: PresencaIn, s: Session = Depends(get_session), x_portal_token
     return r
 
 
+class FaltaIn(BaseModel):
+    data: date | None = None
+    colaborador_id: int
+    motivo: str | None = Field(None, max_length=20)  # vazio = tirar a falta
+    observacao: str | None = Field(None, max_length=300)
+
+
+@publico.post("/apontador/falta")
+def ap_falta(d: FaltaIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.falta(s, x_portal_token, d.data, d.colaborador_id, d.motivo, d.observacao)
+    _mudou(x_portal_token)
+    return r
+
+
+class FaltasRestantesIn(BaseModel):
+    data: date | None = None
+    equipe_id: int
+    motivo: str = Field(max_length=20)
+    observacao: str | None = Field(None, max_length=300)
+
+
+@publico.post("/apontador/faltas/restantes")
+def ap_faltas_restantes(d: FaltasRestantesIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.faltas_restantes(s, x_portal_token, d.data, d.equipe_id, d.motivo, d.observacao)
+    _mudou(x_portal_token)
+    return r
+
+
+class EmprestimoIn(BaseModel):
+    data: date | None = None
+    colaborador_id: int
+    para_equipe_id: int
+    justificativa: str = Field(max_length=300)
+    presente: bool = True
+
+
+@publico.post("/apontador/emprestimo")
+def ap_emprestimo(d: EmprestimoIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.emprestimo(s, x_portal_token, d.data, d.colaborador_id, d.para_equipe_id, d.justificativa, d.presente)
+    _mudou(x_portal_token)
+    return r
+
+
+class DevolverIn(BaseModel):
+    data: date | None = None
+    colaborador_id: int
+
+
+@publico.post("/apontador/emprestimo/devolver")
+def ap_devolver(d: DevolverIn, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
+    r = ap.devolver(s, x_portal_token, d.data, d.colaborador_id)
+    _mudou(x_portal_token)
+    return r
+
+
 @publico.get("/apontador/equipamentos")
 def ap_equipamentos(data: date | None = None, s: Session = Depends(get_session), x_portal_token: str | None = Header(None)):
     return ap.equipamentos(s, x_portal_token, data)

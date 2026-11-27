@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Abas } from '@/components/Obra/Abas';
 import { Calculado, type MemoriaCalculo } from '@/components/Obra/Calculado';
+import { FaltasEmprestimos } from '@/components/Obra/FaltasEmprestimos';
 import { IndicadoresPresenca } from '@/components/Obra/PresencaIndicadores';
 import { Cabecalho, Campo, Chip, Indicador, Painel } from '@/components/Obra/ui';
 import { useApi } from '@/hooks/programacao/useApi';
@@ -52,13 +53,13 @@ const memGrupo = (nome: string, eqs: EquipeDia[], d: Dia | null): MemoriaCalculo
 
 /** Presença do dia (specs 063 e 071): equipes agrupadas por setor em cartões compactos e a aba de indicadores. */
 export default function PresencaDiaPage() {
-  const [aba, setAba] = useState<'equipes' | 'indicadores'>('equipes');
+  const [aba, setAba] = useState<'equipes' | 'indicadores' | 'faltas'>('equipes');
   return (
     <>
       <Cabecalho eyebrow="Efetivo · apropriação" cor="var(--m-proc-executar)" titulo="Presença do dia"
         acoes={<Link href="/app/efetivo/identificacao" className="text-[13px] font-semibold text-m-accent underline">Crachá e rosto</Link>} />
-      <Abas rotulo="Presença" ativa={aba} onTrocar={setAba} abas={[{ chave: 'equipes', titulo: 'Equipes' }, { chave: 'indicadores', titulo: 'Indicadores' }]} />
-      {aba === 'equipes' ? <Equipes /> : <IndicadoresPresenca />}
+      <Abas rotulo="Presença" ativa={aba} onTrocar={setAba} abas={[{ chave: 'equipes', titulo: 'Equipes' }, { chave: 'indicadores', titulo: 'Indicadores' }, { chave: 'faltas', titulo: 'Faltas e empréstimos' }]} />
+      {aba === 'equipes' ? <Equipes /> : aba === 'indicadores' ? <IndicadoresPresenca /> : <FaltasEmprestimos />}
     </>
   );
 }

@@ -53,43 +53,117 @@ def _por_codigo(s: Session, obra_id: int) -> dict[str, ColaboradorModel]:
     return out
 
 
-def _pessoa_out(x: ColaboradorModel | None, cod: str, nome: str, presentes: dict[int, dict], papel: str | None = None) -> dict:
+def _pessoa_out(x: ColaboradorModel | None, cod: str, nome: str, presentes: dict[int, dict], papel: str | None = None,
+                faltas: dict[int, dict] | None = None, emprestimos: dict[int, dict] | None = None, equipe_id: int | None = None) -> dict:
+    cid = x.id if x else None
     return {"cracha": cod, "nome": x.nome if x else nome, "matricula": x.matricula if x else None,
-            "funcao": x.funcao if x else None, "colaborador_id": x.id if x else None, "papel": papel,
-            "presenca": presentes.get(x.id) if x else None}
+            "funcao": x.funcao if x else None, "colaborador_id": cid, "papel": papel, "equipe_id": equipe_id,
+            "presenca": presentes.get(cid) if cid else None, "falta": (faltas or {}).get(cid) if cid else None,
+            "emprestimo": (emprestimos or {}).get(cid) if cid else None}
 
 
 def equipes(s: Session, token: str | None, data: date | None) -> dict:
-    """Todas as equipes ativas com as pessoas e a presença do dia; e quem do efetivo ativo está sem equipe."""
+    """Todas as equipes ativas com as pessoas, a presença, a falta e o empréstimo do dia; quem foi recebido emprestado em cada
+    equipe; e quem do efetivo ativo está sem equipe (spec 147/152)."""
+    from app.modules.presenca.application import apontamento as apt
     from app.modules.presenca.application.manual import presentes as presentes_do_dia
 
     obra, c, _por = _ap(s, token)
     dia = data or hoje_local()
     presentes = presentes_do_dia(s, obra, dia)
+    faltas = apt.faltas_do_dia(s, obra, dia)
+    emprestimos = apt.emprestimos_do_dia(s, obra, dia)
     pessoas = _por_codigo(s, obra)
+    por_id = {x.id: x for x in pessoas.values()}
+    po = lambda x, cod, nome, eid, papel=None: _pessoa_out(x, cod, nome, presentes, papel, faltas, emprestimos, eid)  # noqa: E731
     lista, alocados = [], set()
     for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == obra, EquipeModel.ativo.is_(True)).order_by(EquipeModel.nome)):
         gente = []
         if e.encarregado_cracha:
             x = pessoas.get(e.encarregado_cracha)
-            gente.append(_pessoa_out(x, e.encarregado_cracha, e.encarregado_nome or e.encarregado_cracha, presentes, "encarregado"))
+            gente.append(po(x, e.encarregado_cracha, e.encarregado_nome or e.encarregado_cracha, e.id, "encarregado"))
             if x:
                 alocados.add(x.id)
         for m in sorted(e.membros, key=lambda m: m.nome):
             x = pessoas.get(m.cracha)
             if x and x.id in alocados:  # já apareceu (encarregado desta ou de outra equipe): não conta duas vezes
                 continue
-            gente.append(_pessoa_out(x, m.cracha, m.nome, presentes))
+            gente.append(po(x, m.cracha, m.nome, e.id))
             if x:
                 alocados.add(x.id)
-        lista.append({"id": e.id, "nome": e.nome, "encarregado": e.encarregado_nome, "pessoas": gente,
-                      "presentes": sum(1 for g in gente if g["presenca"]), "total": len(gente)})
-    sem = [_pessoa_out(x, x.cracha or x.matricula, x.nome, presentes)
+        recebidos = [po(por_id[cid], por_id[cid].cracha or por_id[cid].matricula, por_id[cid].nome, emp["de_equipe_id"])
+                     for cid, emp in emprestimos.items() if emp["para_equipe_id"] == e.id and cid in por_id]
+        aqui = [g for g in gente if not (g["emprestimo"] and g["emprestimo"]["para_equipe_id"] != e.id)] + recebidos
+        lista.append({"id": e.id, "nome": e.nome, "encarregado": e.encarregado_nome, "pessoas": gente, "recebidos": recebidos,
+                      "presentes": sum(1 for g in aqui if g["presenca"]), "faltas": sum(1 for g in gente if g["falta"]),
+                      "cedidos": sum(1 for g in gente if g["emprestimo"]), "total": len(gente)})
+    sem = [po(x, x.cracha or x.matricula, x.nome, None)
            for x in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == obra, ColaboradorModel.situacao.not_in(FORA))
                               .order_by(ColaboradorModel.nome))
            if x.id not in alocados and (x.cracha or x.matricula)]
     return {"data": dia.isoformat(), "nome": c.nome, "matricula": c.matricula, "funcao": c.funcao, "obra_id": obra,
-            "equipes": lista, "sem_equipe": sem, "presentes": len(presentes)}
+            "equipes": lista, "sem_equipe": sem, "presentes": len(presentes), "faltas": len(faltas), "emprestimos": len(emprestimos),
+            "motivos_falta": [{"motivo": k, "rotulo": v[0], "justificada": v[1]} for k, v in _motivos().items()]}
+
+
+def _motivos():
+    from app.modules.presenca.domain.apontamento import MOTIVOS_FALTA
+
+    return MOTIVOS_FALTA
+
+
+def falta(s: Session, token: str | None, data: date | None, colaborador_id: int, motivo: str | None, observacao: str | None) -> dict:
+    """Marca a falta do dia (com o motivo) ou tira (motivo vazio)."""
+    from app.modules.presenca.application import apontamento as apt
+
+    obra, _c, por = _ap(s, token)
+    dia = _dia(data)
+    if not motivo:
+        apt.tirar_falta(s, obra, colaborador_id, dia)
+        return {"falta": None}
+    return {"falta": apt.marcar_falta(s, obra, colaborador_id, dia, motivo, observacao, por)}
+
+
+def faltas_restantes(s: Session, token: str | None, data: date | None, equipe_id: int, motivo: str, observacao: str | None) -> dict:
+    """Fecha a equipe no dia: quem não está presente, nem com falta, nem emprestado leva a falta com o motivo escolhido."""
+    from app.modules.presenca.application import apontamento as apt
+
+    dia = _dia(data)
+    r = equipes(s, token, dia)
+    eq = next((e for e in r["equipes"] if e["id"] == equipe_id), None)
+    if eq is None:
+        raise DomainError("equipe inválida", "equipe_id")
+    obra, _c, por = _ap(s, token)
+    feitas = 0
+    for p in eq["pessoas"]:
+        if p["colaborador_id"] and not p["presenca"] and not p["falta"] and not p["emprestimo"]:
+            apt.marcar_falta(s, obra, p["colaborador_id"], dia, motivo, observacao, por)
+            feitas += 1
+    return {"faltas": feitas}
+
+
+def emprestimo(s: Session, token: str | None, data: date | None, colaborador_id: int, para_equipe_id: int, justificativa: str,
+               presente: bool) -> dict:
+    """A pessoa de outra equipe trabalhou hoje nesta: fica na equipe dela, com a justificativa. `presente` já aponta a presença."""
+    from app.modules.presenca.application import apontamento as apt
+
+    obra, c, por = _ap(s, token)
+    dia = _dia(data)
+    r = apt.emprestar(s, obra, colaborador_id, dia, para_equipe_id, justificativa, por)
+    if presente:
+        presenca(s, token, dia, colaborador_id, True)
+    x = s.get(ColaboradorModel, colaborador_id)
+    _avisar(s, obra, f"{c.nome} (apontador) emprestou {x.nome} para a {r['para_equipe']}",
+            f"{'Da ' + r['de_equipe'] if r['de_equipe'] else 'Sem equipe'} · {dia:%d/%m}: {r['justificativa']}")
+    return {"emprestimo": r}
+
+
+def devolver(s: Session, token: str | None, data: date | None, colaborador_id: int) -> dict:
+    from app.modules.presenca.application import apontamento as apt
+
+    obra, _c, _por = _ap(s, token)
+    apt.devolver(s, obra, colaborador_id, _dia(data))
+    return {"emprestimo": None}
 
 
 def criar_equipe(s: Session, token: str | None, disciplina: str, encarregado: str, membros: list[str], nome: str | None) -> dict:
@@ -163,9 +237,14 @@ def presenca(s: Session, token: str | None, data: date | None, colaborador_id: i
     if presente:
         if x.situacao in FORA:
             raise DomainError(f"{x.nome} está {x.situacao.lower()} no efetivo", "colaborador_id")
-        eq = next((e.id for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == obra, EquipeModel.ativo.is_(True)))
-                   if e.encarregado_cracha in _codigos(x) or any(m.cracha in _codigos(x) for m in e.membros)), None)
+        from app.modules.presenca.application import apontamento as apt
+
+        eq = apt.equipe_do_dia(s, obra, x.id, dia)
+        if eq is None:
+            e = apt.equipe_da_pessoa(apt.equipes_ativas(s, obra), x)
+            eq = e.id if e else None
         manual.marcar(s, obra, x.id, dia, eq, por)
+        apt.tirar_falta(s, obra, x.id, dia)  # presente não é falta
     else:
         manual.desmarcar(s, obra, x.id, dia)
     return {"ok": True, "presenca": manual.presentes(s, obra, dia).get(x.id)}

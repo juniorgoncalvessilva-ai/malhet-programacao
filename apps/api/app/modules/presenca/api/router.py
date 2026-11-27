@@ -14,6 +14,7 @@ from app.modules.obras.domain.obra import PapelObra
 from app.core.db import get_session
 from app.modules.efetivo.infra.models import ColaboradorModel
 from app.modules.equipes.infra.models import EquipeModel
+from app.modules.presenca.application import apontamento
 from app.modules.presenca.domain.presenca import (DISTANCIA_MAX, Leitura, normalizar_codigo, primeiras_do_dia,
                                                   validar_descritor, validas)
 from app.modules.presenca.infra.models import IdentificacaoModel, LeituraPresencaModel
@@ -117,9 +118,10 @@ def sincronizar(d: LeiturasIn, s: Session = Depends(get_session), c: ContextoObr
             erros.append({"id_local": x.id_local, "erro": "pessoa não está no efetivo desta obra"})
             continue
         eq = next((por[k] for k in _chaves(p) if k in por), None)
+        emprestada = apontamento.equipe_do_dia(s, c.obra_id, p.id, lt.data)  # spec 152: trabalhou noutra equipe hoje
         r = s.execute(insert(LeituraPresencaModel).values(
             obra_id=c.obra_id, id_local=lt.id_local, colaborador_id=p.id, data=lt.data, hora=lt.hora, meio=lt.meio,
-            equipe_id=eq.id if eq else None, dispositivo=(x.dispositivo or "")[:120] or None, registrado_por=c.usuario.id,
+            equipe_id=emprestada or (eq.id if eq else None), dispositivo=(x.dispositivo or "")[:120] or None, registrado_por=c.usuario.id,
         ).on_conflict_do_nothing(constraint="uq_presenca_id_local").returning(LeituraPresencaModel.id))
         if r.scalar() is not None:
             aceitas += 1
@@ -127,6 +129,8 @@ def sincronizar(d: LeiturasIn, s: Session = Depends(get_session), c: ContextoObr
             repetidas += 1
         tocadas.add((p.id, lt.data))
     s.flush()
+    for cid, dia_ in tocadas:  # spec 152: presença lida não é falta
+        apontamento.tirar_falta(s, c.obra_id, cid, dia_)
     # duplicidade entre celulares (spec 069): por pessoa e dia, só a leitura mais cedo vale
     resultados = []
     for cid, dia_ in tocadas:
@@ -506,3 +510,36 @@ def identificar(cid: int, d: IdentificacaoIn, s: Session = Depends(get_session),
     i.atualizado_por = c.usuario.id
     s.flush()
     return {"id": cid, "codigo": i.codigo, "nfc": i.nfc_serial, "face": bool(i.face_descritor)}
+
+
+@router.get("/apontamentos")
+def apontamentos(de: date | None = None, ate: date | None = None, s: Session = Depends(get_session), c: ContextoObra = Depends(ler)):
+    """Faltas e empréstimos entre equipes no período (spec 152), com a memória: por motivo, justificadas, cedidos e recebidos."""
+    from app.modules.presenca.domain.apontamento import EmprestimoDia, FaltaDia, memorias
+    from app.modules.presenca.infra.models import EmprestimoModel, FaltaModel
+
+    ate = ate or date.today()
+    de = de or ate - timedelta(days=6)
+    if (ate - de).days > 120:
+        raise DomainError("escolha até 120 dias", "de")
+    pessoas = {p.id: p for p in s.scalars(select(ColaboradorModel).where(ColaboradorModel.obra_id == c.obra_id))}
+    equipes = {e.id: e.nome for e in s.scalars(select(EquipeModel).where(EquipeModel.obra_id == c.obra_id))}
+    fs = list(s.scalars(select(FaltaModel).where(FaltaModel.obra_id == c.obra_id, FaltaModel.data >= de, FaltaModel.data <= ate)
+                        .order_by(FaltaModel.data.desc())))
+    es = list(s.scalars(select(EmprestimoModel).where(EmprestimoModel.obra_id == c.obra_id, EmprestimoModel.data >= de,
+                                                      EmprestimoModel.data <= ate).order_by(EmprestimoModel.data.desc())))
+    por, eqs = _equipe_por_pessoa(s, c.obra_id)
+    nas_equipes = {p.id for p in pessoas.values() if p.situacao not in FORA and any(k in por for k in _chaves(p))}
+    dias = (ate - de).days + 1
+    nome = lambda cid: pessoas[cid].nome if cid in pessoas else f"#{cid}"  # noqa: E731
+    mem = memorias([FaltaDia(nome(f.colaborador_id), equipes.get(f.equipe_id), f.motivo) for f in fs],
+                   [EmprestimoDia(nome(e.colaborador_id), e.de_equipe_nome, e.para_equipe_nome, e.justificativa) for e in es],
+                   len(nas_equipes) * dias, "Apontamento do campo")
+    from app.modules.presenca.application.apontamento import emprestimo_out, falta_out
+
+    return {"de": de.isoformat(), "ate": ate.isoformat(), **mem,
+            "lista_faltas": [{"data": f.data.isoformat(), "colaborador_id": f.colaborador_id, "nome": nome(f.colaborador_id),
+                              "matricula": pessoas[f.colaborador_id].matricula if f.colaborador_id in pessoas else None,
+                              "equipe": equipes.get(f.equipe_id), **falta_out(f)} for f in fs[:1000]],
+            "lista_emprestimos": [{"data": e.data.isoformat(), "colaborador_id": e.colaborador_id, "nome": nome(e.colaborador_id),
+                                   **emprestimo_out(e)} for e in es[:1000]]}

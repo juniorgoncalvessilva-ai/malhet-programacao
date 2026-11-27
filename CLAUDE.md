@@ -91,6 +91,10 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   (`components/Presenca/PainelLeitura.tsx`, crachá/código/rosto/lista, offline) por `usePresencaCom` com o token do portal
   (`/portal/apontador/presenca/{base,leituras,hoje,vincular,pessoa-simplificada}`, `apontador.contexto_presenca`); só a marcação
   manual do apontador sai (`manual.desmarcar`).
+  Falta e empréstimo (spec 152, `presenca/domain/apontamento.py`, `application/apontamento.py`, `presenca_falta`/`presenca_emprestimo`):
+  falta com motivo (lida no crachá não é falta; leitura/presente apaga; "falta p/ quem não veio"), empréstimo com justificativa (fica
+  na equipe dela, leituras do dia vão à que recebeu), "Equipe que estou apontando" + "Apontar alguém de fora" (emprestar ou trazer),
+  pesquisa na aba Equipes; números em Presença › "Faltas e empréstimos" (`GET /presenca/apontamentos`, `FaltasEmprestimos.tsx`).
 - Organograma: `components/Obra/OrganogramaArvore.tsx` (recolher por nível, folhas empilhadas, zoom/arrastar/tela cheia).
   Quadro de totais no fim da planilha do efetivo é ignorado (`e_quadro_de_totais`). Spec 017. Editar equipes pelo
   organograma (`EdicaoOrganograma`; `POST/DELETE /equipes/{id}/membros`, mover com `de_equipe_id`). Spec 049. Arrastar e
