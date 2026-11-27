@@ -126,6 +126,11 @@ gargalo · base PRAZO/CAPACIDADE · emitir.
   existente ou novo; não repete o que o destino tem) e programação `POST /programacoes/{pid}/linhas/duplicar` ("Duplicar linha" e
   "duplicar grupo" no cabeçalho do CWP; cópia logo abaixo, sem dias/qtd do período). Envio da WBS pula nó que sumiu
   (`iwps_abaixo` → `nos_inexistentes`); `useWbs` = `['wbs', obra]` sempre atual e a seleção é podada à árvore.
+  Planilha semanal do cliente (spec 146, `programacao_cliente/`): importa para uma área de conferência (nada muda na programação),
+  lê o layout da obra pelo nome do cabeçalho (`domain/planilha.py`, P/R, grupo/CWA/TAG, CWP), liga frente/cronograma/PQ/tipo/IWP/
+  equipe (`domain/vinculo.py`: código confirma, texto só sugere), lembra as decisões (`programacao_cliente_decisao`) e leva só as
+  prontas a um destino **perguntado a cada vez** (somar à semana — emitida reabre — ou criar nova), com realizado só onde o campo não
+  lançou (`application/levar.py`). Tela `/app/programacoes/cliente`.
   Importar itens de outra programação (spec 116, `importar_linhas`, `ImportarProgramacao`): a anterior do mesmo tipo vem sugerida
   (`/importar/origens`, prévia `/importar/{de}`, `POST /importar`; criação com `copiar_de` usa a mesma regra), sem valores do dia,
   quantidade vazia ou o que faltou (`saldo_periodo`), concluída no projeto fica fora e linha repetida não duplica. Realizado confere o

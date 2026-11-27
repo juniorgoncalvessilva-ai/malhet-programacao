@@ -34,7 +34,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: 'Plano de 90 dias', url: '/app/plano', icone: CalendarClock, palavras: 'médio prazo 6 semanas pull planning lookahead' },
       { titulo: 'Restrições (6WLA)', url: '/app/restricoes', icone: Fish, palavras: 'ishikawa 6m plano de ação restrição' },
       { titulo: 'Look-ahead das equipes', url: '/app/lookahead', icone: Columns3, palavras: 'quadro gestão à vista' },
-      { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange, palavras: 'semanal mensal emitir ft simova' },
+      { titulo: 'Programações', url: '/app/programacoes', icone: CalendarRange, palavras: 'semanal mensal emitir ft simova planilha do cliente importar conferir' },
       { titulo: 'PTO (planejamento)', url: '/app/pto', icone: ClipboardList, minimo: 'planejador', palavras: 'permissão de trabalho' },
     ],
   },

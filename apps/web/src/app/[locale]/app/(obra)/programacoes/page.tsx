@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus } from 'lucide-react';
+import { FileSpreadsheet, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Botao, Cabecalho, Campo, Chip, Erro, Painel, Pilula, Selecao, Tabela, dataBR, td } from '@/components/Obra/ui';
@@ -34,6 +34,8 @@ export default function ProgramacoesPage() {
       <Cabecalho
         eyebrow="Programação · semanal e mensal"
         titulo={lista.data?.length ? `${lista.data.length} programaç${lista.data.length > 1 ? 'ões' : 'ão'} nesta obra` : 'Nenhuma programação ainda'}
+        acoes={<Link href="/app/programacoes/cliente" className="inline-flex h-9 items-center gap-1.5 rounded-full border border-m-accent-strong px-4 text-[13px] font-semibold text-m-accent">
+          <FileSpreadsheet size={15} /> Planilha do cliente</Link>}
       />
       {pode('planejador') && (
         <Painel titulo="Nova programação">
